@@ -1,0 +1,489 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ============================================================
+// Auth & Users
+// ============================================================
+
+model User {
+  id            String    @id @default(cuid())
+  email         String    @unique
+  passwordHash  String?
+  name          String
+  displayName   String?
+  avatarUrl     String?
+  bio           String?
+  role          UserRole  @default(READER)
+  emailVerified Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  // Relations
+  oauthAccounts   OAuthAccount[]
+  onboarding      OnboardingResult?
+  works           Work[]
+  episodes        Episode[]
+  readingProgress ReadingProgress[]
+  bookshelf       BookshelfEntry[]
+  highlights      Highlight[]
+  emotionTags     UserEmotionTag[]
+  reviews         Review[]
+  reviewHelpfuls  ReviewHelpful[]
+  stateChanges    StateChange[]
+  points          PointAccount?
+  pointHistory    PointTransaction[]
+  comments        Comment[]
+  notifications   Notification[]
+
+  // Following
+  following  Follow[] @relation("follower")
+  followers  Follow[] @relation("following")
+
+  // Stripe
+  stripeCustomerId  String?
+  stripeAccountId   String?
+  subscription      Subscription?
+
+  @@index([email])
+  @@index([role])
+}
+
+enum UserRole {
+  READER
+  AUTHOR
+  EDITOR
+  ADMIN
+}
+
+model OAuthAccount {
+  id         String   @id @default(cuid())
+  userId     String
+  provider   String   // google, x, apple
+  providerId String
+  createdAt  DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerId])
+  @@index([userId])
+}
+
+model OnboardingResult {
+  id              String   @id @default(cuid())
+  userId          String   @unique
+  answers         Json     // 5-item diagnosis answers
+  emotionVector   Json     // initial emotion vector
+  completedAt     DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Follow {
+  id          String   @id @default(cuid())
+  followerId  String
+  followingId String
+  createdAt   DateTime @default(now())
+
+  follower  User @relation("follower", fields: [followerId], references: [id], onDelete: Cascade)
+  following User @relation("following", fields: [followingId], references: [id], onDelete: Cascade)
+
+  @@unique([followerId, followingId])
+  @@index([followerId])
+  @@index([followingId])
+}
+
+// ============================================================
+// Works & Episodes
+// ============================================================
+
+model Work {
+  id          String     @id @default(cuid())
+  authorId    String
+  title       String
+  synopsis    String?    @db.Text
+  coverUrl    String?
+  status      WorkStatus @default(DRAFT)
+  genre       String?
+  createdAt   DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+  publishedAt DateTime?
+
+  // Relations
+  author         User              @relation(fields: [authorId], references: [id])
+  episodes       Episode[]
+  tags           WorkTag[]
+  emotionTags    UserEmotionTag[]
+  qualityScore   QualityScore?
+  bookshelfEntries BookshelfEntry[]
+  reviews        Review[]
+  stateChanges   StateChange[]
+  series         SeriesWork[]
+  readingProgress ReadingProgress[]
+
+  // Denormalized stats
+  totalViews     Int @default(0)
+  totalReads     Int @default(0) // completed reads
+
+  @@index([authorId])
+  @@index([status])
+  @@index([genre])
+  @@index([publishedAt])
+  @@index([totalViews])
+}
+
+enum WorkStatus {
+  DRAFT
+  PUBLISHED
+  UNPUBLISHED
+}
+
+model Episode {
+  id          String   @id @default(cuid())
+  workId      String
+  authorId    String
+  title       String
+  content     String   @db.Text
+  orderIndex  Int
+  wordCount   Int      @default(0)
+  publishedAt DateTime?
+  scheduledAt DateTime?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  work   Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+  author User @relation(fields: [authorId], references: [id])
+
+  readingProgress ReadingProgress[]
+  highlights      Highlight[]
+  comments        Comment[]
+
+  @@unique([workId, orderIndex])
+  @@index([workId])
+  @@index([authorId])
+}
+
+model WorkTag {
+  id     String @id @default(cuid())
+  workId String
+  tag    String
+  type   TagType @default(KEYWORD) // genre, keyword, author_emotion
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([workId, tag, type])
+  @@index([tag])
+  @@index([type])
+}
+
+enum TagType {
+  GENRE
+  KEYWORD
+  AUTHOR_EMOTION
+}
+
+model Series {
+  id          String   @id @default(cuid())
+  title       String
+  description String?
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  works SeriesWork[]
+}
+
+model SeriesWork {
+  id         String @id @default(cuid())
+  seriesId   String
+  workId     String
+  orderIndex Int
+
+  series Series @relation(fields: [seriesId], references: [id], onDelete: Cascade)
+  work   Work   @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([seriesId, workId])
+  @@unique([seriesId, orderIndex])
+}
+
+// ============================================================
+// Reading
+// ============================================================
+
+model ReadingProgress {
+  id         String   @id @default(cuid())
+  userId     String
+  workId     String
+  episodeId  String
+  progressPct Float   @default(0) // 0.0 - 1.0
+  readTimeMs  Int     @default(0)
+  lastPosition Int    @default(0)
+  completed   Boolean @default(false)
+  updatedAt   DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work    Work    @relation(fields: [workId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@index([userId, workId])
+}
+
+model BookshelfEntry {
+  id        String         @id @default(cuid())
+  userId    String
+  workId    String
+  status    BookshelfStatus @default(WANT_TO_READ)
+  addedAt   DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workId])
+  @@index([userId, status])
+}
+
+enum BookshelfStatus {
+  WANT_TO_READ
+  READING
+  COMPLETED
+}
+
+model Highlight {
+  id        String   @id @default(cuid())
+  userId    String
+  episodeId String
+  startPos  Int
+  endPos    Int
+  color     String   @default("#FFFF00")
+  memo      String?  @db.Text
+  createdAt DateTime @default(now())
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([userId, episodeId])
+}
+
+model Comment {
+  id          String   @id @default(cuid())
+  userId      String
+  episodeId   String
+  paragraphId String?  // for inline comments
+  content     String   @db.Text
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([userId])
+}
+
+// ============================================================
+// Emotions & Reflection
+// ============================================================
+
+model EmotionTagMaster {
+  id       String @id @default(cuid())
+  name     String @unique
+  nameJa   String
+  category String
+  iconUrl  String?
+
+  userEmotionTags UserEmotionTag[]
+}
+
+model UserEmotionTag {
+  id        String   @id @default(cuid())
+  userId    String
+  workId    String
+  tagId     String
+  intensity Int      @default(3) // 1-5
+  createdAt DateTime @default(now())
+
+  user User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work Work            @relation(fields: [workId], references: [id], onDelete: Cascade)
+  tag  EmotionTagMaster @relation(fields: [tagId], references: [id])
+
+  @@unique([userId, workId, tagId])
+  @@index([workId])
+  @@index([tagId])
+}
+
+model StateChange {
+  id     String @id @default(cuid())
+  userId String
+  workId String
+  axis   String // e.g., "confidence", "worldview", "empathy"
+  before Int    // 1-10
+  after  Int    // 1-10
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workId, axis])
+  @@index([userId])
+  @@index([workId])
+}
+
+model Review {
+  id        String   @id @default(cuid())
+  userId    String
+  workId    String
+  content   String   @db.Text
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user     User            @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work     Work            @relation(fields: [workId], references: [id], onDelete: Cascade)
+  helpfuls ReviewHelpful[]
+
+  @@unique([userId, workId])
+  @@index([workId])
+}
+
+model ReviewHelpful {
+  id        String   @id @default(cuid())
+  userId    String
+  reviewId  String
+  createdAt DateTime @default(now())
+
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+  review Review @relation(fields: [reviewId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, reviewId])
+}
+
+// ============================================================
+// AI Quality Scoring
+// ============================================================
+
+model QualityScore {
+  id              String   @id @default(cuid())
+  workId          String   @unique
+  immersion       Float    // 没入力 0-100
+  transformation  Float    // 変容力 0-100
+  virality        Float    // 拡散力 0-100
+  worldBuilding   Float    // 世界構築力 0-100
+  overall         Float    // 統合スコア 0-100
+  analysisJson    Json?    // detailed LLM analysis
+  improvementTips Json?    // top 3 improvement suggestions
+  scoredAt        DateTime @default(now())
+  version         Int      @default(1)
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([overall])
+}
+
+// ============================================================
+// Points & Payments
+// ============================================================
+
+model PointAccount {
+  id      String @id @default(cuid())
+  userId  String @unique
+  balance Int    @default(0)
+
+  user         User               @relation(fields: [userId], references: [id], onDelete: Cascade)
+  transactions PointTransaction[]
+}
+
+model PointTransaction {
+  id        String          @id @default(cuid())
+  userId    String
+  accountId String
+  amount    Int             // positive = earn, negative = spend
+  type      PointTxType
+  reason    String?
+  createdAt DateTime        @default(now())
+
+  user    User         @relation(fields: [userId], references: [id], onDelete: Cascade)
+  account PointAccount @relation(fields: [accountId], references: [id])
+
+  @@index([userId])
+  @@index([accountId])
+}
+
+enum PointTxType {
+  EARN_REVIEW
+  EARN_EMOTION_TAG
+  EARN_STATE_CHANGE
+  SPEND_REDEEM
+}
+
+model Subscription {
+  id                String   @id @default(cuid())
+  userId            String   @unique
+  stripeSubId       String   @unique
+  plan              String   // e.g., "premium"
+  status            String   // active, canceled, past_due
+  currentPeriodEnd  DateTime
+  createdAt         DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model Payment {
+  id              String      @id @default(cuid())
+  stripePaymentId String      @unique
+  payerId         String
+  recipientId     String?
+  amount          Int         // in cents (JPY)
+  currency        String      @default("jpy")
+  type            PaymentType
+  status          String      @default("succeeded")
+  createdAt       DateTime    @default(now())
+
+  @@index([payerId])
+  @@index([recipientId])
+}
+
+enum PaymentType {
+  TIP
+  EPISODE_PURCHASE
+  SUBSCRIPTION
+}
+
+// ============================================================
+// Notifications
+// ============================================================
+
+model Notification {
+  id        String   @id @default(cuid())
+  userId    String
+  type      String   // comment, review, tip, score_ready, etc.
+  title     String
+  body      String?
+  data      Json?
+  read      Boolean  @default(false)
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, read])
+  @@index([createdAt])
+}
+
+// ============================================================
+// Reading History Import
+// ============================================================
+
+model ReadingHistoryImport {
+  id        String   @id @default(cuid())
+  userId    String
+  title     String
+  author    String?
+  source    String?  // "manual", "csv"
+  importedAt DateTime @default(now())
+
+  @@index([userId])
+}

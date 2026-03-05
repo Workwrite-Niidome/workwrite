@@ -74,6 +74,8 @@
 | GET | /discover/recommend | パーソナライズドレコメンド | JWT |
 | GET | /discover/destiny | 「運命の一冊」 | JWT |
 | GET | /discover/trending | トレンド作品 | - |
+| GET | /discover/next-for-me?workId=xxx | 読了作品の感情タグ近傍「次の一冊」3件 | JWT |
+| GET | /discover/hidden-gems | 埋もれた名作（品質スコア上位×PV下位） | - |
 
 ### Emotions（感情タグ）
 
@@ -82,6 +84,7 @@
 | POST | /emotions | 感情タグ投稿（読後） | JWT |
 | GET | /emotions/work/:workId | 作品の感情タグ集計 | - |
 | GET | /emotions/me/timeline | 自分の感情タイムライン | JWT |
+| GET | /emotions/work/:workId/aggregate | 作品の感情タグ集約（作家ダッシュボード用ワードクラウドデータ） | JWT(Author) |
 
 ### Reviews（レビュー・省察）
 
