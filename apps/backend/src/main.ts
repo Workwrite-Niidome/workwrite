@@ -39,8 +39,8 @@ async function bootstrap() {
 
   // Swagger/OpenAPI
   const config = new DocumentBuilder()
-    .setTitle('Ultra Reader First API')
-    .setDescription('超読者ファースト - REST API')
+    .setTitle('Workwrite API')
+    .setDescription('Workwrite - REST API')
     .setVersion('1.0')
     .addBearerAuth()
     .build();

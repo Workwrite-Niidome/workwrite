@@ -1,5 +1,5 @@
 {
-  "name": "@ultra-reader/shared",
+  "name": "@workwrite/shared",
   "version": "0.0.0",
   "private": true,
   "main": "./src/index.ts",
@@ -9,7 +9,7 @@
     "build": "tsc"
   },
   "devDependencies": {
-    "@ultra-reader/typescript-config": "*",
+    "@workwrite/typescript-config": "*",
     "typescript": "^5.7.0"
   }
 }

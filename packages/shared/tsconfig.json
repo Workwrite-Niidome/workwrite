@@ -1,5 +1,5 @@
 {
-  "extends": "@ultra-reader/typescript-config/base.json",
+  "extends": "@workwrite/typescript-config/base.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src"

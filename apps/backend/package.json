@@ -1,5 +1,5 @@
 {
-  "name": "@ultra-reader/backend",
+  "name": "@workwrite/backend",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -25,7 +25,7 @@
     "@nestjs/platform-express": "^11.0.0",
     "@nestjs/swagger": "^11.0.0",
     "@prisma/client": "^6.4.0",
-    "@ultra-reader/shared": "*",
+    "@workwrite/shared": "*",
     "bcrypt": "^6.0.0",
     "class-transformer": "^0.5.0",
     "class-validator": "^0.14.0",
@@ -53,7 +53,7 @@
     "@types/passport-jwt": "^4.0.1",
     "@types/passport-local": "^1.0.38",
     "@types/uuid": "^10.0.0",
-    "@ultra-reader/typescript-config": "*",
+    "@workwrite/typescript-config": "*",
     "eslint": "^9.0.0",
     "jest": "^29.0.0",
     "prisma": "^6.4.0",
@@ -61,5 +61,8 @@
     "ts-jest": "^29.0.0",
     "ts-node": "^10.9.0",
     "typescript": "^5.7.0"
+  },
+  "prisma": {
+    "seed": "ts-node prisma/seed.ts"
   }
 }

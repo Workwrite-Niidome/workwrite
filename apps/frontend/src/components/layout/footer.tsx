@@ -36,7 +36,7 @@ export function Footer() {
           </div>
         </div>
         <div className="mt-8 border-t border-border pt-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} 超読者ファースト
+          &copy; {new Date().getFullYear()} Workwrite
         </div>
       </div>
     </footer>

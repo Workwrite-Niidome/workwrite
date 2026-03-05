@@ -1,5 +1,5 @@
 {
-  "extends": "@ultra-reader/typescript-config/nestjs.json",
+  "extends": "@workwrite/typescript-config/nestjs.json",
   "compilerOptions": {
     "outDir": "./dist",
     "rootDir": "./src",

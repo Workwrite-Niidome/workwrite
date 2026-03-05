@@ -41,7 +41,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle>新規登録</CardTitle>
-          <CardDescription>超読者ファーストに参加する</CardDescription>
+          <CardDescription>Workwriteに参加する</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">

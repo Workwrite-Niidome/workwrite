@@ -1,6 +1,6 @@
 import { IsOptional, IsString, IsInt, Min, Max } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
-import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@ultra-reader/shared';
+import { DEFAULT_PAGE_SIZE, MAX_PAGE_SIZE } from '@workwrite/shared';
 
 export class PaginationDto {
   @ApiPropertyOptional({ description: 'Cursor for pagination' })

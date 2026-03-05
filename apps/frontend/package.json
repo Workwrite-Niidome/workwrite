@@ -1,5 +1,5 @@
 {
-  "name": "@ultra-reader/frontend",
+  "name": "@workwrite/frontend",
   "version": "0.0.0",
   "private": true,
   "scripts": {
@@ -9,7 +9,7 @@
     "lint": "next lint"
   },
   "dependencies": {
-    "@ultra-reader/shared": "*",
+    "@workwrite/shared": "*",
     "next": "^15.2.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
@@ -19,7 +19,7 @@
     "lucide-react": "^0.475.0"
   },
   "devDependencies": {
-    "@ultra-reader/typescript-config": "*",
+    "@workwrite/typescript-config": "*",
     "@types/node": "^22.0.0",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",

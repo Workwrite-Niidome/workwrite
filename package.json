@@ -1,5 +1,5 @@
 {
-  "name": "ultra-reader-first",
+  "name": "workwrite",
   "private": true,
   "workspaces": [
     "apps/*",

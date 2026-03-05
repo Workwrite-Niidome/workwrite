@@ -6,7 +6,7 @@ export default function GuidelinesPage() {
       <section className="mb-8">
         <h2 className="text-xl font-semibold mb-3">「いい作品」とは</h2>
         <p className="text-muted-foreground leading-relaxed">
-          超読者ファーストにおける「いい作品」とは、読者の心に変化をもたらす作品です。
+          Workwriteにおける「いい作品」とは、読者の心に変化をもたらす作品です。
           PV数や人気ランキングだけでなく、AIスコアリングと読者の感情タグによって、
           作品の本質的な価値を評価します。
         </p>

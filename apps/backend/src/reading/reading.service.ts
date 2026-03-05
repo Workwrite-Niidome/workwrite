@@ -1,7 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { BatchProgressDto } from './dto/reading.dto';
-import { COMPLETION_THRESHOLD } from '@ultra-reader/shared';
+import { COMPLETION_THRESHOLD } from '@workwrite/shared';
 
 @Injectable()
 export class ReadingService {

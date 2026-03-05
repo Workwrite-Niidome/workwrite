@@ -5,7 +5,7 @@ import { AuthProvider } from '@/lib/auth-context';
 import './globals.css';
 
 export const metadata: Metadata = {
-  title: '超読者ファースト - 読後の自己変容を設計する小説プラットフォーム',
+  title: 'Workwrite - 読後の自己変容を設計する小説プラットフォーム',
   description:
     'AIスコアリングと感情タグで、あなたの「次の一冊」を見つける。埋もれた名作を発見し、読書体験を通じて自己変容を記録する新しい小説プラットフォーム。',
 };

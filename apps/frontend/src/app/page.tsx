@@ -85,7 +85,7 @@ export default function Home() {
       <section className="relative bg-gradient-to-b from-primary/5 to-background py-16 px-4">
         <div className="mx-auto max-w-4xl text-center space-y-6">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
-            超読者ファースト
+            Workwrite
           </h1>
           <p className="text-muted-foreground text-lg max-w-2xl mx-auto">
             読後の自己変容を設計する小説プラットフォーム

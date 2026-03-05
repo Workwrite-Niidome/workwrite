@@ -1,7 +1,7 @@
 import type { NextConfig } from 'next';
 
 const nextConfig: NextConfig = {
-  transpilePackages: ['@ultra-reader/shared'],
+  transpilePackages: ['@workwrite/shared'],
   output: 'standalone',
 };
 

@@ -1,5 +1,5 @@
 {
-  "name": "@ultra-reader/typescript-config",
+  "name": "@workwrite/typescript-config",
   "version": "0.0.0",
   "private": true,
   "files": ["base.json", "nextjs.json", "nestjs.json"]
