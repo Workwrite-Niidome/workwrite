@@ -112,7 +112,7 @@ export default function WorkAnalyticsPage() {
                 </div>
                 <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
                   {(['immersion', 'transformation', 'virality', 'worldBuilding'] as const).map((key) => (
-                    <div key={key} className="text-center p-3 rounded-lg bg-muted/50">
+                    <div key={key} className="text-center p-4 rounded-lg bg-muted/50">
                       <p className="text-xs text-muted-foreground">{SCORE_LABELS[key]}</p>
                       <p className="text-xl font-bold">{Math.round(score[key])}</p>
                       {score.analysis?.[key] && (

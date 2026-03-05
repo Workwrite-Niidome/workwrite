@@ -4,7 +4,9 @@ import { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
+import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
 const GENRES = [
@@ -56,12 +58,11 @@ export default function NewWorkPage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">あらすじ</label>
-              <textarea
+              <Textarea
                 value={synopsis}
                 onChange={(e) => setSynopsis(e.target.value)}
                 rows={5}
                 maxLength={5000}
-                className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 placeholder="作品のあらすじを書きましょう"
               />
             </div>
@@ -73,11 +74,12 @@ export default function NewWorkPage() {
                     key={g}
                     type="button"
                     onClick={() => setGenre(genre === g ? '' : g)}
-                    className={`px-3 py-1.5 rounded-full text-sm border transition-colors ${
+                    className={cn(
+                      'px-3 py-1.5 rounded-full text-sm border transition-colors min-h-[44px]',
                       genre === g
                         ? 'bg-primary text-primary-foreground border-primary'
-                        : 'border-border hover:border-primary/50'
-                    }`}
+                        : 'border-border hover:border-primary/50 text-foreground',
+                    )}
                   >
                     {GENRE_LABELS[g]}
                   </button>

@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { useState } from 'react';
 import { Menu, X, Search, Bell, BookOpen, PenTool, TrendingUp, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 
@@ -49,22 +50,24 @@ export function Header() {
           ))}
         </nav>
 
-        <div className="ml-auto flex items-center space-x-2">
-          <Link href="/search">
-            <Button variant="ghost" size="icon" aria-label="検索">
-              <Search className="h-5 w-5" />
+        <div className="ml-auto flex items-center space-x-1">
+          <ThemeToggle />
+
+          <Link href="/search" className="hidden md:inline-flex">
+            <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="検索">
+              <Search className="h-4 w-4" />
             </Button>
           </Link>
 
           {isAuthenticated ? (
             <>
               <Link href="/notifications">
-                <Button variant="ghost" size="icon" aria-label="通知">
-                  <Bell className="h-5 w-5" />
+                <Button variant="ghost" size="icon" className="h-9 w-9" aria-label="通知">
+                  <Bell className="h-4 w-4" />
                 </Button>
               </Link>
               <Link href="/profile" className="hidden md:inline-flex">
-                <Button variant="ghost" size="sm" className="gap-1">
+                <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
                   <User className="h-4 w-4" />
                   {user?.displayName || user?.name || 'マイページ'}
                 </Button>
@@ -74,7 +77,7 @@ export function Header() {
                 size="icon"
                 onClick={handleLogout}
                 aria-label="ログアウト"
-                className="hidden md:inline-flex"
+                className="hidden md:inline-flex h-9 w-9"
               >
                 <LogOut className="h-4 w-4" />
               </Button>
@@ -88,7 +91,7 @@ export function Header() {
           <Button
             variant="ghost"
             size="icon"
-            className="md:hidden"
+            className="md:hidden min-h-[44px] min-w-[44px]"
             onClick={() => setMobileOpen(!mobileOpen)}
             aria-label="メニュー"
           >
@@ -104,29 +107,18 @@ export function Header() {
           mobileOpen ? 'max-h-80' : 'max-h-0',
         )}
       >
-        <nav className="flex flex-col space-y-2 p-4">
-          {visibleLinks.map((link) => (
-            <Link
-              key={link.href}
-              href={link.href}
-              className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2"
-              onClick={() => setMobileOpen(false)}
-            >
-              <link.icon className="h-4 w-4" />
-              {link.label}
-            </Link>
-          ))}
+        <nav className="flex flex-col space-y-1 p-4">
           {isAuthenticated ? (
             <>
-              <Link href="/profile" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2" onClick={() => setMobileOpen(false)}>
-                <User className="h-4 w-4" /> プロフィール
+              <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 min-h-[44px]" onClick={() => setMobileOpen(false)}>
+                <PenTool className="h-4 w-4" /> 執筆ダッシュボード
               </Link>
-              <button onClick={handleLogout} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 text-left">
+              <button onClick={handleLogout} className="text-sm text-muted-foreground hover:text-foreground flex items-center gap-2 text-left min-h-[44px]">
                 <LogOut className="h-4 w-4" /> ログアウト
               </button>
             </>
           ) : (
-            <Link href="/login" className="text-sm text-primary font-medium" onClick={() => setMobileOpen(false)}>
+            <Link href="/login" className="text-sm text-primary font-medium min-h-[44px] flex items-center" onClick={() => setMobileOpen(false)}>
               ログイン
             </Link>
           )}

@@ -76,7 +76,7 @@ export default function TimelinePage() {
         </Card>
         <Card>
           <CardContent className="pt-6 text-center">
-            <p className="text-3xl font-bold text-amber-500">{points}</p>
+            <p className="text-3xl font-bold text-accent">{points}</p>
             <p className="text-sm text-muted-foreground mt-1">ポイント</p>
           </CardContent>
         </Card>
@@ -97,11 +97,11 @@ export default function TimelinePage() {
                   <span className="text-sm font-medium">{AXIS_LABELS[axis] || axis}</span>
                   <div className="flex items-center gap-2">
                     {summary.totalChange >= 0 ? (
-                      <ArrowUpRight className="h-4 w-4 text-green-500" />
+                      <ArrowUpRight className="h-4 w-4 text-green-500 dark:text-green-400" />
                     ) : (
-                      <ArrowDownRight className="h-4 w-4 text-red-500" />
+                      <ArrowDownRight className="h-4 w-4 text-red-500 dark:text-red-400" />
                     )}
-                    <span className={`text-sm font-bold ${summary.totalChange >= 0 ? 'text-green-600' : 'text-red-600'}`}>
+                    <span className={`text-sm font-bold ${summary.totalChange >= 0 ? 'text-green-600 dark:text-green-400' : 'text-red-600 dark:text-red-400'}`}>
                       {summary.totalChange > 0 ? '+' : ''}{summary.totalChange}
                     </span>
                     <span className="text-xs text-muted-foreground">({summary.count}作品)</span>
@@ -126,7 +126,7 @@ export default function TimelinePage() {
       ) : (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">タイムライン</h2>
-          <div className="relative border-l-2 border-muted pl-6 space-y-6">
+          <div className="relative border-l-2 border-border pl-6 space-y-6">
             {data.timeline.map((entry, i) => {
               const d = entry.data as Record<string, unknown>;
               const work = d.work as { id: string; title: string } | undefined;
@@ -137,16 +137,16 @@ export default function TimelinePage() {
                     {new Date(entry.date).toLocaleDateString('ja-JP')}
                   </div>
                   <Card>
-                    <CardContent className="p-3">
+                    <CardContent className="p-4">
                       <div className="flex items-start gap-2">
                         {entry.type === 'state_change' && (
-                          <TrendingUp className="h-4 w-4 text-blue-500 mt-0.5 shrink-0" />
+                          <TrendingUp className="h-4 w-4 text-blue-500 dark:text-blue-400 mt-0.5 shrink-0" />
                         )}
                         {entry.type === 'emotion_tag' && (
-                          <Heart className="h-4 w-4 text-pink-500 mt-0.5 shrink-0" />
+                          <Heart className="h-4 w-4 text-pink-500 dark:text-pink-400 mt-0.5 shrink-0" />
                         )}
                         {entry.type === 'review' && (
-                          <MessageSquare className="h-4 w-4 text-green-500 mt-0.5 shrink-0" />
+                          <MessageSquare className="h-4 w-4 text-green-500 dark:text-green-400 mt-0.5 shrink-0" />
                         )}
                         <div className="flex-1 min-w-0">
                           {entry.type === 'state_change' && (

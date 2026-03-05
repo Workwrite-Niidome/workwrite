@@ -148,7 +148,7 @@ export default function WorkDetailPage() {
                   <li key={ep.id}>
                     <Link
                       href={`/read/${ep.id}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors"
+                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors min-h-[44px]"
                     >
                       <span className="text-sm">
                         <span className="text-muted-foreground mr-2">

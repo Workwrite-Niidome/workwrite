@@ -4,6 +4,7 @@ import { useState, useEffect } from 'react';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { Loading } from '@/components/layout/loading';
@@ -21,7 +22,6 @@ export default function ProfilePage() {
       setName(user.name || '');
       setDisplayName(user.displayName || '');
     }
-    // Load full profile
     api.getMyProfile()
       .then((res) => {
         const p = res.data;
@@ -77,12 +77,11 @@ export default function ProfilePage() {
             </div>
             <div className="space-y-2">
               <label className="text-sm font-medium">自己紹介</label>
-              <textarea
+              <Textarea
                 value={bio}
                 onChange={(e) => setBio(e.target.value)}
                 rows={4}
                 maxLength={500}
-                className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
                 placeholder="自己紹介を書いてみましょう"
               />
             </div>

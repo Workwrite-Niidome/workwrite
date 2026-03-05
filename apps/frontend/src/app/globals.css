@@ -1,19 +1,57 @@
 @import "tailwindcss";
 
-@theme {
-  --color-primary: #6366f1;
+:root {
+  --color-background: #fafafa;
+  --color-foreground: #1a1a2e;
+  --color-primary: #5b5bd6;
   --color-primary-foreground: #ffffff;
-  --color-secondary: #f1f5f9;
-  --color-secondary-foreground: #0f172a;
-  --color-accent: #f59e0b;
+  --color-secondary: #f0f0f5;
+  --color-secondary-foreground: #1a1a2e;
+  --color-accent: #e8a230;
   --color-accent-foreground: #ffffff;
-  --color-background: #ffffff;
-  --color-foreground: #0f172a;
-  --color-muted: #f1f5f9;
-  --color-muted-foreground: #64748b;
-  --color-border: #e2e8f0;
+  --color-muted: #f0f0f5;
+  --color-muted-foreground: #6b7280;
+  --color-border: #e5e5ec;
+  --color-destructive: #dc2626;
+  --color-destructive-foreground: #ffffff;
+  --color-card: #ffffff;
+  --color-card-foreground: #1a1a2e;
+}
+
+.dark {
+  --color-background: #111118;
+  --color-foreground: #e8e8ed;
+  --color-primary: #8b8bf5;
+  --color-primary-foreground: #111118;
+  --color-secondary: #1e1e2a;
+  --color-secondary-foreground: #e8e8ed;
+  --color-accent: #f0b44a;
+  --color-accent-foreground: #111118;
+  --color-muted: #1e1e2a;
+  --color-muted-foreground: #9ca3af;
+  --color-border: #2a2a3c;
   --color-destructive: #ef4444;
   --color-destructive-foreground: #ffffff;
+  --color-card: #1a1a24;
+  --color-card-foreground: #e8e8ed;
+}
+
+@theme {
+  --color-background: var(--color-background);
+  --color-foreground: var(--color-foreground);
+  --color-primary: var(--color-primary);
+  --color-primary-foreground: var(--color-primary-foreground);
+  --color-secondary: var(--color-secondary);
+  --color-secondary-foreground: var(--color-secondary-foreground);
+  --color-accent: var(--color-accent);
+  --color-accent-foreground: var(--color-accent-foreground);
+  --color-muted: var(--color-muted);
+  --color-muted-foreground: var(--color-muted-foreground);
+  --color-border: var(--color-border);
+  --color-destructive: var(--color-destructive);
+  --color-destructive-foreground: var(--color-destructive-foreground);
+  --color-card: var(--color-card);
+  --color-card-foreground: var(--color-card-foreground);
   --font-sans: "Noto Sans JP", "Inter", sans-serif;
   --font-serif: "Noto Serif JP", serif;
   --radius-sm: 0.25rem;
@@ -23,7 +61,7 @@
 
 @layer base {
   body {
-    @apply bg-background text-foreground antialiased;
+    @apply bg-background text-foreground antialiased transition-colors duration-200;
     font-family: var(--font-sans);
   }
 }

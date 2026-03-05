@@ -3,11 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Sparkles, ChevronRight, BookOpen } from 'lucide-react';
+import { Star, ChevronRight, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
+import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { api, type Work, type EmotionTag } from '@/lib/api';
 
@@ -78,7 +80,6 @@ export default function AfterwordPage() {
     if (changes.length > 0) {
       await api.saveStateChanges(workId, changes).catch(() => {});
     }
-    // Fetch next book suggestions
     api.getNextForMe(workId)
       .then((res) => setNextBooks(res.data))
       .catch(() => {});
@@ -109,12 +110,12 @@ export default function AfterwordPage() {
         {step === 'afterglow' && (
           <div className="text-center space-y-8 animate-in fade-in duration-1000">
             <div className="space-y-4">
-              <Sparkles className="h-12 w-12 mx-auto text-primary/60" />
+              <Star className="h-12 w-12 mx-auto text-primary/60" />
               <h1 className="text-2xl font-serif font-bold">{work.title}</h1>
               <p className="text-muted-foreground">お疲れさまでした</p>
             </div>
             <div className="pt-8">
-              <Button onClick={() => setStep('emotions')} size="lg">
+              <Button onClick={() => setStep('emotions')} size="lg" className="min-h-[48px]">
                 読後の気持ちを記録する <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -133,18 +134,19 @@ export default function AfterwordPage() {
                 <button
                   key={tag.id}
                   onClick={() => toggleTag(tag.id)}
-                  className={`px-4 py-2 rounded-full text-sm transition-all ${
+                  className={cn(
+                    'px-4 py-2 rounded-full text-sm transition-all min-h-[44px]',
                     selectedTags.includes(tag.id)
                       ? 'bg-primary text-primary-foreground scale-105'
-                      : 'bg-muted hover:bg-muted/80'
-                  }`}
+                      : 'bg-muted text-foreground hover:bg-muted/80',
+                  )}
                 >
                   {tag.nameJa}
                 </button>
               ))}
             </div>
             <div className="flex justify-center pt-4">
-              <Button onClick={handleEmotionSubmit} size="lg">
+              <Button onClick={handleEmotionSubmit} size="lg" className="min-h-[48px]">
                 次へ <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -179,7 +181,7 @@ export default function AfterwordPage() {
                           ...prev,
                           [axis]: { ...prev[axis], before: Number(e.target.value) },
                         }))}
-                        className="w-full"
+                        className="w-full accent-primary"
                       />
                     </div>
                     <div>
@@ -193,7 +195,7 @@ export default function AfterwordPage() {
                           ...prev,
                           [axis]: { ...prev[axis], after: Number(e.target.value) },
                         }))}
-                        className="w-full"
+                        className="w-full accent-primary"
                       />
                     </div>
                   </div>
@@ -201,7 +203,7 @@ export default function AfterwordPage() {
               ))}
             </div>
             <div className="flex justify-center pt-4">
-              <Button onClick={handleStateChangeSubmit} size="lg">
+              <Button onClick={handleStateChangeSubmit} size="lg" className="min-h-[48px]">
                 次へ <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -220,7 +222,7 @@ export default function AfterwordPage() {
                 {nextBooks.map((w) => (
                   <Link key={w.id} href={`/works/${w.id}`}>
                     <Card className="hover:shadow-md transition-shadow">
-                      <CardContent className="p-4 flex items-center gap-4">
+                      <CardContent className="p-5 flex items-center gap-4">
                         <BookOpen className="h-8 w-8 text-primary/40 shrink-0" />
                         <div className="flex-1 min-w-0">
                           <h3 className="font-medium text-sm">{w.title}</h3>
@@ -244,7 +246,7 @@ export default function AfterwordPage() {
               </p>
             )}
             <div className="flex justify-center pt-4">
-              <Button onClick={() => setStep('review')} variant="outline" size="lg">
+              <Button onClick={() => setStep('review')} variant="outline" size="lg" className="min-h-[48px]">
                 レビューを書く <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
             </div>
@@ -263,26 +265,26 @@ export default function AfterwordPage() {
                   <Badge
                     key={i}
                     variant="outline"
-                    className="text-xs cursor-pointer hover:bg-muted"
+                    className="text-xs cursor-pointer hover:bg-muted min-h-[36px]"
                     onClick={() => setReviewText((prev) => prev + (prev ? '\n' : '') + guide)}
                   >
                     {guide}
                   </Badge>
                 ))}
               </div>
-              <textarea
+              <Textarea
                 value={reviewText}
                 onChange={(e) => setReviewText(e.target.value)}
                 rows={6}
                 placeholder="この作品について思ったことを自由に書いてください..."
-                className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm font-serif leading-relaxed focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="font-serif leading-relaxed"
               />
             </div>
             <div className="flex justify-center gap-3 pt-4">
-              <Button onClick={() => { setReviewText(''); handleReviewSubmit(); }} variant="ghost">
+              <Button onClick={() => { setReviewText(''); handleReviewSubmit(); }} variant="ghost" className="min-h-[48px]">
                 スキップ
               </Button>
-              <Button onClick={handleReviewSubmit} size="lg">
+              <Button onClick={handleReviewSubmit} size="lg" className="min-h-[48px]">
                 投稿して完了
               </Button>
             </div>
@@ -294,9 +296,10 @@ export default function AfterwordPage() {
           {(['afterglow', 'emotions', 'stateChange', 'nextBook', 'review'] as Step[]).map((s) => (
             <div
               key={s}
-              className={`h-1.5 w-8 rounded-full transition-colors ${
-                s === step ? 'bg-primary' : 'bg-muted'
-              }`}
+              className={cn(
+                'h-1.5 w-8 rounded-full transition-colors',
+                s === step ? 'bg-primary' : 'bg-muted',
+              )}
             />
           ))}
         </div>

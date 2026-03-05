@@ -122,10 +122,10 @@ export default function OnboardingPage() {
                 key={option.value}
                 onClick={() => selectAnswer(option.value)}
                 className={cn(
-                  'w-full p-4 rounded-lg border text-left transition-all',
+                  'w-full p-4 rounded-lg border text-left transition-all min-h-[44px]',
                   answers[currentQuestion.id] === option.value
-                    ? 'border-primary bg-primary/5 text-primary font-medium'
-                    : 'border-border hover:border-primary/50 hover:bg-muted/50',
+                    ? 'border-primary bg-primary/10 text-primary font-medium'
+                    : 'border-border hover:border-primary/50 hover:bg-muted/50 text-foreground',
                 )}
               >
                 {option.label}

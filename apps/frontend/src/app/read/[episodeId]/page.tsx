@@ -28,9 +28,9 @@ const FONT_SIZES: Record<FontSize, string> = {
 };
 
 const THEMES: Record<Theme, { bg: string; text: string; label: string }> = {
-  light: { bg: 'bg-white', text: 'text-gray-900', label: '明るい' },
+  light: { bg: 'bg-white dark:bg-gray-50', text: 'text-gray-900', label: '明るい' },
   dark: { bg: 'bg-gray-900', text: 'text-gray-100', label: '暗い' },
-  sepia: { bg: 'bg-amber-50', text: 'text-amber-950', label: 'セピア' },
+  sepia: { bg: 'bg-amber-50 dark:bg-amber-950', text: 'text-amber-950 dark:text-amber-100', label: 'セピア' },
 };
 
 const PROGRESS_DEBOUNCE = 5000;
@@ -176,15 +176,15 @@ export default function ReaderPage() {
       {/* Top nav */}
       <header className="sticky top-1 z-40 flex items-center justify-between px-4 py-2">
         <Link href={`/works/${episode.workId}`}>
-          <Button variant="ghost" size="sm" className="gap-1">
+          <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
             <ChevronLeft className="h-4 w-4" /> 作品へ戻る
           </Button>
         </Link>
         <div className="flex gap-1">
-          <Button variant="ghost" size="icon" onClick={toggleComments}>
+          <Button variant="ghost" size="icon" onClick={toggleComments} className="min-h-[44px] min-w-[44px]">
             <MessageSquare className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)}>
+          <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)} className="min-h-[44px] min-w-[44px]">
             <Settings className="h-4 w-4" />
           </Button>
         </div>
@@ -192,10 +192,10 @@ export default function ReaderPage() {
 
       {/* Settings panel */}
       {showSettings && (
-        <div className="fixed right-4 top-14 z-50 w-64 rounded-lg border bg-background p-4 shadow-lg space-y-4">
+        <div className="fixed right-4 top-14 z-50 w-64 rounded-lg border border-border bg-card text-card-foreground p-4 shadow-lg space-y-4">
           <div className="flex items-center justify-between">
             <span className="text-sm font-medium">表示設定</span>
-            <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)}>
+            <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)} className="h-8 w-8">
               <X className="h-3 w-3" />
             </Button>
           </div>
@@ -208,7 +208,7 @@ export default function ReaderPage() {
                   variant={fontSize === s ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handleFontSizeChange(s)}
-                  className="flex-1 text-xs"
+                  className="flex-1 text-xs min-h-[44px]"
                 >
                   {s === 'sm' ? '小' : s === 'base' ? '中' : s === 'lg' ? '大' : '特大'}
                 </Button>
@@ -224,7 +224,7 @@ export default function ReaderPage() {
                   variant={theme === key ? 'default' : 'outline'}
                   size="sm"
                   onClick={() => handleThemeChange(key)}
-                  className="flex-1 text-xs"
+                  className="flex-1 text-xs min-h-[44px]"
                 >
                   {key === 'dark' ? <Moon className="h-3 w-3 mr-1" /> : key === 'light' ? <Sun className="h-3 w-3 mr-1" /> : null}
                   {val.label}
@@ -251,7 +251,7 @@ export default function ReaderPage() {
       <nav className="mx-auto max-w-2xl px-6 py-8 flex justify-between border-t border-border/50">
         {prevEp ? (
           <Link href={`/read/${prevEp.id}`}>
-            <Button variant="outline" className="gap-1">
+            <Button variant="outline" className="gap-1 min-h-[44px]">
               <ChevronLeft className="h-4 w-4" /> 前話
             </Button>
           </Link>
@@ -260,23 +260,23 @@ export default function ReaderPage() {
         )}
         {nextEp ? (
           <Link href={`/read/${nextEp.id}`}>
-            <Button variant="outline" className="gap-1">
+            <Button variant="outline" className="gap-1 min-h-[44px]">
               次話 <ChevronRight className="h-4 w-4" />
             </Button>
           </Link>
         ) : (
           <Link href={`/works/${episode.workId}/afterword`}>
-            <Button variant="default">読了</Button>
+            <Button variant="default" className="min-h-[44px]">読了</Button>
           </Link>
         )}
       </nav>
 
       {/* Comments sidebar */}
       {showComments && (
-        <div className="fixed right-0 top-0 bottom-0 z-50 w-80 bg-background border-l shadow-xl flex flex-col">
-          <div className="flex items-center justify-between p-4 border-b">
+        <div className="fixed right-0 top-0 bottom-0 z-50 w-80 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
             <span className="font-medium text-sm">コメント</span>
-            <Button variant="ghost" size="icon" onClick={() => setShowComments(false)}>
+            <Button variant="ghost" size="icon" onClick={() => setShowComments(false)} className="h-9 w-9">
               <X className="h-4 w-4" />
             </Button>
           </div>
@@ -302,7 +302,7 @@ export default function ReaderPage() {
             )}
           </div>
           {isAuthenticated && (
-            <div className="p-4 border-t">
+            <div className="p-4 border-t border-border">
               <div className="flex gap-2">
                 <input
                   type="text"
@@ -312,7 +312,7 @@ export default function ReaderPage() {
                   placeholder="コメントを入力..."
                   className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
                 />
-                <Button size="sm" onClick={handlePostComment}>
+                <Button size="sm" onClick={handlePostComment} className="min-h-[40px]">
                   送信
                 </Button>
               </div>

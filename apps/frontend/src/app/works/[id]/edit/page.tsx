@@ -6,6 +6,7 @@ import Link from 'next/link';
 import { Plus, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Loading } from '@/components/layout/loading';
@@ -75,7 +76,7 @@ export default function EditWorkPage() {
           {work.status === 'DRAFT' && (
             <Button onClick={handlePublish} variant="default">公開する</Button>
           )}
-          <Button onClick={handleDelete} variant="destructive" size="icon">
+          <Button onClick={handleDelete} variant="destructive" size="icon" className="min-h-[44px] min-w-[44px]">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
@@ -91,11 +92,10 @@ export default function EditWorkPage() {
           </div>
           <div className="space-y-2">
             <label className="text-sm font-medium">あらすじ</label>
-            <textarea
+            <Textarea
               value={synopsis}
               onChange={(e) => setSynopsis(e.target.value)}
               rows={5}
-              className="flex w-full rounded-md border border-border bg-background px-3 py-2 text-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
             />
           </div>
           <Button onClick={handleSave} disabled={saving}>

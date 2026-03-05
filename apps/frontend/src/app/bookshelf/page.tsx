@@ -8,12 +8,13 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Tabs } from '@/components/ui/tabs';
 import { useAuth } from '@/lib/auth-context';
 import { api, type BookshelfEntry } from '@/lib/api';
 
 type Tab = 'READING' | 'WANT_TO_READ' | 'COMPLETED';
 
-const TABS: { key: Tab; label: string }[] = [
+const TABS = [
   { key: 'READING', label: '読書中' },
   { key: 'WANT_TO_READ', label: '読みたい' },
   { key: 'COMPLETED', label: '読了' },
@@ -72,21 +73,12 @@ export default function BookshelfPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">本棚</h1>
 
-      <div className="flex gap-1 mb-6 border-b">
-        {TABS.map((tab) => (
-          <button
-            key={tab.key}
-            onClick={() => setActiveTab(tab.key)}
-            className={`px-4 py-2 text-sm font-medium border-b-2 transition-colors ${
-              activeTab === tab.key
-                ? 'border-primary text-primary'
-                : 'border-transparent text-muted-foreground hover:text-foreground'
-            }`}
-          >
-            {tab.label}
-          </button>
-        ))}
-      </div>
+      <Tabs
+        tabs={TABS}
+        activeKey={activeTab}
+        onTabChange={(key) => setActiveTab(key as Tab)}
+        className="mb-6"
+      />
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -109,7 +101,7 @@ export default function BookshelfPage() {
         <div className="grid gap-4 md:grid-cols-2">
           {entries.map((entry) => (
             <Card key={entry.id} className="overflow-hidden">
-              <CardContent className="p-4">
+              <CardContent className="p-5">
                 <div className="flex justify-between items-start gap-3">
                   <div className="flex-1 min-w-0">
                     <Link
@@ -132,7 +124,7 @@ export default function BookshelfPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="text-xs"
+                        className="text-xs min-h-[44px]"
                         onClick={() => handleStatusChange(entry.workId, 'READING')}
                       >
                         <BookOpen className="h-3 w-3 mr-1" /> 読書中へ
@@ -141,7 +133,7 @@ export default function BookshelfPage() {
                     <Button
                       variant="ghost"
                       size="icon"
-                      className="h-7 w-7 text-muted-foreground"
+                      className="h-9 w-9 text-muted-foreground"
                       onClick={() => handleRemove(entry.workId)}
                     >
                       <Trash2 className="h-3 w-3" />

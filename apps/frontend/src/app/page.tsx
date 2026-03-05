@@ -2,7 +2,10 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Search, Sparkles, Eye, TrendingUp, BookOpen } from 'lucide-react';
+import {
+  Search, Eye, TrendingUp, BookOpen, Star,
+  Flame, Droplets, Leaf, HeartPulse, Globe, Laugh,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,19 +14,43 @@ import { Input } from '@/components/ui/input';
 import { api, type Work, type TopPageData } from '@/lib/api';
 
 const MOOD_CARDS = [
-  { mood: 'courage', label: '勇気をもらいたい', emoji: '🔥', color: 'bg-orange-50 border-orange-200 hover:bg-orange-100' },
-  { mood: 'tears', label: '泣きたい', emoji: '💧', color: 'bg-blue-50 border-blue-200 hover:bg-blue-100' },
-  { mood: 'healing', label: '癒されたい', emoji: '🌿', color: 'bg-green-50 border-green-200 hover:bg-green-100' },
-  { mood: 'excitement', label: 'ドキドキしたい', emoji: '💓', color: 'bg-pink-50 border-pink-200 hover:bg-pink-100' },
-  { mood: 'worldview', label: '世界観を広げたい', emoji: '🌍', color: 'bg-purple-50 border-purple-200 hover:bg-purple-100' },
-  { mood: 'laughter', label: '笑いたい', emoji: '😄', color: 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100' },
+  {
+    mood: 'courage', label: '勇気をもらいたい', icon: Flame,
+    light: 'bg-orange-50 border-orange-200 hover:bg-orange-100 text-orange-700',
+    dark: 'dark:bg-orange-950/40 dark:border-orange-800 dark:hover:bg-orange-900/50 dark:text-orange-300',
+  },
+  {
+    mood: 'tears', label: '泣きたい', icon: Droplets,
+    light: 'bg-blue-50 border-blue-200 hover:bg-blue-100 text-blue-700',
+    dark: 'dark:bg-blue-950/40 dark:border-blue-800 dark:hover:bg-blue-900/50 dark:text-blue-300',
+  },
+  {
+    mood: 'healing', label: '癒されたい', icon: Leaf,
+    light: 'bg-green-50 border-green-200 hover:bg-green-100 text-green-700',
+    dark: 'dark:bg-green-950/40 dark:border-green-800 dark:hover:bg-green-900/50 dark:text-green-300',
+  },
+  {
+    mood: 'excitement', label: 'ドキドキしたい', icon: HeartPulse,
+    light: 'bg-pink-50 border-pink-200 hover:bg-pink-100 text-pink-700',
+    dark: 'dark:bg-pink-950/40 dark:border-pink-800 dark:hover:bg-pink-900/50 dark:text-pink-300',
+  },
+  {
+    mood: 'worldview', label: '世界観を広げたい', icon: Globe,
+    light: 'bg-purple-50 border-purple-200 hover:bg-purple-100 text-purple-700',
+    dark: 'dark:bg-purple-950/40 dark:border-purple-800 dark:hover:bg-purple-900/50 dark:text-purple-300',
+  },
+  {
+    mood: 'laughter', label: '笑いたい', icon: Laugh,
+    light: 'bg-yellow-50 border-yellow-200 hover:bg-yellow-100 text-yellow-700',
+    dark: 'dark:bg-yellow-950/40 dark:border-yellow-800 dark:hover:bg-yellow-900/50 dark:text-yellow-300',
+  },
 ];
 
 function WorkCard({ work }: { work: Work }) {
   return (
     <Link href={`/works/${work.id}`}>
       <Card className="h-full hover:shadow-md transition-shadow cursor-pointer">
-        <CardContent className="p-4 space-y-2">
+        <CardContent className="p-5 space-y-2">
           <h3 className="font-medium text-sm line-clamp-2">{work.title}</h3>
           <p className="text-xs text-muted-foreground">
             {work.author.displayName || work.author.name}
@@ -37,7 +64,7 @@ function WorkCard({ work }: { work: Work }) {
             )}
             {work.qualityScore && (
               <Badge variant="secondary" className="text-xs">
-                <Sparkles className="h-3 w-3 mr-0.5" />
+                <Star className="h-3 w-3 mr-0.5" />
                 {Math.round(work.qualityScore.overall)}
               </Badge>
             )}
@@ -51,7 +78,7 @@ function WorkCard({ work }: { work: Work }) {
 function WorkCardSkeleton() {
   return (
     <Card>
-      <CardContent className="p-4 space-y-2">
+      <CardContent className="p-5 space-y-2">
         <Skeleton className="h-4 w-3/4" />
         <Skeleton className="h-3 w-1/2" />
         <Skeleton className="h-3 w-full" />
@@ -82,7 +109,7 @@ export default function Home() {
   return (
     <main className="min-h-screen">
       {/* Hero */}
-      <section className="relative bg-gradient-to-b from-primary/5 to-background py-16 px-4">
+      <section className="relative bg-gradient-to-b from-primary/5 to-background py-20 px-4">
         <div className="mx-auto max-w-4xl text-center space-y-6">
           <h1 className="text-4xl font-bold tracking-tight sm:text-5xl">
             Workwrite
@@ -97,23 +124,23 @@ export default function Home() {
               placeholder="作品を検索..."
               className="flex-1"
             />
-            <Button type="submit" size="icon">
+            <Button type="submit" size="icon" className="min-h-[44px] min-w-[44px]">
               <Search className="h-4 w-4" />
             </Button>
           </form>
         </div>
       </section>
 
-      <div className="mx-auto max-w-6xl px-4 py-8 space-y-12">
+      <div className="mx-auto max-w-6xl px-4 py-10 space-y-14">
         {/* Popular Works */}
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold flex items-center gap-2">
               <TrendingUp className="h-5 w-5 text-primary" />
               今すぐ読める人気作
             </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {loading
               ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
               : data?.popular.map((work) => <WorkCard key={work.id} work={work} />)}
@@ -127,31 +154,34 @@ export default function Home() {
 
         {/* Mood-based Discovery */}
         <section>
-          <h2 className="text-xl font-bold mb-4 flex items-center gap-2">
+          <h2 className="text-xl font-bold mb-6 flex items-center gap-2">
             <BookOpen className="h-5 w-5 text-primary" />
             今の気分で探す
           </h2>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
-            {MOOD_CARDS.map((card) => (
-              <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
-                <div className={`rounded-lg border p-4 text-center transition-colors cursor-pointer ${card.color}`}>
-                  <span className="text-2xl">{card.emoji}</span>
-                  <p className="text-sm font-medium mt-2">{card.label}</p>
-                </div>
-              </Link>
-            ))}
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
+            {MOOD_CARDS.map((card) => {
+              const Icon = card.icon;
+              return (
+                <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
+                  <div className={`rounded-lg border p-5 text-center transition-colors cursor-pointer ${card.light} ${card.dark}`}>
+                    <Icon className="h-6 w-6 mx-auto" />
+                    <p className="text-sm font-medium mt-2">{card.label}</p>
+                  </div>
+                </Link>
+              );
+            })}
           </div>
         </section>
 
         {/* Hidden Gems */}
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold flex items-center gap-2">
-              <Sparkles className="h-5 w-5 text-amber-500" />
+              <Star className="h-5 w-5 text-accent" />
               埋もれた名作
             </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {loading
               ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
               : data?.hiddenGems.map((work) => <WorkCard key={work.id} work={work} />)}
@@ -165,13 +195,13 @@ export default function Home() {
 
         {/* Recent Works */}
         <section>
-          <div className="flex items-center justify-between mb-4">
+          <div className="flex items-center justify-between mb-6">
             <h2 className="text-xl font-bold flex items-center gap-2">
               <Eye className="h-5 w-5 text-primary" />
               新着作品
             </h2>
           </div>
-          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-3">
+          <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-6 gap-4">
             {loading
               ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
               : data?.recent.map((work) => <WorkCard key={work.id} work={work} />)}
@@ -181,7 +211,7 @@ export default function Home() {
         {/* Trending Emotion Tags */}
         {data?.trendingTags && data.trendingTags.length > 0 && (
           <section>
-            <h2 className="text-xl font-bold mb-4">人気の感情タグ</h2>
+            <h2 className="text-xl font-bold mb-6">人気の感情タグ</h2>
             <div className="flex flex-wrap gap-2">
               {data.trendingTags.map((tag) => (
                 <Link key={tag.id} href={`/discover/emotion/${tag.name}`}>

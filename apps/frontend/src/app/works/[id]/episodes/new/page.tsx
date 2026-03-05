@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { api } from '@/lib/api';
 
@@ -50,12 +51,12 @@ export default function NewEpisodePage() {
                 <label className="text-sm font-medium">本文 *</label>
                 <span className="text-xs text-muted-foreground">{wordCount.toLocaleString()} 文字</span>
               </div>
-              <textarea
+              <Textarea
                 value={content}
                 onChange={(e) => setContent(e.target.value)}
                 rows={20}
                 required
-                className="flex w-full rounded-md border border-border bg-background px-4 py-3 text-base leading-relaxed font-serif placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/50"
+                className="text-base leading-relaxed font-serif"
                 placeholder="本文を書き始めましょう..."
                 style={{ fontFamily: 'var(--font-serif)' }}
               />
