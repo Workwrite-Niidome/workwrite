@@ -38,10 +38,7 @@ jobs:
           cache: npm
 
       - name: Install dependencies
-        run: npm install
-
-      - name: Install platform-specific optional deps
-        run: npm install lightningcss-linux-x64-gnu@1.31.1 --no-save
+        run: rm -f package-lock.json && npm install
 
       - name: Generate Prisma client
         run: npm run prisma:generate --workspace=@workwrite/backend
