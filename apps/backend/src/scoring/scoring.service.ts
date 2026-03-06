@@ -1,6 +1,6 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
 
 export interface ScoringResult {
   immersion: number;
@@ -23,7 +23,7 @@ export class ScoringService {
 
   constructor(
     private prisma: PrismaService,
-    private config: ConfigService,
+    private aiSettings: AiSettingsService,
   ) {}
 
   async scoreWork(workId: string): Promise<ScoringResult | null> {
@@ -72,7 +72,7 @@ export class ScoringService {
   }
 
   private async callLlmForScoring(title: string, text: string): Promise<ScoringResult> {
-    const apiKey = this.config.get<string>('CLAUDE_API_KEY');
+    const apiKey = await this.aiSettings.getApiKey();
 
     if (!apiKey) {
       this.logger.warn('CLAUDE_API_KEY not set, using mock scores');

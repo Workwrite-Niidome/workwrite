@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { BarChart3, Users, BookOpen, MessageSquare } from 'lucide-react';
+import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -12,6 +12,8 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'Users', icon: Users },
   { href: '/admin/works', label: 'Works', icon: BookOpen },
   { href: '/admin/reviews', label: 'Reviews', icon: MessageSquare },
+  { href: '/admin/ai', label: 'AI Settings', icon: Sparkles },
+  { href: '/admin/ai/templates', label: 'Templates', icon: FileText },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

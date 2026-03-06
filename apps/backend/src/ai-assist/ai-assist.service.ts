@@ -1,0 +1,145 @@
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
+
+const MAX_CONTENT_LENGTH = 10000;
+
+// In-memory rate limiter: userId -> timestamps
+const rateLimitMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60 * 60 * 1000; // 1 hour
+const RATE_LIMIT_MAX = 20;
+
+@Injectable()
+export class AiAssistService {
+  private readonly logger = new Logger(AiAssistService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private aiSettings: AiSettingsService,
+    private templates: PromptTemplatesService,
+  ) {}
+
+  async checkStatus(): Promise<{ available: boolean; model: string }> {
+    const enabled = await this.aiSettings.isAiEnabled();
+    const model = await this.aiSettings.getModel();
+    if (!enabled) return { available: false, model };
+    const apiKey = await this.aiSettings.getApiKey();
+    return { available: !!apiKey, model };
+  }
+
+  checkRateLimit(userId: string): boolean {
+    const now = Date.now();
+    const timestamps = rateLimitMap.get(userId) || [];
+    const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+    if (recent.length >= RATE_LIMIT_MAX) return false;
+    recent.push(now);
+    rateLimitMap.set(userId, recent);
+    return true;
+  }
+
+  async *streamAssist(
+    userId: string,
+    templateSlug: string,
+    variables: Record<string, string>,
+  ): AsyncGenerator<string> {
+    const enabled = await this.aiSettings.isAiEnabled();
+    if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    if (!this.checkRateLimit(userId)) {
+      throw new ServiceUnavailableException('Rate limit exceeded. Please try again later.');
+    }
+
+    const template = await this.templates.findBySlug(templateSlug);
+    const model = await this.aiSettings.getModel();
+
+    // Build prompt from template
+    let prompt = template.prompt;
+    for (const [key, value] of Object.entries(variables)) {
+      const truncated = key === 'content' ? value.slice(0, MAX_CONTENT_LENGTH) : value;
+      prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), truncated);
+    }
+
+    const startTime = Date.now();
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        stream: true,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`Claude API error: ${response.status} ${errorText}`);
+      throw new ServiceUnavailableException('AI service error');
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) throw new ServiceUnavailableException('No response stream');
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') break;
+
+          try {
+            const event = JSON.parse(data);
+            if (event.type === 'content_block_delta' && event.delta?.text) {
+              yield event.delta.text;
+            }
+            if (event.type === 'message_start' && event.message?.usage) {
+              inputTokens = event.message.usage.input_tokens || 0;
+            }
+            if (event.type === 'message_delta' && event.usage) {
+              outputTokens = event.usage.output_tokens || 0;
+            }
+          } catch {
+            // Skip malformed JSON
+          }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+
+      // Log usage
+      const durationMs = Date.now() - startTime;
+      await this.prisma.aiUsageLog.create({
+        data: {
+          userId,
+          templateId: template.id,
+          feature: 'writing_assist',
+          inputTokens,
+          outputTokens,
+          model,
+          durationMs,
+        },
+      }).catch((e) => this.logger.error('Failed to log AI usage', e));
+    }
+  }
+}

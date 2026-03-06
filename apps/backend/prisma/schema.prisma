@@ -488,3 +488,69 @@ model ReadingHistoryImport {
 
   @@index([userId])
 }
+
+// ============================================================
+// AI Settings & Templates
+// ============================================================
+
+model SystemSetting {
+  id        String   @id @default(cuid())
+  key       String   @unique
+  value     String   @db.Text
+  encrypted Boolean  @default(false)
+  updatedAt DateTime @updatedAt
+  updatedBy String?
+
+  @@index([key])
+}
+
+model PromptTemplate {
+  id          String   @id @default(cuid())
+  slug        String   @unique
+  name        String
+  description String?
+  category    String   // "writing" | "editing" | "generation"
+  prompt      String   @db.Text
+  variables   Json?    // ["content", "genre"] etc.
+  isBuiltIn   Boolean  @default(false)
+  isActive    Boolean  @default(true)
+  sortOrder   Int      @default(0)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  usageLogs AiUsageLog[]
+
+  @@index([category])
+  @@index([isActive])
+}
+
+model AiUsageLog {
+  id           String          @id @default(cuid())
+  userId       String
+  templateId   String?
+  feature      String          // "writing_assist" | "scoring" | "synopsis_gen"
+  inputTokens  Int             @default(0)
+  outputTokens Int             @default(0)
+  model        String
+  durationMs   Int             @default(0)
+  createdAt    DateTime        @default(now())
+
+  template PromptTemplate? @relation(fields: [templateId], references: [id], onDelete: SetNull)
+
+  @@index([userId])
+  @@index([createdAt])
+  @@index([feature])
+}
+
+model EpisodeDraft {
+  id        String   @id @default(cuid())
+  episodeId String   @default("")
+  workId    String
+  userId    String
+  title     String
+  content   String   @db.Text
+  savedAt   DateTime @default(now())
+
+  @@unique([userId, workId, episodeId])
+  @@index([userId])
+}

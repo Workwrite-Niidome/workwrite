@@ -21,6 +21,9 @@ import { AuthorDashboardModule } from './author-dashboard/author-dashboard.modul
 import { PaymentsModule } from './payments/payments.module';
 import { NotificationsModule } from './notifications/notifications.module';
 import { AdminModule } from './admin/admin.module';
+import { AiSettingsModule } from './ai-settings/ai-settings.module';
+import { PromptTemplatesModule } from './prompt-templates/prompt-templates.module';
+import { AiAssistModule } from './ai-assist/ai-assist.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -50,6 +53,9 @@ import { HealthController } from './health.controller';
     PaymentsModule,
     NotificationsModule,
     AdminModule,
+    AiSettingsModule,
+    PromptTemplatesModule,
+    AiAssistModule,
   ],
   controllers: [HealthController],
 })

@@ -453,6 +453,80 @@ class ApiClient {
   async deleteReviewAsAdmin(reviewId: string) {
     return this.request<{ data: { id: string } }>(`/admin/reviews/${reviewId}`, { method: 'DELETE' });
   }
+
+  // AI Status & Assist
+  async getAiStatus() {
+    return this.request<{ data: { available: boolean; model: string } }>('/ai/status');
+  }
+
+  async getPromptTemplates() {
+    return this.request<{ data: PromptTemplate[] }>('/prompt-templates');
+  }
+
+  // Drafts
+  async saveDraft(data: { workId: string; episodeId?: string; title: string; content: string }) {
+    return this.request<{ data: DraftData }>('/episodes/draft', {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getDraft(workId: string, episodeId?: string) {
+    const qs = episodeId ? `?episodeId=${episodeId}` : '';
+    return this.request<{ data: DraftData | null }>(`/episodes/draft/${workId}${qs}`);
+  }
+
+  async deleteDraft(workId: string, episodeId?: string) {
+    const qs = episodeId ? `?episodeId=${episodeId}` : '';
+    return this.request<{ data: { deleted: boolean } }>(`/episodes/draft/${workId}${qs}`, { method: 'DELETE' });
+  }
+
+  // Admin AI Settings
+  async getAiSettings() {
+    return this.request<{ data: AiSettingItem[] }>('/admin/ai/settings');
+  }
+
+  async updateAiSetting(key: string, value: string, encrypted?: boolean) {
+    return this.request<{ data: { success: boolean } }>(`/admin/ai/settings/${encodeURIComponent(key)}`, {
+      method: 'PUT',
+      body: JSON.stringify({ value, encrypted }),
+    });
+  }
+
+  async getAiUsage() {
+    return this.request<{ data: { totalRequests: number; totalInputTokens: number; totalOutputTokens: number } }>('/admin/ai/usage');
+  }
+
+  async getAiUsageDaily() {
+    return this.request<{ data: { date: string; requests: number; tokens: number }[] }>('/admin/ai/usage/daily');
+  }
+
+  // Admin Templates
+  async getAdminTemplates() {
+    return this.request<{ data: PromptTemplate[] }>('/admin/prompt-templates');
+  }
+
+  async createTemplate(data: Partial<PromptTemplate>) {
+    return this.request<{ data: PromptTemplate }>('/admin/prompt-templates', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateTemplate(id: string, data: Partial<PromptTemplate>) {
+    return this.request<{ data: PromptTemplate }>(`/admin/prompt-templates/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteTemplate(id: string) {
+    return this.request<{ data: { deleted: boolean } }>(`/admin/prompt-templates/${id}`, { method: 'DELETE' });
+  }
+
+  async seedTemplates() {
+    return this.request<{ data: { seeded: number } }>('/admin/prompt-templates/seed', { method: 'POST' });
+  }
 }
 
 export class ApiError extends Error {
@@ -677,6 +751,35 @@ export interface TopPageData {
   recent: Work[];
   hiddenGems: Work[];
   trendingTags: (EmotionTag & { count: number })[];
+}
+
+export interface PromptTemplate {
+  id: string;
+  slug: string;
+  name: string;
+  description: string | null;
+  category: string;
+  prompt: string;
+  variables: string[];
+  isBuiltIn: boolean;
+  isActive: boolean;
+  sortOrder: number;
+}
+
+export interface DraftData {
+  id: string;
+  workId: string;
+  episodeId: string | null;
+  title: string;
+  content: string;
+  savedAt: string;
+}
+
+export interface AiSettingItem {
+  key: string;
+  value: string;
+  encrypted: boolean;
+  updatedAt: string;
 }
 
 export const api = new ApiClient();
