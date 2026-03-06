@@ -57,6 +57,10 @@ export class AuthService {
       throw new UnauthorizedException('Invalid credentials');
     }
 
+    if (user.isBanned) {
+      throw new UnauthorizedException('Account has been suspended');
+    }
+
     return this.generateTokens(user);
   }
 
@@ -137,7 +141,7 @@ export class AuthService {
   }
 
   async validateUser(userId: string) {
-    return this.prisma.user.findUnique({
+    const user = await this.prisma.user.findUnique({
       where: { id: userId },
       select: {
         id: true,
@@ -146,8 +150,11 @@ export class AuthService {
         displayName: true,
         role: true,
         avatarUrl: true,
+        isBanned: true,
       },
     });
+    if (user?.isBanned) return null;
+    return user;
   }
 
   private generateTokens(user: {

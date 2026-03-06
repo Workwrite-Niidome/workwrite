@@ -86,22 +86,28 @@ export function Header() {
       <div
         className={cn(
           'md:hidden border-t border-border overflow-hidden transition-all',
-          mobileOpen ? 'max-h-60' : 'max-h-0',
+          mobileOpen ? 'max-h-80' : 'max-h-0',
         )}
       >
         <nav className="flex flex-col p-4 gap-1">
           {isAuthenticated ? (
             <>
+              <Link href="/notifications" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
+                Notifications
+              </Link>
               <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
-                執筆ダッシュボード
+                Writing Dashboard
+              </Link>
+              <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
+                Settings
               </Link>
               <button onClick={handleLogout} className="text-sm text-muted-foreground hover:text-foreground py-2 text-left">
-                ログアウト
+                Log out
               </button>
             </>
           ) : (
             <Link href="/login" className="text-sm font-medium py-2" onClick={() => setMobileOpen(false)}>
-              ログイン
+              Log in
             </Link>
           )}
         </nav>

@@ -363,6 +363,96 @@ class ApiClient {
   async getScoreAnalysis(workId: string) {
     return this.request<{ data: QualityScoreDetail | null }>(`/scoring/works/${workId}/analysis`);
   }
+
+  // Notifications
+  async getNotifications(unreadOnly = false) {
+    const qs = unreadOnly ? '?unreadOnly=true' : '';
+    return this.request<{ data: NotificationItem[] }>(`/notifications${qs}`);
+  }
+
+  async getUnreadNotificationCount() {
+    return this.request<{ data: number }>('/notifications/unread-count');
+  }
+
+  async markNotificationAsRead(id: string) {
+    return this.request<{ data: unknown }>(`/notifications/${id}/read`, { method: 'POST' });
+  }
+
+  async markAllNotificationsAsRead() {
+    return this.request<{ data: unknown }>('/notifications/read-all', { method: 'POST' });
+  }
+
+  // Settings
+  async changePassword(data: { currentPassword: string; newPassword: string }) {
+    return this.request<{ data: { success: boolean } }>('/users/me/password', {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAccount() {
+    return this.request<{ data: { deleted: boolean } }>('/users/me', { method: 'DELETE' });
+  }
+
+  // Admin
+  async getAdminStats() {
+    return this.request<{ data: AdminStats }>('/admin/stats');
+  }
+
+  async getAdminUsers(params?: { page?: number; limit?: number; search?: string; role?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.search) qs.set('search', params.search);
+    if (params?.role) qs.set('role', params.role);
+    return this.request<{ data: AdminUser[]; total: number; page: number; limit: number }>(
+      `/admin/users?${qs.toString()}`,
+    );
+  }
+
+  async updateUserRole(userId: string, role: string) {
+    return this.request<{ data: { id: string; name: string; role: string } }>(
+      `/admin/users/${userId}/role`,
+      { method: 'PATCH', body: JSON.stringify({ role }) },
+    );
+  }
+
+  async banUser(userId: string, isBanned: boolean) {
+    return this.request<{ data: { id: string; name: string; isBanned: boolean } }>(
+      `/admin/users/${userId}/ban`,
+      { method: 'PATCH', body: JSON.stringify({ isBanned }) },
+    );
+  }
+
+  async getAdminWorks(params?: { page?: number; limit?: number; status?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.status) qs.set('status', params.status);
+    return this.request<{ data: AdminWork[]; total: number; page: number; limit: number }>(
+      `/admin/works?${qs.toString()}`,
+    );
+  }
+
+  async updateWorkStatus(workId: string, status: string) {
+    return this.request<{ data: { id: string; title: string; status: string } }>(
+      `/admin/works/${workId}/status`,
+      { method: 'PATCH', body: JSON.stringify({ status }) },
+    );
+  }
+
+  async getAdminReviews(params?: { page?: number; limit?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.page) qs.set('page', String(params.page));
+    if (params?.limit) qs.set('limit', String(params.limit));
+    return this.request<{ data: AdminReview[]; total: number; page: number; limit: number }>(
+      `/admin/reviews?${qs.toString()}`,
+    );
+  }
+
+  async deleteReviewAsAdmin(reviewId: string) {
+    return this.request<{ data: { id: string } }>(`/admin/reviews/${reviewId}`, { method: 'DELETE' });
+  }
 }
 
 export class ApiError extends Error {
@@ -530,6 +620,56 @@ export interface QualityScoreDetail {
   analysis: Record<string, string> | null;
   tips: string[];
   scoredAt: string;
+}
+
+export interface NotificationItem {
+  id: string;
+  type: string;
+  title: string;
+  body: string | null;
+  data: Record<string, unknown> | null;
+  read: boolean;
+  createdAt: string;
+}
+
+export interface AdminStats {
+  totalUsers: number;
+  totalWorks: number;
+  totalReviews: number;
+  totalComments: number;
+  todayNewUsers: number;
+  todayNewWorks: number;
+}
+
+export interface AdminUser {
+  id: string;
+  email: string;
+  name: string;
+  displayName: string | null;
+  role: string;
+  isBanned: boolean;
+  createdAt: string;
+  _count: { works: number; reviews: number };
+}
+
+export interface AdminWork {
+  id: string;
+  title: string;
+  status: string;
+  genre: string | null;
+  createdAt: string;
+  author: { id: string; name: string; displayName: string | null };
+  qualityScore: { overall: number } | null;
+  _count: { episodes: number; reviews: number };
+}
+
+export interface AdminReview {
+  id: string;
+  content: string;
+  createdAt: string;
+  user: { id: string; name: string; displayName: string | null };
+  work: { id: string; title: string };
+  _count: { helpfuls: number };
 }
 
 export interface TopPageData {

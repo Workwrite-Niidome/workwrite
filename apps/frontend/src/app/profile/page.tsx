@@ -1,6 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
+import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { Loading } from '@/components/layout/loading';
+import { Settings } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -60,7 +62,15 @@ export default function ProfilePage() {
     <div className="mx-auto max-w-2xl px-4 py-8">
       <Card>
         <CardHeader>
-          <CardTitle>プロフィール設定</CardTitle>
+          <div className="flex items-center justify-between">
+            <CardTitle>Profile</CardTitle>
+            <Link href="/settings">
+              <Button variant="ghost" size="sm" className="text-xs h-8 gap-1">
+                <Settings className="h-3.5 w-3.5" />
+                Settings
+              </Button>
+            </Link>
+          </div>
         </CardHeader>
         <CardContent>
           <form onSubmit={handleSave} className="space-y-4">

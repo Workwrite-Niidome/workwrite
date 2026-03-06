@@ -20,6 +20,7 @@ import { ScoringModule } from './scoring/scoring.module';
 import { AuthorDashboardModule } from './author-dashboard/author-dashboard.module';
 import { PaymentsModule } from './payments/payments.module';
 import { NotificationsModule } from './notifications/notifications.module';
+import { AdminModule } from './admin/admin.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -48,6 +49,7 @@ import { HealthController } from './health.controller';
     AuthorDashboardModule,
     PaymentsModule,
     NotificationsModule,
+    AdminModule,
   ],
   controllers: [HealthController],
 })
