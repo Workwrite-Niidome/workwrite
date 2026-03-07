@@ -84,6 +84,7 @@ class ApiClient {
         localStorage.removeItem('refreshToken');
       }
       this.onAuthFailure?.();
+      throw new ApiError(401, 'Authentication failed');
     }
 
     if (!res.ok) {
