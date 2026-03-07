@@ -256,7 +256,7 @@ export default function ReaderPage() {
   return (
     <div className={`min-h-screen ${themeStyle.bg} ${themeStyle.text} transition-colors`}>
       {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted">
+      <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted" style={{ transform: 'translateZ(0)' }}>
         <div
           className="h-full bg-primary transition-all duration-300"
           style={{ width: `${progressPct * 100}%` }}

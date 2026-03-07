@@ -1,10 +1,18 @@
-import type { Metadata } from 'next';
+import type { Metadata, Viewport } from 'next';
 import { ThemeProvider } from 'next-themes';
 import { Header } from '@/components/layout/header';
 import { Footer } from '@/components/layout/footer';
 import { BottomNav } from '@/components/layout/bottom-nav';
 import { AuthProvider } from '@/lib/auth-context';
 import './globals.css';
+
+export const viewport: Viewport = {
+  width: 'device-width',
+  initialScale: 1,
+  maximumScale: 1,
+  userScalable: false,
+  viewportFit: 'cover',
+};
 
 export const metadata: Metadata = {
   title: 'Workwrite - 読後の自己変容を設計する小説プラットフォーム',

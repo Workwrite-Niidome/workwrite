@@ -22,7 +22,7 @@ export function Header() {
   }
 
   return (
-    <header className="sticky top-0 z-50 w-full border-b border-border bg-background/80 backdrop-blur-sm">
+    <header className="sticky top-0 z-50 w-full border-b border-border bg-background" style={{ transform: 'translateZ(0)' }}>
       <div className="mx-auto flex h-12 max-w-5xl items-center px-6">
         <Link href="/" className="mr-8">
           <span className="text-sm font-semibold tracking-wide">Workwrite</span>
@@ -92,21 +92,21 @@ export function Header() {
           {isAuthenticated ? (
             <>
               <Link href="/notifications" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
-                Notifications
+                通知
               </Link>
               <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
-                Writing Dashboard
+                執筆ダッシュボード
               </Link>
               <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
-                Settings
+                設定
               </Link>
               <button onClick={handleLogout} className="text-sm text-muted-foreground hover:text-foreground py-2 text-left">
-                Log out
+                ログアウト
               </button>
             </>
           ) : (
             <Link href="/login" className="text-sm font-medium py-2" onClick={() => setMobileOpen(false)}>
-              Log in
+              ログイン
             </Link>
           )}
         </nav>

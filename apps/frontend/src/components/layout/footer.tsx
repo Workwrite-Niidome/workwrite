@@ -7,7 +7,7 @@ export function Footer() {
   const { isAuthenticated } = useAuth();
 
   return (
-    <footer className="border-t border-border pb-20 md:pb-0">
+    <footer className="border-t border-border pb-24 md:pb-0">
       <div className="mx-auto max-w-5xl px-6 py-10">
         <div className="grid grid-cols-2 md:grid-cols-4 gap-8 text-sm">
           <div>

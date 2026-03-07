@@ -64,14 +64,28 @@
 }
 
 @layer base {
+  html {
+    -webkit-text-size-adjust: 100%;
+    text-size-adjust: 100%;
+  }
+
   body {
     @apply bg-background text-foreground antialiased transition-colors duration-200;
     font-family: var(--font-sans);
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    overscroll-behavior-y: none;
   }
 
   ::selection {
     @apply bg-foreground/10;
+  }
+}
+
+/* Fixed elements should not scale with pinch zoom */
+@supports (touch-action: none) {
+  .fixed-viewport {
+    transform: translateZ(0);
+    -webkit-transform: translateZ(0);
   }
 }

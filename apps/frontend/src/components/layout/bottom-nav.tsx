@@ -20,7 +20,7 @@ export function BottomNav() {
   if (pathname.startsWith('/read/')) return null;
 
   return (
-    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/80 md:hidden">
+    <nav className="fixed bottom-0 left-0 right-0 z-50 border-t border-border bg-background md:hidden" style={{ transform: 'translateZ(0)', paddingBottom: 'env(safe-area-inset-bottom, 0px)' }}>
       <div className="flex items-center justify-around">
         {NAV_ITEMS.map((item) => {
           const isActive = item.href === '/'
