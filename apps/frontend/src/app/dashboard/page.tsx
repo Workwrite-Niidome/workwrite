@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3 } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -122,35 +122,48 @@ export default function DashboardPage() {
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">作品一覧</h2>
           {overview.works.map((work) => (
-            <Card key={work.id}>
-              <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-                <CardTitle className="text-lg">
-                  <Link href={`/works/${work.id}/edit`} className="hover:text-primary">
-                    {work.title}
-                  </Link>
-                </CardTitle>
-                <div className="flex items-center gap-2">
-                  <Link href={`/dashboard/works/${work.id}`}>
-                    <Button variant="ghost" size="sm">
-                      <BarChart3 className="h-4 w-4 mr-1" /> 分析
-                    </Button>
-                  </Link>
-                  <Badge variant={work.status === 'PUBLISHED' ? 'default' : 'secondary'}>
-                    {STATUS_LABELS[work.status]}
-                  </Badge>
-                </div>
-              </CardHeader>
-              <CardContent>
-                <div className="flex items-center gap-4 text-sm text-muted-foreground">
-                  <span>{work._count?.episodes ?? 0} エピソード</span>
-                  <span><Eye className="h-3 w-3 inline mr-0.5" />{work.totalViews}</span>
-                  <span>{work._count?.reviews ?? 0} レビュー</span>
-                  {work.qualityScore && (
-                    <Badge variant="secondary">スコア {Math.round(work.qualityScore.overall)}</Badge>
-                  )}
-                  {work.genre && <Badge variant="outline">{work.genre}</Badge>}
-                </div>
-              </CardContent>
+            <Card key={work.id} className="group">
+              <Link href={`/works/${work.id}/edit`} className="block">
+                <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
+                  <div className="flex items-center gap-2 min-w-0">
+                    <CardTitle className="text-lg truncate group-hover:text-primary transition-colors">
+                      {work.title}
+                    </CardTitle>
+                    <Badge variant={work.status === 'PUBLISHED' ? 'default' : 'secondary'} className="shrink-0">
+                      {STATUS_LABELS[work.status]}
+                    </Badge>
+                  </div>
+                  <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
+                </CardHeader>
+                <CardContent>
+                  <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                    <span>{work._count?.episodes ?? 0} エピソード</span>
+                    <span><Eye className="h-3 w-3 inline mr-0.5" />{work.totalViews}</span>
+                    <span>{work._count?.reviews ?? 0} レビュー</span>
+                    {work.qualityScore && (
+                      <Badge variant="secondary">スコア {Math.round(work.qualityScore.overall)}</Badge>
+                    )}
+                    {work.genre && <Badge variant="outline">{work.genre}</Badge>}
+                  </div>
+                </CardContent>
+              </Link>
+              <div className="px-6 pb-4 flex gap-2">
+                <Link href={`/works/${work.id}/episodes/new`}>
+                  <Button variant="outline" size="sm" className="text-xs h-8">
+                    <Plus className="h-3 w-3 mr-1" /> エピソード追加
+                  </Button>
+                </Link>
+                <Link href={`/works/${work.id}/edit`}>
+                  <Button variant="ghost" size="sm" className="text-xs h-8">
+                    <Pencil className="h-3 w-3 mr-1" /> 編集
+                  </Button>
+                </Link>
+                <Link href={`/dashboard/works/${work.id}`}>
+                  <Button variant="ghost" size="sm" className="text-xs h-8">
+                    <BarChart3 className="h-3 w-3 mr-1" /> 分析
+                  </Button>
+                </Link>
+              </div>
             </Card>
           ))}
         </div>

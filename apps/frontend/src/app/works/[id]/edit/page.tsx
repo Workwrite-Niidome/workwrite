@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2 } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -113,11 +113,22 @@ export default function EditWorkPage() {
             </CardHeader>
             <CardContent>
               {work.episodes && work.episodes.length > 0 ? (
-                <ul className="space-y-2">
+                <ul className="space-y-1">
                   {work.episodes.map((ep) => (
-                    <li key={ep.id} className="flex items-center justify-between text-sm">
-                      <span>{ep.orderIndex + 1}. {ep.title}</span>
-                      <Badge variant="outline">{ep.wordCount}字</Badge>
+                    <li key={ep.id}>
+                      <Link
+                        href={`/works/${workId}/episodes/${ep.id}/edit`}
+                        className="flex items-center justify-between rounded-md px-2 py-2 -mx-2 hover:bg-muted transition-colors group"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-xs text-muted-foreground w-5 shrink-0">{ep.orderIndex + 1}.</span>
+                          <span className="text-sm truncate">{ep.title}</span>
+                        </div>
+                        <div className="flex items-center gap-2 shrink-0">
+                          <Badge variant="outline" className="text-xs">{ep.wordCount}字</Badge>
+                          <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                        </div>
+                      </Link>
                     </li>
                   ))}
                 </ul>
