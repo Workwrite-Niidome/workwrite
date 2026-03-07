@@ -51,6 +51,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, []);
 
   useEffect(() => {
+    api.setOnAuthFailure(() => {
+      setState({ user: null, isLoading: false, isAuthenticated: false });
+    });
+  }, []);
+
+  useEffect(() => {
     const token = api.getToken();
     if (!token) {
       setState((s) => ({ ...s, isLoading: false }));

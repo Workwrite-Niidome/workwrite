@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Search, ArrowRight, BookOpen } from 'lucide-react';
@@ -8,7 +8,9 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
-import { api, type Work, type TopPageData } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
+import { estimateReadingTime } from '@/lib/utils';
+import { api, type Work, type TopPageData, type ContinueReadingItem } from '@/lib/api';
 
 const MOOD_CARDS = [
   { mood: 'courage', label: '勇気をもらいたい' },
@@ -59,9 +61,15 @@ function WorkCardSkeleton() {
 
 export default function Home() {
   const router = useRouter();
+  const { isAuthenticated } = useAuth();
   const [data, setData] = useState<TopPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [searchQuery, setSearchQuery] = useState('');
+  const [continueReading, setContinueReading] = useState<ContinueReadingItem[]>([]);
+  const [autocompleteResults, setAutocompleteResults] = useState<{ id: string; title: string; author: { name: string; displayName: string | null } }[]>([]);
+  const [showAutocomplete, setShowAutocomplete] = useState(false);
+  const autocompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const autocompleteRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     api.getTopPage()
@@ -70,8 +78,46 @@ export default function Home() {
       .finally(() => setLoading(false));
   }, []);
 
+  useEffect(() => {
+    if (isAuthenticated) {
+      api.getContinueReading()
+        .then((res) => setContinueReading(res.data))
+        .catch(() => {});
+    }
+  }, [isAuthenticated]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (autocompleteRef.current && !autocompleteRef.current.contains(e.target as Node)) {
+        setShowAutocomplete(false);
+      }
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  function handleSearchInput(value: string) {
+    setSearchQuery(value);
+    if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
+    if (value.trim().length < 2) {
+      setAutocompleteResults([]);
+      setShowAutocomplete(false);
+      return;
+    }
+    autocompleteTimer.current = setTimeout(async () => {
+      try {
+        const res = await api.autocomplete(value.trim());
+        setAutocompleteResults(res.data);
+        setShowAutocomplete(res.data.length > 0);
+      } catch {
+        setShowAutocomplete(false);
+      }
+    }, 300);
+  }
+
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
+    setShowAutocomplete(false);
     if (searchQuery.trim()) {
       router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
     }
@@ -91,14 +137,32 @@ export default function Home() {
             あなたの心に響く次の一冊を。
           </p>
           <form onSubmit={handleSearch} className="mt-10 flex gap-2 max-w-sm mx-auto">
-            <div className="relative flex-1">
+            <div className="relative flex-1" ref={autocompleteRef}>
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
               <Input
                 value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
+                onChange={(e) => handleSearchInput(e.target.value)}
+                onFocus={() => autocompleteResults.length > 0 && setShowAutocomplete(true)}
                 placeholder="作品を検索"
                 className="pl-9"
               />
+              {showAutocomplete && (
+                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
+                  {autocompleteResults.map((item) => (
+                    <Link
+                      key={item.id}
+                      href={`/works/${item.id}`}
+                      onClick={() => setShowAutocomplete(false)}
+                      className="block px-4 py-2.5 hover:bg-muted/50 transition-colors"
+                    >
+                      <p className="text-sm font-medium">{item.title}</p>
+                      <p className="text-xs text-muted-foreground">
+                        {item.author.displayName || item.author.name}
+                      </p>
+                    </Link>
+                  ))}
+                </div>
+              )}
             </div>
             <Button type="submit" aria-label="検索">
               <Search className="h-4 w-4" />
@@ -108,6 +172,47 @@ export default function Home() {
       </section>
 
       <div className="mx-auto max-w-2xl px-6 py-12 space-y-16">
+        {/* Continue Reading */}
+        {isAuthenticated && continueReading.length > 0 && (
+          <section>
+            <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">続きを読む</h2>
+            <div className="space-y-1">
+              {continueReading.map((item) => (
+                <Link
+                  key={item.workId}
+                  href={item.currentEpisode ? `/read/${item.currentEpisode.id}` : `/works/${item.workId}`}
+                  className="group block"
+                >
+                  <div className="flex items-center gap-4 py-3 border-b border-border last:border-b-0 -mx-2 px-2 rounded hover:bg-secondary/30 transition-colors">
+                    <div className="flex-1 min-w-0">
+                      <p className="text-sm font-medium truncate">{item.work.title}</p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {item.work.author.displayName || item.work.author.name}
+                        {item.currentEpisode && (
+                          <span className="ml-2">
+                            第{item.currentEpisode.orderIndex + 1}話
+                          </span>
+                        )}
+                      </p>
+                    </div>
+                    <div className="flex items-center gap-3 flex-shrink-0">
+                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
+                        <div
+                          className="h-full bg-primary rounded-full transition-all"
+                          style={{ width: `${Math.round(item.progressPct * 100)}%` }}
+                        />
+                      </div>
+                      <span className="text-xs text-muted-foreground w-8 text-right">
+                        {Math.round(item.progressPct * 100)}%
+                      </span>
+                    </div>
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+
         {/* Mood Discovery - minimal, text-based */}
         <section>
           <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-6">今の気分で探す</h2>

@@ -11,11 +11,16 @@ import {
   Sun,
   X,
   MessageSquare,
+  Sparkles,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
-import { api, type Episode, type Comment } from '@/lib/api';
+import { estimateReadingTime } from '@/lib/utils';
+import { api, type Episode, type Comment, type Highlight } from '@/lib/api';
+import { HighlightedText } from '@/components/reader/highlighted-text';
+import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
+import { CompanionChat } from '@/components/ai/companion-chat';
 
 type FontSize = 'sm' | 'base' | 'lg' | 'xl';
 type Theme = 'light' | 'dark' | 'sepia';
@@ -48,9 +53,16 @@ export default function ReaderPage() {
   const [theme, setTheme] = useState<Theme>('light');
   const [showSettings, setShowSettings] = useState(false);
   const [showComments, setShowComments] = useState(false);
+  const [showCompanion, setShowCompanion] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
   const [progressPct, setProgressPct] = useState(0);
+
+  // Highlight state
+  const [highlights, setHighlights] = useState<Highlight[]>([]);
+  const [showToolbar, setShowToolbar] = useState(false);
+  const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
+  const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -71,6 +83,14 @@ export default function ReaderPage() {
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));
   }, [episodeId, router]);
+
+  // Load highlights
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.getHighlightsForEpisode(episodeId)
+      .then((res) => setHighlights(res.data))
+      .catch(() => {});
+  }, [episodeId, isAuthenticated]);
 
   useEffect(() => {
     if (typeof window !== 'undefined') {
@@ -145,6 +165,76 @@ export default function ReaderPage() {
   function toggleComments() {
     if (!showComments) loadComments();
     setShowComments(!showComments);
+    if (showCompanion) setShowCompanion(false);
+  }
+
+  function toggleCompanion() {
+    setShowCompanion(!showCompanion);
+    if (showComments) setShowComments(false);
+  }
+
+  function handleContentMouseUp() {
+    if (!isAuthenticated || !episode) return;
+    const selection = window.getSelection();
+    if (!selection || selection.isCollapsed || !selection.rangeCount) {
+      return;
+    }
+
+    const range = selection.getRangeAt(0);
+    const text = selection.toString().trim();
+    if (!text) return;
+
+    // Calculate position in the content string
+    const contentEl = contentRef.current;
+    if (!contentEl) return;
+
+    const content = episode.content;
+    const selectedText = text;
+    const startIdx = content.indexOf(selectedText);
+    if (startIdx === -1) return;
+
+    const rect = range.getBoundingClientRect();
+    setToolbarPosition({
+      top: rect.top + window.scrollY,
+      left: rect.left + rect.width / 2,
+    });
+    setSelectedRange({ start: startIdx, end: startIdx + selectedText.length });
+    setShowToolbar(true);
+  }
+
+  async function handleHighlightSave(color: string, memo: string) {
+    if (!selectedRange) return;
+    try {
+      const res = await api.createHighlight({
+        episodeId,
+        startPos: selectedRange.start,
+        endPos: selectedRange.end,
+        color,
+        memo: memo || undefined,
+      });
+      setHighlights((prev) => [...prev, res.data]);
+    } catch {}
+    window.getSelection()?.removeAllRanges();
+    setSelectedRange(null);
+  }
+
+  async function handleAiExplain() {
+    if (!selectedRange) return;
+    // Save highlight first, then explain
+    try {
+      const res = await api.createHighlight({
+        episodeId,
+        startPos: selectedRange.start,
+        endPos: selectedRange.end,
+        color: 'yellow',
+      });
+      setHighlights((prev) => [...prev, res.data]);
+      const explainRes = await api.explainHighlight(res.data.id);
+      alert(explainRes.data.explanation);
+    } catch {}
+    window.getSelection()?.removeAllRanges();
+    setSelectedRange(null);
+    setShowToolbar(false);
   }
 
   if (loading) {
@@ -180,7 +270,15 @@ export default function ReaderPage() {
             <ChevronLeft className="h-4 w-4" /> 作品へ戻る
           </Button>
         </Link>
-        <div className="flex gap-1">
+        <div className="flex items-center gap-1">
+          {episode && (
+            <span className="text-xs text-muted-foreground mr-2">
+              残り {estimateReadingTime(Math.round(episode.wordCount * (1 - progressPct)))}
+            </span>
+          )}
+          <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="AIコンパニオン">
+            <Sparkles className="h-4 w-4" />
+          </Button>
           <Button variant="ghost" size="icon" onClick={toggleComments} className="min-h-[44px] min-w-[44px]">
             <MessageSquare className="h-4 w-4" />
           </Button>
@@ -235,15 +333,31 @@ export default function ReaderPage() {
         </div>
       )}
 
+      {/* Highlight toolbar */}
+      {showToolbar && (
+        <HighlightToolbar
+          position={toolbarPosition}
+          onSave={handleHighlightSave}
+          onAiExplain={handleAiExplain}
+          onClose={() => { setShowToolbar(false); setSelectedRange(null); window.getSelection()?.removeAllRanges(); }}
+        />
+      )}
+
       {/* Main content */}
-      <article ref={contentRef} className="mx-auto max-w-2xl px-6 py-12">
+      <article ref={contentRef} className="mx-auto max-w-2xl px-6 py-12" onMouseUp={handleContentMouseUp}>
         <h1 className="text-2xl font-bold font-serif mb-8 text-center">
           {episode.title}
         </h1>
         <div
           className={`font-serif ${FONT_SIZES[fontSize]} whitespace-pre-wrap`}
         >
-          {episode.content}
+          <HighlightedText
+            text={episode.content}
+            highlights={highlights}
+            onHighlightClick={(h) => {
+              if (h.memo) alert(h.memo);
+            }}
+          />
         </div>
       </article>
 
@@ -318,6 +432,21 @@ export default function ReaderPage() {
               </div>
             </div>
           )}
+        </div>
+      )}
+
+      {/* Companion sidebar */}
+      {showCompanion && (
+        <div className="fixed right-0 top-0 bottom-0 z-50 w-96 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
+          <div className="flex items-center justify-between p-4 border-b border-border">
+            <span className="font-medium text-sm">AIコンパニオン</span>
+            <Button variant="ghost" size="icon" onClick={() => setShowCompanion(false)} className="h-9 w-9">
+              <X className="h-4 w-4" />
+            </Button>
+          </div>
+          <div className="flex-1 overflow-hidden">
+            <CompanionChat workId={episode.workId} />
+          </div>
         </div>
       )}
     </div>

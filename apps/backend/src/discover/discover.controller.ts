@@ -1,11 +1,28 @@
-import { Controller, Get, Query, Param } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiQuery } from '@nestjs/swagger';
+import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { DiscoverService } from './discover.service';
+import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Discover')
 @Controller('discover')
 export class DiscoverController {
   constructor(private discoverService: DiscoverService) {}
+
+  @Get('continue-reading')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get continue reading list' })
+  getContinueReading(@CurrentUser('id') userId: string) {
+    return this.discoverService.getContinueReading(userId);
+  }
+
+  @Get('autocomplete')
+  @ApiOperation({ summary: 'Autocomplete search' })
+  @ApiQuery({ name: 'q', required: true })
+  autocomplete(@Query('q') q: string) {
+    return this.discoverService.autocomplete(q);
+  }
 
   @Get('search')
   @ApiOperation({ summary: 'Full-text search works' })

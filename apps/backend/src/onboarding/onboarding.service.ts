@@ -1,10 +1,16 @@
-import { Injectable, ConflictException } from '@nestjs/common';
+import { Injectable, Logger, ConflictException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { SubmitOnboardingDto, ONBOARDING_QUESTIONS } from './dto/onboarding.dto';
 
 @Injectable()
 export class OnboardingService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(OnboardingService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private aiSettings: AiSettingsService,
+  ) {}
 
   getQuestions() {
     return ONBOARDING_QUESTIONS;
@@ -27,6 +33,11 @@ export class OnboardingService {
         emotionVector: emotionVector as any,
       },
     });
+
+    // Generate AI profile asynchronously (don't block the response)
+    this.generateAiProfile(userId, dto.answers, emotionVector).catch((e) =>
+      this.logger.error('Failed to generate AI profile', e),
+    );
 
     return { result, emotionVector };
   }
@@ -82,5 +93,96 @@ export class OnboardingService {
     }
 
     return vector;
+  }
+
+  async getAiProfile(userId: string) {
+    const result = await this.prisma.onboardingResult.findUnique({
+      where: { userId },
+    });
+    if (!result) throw new NotFoundException('Onboarding not completed');
+    return { aiProfile: result.aiProfile };
+  }
+
+  private async generateAiProfile(
+    userId: string,
+    answers: SubmitOnboardingDto['answers'],
+    emotionVector: Record<string, number>,
+  ) {
+    const enabled = await this.aiSettings.isAiEnabled();
+    if (!enabled) return;
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) return;
+
+    const model = await this.aiSettings.getModel();
+
+    const answersText = answers
+      .map((a) => `質問:${a.questionId} 回答:${a.answer} 重み:${a.weight}`)
+      .join('\n');
+    const vectorText = Object.entries(emotionVector)
+      .map(([k, v]) => `${k}:${v}`)
+      .join(', ');
+
+    const prompt = `以下のオンボーディング回答と感情ベクトルから、この読者の「読書パーソナリティ」を生成してください。
+
+回答:
+${answersText}
+
+感情ベクトル: ${vectorText}
+
+JSON形式で回答: { "personalityType": "タイプ名(4-8文字)", "description": "この読者の読書傾向の説明(100-200字)", "strengths": ["強み1", "強み2"], "recommendedGenres": ["ジャンル1", "ジャンル2"], "readingStyle": "読書スタイルの説明(50字程度)" }`;
+
+    const startTime = Date.now();
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      this.logger.error(`Claude API error: ${response.status}`);
+      return;
+    }
+
+    const result = await response.json();
+    const text = result.content?.[0]?.text || '';
+    const durationMs = Date.now() - startTime;
+
+    // Log usage
+    await this.prisma.aiUsageLog.create({
+      data: {
+        userId,
+        feature: 'onboarding_profile',
+        inputTokens: result.usage?.input_tokens || 0,
+        outputTokens: result.usage?.output_tokens || 0,
+        model,
+        durationMs,
+      },
+    }).catch((e) => this.logger.error('Failed to log AI usage', e));
+
+    // Parse and save AI profile
+    let aiProfile: Record<string, unknown> = { raw: text };
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        aiProfile = JSON.parse(jsonMatch[0]);
+      }
+    } catch {
+      this.logger.warn('Failed to parse AI profile JSON');
+    }
+
+    await this.prisma.onboardingResult.update({
+      where: { userId },
+      data: { aiProfile: aiProfile as any },
+    });
   }
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { TrendingUp, Heart, MessageSquare, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { TrendingUp, Heart, MessageSquare, ArrowUpRight, ArrowDownRight, Sparkles } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,6 +23,8 @@ export default function TimelinePage() {
   const [data, setData] = useState<TimelineData | null>(null);
   const [points, setPoints] = useState<number>(0);
   const [loading, setLoading] = useState(true);
+  const [narrativeText, setNarrativeText] = useState<string | null>(null);
+  const [narrativeLoading, setNarrativeLoading] = useState(true);
 
   useEffect(() => {
     if (!authLoading && !isAuthenticated) {
@@ -40,6 +42,11 @@ export default function TimelinePage() {
       setPoints(pointsRes.data.balance);
     }).catch(() => {})
       .finally(() => setLoading(false));
+    // Fetch AI narrative
+    api.getTimelineNarrative()
+      .then((res) => setNarrativeText(res.data.narrative))
+      .catch(() => {})
+      .finally(() => setNarrativeLoading(false));
   }, [isAuthenticated]);
 
   if (authLoading || loading) {
@@ -59,6 +66,29 @@ export default function TimelinePage() {
   return (
     <div className="mx-auto max-w-4xl px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">自己変容タイムライン</h1>
+
+      {/* AI Narrative */}
+      {narrativeLoading ? (
+        <Card className="mb-8">
+          <CardContent className="pt-6">
+            <Skeleton className="h-4 w-full mb-2" />
+            <Skeleton className="h-4 w-3/4" />
+          </CardContent>
+        </Card>
+      ) : narrativeText ? (
+        <Card className="mb-8">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <Sparkles className="h-4 w-4" /> あなたの読書の物語
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground leading-relaxed whitespace-pre-wrap">
+              {narrativeText}
+            </p>
+          </CardContent>
+        </Card>
+      ) : null}
 
       {/* Summary Cards */}
       <div className="grid gap-4 md:grid-cols-3 mb-8">

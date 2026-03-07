@@ -151,6 +151,63 @@ export class DiscoverService {
     });
   }
 
+  async getContinueReading(userId: string) {
+    const entries = await this.prisma.bookshelfEntry.findMany({
+      where: { userId, status: 'READING' },
+      include: {
+        work: {
+          include: {
+            episodes: { select: { id: true, title: true, orderIndex: true, wordCount: true }, orderBy: { orderIndex: 'asc' } },
+            author: { select: { id: true, name: true, displayName: true } },
+          },
+        },
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 5,
+    });
+
+    const results = [];
+    for (const entry of entries) {
+      const progress = await this.prisma.readingProgress.findMany({
+        where: { userId, workId: entry.workId },
+        orderBy: { updatedAt: 'desc' },
+        take: 1,
+      });
+      const latestProgress = progress[0];
+      const currentEpisode = latestProgress
+        ? entry.work.episodes.find(ep => ep.id === latestProgress.episodeId)
+        : entry.work.episodes[0];
+      results.push({
+        work: entry.work,
+        currentEpisode,
+        progressPct: latestProgress?.progressPct ?? 0,
+      });
+    }
+    return results;
+  }
+
+  async autocomplete(query: string) {
+    if (!query || query.length < 2) return [];
+    const works = await this.prisma.work.findMany({
+      where: {
+        status: 'PUBLISHED',
+        OR: [
+          { title: { contains: query, mode: 'insensitive' } },
+          { author: { name: { contains: query, mode: 'insensitive' } } },
+          { author: { displayName: { contains: query, mode: 'insensitive' } } },
+        ],
+      },
+      take: 5,
+      select: {
+        id: true,
+        title: true,
+        author: { select: { name: true, displayName: true } },
+        genre: true,
+      },
+    });
+    return works;
+  }
+
   async getWorksByGenre(genre: string, limit = 20, cursor?: string) {
     return this.prisma.work.findMany({
       where: { status: 'PUBLISHED', genre },

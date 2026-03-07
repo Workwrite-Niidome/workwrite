@@ -3,12 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, BookmarkPlus, Clock, User } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Clock, User, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
+import { estimateReadingTime } from '@/lib/utils';
 import { api, type Work } from '@/lib/api';
 
 export default function WorkDetailPage() {
@@ -91,6 +92,8 @@ export default function WorkDetailPage() {
             <span>全{work.episodes?.length ?? 0}話</span>
             <span className="mx-1">/</span>
             <span>{totalWords.toLocaleString()}字</span>
+            <span className="mx-1">/</span>
+            <span>{estimateReadingTime(totalWords)}</span>
           </div>
 
           {work.tags.length > 0 && (
@@ -136,6 +139,12 @@ export default function WorkDetailPage() {
               本棚に追加済み
             </Badge>
           )}
+          <Link href={`/works/${workId}/companion`}>
+            <Button variant="outline" size="lg">
+              <Sparkles className="h-4 w-4 mr-2" />
+              AIと語る
+            </Button>
+          </Link>
         </div>
 
         {work.episodes && work.episodes.length > 0 && (
@@ -157,7 +166,7 @@ export default function WorkDetailPage() {
                         {ep.title}
                       </span>
                       <span className="text-xs text-muted-foreground">
-                        {ep.wordCount.toLocaleString()}字
+                        {ep.wordCount.toLocaleString()}字 / {estimateReadingTime(ep.wordCount)}
                       </span>
                     </Link>
                   </li>

@@ -1,9 +1,15 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
 
 @Injectable()
 export class ReflectionService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ReflectionService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private aiSettings: AiSettingsService,
+  ) {}
 
   // State Change
   async saveStateChange(userId: string, data: { workId: string; axis: string; before: number; after: number }) {
@@ -130,5 +136,100 @@ export class ReflectionService {
       orderBy: { createdAt: 'desc' },
       take: 50,
     });
+  }
+
+  async generateTimelineNarrative(userId: string) {
+    const enabled = await this.aiSettings.isAiEnabled();
+    if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    const model = await this.aiSettings.getModel();
+
+    // Gather timeline data
+    const [stateChanges, emotionTags, reviews] = await Promise.all([
+      this.prisma.stateChange.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        include: { work: { select: { title: true } } },
+      }),
+      this.prisma.userEmotionTag.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        include: { tag: true, work: { select: { title: true } } },
+      }),
+      this.prisma.review.findMany({
+        where: { userId },
+        orderBy: { createdAt: 'asc' },
+        include: { work: { select: { title: true } } },
+      }),
+    ]);
+
+    const timelineData = [
+      ...stateChanges.map((sc) => `${sc.createdAt.toISOString().slice(0, 10)}: 「${sc.work.title}」で${sc.axis}が${sc.before}→${sc.after}に変化`),
+      ...emotionTags.map((et) => `${et.createdAt.toISOString().slice(0, 10)}: 「${et.work.title}」で${et.tag.name}(強度:${et.intensity})を感じた`),
+      ...reviews.map((r) => `${r.createdAt.toISOString().slice(0, 10)}: 「${r.work.title}」にレビューを投稿`),
+    ].sort();
+
+    if (timelineData.length === 0) {
+      return { narrative: '読書活動がまだありません。作品を読んで感情タグやレビューを残してみましょう。' };
+    }
+
+    const prompt = `以下は一人の読者の読書タイムラインです。この読者の成長の物語をナラティブとして300-600字で語ってください。
+
+タイムラインデータ:
+${timelineData.join('\n')}
+
+JSON形式で回答: { "narrative": "成長の物語...", "keyMoments": ["転機1", "転機2"], "overallTheme": "この読者の読書テーマ" }`;
+
+    const startTime = Date.now();
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model,
+        max_tokens: 4000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`Claude API error: ${response.status} ${errorText}`);
+      throw new ServiceUnavailableException('AI service error');
+    }
+
+    const result = await response.json();
+    const text = result.content?.[0]?.text || '';
+    const durationMs = Date.now() - startTime;
+
+    // Log usage
+    await this.prisma.aiUsageLog.create({
+      data: {
+        userId,
+        feature: 'timeline_narrative',
+        inputTokens: result.usage?.input_tokens || 0,
+        outputTokens: result.usage?.output_tokens || 0,
+        model,
+        durationMs,
+      },
+    }).catch((e) => this.logger.error('Failed to log AI usage', e));
+
+    // Parse JSON response
+    try {
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+    } catch {
+      this.logger.warn('Failed to parse AI JSON response');
+    }
+    return { narrative: text };
   }
 }

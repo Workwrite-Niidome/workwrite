@@ -39,3 +39,6 @@ export const NEXT_BOOK_SUGGESTIONS_COUNT = 3;
 
 // Materialized view refresh interval (minutes)
 export const EMOTION_PROFILE_REFRESH_INTERVAL_MIN = 15;
+
+// Reading time estimation
+export const JAPANESE_CHARS_PER_MINUTE = 500;

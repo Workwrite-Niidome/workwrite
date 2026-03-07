@@ -80,6 +80,7 @@ model OnboardingResult {
   userId          String   @unique
   answers         Json     // 5-item diagnosis answers
   emotionVector   Json     // initial emotion vector
+  aiProfile       Json?
   completedAt     DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
@@ -126,6 +127,8 @@ model Work {
   stateChanges   StateChange[]
   series         SeriesWork[]
   readingProgress ReadingProgress[]
+  aiInsights    AiInsight[]
+  embedding     WorkEmbedding?
 
   // Denormalized stats
   totalViews     Int @default(0)
@@ -552,5 +555,45 @@ model EpisodeDraft {
   savedAt   DateTime @default(now())
 
   @@unique([userId, workId, episodeId])
+  @@index([userId])
+}
+
+// ============================================================
+// AI Insights & Embeddings
+// ============================================================
+
+model AiInsight {
+  id        String   @id @default(cuid())
+  workId    String
+  userId    String?
+  type      String
+  content   Json
+  createdAt DateTime @default(now())
+  work      Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  @@unique([workId, userId, type])
+  @@index([workId])
+  @@index([userId])
+}
+
+model WorkEmbedding {
+  id        String   @id @default(cuid())
+  workId    String   @unique
+  summary   String   @db.Text
+  themes    Json
+  tone      String?
+  audience  String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  work      Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+}
+
+model AiConversation {
+  id        String   @id @default(cuid())
+  userId    String
+  workId    String
+  messages  Json
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+  @@unique([userId, workId])
   @@index([userId])
 }

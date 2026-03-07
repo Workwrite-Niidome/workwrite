@@ -3,9 +3,10 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useState } from 'react';
-import { Menu, X, Bell, PenTool, User, LogOut } from 'lucide-react';
+import { Menu, X, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
+import { NotificationDropdown } from '@/components/layout/notification-dropdown';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 
@@ -52,11 +53,9 @@ export function Header() {
 
           {isAuthenticated ? (
             <>
-              <Link href="/notifications" className="hidden md:inline-flex">
-                <Button variant="ghost" size="icon" className="h-8 w-8" aria-label="通知">
-                  <Bell className="h-4 w-4" />
-                </Button>
-              </Link>
+              <div className="hidden md:block">
+                <NotificationDropdown />
+              </div>
               <Link href="/profile" className="hidden md:inline-flex">
                 <Button variant="ghost" size="sm" className="text-xs gap-1 h-8">
                   <User className="h-3.5 w-3.5" />

@@ -24,9 +24,41 @@ class ApiClient {
     return this.accessToken;
   }
 
+  private isRefreshing = false;
+  private refreshPromise: Promise<boolean> | null = null;
+  private onAuthFailure: (() => void) | null = null;
+
+  setOnAuthFailure(callback: () => void) {
+    this.onAuthFailure = callback;
+  }
+
+  private async tryRefreshToken(): Promise<boolean> {
+    if (this.isRefreshing && this.refreshPromise) return this.refreshPromise;
+    this.isRefreshing = true;
+    this.refreshPromise = (async () => {
+      try {
+        const rt = typeof window !== 'undefined' ? localStorage.getItem('refreshToken') : null;
+        if (!rt) return false;
+        const res = await this.refreshToken(rt);
+        this.setToken(res.data.accessToken);
+        if (typeof window !== 'undefined') {
+          localStorage.setItem('refreshToken', res.data.refreshToken);
+        }
+        return true;
+      } catch {
+        return false;
+      } finally {
+        this.isRefreshing = false;
+        this.refreshPromise = null;
+      }
+    })();
+    return this.refreshPromise;
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit = {},
+    skipRefresh = false,
   ): Promise<T> {
     const token = this.getToken();
     const headers: Record<string, string> = {
@@ -41,6 +73,18 @@ class ApiClient {
       ...options,
       headers,
     });
+
+    if (res.status === 401 && !skipRefresh && !path.startsWith('/auth/')) {
+      const refreshed = await this.tryRefreshToken();
+      if (refreshed) {
+        return this.request<T>(path, options, true);
+      }
+      this.setToken(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('refreshToken');
+      }
+      this.onAuthFailure?.();
+    }
 
     if (!res.ok) {
       const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
@@ -527,6 +571,60 @@ class ApiClient {
   async seedTemplates() {
     return this.request<{ data: { seeded: number } }>('/admin/prompt-templates/seed', { method: 'POST' });
   }
+
+  // Continue Reading
+  async getContinueReading() {
+    return this.request<{ data: ContinueReadingItem[] }>('/discover/continue-reading');
+  }
+
+  // Autocomplete
+  async autocomplete(q: string) {
+    return this.request<{ data: { id: string; title: string; author: { name: string; displayName: string | null } }[] }>(
+      `/discover/autocomplete?q=${encodeURIComponent(q)}`,
+    );
+  }
+
+  // AI Insights
+  async getAiInsights(workId: string) {
+    return this.request<{ data: AiInsightData }>(`/ai/insights/${workId}`);
+  }
+
+  async getPersonalAiInsights(workId: string) {
+    return this.request<{ data: AiPersonalInsightData }>(`/ai/insights/${workId}/personal`);
+  }
+
+  // AI Recommendations
+  async getAiRecommendations() {
+    return this.request<{ data: AiRecommendation[] }>('/ai/recommendations/for-me');
+  }
+
+  async getAiRecommendationsBecauseYouRead(workId: string) {
+    return this.request<{ data: AiRecommendation[] }>(`/ai/recommendations/because-you-read/${workId}`);
+  }
+
+  // AI Companion
+  async getCompanionHistory(workId: string) {
+    return this.request<{ data: CompanionMessage[] }>(`/ai/companion/${workId}/history`);
+  }
+
+  async clearCompanionHistory(workId: string) {
+    return this.request<{ data: { cleared: boolean } }>(`/ai/companion/${workId}`, { method: 'DELETE' });
+  }
+
+  // AI Highlight Explanation
+  async explainHighlight(highlightId: string) {
+    return this.request<{ data: { explanation: string } }>(`/reading/highlights/${highlightId}/ai-explain`, { method: 'POST' });
+  }
+
+  // AI Timeline Narrative
+  async getTimelineNarrative() {
+    return this.request<{ data: { narrative: string } }>('/reflection/narrative');
+  }
+
+  // AI Onboarding Profile
+  async getAiProfile() {
+    return this.request<{ data: { personality: string; recommendedGenres: string[]; recommendedThemes: string[] } | null }>('/users/me/onboarding/ai-profile');
+  }
 }
 
 export class ApiError extends Error {
@@ -780,6 +878,38 @@ export interface AiSettingItem {
   value: string;
   encrypted: boolean;
   updatedAt: string;
+}
+
+export interface ContinueReadingItem {
+  workId: string;
+  work: { id: string; title: string; author: { name: string; displayName: string | null } };
+  currentEpisode: { id: string; title: string; orderIndex: number } | null;
+  progressPct: number;
+}
+
+export interface AiInsightData {
+  themes: { name: string; explanation: string }[];
+  emotionalJourney: string;
+  characterInsights: { name: string; arc: string }[];
+  symbolism: { element: string; meaning: string }[];
+  discussionQuestions: string[];
+}
+
+export interface AiPersonalInsightData {
+  resonance: string;
+  personalMeaning: string;
+  growthPoints: string[];
+}
+
+export interface AiRecommendation {
+  work: Work;
+  reason: string;
+}
+
+export interface CompanionMessage {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
 }
 
 export const api = new ApiClient();

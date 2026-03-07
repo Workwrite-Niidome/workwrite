@@ -58,4 +58,11 @@ export class ReflectionController {
   getPointHistory(@CurrentUser('id') userId: string) {
     return this.reflectionService.getPointHistory(userId);
   }
+
+  // AI Timeline Narrative
+  @Get('narrative')
+  @ApiOperation({ summary: 'Generate AI timeline narrative' })
+  getTimelineNarrative(@CurrentUser('id') userId: string) {
+    return this.reflectionService.generateTimelineNarrative(userId);
+  }
 }

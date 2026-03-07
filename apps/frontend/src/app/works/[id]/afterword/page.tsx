@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Star, ChevronRight, BookOpen } from 'lucide-react';
+import { Star, ChevronRight, BookOpen, Sparkles } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -11,9 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
-import { api, type Work, type EmotionTag } from '@/lib/api';
+import { InsightCard } from '@/components/ai/insight-card';
+import { RecommendationCard } from '@/components/ai/recommendation-card';
+import { api, type Work, type EmotionTag, type AiInsightData, type AiRecommendation } from '@/lib/api';
 
-type Step = 'afterglow' | 'emotions' | 'stateChange' | 'nextBook' | 'review';
+type Step = 'afterglow' | 'emotions' | 'stateChange' | 'insights' | 'nextBook' | 'review';
 
 const STATE_AXES = [
   { axis: 'confidence', label: '自信' },
@@ -42,8 +44,11 @@ export default function AfterwordPage() {
     Object.fromEntries(STATE_AXES.map((a) => [a.axis, { before: 5, after: 5 }])),
   );
   const [nextBooks, setNextBooks] = useState<Work[]>([]);
+  const [aiRecommendations, setAiRecommendations] = useState<AiRecommendation[]>([]);
   const [reviewText, setReviewText] = useState('');
   const [loading, setLoading] = useState(true);
+  const [insights, setInsights] = useState<AiInsightData | null>(null);
+  const [insightsLoading, setInsightsLoading] = useState(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -80,9 +85,25 @@ export default function AfterwordPage() {
     if (changes.length > 0) {
       await api.saveStateChanges(workId, changes).catch(() => {});
     }
-    api.getNextForMe(workId)
-      .then((res) => setNextBooks(res.data))
-      .catch(() => {});
+    // Start loading AI insights
+    setInsightsLoading(true);
+    api.getAiInsights(workId)
+      .then((res) => setInsights(res.data))
+      .catch(() => {})
+      .finally(() => setInsightsLoading(false));
+    setStep('insights');
+  }
+
+  async function handleInsightsNext() {
+    // Try AI recommendations first, fall back to getNextForMe
+    api.getAiRecommendationsBecauseYouRead(workId)
+      .then((res) => setAiRecommendations(res.data))
+      .catch(() => {
+        // Fallback to standard recommendations
+        api.getNextForMe(workId)
+          .then((res) => setNextBooks(res.data))
+          .catch(() => {});
+      });
     setStep('nextBook');
   }
 
@@ -210,6 +231,89 @@ export default function AfterwordPage() {
           </div>
         )}
 
+        {/* Step: AI Insights */}
+        {step === 'insights' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="text-center">
+              <Sparkles className="h-8 w-8 mx-auto text-primary/60 mb-2" />
+              <h2 className="text-xl font-bold mb-2">AIによる作品分析</h2>
+              <p className="text-sm text-muted-foreground">この作品から見えてきたこと</p>
+            </div>
+            {insightsLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : insights ? (
+              <div className="space-y-3">
+                {insights.themes.length > 0 && (
+                  <InsightCard title="テーマ" defaultOpen>
+                    <ul className="space-y-2">
+                      {insights.themes.map((t, i) => (
+                        <li key={i}>
+                          <span className="font-medium text-foreground">{t.name}</span>
+                          <span className="mx-1">-</span>
+                          {t.explanation}
+                        </li>
+                      ))}
+                    </ul>
+                  </InsightCard>
+                )}
+                {insights.emotionalJourney && (
+                  <InsightCard title="感情の旅路">
+                    <p>{insights.emotionalJourney}</p>
+                  </InsightCard>
+                )}
+                {insights.characterInsights.length > 0 && (
+                  <InsightCard title="キャラクター分析">
+                    <ul className="space-y-2">
+                      {insights.characterInsights.map((c, i) => (
+                        <li key={i}>
+                          <span className="font-medium text-foreground">{c.name}</span>
+                          <span className="mx-1">-</span>
+                          {c.arc}
+                        </li>
+                      ))}
+                    </ul>
+                  </InsightCard>
+                )}
+                {insights.symbolism.length > 0 && (
+                  <InsightCard title="象徴・シンボル">
+                    <ul className="space-y-2">
+                      {insights.symbolism.map((s, i) => (
+                        <li key={i}>
+                          <span className="font-medium text-foreground">{s.element}</span>
+                          <span className="mx-1">-</span>
+                          {s.meaning}
+                        </li>
+                      ))}
+                    </ul>
+                  </InsightCard>
+                )}
+                {insights.discussionQuestions.length > 0 && (
+                  <InsightCard title="議論のきっかけ">
+                    <ul className="space-y-1 list-disc list-inside">
+                      {insights.discussionQuestions.map((q, i) => (
+                        <li key={i}>{q}</li>
+                      ))}
+                    </ul>
+                  </InsightCard>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                AI分析を取得できませんでした
+              </p>
+            )}
+            <div className="flex justify-center pt-4">
+              <Button onClick={handleInsightsNext} size="lg" className="min-h-[48px]">
+                次へ <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Step: Next Book */}
         {step === 'nextBook' && (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -217,7 +321,13 @@ export default function AfterwordPage() {
               <h2 className="text-xl font-bold mb-2">次にこの一冊はいかが？</h2>
               <p className="text-sm text-muted-foreground">あなたの感情に近い作品です</p>
             </div>
-            {nextBooks.length > 0 ? (
+            {aiRecommendations.length > 0 ? (
+              <div className="grid gap-3">
+                {aiRecommendations.map((rec, i) => (
+                  <RecommendationCard key={i} rec={rec} />
+                ))}
+              </div>
+            ) : nextBooks.length > 0 ? (
               <div className="grid gap-3">
                 {nextBooks.map((w) => (
                   <Link key={w.id} href={`/works/${w.id}`}>
@@ -293,7 +403,7 @@ export default function AfterwordPage() {
 
         {/* Progress indicator */}
         <div className="flex justify-center gap-2 mt-12">
-          {(['afterglow', 'emotions', 'stateChange', 'nextBook', 'review'] as Step[]).map((s) => (
+          {(['afterglow', 'emotions', 'stateChange', 'insights', 'nextBook', 'review'] as Step[]).map((s) => (
             <div
               key={s}
               className={cn(

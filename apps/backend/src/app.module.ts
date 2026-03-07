@@ -24,6 +24,9 @@ import { AdminModule } from './admin/admin.module';
 import { AiSettingsModule } from './ai-settings/ai-settings.module';
 import { PromptTemplatesModule } from './prompt-templates/prompt-templates.module';
 import { AiAssistModule } from './ai-assist/ai-assist.module';
+import { AiInsightsModule } from './ai-insights/ai-insights.module';
+import { AiRecommendationsModule } from './ai-recommendations/ai-recommendations.module';
+import { AiCompanionModule } from './ai-companion/ai-companion.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -56,6 +59,9 @@ import { HealthController } from './health.controller';
     AiSettingsModule,
     PromptTemplatesModule,
     AiAssistModule,
+    AiInsightsModule,
+    AiRecommendationsModule,
+    AiCompanionModule,
   ],
   controllers: [HealthController],
 })

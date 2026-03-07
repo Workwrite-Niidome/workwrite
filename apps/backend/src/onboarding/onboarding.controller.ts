@@ -34,4 +34,12 @@ export class OnboardingController {
   status(@CurrentUser('id') userId: string) {
     return this.onboardingService.getOnboardingStatus(userId);
   }
+
+  @Get('ai-profile')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get AI-generated reading personality profile' })
+  getAiProfile(@CurrentUser('id') userId: string) {
+    return this.onboardingService.getAiProfile(userId);
+  }
 }

@@ -1,9 +1,11 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 
@@ -68,6 +70,9 @@ export default function OnboardingPage() {
   const [step, setStep] = useState(0);
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
+  const [showProfile, setShowProfile] = useState(false);
+  const [aiProfile, setAiProfile] = useState<{ personality: string; recommendedGenres: string[]; recommendedThemes: string[] } | null>(null);
+  const [profileLoading, setProfileLoading] = useState(false);
   const router = useRouter();
 
   const currentQuestion = QUESTIONS[step];
@@ -81,6 +86,31 @@ export default function OnboardingPage() {
     }
   }
 
+  const pollAiProfile = useCallback(() => {
+    setProfileLoading(true);
+    let attempts = 0;
+    const maxAttempts = 10;
+    const interval = setInterval(async () => {
+      attempts++;
+      try {
+        const res = await api.getAiProfile();
+        if (res.data) {
+          setAiProfile(res.data);
+          setProfileLoading(false);
+          clearInterval(interval);
+          return;
+        }
+      } catch {
+        // ignore errors during polling
+      }
+      if (attempts >= maxAttempts) {
+        setProfileLoading(false);
+        clearInterval(interval);
+      }
+    }, 2000);
+    return () => clearInterval(interval);
+  }, []);
+
   async function handleSubmit() {
     setSubmitting(true);
     try {
@@ -90,13 +120,84 @@ export default function OnboardingPage() {
         weight: 3,
       }));
       await api.submitOnboarding(formattedAnswers);
-      router.push('/import-history');
+      setShowProfile(true);
+      pollAiProfile();
     } catch {
       router.push('/');
+    } finally {
+      setSubmitting(false);
     }
   }
 
   const allAnswered = QUESTIONS.every((q) => answers[q.id]);
+
+  if (showProfile) {
+    return (
+      <div className="flex items-center justify-center min-h-[70vh] px-4">
+        <Card className="w-full max-w-lg">
+          <CardHeader className="text-center">
+            <CardTitle>あなたの読書プロフィール</CardTitle>
+            <CardDescription>
+              AIがあなたの回答を分析しました
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            {profileLoading ? (
+              <div className="space-y-4">
+                <Skeleton className="h-4 w-full" />
+                <Skeleton className="h-4 w-3/4" />
+                <Skeleton className="h-4 w-5/6" />
+                <Skeleton className="h-8 w-1/2 mx-auto mt-4" />
+              </div>
+            ) : aiProfile ? (
+              <div className="space-y-6">
+                <div>
+                  <h3 className="text-sm font-medium mb-2">パーソナリティ</h3>
+                  <p className="text-sm text-muted-foreground leading-relaxed">
+                    {aiProfile.personality}
+                  </p>
+                </div>
+                {aiProfile.recommendedGenres.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium mb-2">おすすめジャンル</h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiProfile.recommendedGenres.map((genre) => (
+                        <Badge key={genre} variant="secondary">{genre}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {aiProfile.recommendedThemes.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium mb-2">おすすめテーマ</h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiProfile.recommendedThemes.map((theme) => (
+                        <Badge key={theme} variant="outline">{theme}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                <div className="flex justify-center pt-4">
+                  <Button onClick={() => router.push('/import-history')} size="lg">
+                    読書を始める
+                  </Button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-center space-y-4">
+                <p className="text-sm text-muted-foreground">
+                  プロフィールの生成に時間がかかっています
+                </p>
+                <Button onClick={() => router.push('/import-history')} size="lg">
+                  読書を始める
+                </Button>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+    );
+  }
 
   return (
     <div className="flex items-center justify-center min-h-[70vh] px-4">

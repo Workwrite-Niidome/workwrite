@@ -1,4 +1,5 @@
 import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
+
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { HighlightsService } from './highlights.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
@@ -42,5 +43,14 @@ export class HighlightsController {
   @ApiOperation({ summary: 'Delete highlight' })
   delete(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.highlightsService.delete(id, userId);
+  }
+
+  @Post(':id/ai-explain')
+  @ApiOperation({ summary: 'Get AI explanation for a highlight' })
+  explainHighlight(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.highlightsService.explainHighlight(id, userId);
   }
 }
