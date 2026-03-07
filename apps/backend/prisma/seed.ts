@@ -101,14 +101,22 @@ async function main() {
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });
 
   if (existingAdmin) {
-    if (existingAdmin.role !== 'ADMIN') {
+    // Always ensure ADMIN role and reset password if env ADMIN_RESET_PASSWORD is set
+    const resetPw = process.env.ADMIN_RESET_PASSWORD;
+    const updates: Record<string, unknown> = {};
+    if (existingAdmin.role !== 'ADMIN') updates.role = 'ADMIN';
+    if (resetPw) {
+      updates.passwordHash = await bcrypt.hash(resetPw, 12);
+      console.log(`Password reset for ${adminEmail}.`);
+    }
+    if (Object.keys(updates).length > 0) {
       await prisma.user.update({
         where: { email: adminEmail },
-        data: { role: 'ADMIN' },
+        data: updates,
       });
-      console.log(`Promoted ${adminEmail} to ADMIN.`);
+      console.log(`Updated ${adminEmail}: ${Object.keys(updates).join(', ')}`);
     } else {
-      console.log(`${adminEmail} is already ADMIN.`);
+      console.log(`${adminEmail} is already ADMIN, no changes.`);
     }
   } else {
     const passwordHash = await bcrypt.hash('admin-change-me-immediately', 12);
