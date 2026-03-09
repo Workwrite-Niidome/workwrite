@@ -192,18 +192,24 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
 
         {/* Creation plan context indicator */}
         {creationPlan && (
-          <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50">
-            <p className="text-[10px] font-medium text-blue-800 dark:text-blue-300 flex items-center gap-1">
-              <BookCheck className="h-3 w-3" /> 設計メモを読み込み済み
+          <div className="p-2 bg-muted/50 rounded-md border border-border">
+            <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
+              <BookCheck className="h-3.5 w-3.5 text-muted-foreground" /> 設計メモを読み込み済み
             </p>
-            <p className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
-              {[
-                creationPlan.emotionBlueprint?.coreMessage && 'テーマ',
-                creationPlan.characters?.length > 0 && `${creationPlan.characters.length}キャラ`,
-                creationPlan.plotOutline && 'プロット',
-                creationPlan.chapterOutline?.length > 0 && `${creationPlan.chapterOutline.length}章`,
-              ].filter(Boolean).join(' · ')}
-            </p>
+            <div className="flex flex-wrap gap-1.5 mt-1.5">
+              {creationPlan.emotionBlueprint?.coreMessage && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">テーマ</span>
+              )}
+              {creationPlan.characters?.length > 0 && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.characters.length}キャラ</span>
+              )}
+              {creationPlan.plotOutline && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">プロット</span>
+              )}
+              {creationPlan.chapterOutline?.length > 0 && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.chapterOutline.length}章</span>
+              )}
+            </div>
           </div>
         )}
 
