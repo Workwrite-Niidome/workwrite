@@ -34,11 +34,27 @@ function parseAiChapters(raw: string): { chapters: AiChapter[]; suggestions: str
     const end = cleaned.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
     const json = JSON.parse(cleaned.slice(start, end + 1));
-    return {
-      chapters: json.chapters || [],
-      suggestions: json.suggestions || json.pacing || '',
-    };
+    if (json.chapters && Array.isArray(json.chapters) && json.chapters.length > 0) {
+      return {
+        chapters: json.chapters,
+        suggestions: json.suggestions || json.pacing || '',
+      };
+    }
+    // Try top-level array format
+    return null;
   } catch {
+    // Try to find JSON array directly
+    try {
+      const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const arrStart = cleaned.indexOf('[');
+      const arrEnd = cleaned.lastIndexOf(']');
+      if (arrStart !== -1 && arrEnd !== -1) {
+        const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+        if (Array.isArray(arr) && arr.length > 0 && arr[0].title) {
+          return { chapters: arr, suggestions: '' };
+        }
+      }
+    } catch { /* skip */ }
     return null;
   }
 }
@@ -149,6 +165,16 @@ export function StepChapterOutline({ data, onChange }: Props) {
       if (result) {
         setAiParsed(result);
         onChange({ _aiChapterSuggestions: result });
+        // Auto-adopt all chapters
+        const newChapters = result.chapters.map((ai) => {
+          const summary = [
+            ai.summary,
+            ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
+            ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
+          ].join('');
+          return { title: ai.title, summary, aiSuggested: true };
+        });
+        onChange({ chapterOutline: [...chapters, ...newChapters], _aiChapterSuggestions: result });
       }
     } catch {
       setAiRaw('AIの提案を取得できませんでした。');
@@ -228,34 +254,49 @@ export function StepChapterOutline({ data, onChange }: Props) {
         {!aiLoading && aiParsed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">AIの提案（気に入った章を採用しましょう）</p>
-              <Button variant="outline" size="sm" onClick={adoptAllChapters} className="gap-1 text-xs">
-                <ListPlus className="h-3 w-3" />
-                すべて採用
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                {chapters.some((c) => c.aiSuggested)
+                  ? 'AIの提案を章立てに反映しました。上の一覧を自由に編集できます。'
+                  : 'AIの提案（気に入った章を採用しましょう）'}
+              </p>
+              {!chapters.some((c) => c.aiSuggested) && (
+                <Button variant="outline" size="sm" onClick={adoptAllChapters} className="gap-1 text-xs">
+                  <ListPlus className="h-3 w-3" />
+                  すべて採用
+                </Button>
+              )}
             </div>
-            {aiParsed.chapters.map((ai, i) => (
-              <div key={i} className="p-3 bg-muted/30 rounded-lg border border-border/50">
-                <div className="flex items-center justify-between mb-1">
-                  <span className="text-sm font-medium">
-                    第{ai.number ?? i + 1}話: {ai.title}
-                  </span>
-                  <Button variant="secondary" size="sm" onClick={() => adoptChapter(ai)} className="gap-1 text-xs">
-                    <Plus className="h-3 w-3" /> 採用
-                  </Button>
+            {aiParsed.chapters.map((ai, i) => {
+              const alreadyAdopted = chapters.some((c) => c.title === ai.title);
+              return (
+                <div key={i} className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-medium">
+                      第{ai.number ?? i + 1}話: {ai.title}
+                    </span>
+                    <Button
+                      variant={alreadyAdopted ? 'ghost' : 'secondary'}
+                      size="sm"
+                      onClick={() => adoptChapter(ai)}
+                      disabled={alreadyAdopted}
+                      className="gap-1 text-xs"
+                    >
+                      <Plus className="h-3 w-3" /> {alreadyAdopted ? '採用済み' : '採用'}
+                    </Button>
+                  </div>
+                  <p className="text-xs text-muted-foreground">{ai.summary}</p>
+                  {ai.keyScenes && ai.keyScenes.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">キーシーン: {ai.keyScenes.join('、')}</p>
+                  )}
+                  {ai.emotionTarget && (
+                    <p className="text-xs text-muted-foreground mt-0.5">感情: {ai.emotionTarget}</p>
+                  )}
+                  {ai.wordCountEstimate && (
+                    <p className="text-xs text-muted-foreground mt-0.5">目安: {ai.wordCountEstimate.toLocaleString()}字</p>
+                  )}
                 </div>
-                <p className="text-xs text-muted-foreground">{ai.summary}</p>
-                {ai.keyScenes && ai.keyScenes.length > 0 && (
-                  <p className="text-xs text-muted-foreground mt-1">キーシーン: {ai.keyScenes.join('、')}</p>
-                )}
-                {ai.emotionTarget && (
-                  <p className="text-xs text-muted-foreground mt-0.5">感情: {ai.emotionTarget}</p>
-                )}
-                {ai.wordCountEstimate && (
-                  <p className="text-xs text-muted-foreground mt-0.5">目安: {ai.wordCountEstimate.toLocaleString()}字</p>
-                )}
-              </div>
-            ))}
+              );
+            })}
             {aiParsed.suggestions && (
               <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
                 <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">構成アドバイス</p>
