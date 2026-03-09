@@ -55,6 +55,58 @@ class ApiClient {
     return this.refreshPromise;
   }
 
+  /** Get a valid auth token, refreshing if needed. For use with SSE/streaming fetch calls. */
+  async getValidToken(): Promise<string | null> {
+    const token = this.getToken();
+    if (!token) return null;
+    // Try a quick HEAD or just return the token — the caller handles 401 retry
+    return token;
+  }
+
+  /** Make an SSE streaming fetch with auto token refresh on 401. */
+  async fetchSSE(path: string, body: any): Promise<Response> {
+    const token = this.getToken();
+    const url = `${API_BASE}${path}`;
+
+    let res = await fetch(url, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        ...(token ? { Authorization: `Bearer ${token}` } : {}),
+      },
+      body: JSON.stringify(body),
+    });
+
+    if (res.status === 401) {
+      const refreshed = await this.tryRefreshToken();
+      if (refreshed) {
+        const newToken = this.getToken();
+        res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
+          },
+          body: JSON.stringify(body),
+        });
+      } else {
+        this.setToken(null);
+        if (typeof window !== 'undefined') {
+          localStorage.removeItem('refreshToken');
+        }
+        this.onAuthFailure?.();
+        throw new Error('認証の有効期限が切れました。再ログインしてください。');
+      }
+    }
+
+    if (!res.ok) {
+      const errText = await res.text();
+      throw new Error(errText || `サーバーエラー (${res.status})`);
+    }
+
+    return res;
+  }
+
   private async request<T>(
     path: string,
     options: RequestInit = {},

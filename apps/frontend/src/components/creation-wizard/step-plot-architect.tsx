@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { Sparkles, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
+import { api } from '@/lib/api';
 import type { WizardData } from './wizard-shell';
 
 interface Props {
@@ -86,27 +87,12 @@ export function StepPlotArchitect({ data, onChange }: Props) {
     try {
       const themes = data.coreMessage || ownIdeas || 'ストーリーのプロットを提案してください';
 
-      const res = await fetch(
-        `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/works/none/creation/plot`,
-        {
-          method: 'POST',
-          headers: {
-            'Content-Type': 'application/json',
-            'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
-          },
-          body: JSON.stringify({
-            themes,
-            message: data.targetEmotions || undefined,
-            emotionGoals: data.readerJourney || undefined,
-            characters: data.characters.length > 0 ? data.characters : undefined,
-          }),
-        }
-      );
-
-      if (!res.ok) {
-        const err = await res.text();
-        throw new Error(err);
-      }
+      const res = await api.fetchSSE('/works/none/creation/plot', {
+        themes,
+        message: data.targetEmotions || undefined,
+        emotionGoals: data.readerJourney || undefined,
+        characters: data.characters.length > 0 ? data.characters : undefined,
+      });
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('No stream');
@@ -140,8 +126,8 @@ export function StepPlotArchitect({ data, onChange }: Props) {
         onChange({ plotOutline: { text, aiAssisted: true, aiData: result } });
         setAdopted(true);
       }
-    } catch {
-      setAiRaw('AIの提案を取得できませんでした。');
+    } catch (err) {
+      setAiRaw(`AIの提案を取得できませんでした。${err instanceof Error ? `\n${err.message}` : ''}`);
     } finally {
       setAiLoading(false);
     }
