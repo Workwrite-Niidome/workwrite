@@ -69,10 +69,15 @@ class ApiClient {
       headers['Authorization'] = `Bearer ${token}`;
     }
 
-    const res = await fetch(`${API_BASE}${path}`, {
-      ...options,
-      headers,
-    });
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        ...options,
+        headers,
+      });
+    } catch {
+      throw new ApiError(0, 'サーバーに接続できません。バックエンドが起動しているか確認してください。');
+    }
 
     if (res.status === 401 && !skipRefresh && !path.startsWith('/auth/')) {
       const refreshed = await this.tryRefreshToken();
@@ -88,8 +93,13 @@ class ApiClient {
     }
 
     if (!res.ok) {
-      const error = await res.json().catch(() => ({ error: { message: 'Network error' } }));
-      throw new ApiError(res.status, error.error?.message || 'Unknown error', error.error);
+      const error = await res.json().catch(() => ({ error: { message: 'サーバーエラーが発生しました' } }));
+      const message = error.error?.message || 'Unknown error';
+      // Provide clearer messages for common HTTP errors
+      if (res.status === 500) {
+        throw new ApiError(res.status, 'サーバー内部エラー: データベースに接続できない可能性があります', error.error);
+      }
+      throw new ApiError(res.status, message, error.error);
     }
 
     return res.json();
@@ -221,6 +231,72 @@ class ApiClient {
     return this.request<{ data: { deleted: boolean } }>(`/episodes/${id}`, { method: 'DELETE' });
   }
 
+  async reorderEpisodes(workId: string, items: { id: string; orderIndex: number }[]) {
+    return this.request<{ data: Episode[] }>(`/works/${workId}/episodes/reorder`, {
+      method: 'PATCH',
+      body: JSON.stringify({ items }),
+    });
+  }
+
+  async publishEpisode(id: string) {
+    return this.request<{ data: Episode }>(`/episodes/${id}/publish`, { method: 'POST' });
+  }
+
+  async unpublishEpisode(id: string) {
+    return this.request<{ data: Episode }>(`/episodes/${id}/unpublish`, { method: 'POST' });
+  }
+
+  async scheduleEpisode(id: string, scheduledAt: string) {
+    return this.request<{ data: Episode }>(`/episodes/${id}/schedule`, {
+      method: 'POST',
+      body: JSON.stringify({ scheduledAt }),
+    });
+  }
+
+  // Snapshots
+  async createSnapshot(episodeId: string, label?: string) {
+    return this.request<{ data: EpisodeSnapshot }>(`/episodes/${episodeId}/snapshots`, {
+      method: 'POST',
+      body: JSON.stringify({ label }),
+    });
+  }
+
+  async getSnapshots(episodeId: string) {
+    return this.request<{ data: EpisodeSnapshot[] }>(`/episodes/${episodeId}/snapshots`);
+  }
+
+  async getSnapshotContent(snapshotId: string) {
+    return this.request<{ data: EpisodeSnapshot & { content: string } }>(`/episodes/snapshots/${snapshotId}`);
+  }
+
+  async restoreSnapshot(snapshotId: string) {
+    return this.request<{ data: Episode }>(`/episodes/snapshots/${snapshotId}/restore`, { method: 'POST' });
+  }
+
+  // Work Import
+  async analyzeImportText(text: string) {
+    return this.request<{ data: { chapters: { title: string; content: string; startLine: number }[] } }>(
+      '/works/import/analyze',
+      { method: 'POST', body: JSON.stringify({ text }) },
+    );
+  }
+
+  async importWork(data: { title: string; synopsis?: string; genre?: string; chapters: { title: string; content: string }[] }) {
+    return this.request<{ data: { workId: string; importId: string; chapters: number } }>(
+      '/works/import/text',
+      { method: 'POST', body: JSON.stringify(data) },
+    );
+  }
+
+  async getImportHistory() {
+    return this.request<{ data: WorkImportRecord[] }>('/works/import');
+  }
+
+  // Episode scoring
+  async scoreEpisode(episodeId: string) {
+    return this.request<{ data: QualityScoreDetail | null }>(`/scoring/episodes/${episodeId}`, { method: 'POST' });
+  }
+
   // Reading Progress
   async updateReadingProgress(data: { episodeId: string; progressPct: number; scrollPosition: number }) {
     return this.request<{ data: ReadingProgress }>('/reading/progress', {
@@ -275,6 +351,13 @@ class ApiClient {
     return this.request<{ data: Highlight[] }>(`/reading/highlights/episode/${episodeId}`);
   }
 
+  async updateHighlight(id: string, data: { memo?: string; color?: string }) {
+    return this.request<{ data: Highlight }>(`/reading/highlights/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
   async deleteHighlight(id: string) {
     return this.request<{ data: { deleted: boolean } }>(`/reading/highlights/${id}`, { method: 'DELETE' });
   }
@@ -284,7 +367,7 @@ class ApiClient {
     return this.request<{ data: Comment[] }>(`/comments/episode/${episodeId}`);
   }
 
-  async createComment(data: { episodeId: string; content: string; paragraphId?: string }) {
+  async createComment(data: { episodeId: string; content: string; paragraphId?: string; parentId?: string }) {
     return this.request<{ data: Comment }>('/comments', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -296,12 +379,13 @@ class ApiClient {
   }
 
   // Discover
-  async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number }) {
+  async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
     const qs = new URLSearchParams({ q });
     if (options?.genre) qs.set('genre', options.genre);
     if (options?.emotionTags?.length) qs.set('emotionTags', options.emotionTags.join(','));
     if (options?.limit) qs.set('limit', String(options.limit));
     if (options?.offset) qs.set('offset', String(options.offset));
+    if (options?.sort) qs.set('sort', options.sort);
     return this.request<{ data: { hits: Work[]; total: number } }>(`/discover/search?${qs.toString()}`);
   }
 
@@ -622,9 +706,43 @@ class ApiClient {
     return this.request<{ data: { narrative: string } }>('/reflection/narrative');
   }
 
+  // Reading Stats
+  async getReadingStats() {
+    return this.request<{ data: ReadingStats }>('/reading/stats');
+  }
+
+  // Follow
+  async followUser(userId: string) {
+    return this.request<{ data: { id: string } }>(`/users/${userId}/follow`, { method: 'POST' });
+  }
+
+  async unfollowUser(userId: string) {
+    return this.request<{ data: { deleted: boolean } }>(`/users/${userId}/follow`, { method: 'DELETE' });
+  }
+
+  async isFollowing(userId: string) {
+    return this.request<{ data: { following: boolean } }>(`/users/${userId}/follow/status`);
+  }
+
+  async getFollowingFeed() {
+    return this.request<{ data: Work[] }>('/users/me/following/feed');
+  }
+
   // AI Onboarding Profile
   async getAiProfile() {
     return this.request<{ data: { personality: string; recommendedGenres: string[]; recommendedThemes: string[] } | null }>('/users/me/onboarding/ai-profile');
+  }
+
+  // Health check
+  async checkHealth(): Promise<{ ok: boolean; db: boolean }> {
+    try {
+      const res = await fetch(`${API_BASE}/health`);
+      if (!res.ok) return { ok: false, db: false };
+      const data = await res.json();
+      return { ok: true, db: data.data?.services?.database === 'connected' || data.services?.database === 'connected' };
+    } catch {
+      return { ok: false, db: false };
+    }
   }
 }
 
@@ -720,6 +838,8 @@ export interface BookshelfEntry {
   workId: string;
   status: 'WANT_TO_READ' | 'READING' | 'COMPLETED';
   work: Work;
+  progressPct?: number;
+  currentEpisode?: { id: string; title: string } | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -739,8 +859,21 @@ export interface Comment {
   episodeId: string;
   content: string;
   paragraphId: string | null;
+  parentId?: string | null;
   user: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
+  replies?: Comment[];
   createdAt: string;
+}
+
+export interface ReadingStats {
+  completedWorks: number;
+  completedEpisodes: number;
+  totalReadTimeMs: number;
+  currentStreak: number;
+  maxStreak: number;
+  genreDistribution: Record<string, number>;
+  topEmotionTags: { name: string; nameJa: string; count: number }[];
+  monthlyActivity: { month: string; count: number }[];
 }
 
 export interface EmotionTag {
@@ -911,6 +1044,27 @@ export interface CompanionMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+}
+
+export interface EpisodeSnapshot {
+  id: string;
+  episodeId: string;
+  title: string;
+  wordCount: number;
+  label: string | null;
+  createdAt: string;
+}
+
+export interface WorkImportRecord {
+  id: string;
+  userId: string;
+  workId: string | null;
+  source: string;
+  status: string;
+  totalChapters: number;
+  importedChapters: number;
+  errorMessage: string | null;
+  createdAt: string;
 }
 
 export const api = new ApiClient();

@@ -66,8 +66,15 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       .then((res) => {
         setState({ user: res.data as unknown as AuthResponse['user'], isLoading: false, isAuthenticated: true });
       })
-      .catch(() => {
-        api.setToken(null);
+      .catch((err) => {
+        // Only clear tokens on auth errors (401), not on connection errors
+        if (err?.status === 401) {
+          api.setToken(null);
+          if (typeof window !== 'undefined') {
+            localStorage.removeItem('refreshToken');
+          }
+        }
+        // On connection errors (status 0 or 500), keep tokens for retry on next load
         setState({ user: null, isLoading: false, isAuthenticated: false });
       });
   }, []);

@@ -1,12 +1,14 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
+import { AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 
 export default function RegisterPage() {
   const [name, setName] = useState('');
@@ -15,8 +17,15 @@ export default function RegisterPage() {
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
+  const [serverStatus, setServerStatus] = useState<'checking' | 'ok' | 'down'>('checking');
   const { register } = useAuth();
   const router = useRouter();
+
+  useEffect(() => {
+    api.checkHealth().then(({ ok, db }) => {
+      setServerStatus(ok && db ? 'ok' : 'down');
+    });
+  }, []);
 
   async function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
@@ -30,7 +39,17 @@ export default function RegisterPage() {
       await register(email, password, name);
       router.push('/onboarding');
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : '登録に失敗しました');
+      if (err instanceof Error) {
+        if (err.message.includes('接続できません') || err.message.includes('サーバー')) {
+          setError('サーバーに接続できません。Docker Desktopとバックエンドが起動しているか確認してください。');
+        } else if (err.message === 'Email already registered') {
+          setError('このメールアドレスは既に登録されています');
+        } else {
+          setError(err.message);
+        }
+      } else {
+        setError('登録に失敗しました');
+      }
     } finally {
       setLoading(false);
     }
@@ -45,6 +64,17 @@ export default function RegisterPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {serverStatus === 'down' && (
+              <div className="flex items-start gap-2 p-3 text-sm text-orange-800 bg-orange-50 dark:text-orange-200 dark:bg-orange-950/50 rounded-md border border-orange-200 dark:border-orange-800">
+                <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />
+                <div>
+                  <p className="font-medium">サーバーに接続できません</p>
+                  <p className="text-xs mt-1 opacity-80">
+                    Docker Desktop を起動し、<code className="bg-orange-100 dark:bg-orange-900 px-1 rounded">docker compose up -d</code> を実行してください。
+                  </p>
+                </div>
+              </div>
+            )}
             {error && (
               <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
                 {error}
@@ -98,7 +128,7 @@ export default function RegisterPage() {
             </div>
           </CardContent>
           <CardFooter className="flex flex-col space-y-3">
-            <Button type="submit" className="w-full" disabled={loading}>
+            <Button type="submit" className="w-full" disabled={loading || serverStatus === 'down'}>
               {loading ? '登録中...' : '登録する'}
             </Button>
             <p className="text-sm text-muted-foreground">
