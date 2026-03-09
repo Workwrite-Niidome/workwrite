@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { Wand2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -22,7 +22,12 @@ const GENRE_LABELS: Record<string, string> = {
 };
 
 export default function NewWorkPage() {
-  const [mode, setMode] = useState<'choose' | 'quick' | 'wizard'>('choose');
+  const searchParams = useSearchParams();
+  const urlMode = searchParams.get('mode');
+  const urlDraft = searchParams.get('draft');
+  const [mode, setMode] = useState<'choose' | 'quick' | 'wizard'>(
+    urlMode === 'wizard' || urlDraft ? 'wizard' : urlMode === 'quick' ? 'quick' : 'choose'
+  );
 
   if (mode === 'wizard') {
     return <WizardShell />;
