@@ -23,6 +23,11 @@ export class RegisterDto {
   @IsString()
   @MaxLength(50)
   displayName?: string;
+
+  @ApiProperty({ example: 'BETA-XXXX', description: 'Invite code required for beta registration' })
+  @IsString()
+  @MinLength(1)
+  inviteCode: string;
 }
 
 export class LoginDto {

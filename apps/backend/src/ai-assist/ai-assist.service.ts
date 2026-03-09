@@ -1,6 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { AiTierService } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 
 const MAX_CONTENT_LENGTH = 10000;
@@ -17,15 +18,27 @@ export class AiAssistService {
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private aiTier: AiTierService,
     private templates: PromptTemplatesService,
   ) {}
 
-  async checkStatus(): Promise<{ available: boolean; model: string }> {
+  async checkStatus(userId?: string): Promise<{
+    available: boolean;
+    model: string;
+    tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null };
+  }> {
     const enabled = await this.aiSettings.isAiEnabled();
     const model = await this.aiSettings.getModel();
     if (!enabled) return { available: false, model };
     const apiKey = await this.aiSettings.getApiKey();
-    return { available: !!apiKey, model };
+    const available = !!apiKey;
+
+    if (userId && available) {
+      const tier = await this.aiTier.getUserTier(userId);
+      return { available, model, tier };
+    }
+
+    return { available, model };
   }
 
   checkRateLimit(userId: string): boolean {
@@ -42,6 +55,7 @@ export class AiAssistService {
     userId: string,
     templateSlug: string,
     variables: Record<string, string>,
+    premiumMode: boolean = false,
   ): AsyncGenerator<string> {
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
@@ -53,8 +67,10 @@ export class AiAssistService {
       throw new ServiceUnavailableException('Rate limit exceeded. Please try again later.');
     }
 
+    // Check AI tier and get model config
+    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode);
+
     const template = await this.templates.findBySlug(templateSlug);
-    const model = await this.aiSettings.getModel();
 
     // Build prompt from template
     let prompt = template.prompt;
@@ -67,19 +83,29 @@ export class AiAssistService {
     let inputTokens = 0;
     let outputTokens = 0;
 
+    // Build request body with optional extended thinking
+    const requestBody: Record<string, unknown> = {
+      model: modelConfig.model,
+      max_tokens: modelConfig.thinking ? 16000 : 4000,
+      stream: true,
+      messages: [{ role: 'user', content: prompt }],
+    };
+
+    if (modelConfig.thinking) {
+      requestBody.thinking = {
+        type: 'enabled',
+        budget_tokens: modelConfig.budgetTokens,
+      };
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': '2025-04-15',
       },
-      body: JSON.stringify({
-        model,
-        max_tokens: 4000,
-        stream: true,
-        messages: [{ role: 'user', content: prompt }],
-      }),
+      body: JSON.stringify(requestBody),
     });
 
     if (!response.ok) {
@@ -133,10 +159,10 @@ export class AiAssistService {
         data: {
           userId,
           templateId: template.id,
-          feature: 'writing_assist',
+          feature: modelConfig.thinking ? 'writing_assist_premium' : 'writing_assist',
           inputTokens,
           outputTokens,
-          model,
+          model: modelConfig.model,
           durationMs,
         },
       }).catch((e) => this.logger.error('Failed to log AI usage', e));

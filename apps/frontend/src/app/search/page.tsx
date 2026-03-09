@@ -106,7 +106,7 @@ function SearchContent() {
       </form>
 
       {/* Filters */}
-      <div className="flex flex-wrap gap-2 mb-6">
+      <div className="flex flex-wrap items-center gap-2 mb-6">
         <select
           value={genre}
           onChange={(e) => handleGenreChange(e.target.value)}
@@ -124,6 +124,14 @@ function SearchContent() {
         >
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
+        {(genre || sortBy !== 'relevance') && (
+          <button
+            onClick={() => { setGenre(''); setSortBy('relevance'); if (query) doSearch(query, 0); }}
+            className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
+          >
+            フィルターをクリア
+          </button>
+        )}
       </div>
 
       {loading ? (

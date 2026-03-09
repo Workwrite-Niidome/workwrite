@@ -31,7 +31,7 @@ export default function SettingsPage() {
   if (!user) {
     return (
       <div className="flex items-center justify-center min-h-[50vh]">
-        <p className="text-muted-foreground">Please log in.</p>
+        <p className="text-muted-foreground">ログインしてください</p>
       </div>
     );
   }
@@ -42,12 +42,12 @@ export default function SettingsPage() {
     setPwError(false);
 
     if (newPassword.length < 8) {
-      setPwMessage('New password must be at least 8 characters.');
+      setPwMessage('新しいパスワードは8文字以上にしてください');
       setPwError(true);
       return;
     }
     if (newPassword !== confirmPassword) {
-      setPwMessage('Passwords do not match.');
+      setPwMessage('パスワードが一致しません');
       setPwError(true);
       return;
     }
@@ -55,13 +55,13 @@ export default function SettingsPage() {
     setPwSaving(true);
     try {
       await api.changePassword({ currentPassword, newPassword });
-      setPwMessage('Password changed successfully.');
+      setPwMessage('パスワードを変更しました');
       setPwError(false);
       setCurrentPassword('');
       setNewPassword('');
       setConfirmPassword('');
     } catch (err: any) {
-      setPwMessage(err.message || 'Failed to change password.');
+      setPwMessage(err.message || 'パスワードの変更に失敗しました');
       setPwError(true);
     } finally {
       setPwSaving(false);
@@ -83,10 +83,10 @@ export default function SettingsPage() {
   return (
     <div className="mx-auto max-w-2xl px-6 py-8 space-y-8">
       <div>
-        <h1 className="text-lg font-semibold tracking-wide">Settings</h1>
+        <h1 className="text-lg font-semibold tracking-wide">設定</h1>
         <p className="text-xs text-muted-foreground mt-1">
           <Link href="/profile" className="hover:text-foreground transition-colors underline">
-            Back to profile
+            プロフィールに戻る
           </Link>
         </p>
       </div>
@@ -94,7 +94,7 @@ export default function SettingsPage() {
       {/* Password Change */}
       <Card>
         <CardHeader>
-          <CardTitle className="text-sm">Security</CardTitle>
+          <CardTitle className="text-sm">セキュリティ</CardTitle>
         </CardHeader>
         <CardContent>
           <form onSubmit={handlePasswordChange} className="space-y-4">
@@ -104,7 +104,7 @@ export default function SettingsPage() {
               </div>
             )}
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="current-password">Current Password</label>
+              <label className="text-sm font-medium" htmlFor="current-password">現在のパスワード</label>
               <Input
                 id="current-password"
                 type="password"
@@ -114,18 +114,18 @@ export default function SettingsPage() {
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="new-password">New Password</label>
+              <label className="text-sm font-medium" htmlFor="new-password">新しいパスワード</label>
               <Input
                 id="new-password"
                 type="password"
                 value={newPassword}
                 onChange={(e) => setNewPassword(e.target.value)}
-                placeholder="8 characters minimum"
+                placeholder="8文字以上"
                 autoComplete="new-password"
               />
             </div>
             <div className="space-y-2">
-              <label className="text-sm font-medium" htmlFor="confirm-password">Confirm New Password</label>
+              <label className="text-sm font-medium" htmlFor="confirm-password">新しいパスワード（確認）</label>
               <Input
                 id="confirm-password"
                 type="password"
@@ -135,7 +135,7 @@ export default function SettingsPage() {
               />
             </div>
             <Button type="submit" disabled={pwSaving || !currentPassword || !newPassword}>
-              {pwSaving ? 'Saving...' : 'Change Password'}
+              {pwSaving ? '保存中...' : 'パスワードを変更'}
             </Button>
           </form>
         </CardContent>
@@ -144,17 +144,16 @@ export default function SettingsPage() {
       {/* Account Deletion */}
       <Card className="border-destructive/30">
         <CardHeader>
-          <CardTitle className="text-sm text-destructive">Danger Zone</CardTitle>
+          <CardTitle className="text-sm text-destructive">危険な操作</CardTitle>
         </CardHeader>
         <CardContent>
           <p className="text-sm text-muted-foreground mb-4">
-            Deleting your account is permanent. All your works, reviews, reading data, and profile
-            information will be permanently removed and cannot be recovered.
+            アカウントを削除すると、すべての作品・レビュー・読書データ・プロフィール情報が完全に削除され、復元できません。
           </p>
           <div className="space-y-3">
             <div className="space-y-2">
               <label className="text-sm font-medium" htmlFor="delete-confirm">
-                Type <span className="font-mono text-destructive">DELETE</span> to confirm
+                確認のため <span className="font-mono text-destructive">DELETE</span> と入力してください
               </label>
               <Input
                 id="delete-confirm"
@@ -169,7 +168,7 @@ export default function SettingsPage() {
               disabled={deleteConfirm !== 'DELETE' || deleting}
               onClick={handleDeleteAccount}
             >
-              {deleting ? 'Deleting...' : 'Delete My Account'}
+              {deleting ? '削除中...' : 'アカウントを削除する'}
             </Button>
           </div>
         </CardContent>

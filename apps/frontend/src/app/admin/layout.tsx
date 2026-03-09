@@ -4,16 +4,17 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText } from 'lucide-react';
+import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText, Ticket } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
-  { href: '/admin', label: 'Dashboard', icon: BarChart3 },
-  { href: '/admin/users', label: 'Users', icon: Users },
-  { href: '/admin/works', label: 'Works', icon: BookOpen },
-  { href: '/admin/reviews', label: 'Reviews', icon: MessageSquare },
-  { href: '/admin/ai', label: 'AI Settings', icon: Sparkles },
-  { href: '/admin/ai/templates', label: 'Templates', icon: FileText },
+  { href: '/admin', label: 'ダッシュボード', icon: BarChart3 },
+  { href: '/admin/users', label: 'ユーザー', icon: Users },
+  { href: '/admin/works', label: '作品', icon: BookOpen },
+  { href: '/admin/reviews', label: 'レビュー', icon: MessageSquare },
+  { href: '/admin/invites', label: '招待コード', icon: Ticket },
+  { href: '/admin/ai', label: 'AI設定', icon: Sparkles },
+  { href: '/admin/ai/templates', label: 'テンプレート', icon: FileText },
 ];
 
 export default function AdminLayout({ children }: { children: React.ReactNode }) {

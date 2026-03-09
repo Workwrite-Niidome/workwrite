@@ -10,6 +10,7 @@ interface ReaderShortcutCallbacks {
   onToggleCompanion?: () => void;
   onToggleImmersive?: () => void;
   onEscape?: () => void;
+  onShowHelp?: () => void;
 }
 
 export function useReaderShortcuts(callbacks: ReaderShortcutCallbacks) {
@@ -46,6 +47,10 @@ export function useReaderShortcuts(callbacks: ReaderShortcutCallbacks) {
           break;
         case 'Escape':
           callbacks.onEscape?.();
+          break;
+        case '?':
+          e.preventDefault();
+          callbacks.onShowHelp?.();
           break;
       }
     }

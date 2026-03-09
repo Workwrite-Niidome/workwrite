@@ -14,6 +14,7 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
+  const [inviteCode, setInviteCode] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -36,14 +37,16 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await register(email, password, name);
+      await register(email, password, name, inviteCode);
       router.push('/onboarding');
     } catch (err: unknown) {
       if (err instanceof Error) {
         if (err.message.includes('接続できません') || err.message.includes('サーバー')) {
-          setError('サーバーに接続できません。Docker Desktopとバックエンドが起動しているか確認してください。');
+          setError('サーバーに接続できません。しばらく待ってから再度お試しください。');
         } else if (err.message === 'Email already registered') {
           setError('このメールアドレスは既に登録されています');
+        } else if (err.message.includes('招待コード')) {
+          setError(err.message);
         } else {
           setError(err.message);
         }
@@ -60,7 +63,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle>新規登録</CardTitle>
-          <CardDescription>Workwriteに参加する</CardDescription>
+          <CardDescription>招待コードをお持ちの方はベータ版にご参加いただけます</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -80,6 +83,18 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
+            <div className="space-y-2">
+              <label htmlFor="inviteCode" className="text-sm font-medium">招待コード</label>
+              <Input
+                id="inviteCode"
+                value={inviteCode}
+                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
+                placeholder="WW-XXXXXXXX"
+                required
+                className="font-mono tracking-wider"
+              />
+              <p className="text-xs text-muted-foreground">ベータテスターの方に配布している招待コードを入力してください</p>
+            </div>
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">ニックネーム</label>
               <Input

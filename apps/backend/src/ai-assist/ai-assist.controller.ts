@@ -18,9 +18,9 @@ export class AiAssistController {
   @Get('ai/status')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Check AI availability' })
-  async getStatus() {
-    return this.aiAssist.checkStatus();
+  @ApiOperation({ summary: 'Check AI availability and user tier' })
+  async getStatus(@CurrentUser('id') userId: string) {
+    return this.aiAssist.checkStatus(userId);
   }
 
   @Post('ai/assist')
@@ -39,7 +39,7 @@ export class AiAssistController {
     res.flushHeaders();
 
     try {
-      const stream = this.aiAssist.streamAssist(userId, dto.templateSlug, dto.variables);
+      const stream = this.aiAssist.streamAssist(userId, dto.templateSlug, dto.variables, dto.premiumMode);
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }

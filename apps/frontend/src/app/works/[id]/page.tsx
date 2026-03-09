@@ -3,13 +3,13 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, BookmarkPlus, Clock, User, Sparkles, UserPlus, UserCheck } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Clock, User, Sparkles, UserPlus, UserCheck, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
-import { estimateReadingTime } from '@/lib/utils';
+import { estimateReadingTime, cn } from '@/lib/utils';
 import { api, type Work } from '@/lib/api';
 
 export default function WorkDetailPage() {
@@ -88,9 +88,12 @@ export default function WorkDetailPage() {
                 </span>
                 {isAuthenticated && (
                   <Button
-                    variant={isFollowing ? 'secondary' : 'outline'}
+                    variant={isFollowing ? 'default' : 'outline'}
                     size="sm"
-                    className="h-7 text-xs gap-1"
+                    className={cn(
+                      'h-7 text-xs gap-1 group',
+                      isFollowing && 'hover:bg-destructive hover:text-destructive-foreground hover:border-destructive',
+                    )}
                     disabled={followLoading}
                     onClick={async () => {
                       setFollowLoading(true);
@@ -106,8 +109,19 @@ export default function WorkDetailPage() {
                       setFollowLoading(false);
                     }}
                   >
-                    {isFollowing ? <UserCheck className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
-                    {isFollowing ? 'フォロー中' : 'フォロー'}
+                    {isFollowing ? (
+                      <>
+                        <UserCheck className="h-3 w-3 group-hover:hidden" />
+                        <X className="h-3 w-3 hidden group-hover:block" />
+                        <span className="group-hover:hidden">フォロー中</span>
+                        <span className="hidden group-hover:inline">フォロー解除</span>
+                      </>
+                    ) : (
+                      <>
+                        <UserPlus className="h-3 w-3" />
+                        フォローする
+                      </>
+                    )}
                   </Button>
                 )}
                 {work.genre && <Badge variant="secondary">{work.genre}</Badge>}

@@ -1,8 +1,8 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { useState } from 'react';
+import { useRouter, usePathname } from 'next/navigation';
+import { useState, useEffect } from 'react';
 import { Menu, X, User, LogOut } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
@@ -14,6 +14,9 @@ export function Header() {
   const [mobileOpen, setMobileOpen] = useState(false);
   const { isAuthenticated, user, logout } = useAuth();
   const router = useRouter();
+  const pathname = usePathname();
+
+  useEffect(() => { setMobileOpen(false); }, [pathname]);
 
   function handleLogout() {
     logout();

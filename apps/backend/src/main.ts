@@ -26,6 +26,8 @@ async function bootstrap() {
       if (allowedOrigins.includes(origin)) return callback(null, true);
       // Allow Vercel preview deployments (*.vercel.app)
       if (/^https:\/\/.*\.vercel\.app$/.test(origin)) return callback(null, true);
+      // Allow workwrite.jp and subdomains
+      if (/^https:\/\/(.*\.)?workwrite\.jp$/.test(origin)) return callback(null, true);
       callback(null, false);
     },
     credentials: true,

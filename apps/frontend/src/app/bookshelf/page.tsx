@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, Trash2, BarChart3 } from 'lucide-react';
+import { BookOpen, Trash2, BarChart3, BookMarked, Heart, CheckCircle2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Tabs } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/ui/dialog';
+import { EmptyState } from '@/components/ui/empty-state';
 import { useAuth } from '@/lib/auth-context';
 import { api, type BookshelfEntry } from '@/lib/api';
 
@@ -137,16 +138,16 @@ export default function BookshelfPage() {
           ))}
         </div>
       ) : sorted.length === 0 ? (
-        <div className="text-center py-16">
-          <p className="text-muted-foreground mb-4">
-            {activeTab === 'READING' && 'まだ読書中の作品はありません'}
-            {activeTab === 'WANT_TO_READ' && 'まだ読みたい作品はありません'}
-            {activeTab === 'COMPLETED' && 'まだ読了した作品はありません'}
-          </p>
-          <Link href="/">
-            <Button variant="outline">作品を探す</Button>
-          </Link>
-        </div>
+        <EmptyState
+          icon={activeTab === 'READING' ? BookMarked : activeTab === 'WANT_TO_READ' ? Heart : CheckCircle2}
+          title={
+            activeTab === 'READING' ? 'まだ読書中の作品はありません'
+            : activeTab === 'WANT_TO_READ' ? 'まだ読みたい作品はありません'
+            : 'まだ読了した作品はありません'
+          }
+          description="気になる作品を見つけて本棚に追加しましょう"
+          action={{ label: '作品を探す', href: '/' }}
+        />
       ) : (
         <div className="grid gap-4 md:grid-cols-2">
           {sorted.map((entry) => (

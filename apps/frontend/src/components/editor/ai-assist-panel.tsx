@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream } from '@/lib/use-ai-stream';
 import { api } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine } from 'lucide-react';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles } from 'lucide-react';
 
 interface AiAssistPanelProps {
   currentContent: string;
@@ -24,13 +24,20 @@ interface HistoryItem {
 export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
+  const [tier, setTier] = useState<{
+    plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null;
+  } | null>(null);
+  const [premiumMode, setPremiumMode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const { result, isStreaming, error, generate, abort, reset } = useAiStream();
 
   useEffect(() => {
     api.getAiStatus()
-      .then((res) => setAvailable(res.data.available))
+      .then((res) => {
+        setAvailable(res.data.available);
+        if (res.data.tier) setTier(res.data.tier);
+      })
       .catch(() => setAvailable(false));
     api.getPromptTemplates()
       .then((res) => setTemplates(res.data))
@@ -56,10 +63,11 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
   function handleQuickAction(slug: string) {
     reset();
     const vars: Record<string, string> = { content: selectedText || currentContent };
-    generate(slug, vars);
+    generate(slug, vars, premiumMode);
   }
 
-  if (available === false) {
+  if (available === false || (tier && !tier.canUseAi)) {
+    const isQuotaExhausted = tier && !tier.canUseAi;
     return (
       <div className="h-full flex flex-col">
         <div className="flex items-center justify-between p-3 border-b">
@@ -70,8 +78,11 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
         </div>
         <div className="flex-1 flex items-center justify-center p-4">
           <p className="text-sm text-muted-foreground text-center">
-            AI機能は現在利用できません。<br />
-            管理者がAPIキーを設定するとご利用いただけます。
+            {isQuotaExhausted ? (
+              <>今週のAI使用回数の上限に達しました。<br />プランをアップグレードすると無制限にご利用いただけます。</>
+            ) : (
+              <>AI機能は現在利用できません。<br />管理者がAPIキーを設定するとご利用いただけます。</>
+            )}
           </p>
         </div>
       </div>
@@ -88,6 +99,30 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
       </div>
 
       <div className="flex-1 overflow-y-auto p-3 space-y-3">
+        {/* Tier info */}
+        {tier && (
+          <div className="flex items-center justify-between text-xs">
+            <span className="text-muted-foreground">
+              {tier.plan === 'premium' && <><Crown className="inline h-3 w-3 text-amber-500 mr-1" />プレミアム</>}
+              {tier.plan === 'standard' && <><Sparkles className="inline h-3 w-3 text-blue-500 mr-1" />スタンダード</>}
+              {tier.plan === 'free' && <>無料プラン（残り {tier.remainingFreeUses} 回/週）</>}
+            </span>
+            {tier.canUseThinking && (
+              <button
+                onClick={() => setPremiumMode(!premiumMode)}
+                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                  premiumMode
+                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+                    : 'border-border text-muted-foreground hover:border-amber-500/30'
+                }`}
+              >
+                <Crown className="h-2.5 w-2.5" />
+                {premiumMode ? 'じっくりモード ON' : 'じっくりモード'}
+              </button>
+            )}
+          </div>
+        )}
+
         {/* Quick actions */}
         <div className="space-y-1.5">
           <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
@@ -136,7 +171,7 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
           templates={templates}
           onGenerate={(slug, vars) => {
             reset();
-            generate(slug, vars);
+            generate(slug, vars, premiumMode);
           }}
           isStreaming={isStreaming}
           currentContent={selectedText || currentContent}

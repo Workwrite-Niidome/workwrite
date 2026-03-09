@@ -1,9 +1,10 @@
 import {
-  Controller, Get, Patch, Delete, Param, Body, Query, UseGuards,
+  Controller, Get, Patch, Post, Delete, Param, Body, Query, UseGuards,
   ParseIntPipe, DefaultValuePipe,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
+import { AiTierService } from '../ai-settings/ai-tier.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { BanUserDto } from './dto/ban-user.dto';
 import { UpdateWorkStatusDto } from './dto/update-work-status.dto';
@@ -18,7 +19,10 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @Roles('ADMIN')
 @ApiBearerAuth()
 export class AdminController {
-  constructor(private adminService: AdminService) {}
+  constructor(
+    private adminService: AdminService,
+    private aiTier: AiTierService,
+  ) {}
 
   @Get('stats')
   @ApiOperation({ summary: 'Get admin dashboard statistics' })
@@ -98,5 +102,60 @@ export class AdminController {
   @ApiOperation({ summary: 'Delete a review' })
   deleteReview(@Param('id') id: string) {
     return this.adminService.deleteReview(id);
+  }
+
+  // ─── Invite Code Management ────────────────────────────────
+
+  @Get('invite-codes')
+  @ApiOperation({ summary: 'List all invite codes' })
+  async getInviteCodes() {
+    return this.adminService.getInviteCodes();
+  }
+
+  @Post('invite-codes')
+  @ApiOperation({ summary: 'Create a new invite code' })
+  async createInviteCode(
+    @CurrentUser('id') adminId: string,
+    @Body() body: { label?: string; maxUses?: number; expiresAt?: string },
+  ) {
+    return this.adminService.createInviteCode(adminId, body);
+  }
+
+  @Patch('invite-codes/:id')
+  @ApiOperation({ summary: 'Toggle invite code active status' })
+  async toggleInviteCode(@Param('id') id: string) {
+    return this.adminService.toggleInviteCode(id);
+  }
+
+  @Delete('invite-codes/:id')
+  @ApiOperation({ summary: 'Delete an invite code' })
+  async deleteInviteCode(@Param('id') id: string) {
+    return this.adminService.deleteInviteCode(id);
+  }
+
+  // ─── Subscription Plan Management ─────────────────────────
+
+  @Post('users/:id/plan')
+  @ApiOperation({ summary: 'Grant subscription plan to user (standard/premium)' })
+  async grantPlan(
+    @CurrentUser('id') adminId: string,
+    @Param('id') userId: string,
+    @Body() body: { plan: 'standard' | 'premium' },
+  ) {
+    await this.aiTier.grantPlan(adminId, userId, body.plan);
+    return { granted: true, userId, plan: body.plan };
+  }
+
+  @Delete('users/:id/plan')
+  @ApiOperation({ summary: 'Revoke subscription plan from user' })
+  async revokePlan(@Param('id') userId: string) {
+    await this.aiTier.revokePlan(userId);
+    return { revoked: true, userId };
+  }
+
+  @Get('users/:id/tier')
+  @ApiOperation({ summary: 'Get user AI tier info' })
+  async getUserTier(@Param('id') userId: string) {
+    return this.aiTier.getUserTier(userId);
   }
 }

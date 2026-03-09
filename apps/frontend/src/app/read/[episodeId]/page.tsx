@@ -30,6 +30,7 @@ import { HighlightDetailPopover } from '@/components/reader/highlight-detail-pop
 import { EpisodeCompleteBanner } from '@/components/reader/episode-complete-banner';
 import { CompanionChat } from '@/components/ai/companion-chat';
 import { useReaderShortcuts } from '@/hooks/use-reader-shortcuts';
+import { ShortcutsHelp } from '@/components/reader/shortcuts-help';
 import { useSwipeNavigation } from '@/hooks/use-swipe-navigation';
 
 type FontSize = 'sm' | 'base' | 'lg' | 'xl';
@@ -130,6 +131,7 @@ export default function ReaderPage() {
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
   const [showCompleteBanner, setShowCompleteBanner] = useState(false);
+  const [showShortcutsHelp, setShowShortcutsHelp] = useState(false);
 
   // Highlight state
   const [highlights, setHighlights] = useState<Highlight[]>([]);
@@ -288,11 +290,13 @@ export default function ReaderPage() {
     onToggleCompanion: () => toggleCompanion(),
     onToggleImmersive: () => setImmersiveMode((v) => !v),
     onEscape: () => {
-      if (immersiveMode) setImmersiveMode(false);
+      if (showShortcutsHelp) setShowShortcutsHelp(false);
+      else if (immersiveMode) setImmersiveMode(false);
       else if (showSettings) setShowSettings(false);
       else if (showComments) setShowComments(false);
       else if (showCompanion) setShowCompanion(false);
     },
+    onShowHelp: () => setShowShortcutsHelp((v) => !v),
   });
 
   // Swipe navigation
@@ -702,6 +706,9 @@ export default function ReaderPage() {
           </Button>
         </DialogFooter>
       </Dialog>
+
+      {/* Keyboard shortcuts help */}
+      <ShortcutsHelp open={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
 
       {/* Main content */}
       <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>

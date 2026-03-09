@@ -6,7 +6,7 @@ interface UseAiStreamReturn {
   result: string;
   isStreaming: boolean;
   error: string | null;
-  generate: (templateSlug: string, variables: Record<string, string>) => Promise<void>;
+  generate: (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => Promise<void>;
   abort: () => void;
   reset: () => void;
 }
@@ -28,7 +28,7 @@ export function useAiStream(): UseAiStreamReturn {
     setIsStreaming(false);
   }, []);
 
-  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>) => {
+  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => {
     abort();
     setResult('');
     setError(null);
@@ -45,7 +45,7 @@ export function useAiStream(): UseAiStreamReturn {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ templateSlug, variables }),
+        body: JSON.stringify({ templateSlug, variables, ...(premiumMode ? { premiumMode: true } : {}) }),
         signal: controller.signal,
       });
 

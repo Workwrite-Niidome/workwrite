@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/dialog';
-import { Search, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck, Crown, Star } from 'lucide-react';
 
 const ROLES = ['READER', 'AUTHOR', 'EDITOR', 'ADMIN'] as const;
 const PAGE_SIZE = 20;
@@ -33,6 +33,7 @@ export default function AdminUsersPage() {
 
   const [pendingRole, setPendingRole] = useState<{ userId: string; role: string } | null>(null);
   const [pendingBan, setPendingBan] = useState<AdminUser | null>(null);
+  const [pendingPlan, setPendingPlan] = useState<{ userId: string; plan: 'standard' | 'premium' | 'revoke' } | null>(null);
 
   async function handleRoleChange() {
     if (!pendingRole) return;
@@ -50,6 +51,19 @@ export default function AdminUsersPage() {
       fetchUsers();
     } catch {}
     setPendingBan(null);
+  }
+
+  async function handlePlanChange() {
+    if (!pendingPlan) return;
+    try {
+      if (pendingPlan.plan === 'revoke') {
+        await api.revokeUserPlan(pendingPlan.userId);
+      } else {
+        await api.grantUserPlan(pendingPlan.userId, pendingPlan.plan);
+      }
+      fetchUsers();
+    } catch {}
+    setPendingPlan(null);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -89,6 +103,7 @@ export default function AdminUsersPage() {
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">User</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Role</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">プラン</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Works</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Actions</th>
@@ -98,14 +113,14 @@ export default function AdminUsersPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-border">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                     ))}
                   </tr>
                 ))
               ) : users.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No users found</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No users found</td>
                 </tr>
               ) : (
                 users.map((user) => (
@@ -127,10 +142,30 @@ export default function AdminUsersPage() {
                         {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
                       </select>
                     </td>
+                    <td className="px-4 py-3">
+                      <select
+                        value={user.subscription?.plan || 'free'}
+                        onChange={(e) => {
+                          const val = e.target.value;
+                          setPendingPlan({
+                            userId: user.id,
+                            plan: val === 'free' ? 'revoke' : val as 'standard' | 'premium',
+                          });
+                        }}
+                        className="h-8 rounded border border-border bg-transparent px-2 text-xs"
+                        aria-label={`Plan for ${user.name}`}
+                      >
+                        <option value="free">無料</option>
+                        <option value="standard">スタンダード</option>
+                        <option value="premium">プレミアム</option>
+                      </select>
+                      {user.subscription?.plan === 'premium' && <Crown className="inline h-3 w-3 ml-1 text-amber-500" />}
+                      {user.subscription?.plan === 'standard' && <Star className="inline h-3 w-3 ml-1 text-blue-500" />}
+                    </td>
                     <td className="px-4 py-3 text-muted-foreground">{user._count.works}</td>
                     <td className="px-4 py-3">
                       {user.isBanned ? (
-                        <span className="text-xs text-destructive font-medium">Banned</span>
+                        <span className="text-xs text-destructive font-medium">凍結中</span>
                       ) : (
                         <span className="text-xs text-muted-foreground">Active</span>
                       )}
@@ -143,9 +178,9 @@ export default function AdminUsersPage() {
                         onClick={() => setPendingBan(user)}
                       >
                         {user.isBanned ? (
-                          <><ShieldCheck className="h-3.5 w-3.5" /> Unban</>
+                          <><ShieldCheck className="h-3.5 w-3.5" /> 解除</>
                         ) : (
-                          <><ShieldAlert className="h-3.5 w-3.5" /> Ban</>
+                          <><ShieldAlert className="h-3.5 w-3.5" /> 凍結</>
                         )}
                       </Button>
                     </td>
@@ -174,6 +209,15 @@ export default function AdminUsersPage() {
         confirmLabel={pendingBan?.isBanned ? '解除する' : '凍結する'}
         variant={pendingBan?.isBanned ? 'default' : 'destructive'}
         onConfirm={handleBanToggle}
+      />
+
+      <ConfirmDialog
+        open={!!pendingPlan}
+        onOpenChange={(v) => { if (!v) setPendingPlan(null); }}
+        title="プラン変更"
+        message={`プランを${pendingPlan?.plan === 'revoke' ? '無料' : pendingPlan?.plan === 'premium' ? 'プレミアム' : 'スタンダード'}に変更しますか？`}
+        confirmLabel="変更する"
+        onConfirm={handlePlanChange}
       />
 
       {/* Pagination */}

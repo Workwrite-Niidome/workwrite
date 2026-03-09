@@ -11,7 +11,7 @@ interface AuthState {
 
 interface AuthContextType extends AuthState {
   login: (email: string, password: string) => Promise<void>;
-  register: (email: string, password: string, name: string) => Promise<void>;
+  register: (email: string, password: string, name: string, inviteCode: string) => Promise<void>;
   logout: () => void;
 }
 
@@ -37,8 +37,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setAuth(res.data);
   }, [setAuth]);
 
-  const register = useCallback(async (email: string, password: string, name: string) => {
-    const res = await api.register({ email, password, name });
+  const register = useCallback(async (email: string, password: string, name: string, inviteCode: string) => {
+    const res = await api.register({ email, password, name, inviteCode });
     setAuth(res.data);
   }, [setAuth]);
 

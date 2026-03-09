@@ -106,7 +106,7 @@ class ApiClient {
   }
 
   // Auth
-  async register(data: { email: string; password: string; name: string }) {
+  async register(data: { email: string; password: string; name: string; inviteCode: string }) {
     return this.request<{ data: AuthResponse }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -202,6 +202,19 @@ class ApiClient {
 
   async deleteWork(id: string) {
     return this.request<{ data: { deleted: boolean } }>(`/works/${id}`, { method: 'DELETE' });
+  }
+
+  // Creation Wizard
+  async saveCreationPlan(workId: string, plan: {
+    characters?: any[];
+    plotOutline?: any;
+    emotionBlueprint?: { coreMessage: string; targetEmotions: string; readerJourney: string };
+    chapterOutline?: any[];
+  }) {
+    return this.request<{ data: any }>(`/works/${workId}/creation/plan`, {
+      method: 'PUT',
+      body: JSON.stringify(plan),
+    });
   }
 
   // Episodes
@@ -553,6 +566,49 @@ class ApiClient {
     );
   }
 
+  async grantUserPlan(userId: string, plan: 'standard' | 'premium') {
+    return this.request<{ data: { granted: boolean } }>(
+      `/admin/users/${userId}/plan`,
+      { method: 'POST', body: JSON.stringify({ plan }) },
+    );
+  }
+
+  async revokeUserPlan(userId: string) {
+    return this.request<{ data: { revoked: boolean } }>(
+      `/admin/users/${userId}/plan`,
+      { method: 'DELETE' },
+    );
+  }
+
+  // AI tier
+  async getAiStatus() {
+    return this.request<{ data: {
+      available: boolean;
+      model: string;
+      tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null };
+    } }>('/ai/status');
+  }
+
+  // Invite codes
+  async getInviteCodes() {
+    return this.request<{ data: InviteCode[] }>('/admin/invite-codes');
+  }
+
+  async createInviteCode(opts: { label?: string; maxUses?: number; expiresAt?: string }) {
+    return this.request<{ data: InviteCode }>('/admin/invite-codes', {
+      method: 'POST',
+      body: JSON.stringify(opts),
+    });
+  }
+
+  async toggleInviteCode(id: string) {
+    return this.request<{ data: InviteCode }>(`/admin/invite-codes/${id}`, { method: 'PATCH' });
+  }
+
+  async deleteInviteCode(id: string) {
+    return this.request<{ data: InviteCode }>(`/admin/invite-codes/${id}`, { method: 'DELETE' });
+  }
+
   async getAdminWorks(params?: { page?: number; limit?: number; status?: string }) {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
@@ -584,9 +640,6 @@ class ApiClient {
   }
 
   // AI Status & Assist
-  async getAiStatus() {
-    return this.request<{ data: { available: boolean; model: string } }>('/ai/status');
-  }
 
   async getPromptTemplates() {
     return this.request<{ data: PromptTemplate[] }>('/prompt-templates');
@@ -956,6 +1009,7 @@ export interface AdminUser {
   isBanned: boolean;
   createdAt: string;
   _count: { works: number; reviews: number };
+  subscription?: { plan: string; status: string; grantedBy?: string | null } | null;
 }
 
 export interface AdminWork {
@@ -1065,6 +1119,18 @@ export interface WorkImportRecord {
   importedChapters: number;
   errorMessage: string | null;
   createdAt: string;
+}
+
+export interface InviteCode {
+  id: string;
+  code: string;
+  label: string | null;
+  maxUses: number;
+  usedCount: number;
+  isActive: boolean;
+  expiresAt: string | null;
+  createdAt: string;
+  _count?: { usages: number };
 }
 
 export const api = new ApiClient();

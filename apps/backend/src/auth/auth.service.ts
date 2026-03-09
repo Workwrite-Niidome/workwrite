@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -19,6 +20,21 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
+    // Validate invite code
+    const invite = await this.prisma.inviteCode.findUnique({
+      where: { code: dto.inviteCode.trim().toUpperCase() },
+    });
+
+    if (!invite || !invite.isActive) {
+      throw new BadRequestException('招待コードが無効です');
+    }
+    if (invite.expiresAt && invite.expiresAt < new Date()) {
+      throw new BadRequestException('招待コードの有効期限が切れています');
+    }
+    if (invite.usedCount >= invite.maxUses) {
+      throw new BadRequestException('招待コードの使用回数の上限に達しています');
+    }
+
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -34,6 +50,15 @@ export class AuthService {
         name: dto.name,
         displayName: dto.displayName || dto.name,
       },
+    });
+
+    // Record invite code usage
+    await this.prisma.inviteCode.update({
+      where: { id: invite.id },
+      data: { usedCount: { increment: 1 } },
+    });
+    await this.prisma.inviteCodeUsage.create({
+      data: { inviteCodeId: invite.id, userId: user.id },
     });
 
     // Create point account

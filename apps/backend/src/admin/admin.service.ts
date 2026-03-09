@@ -1,4 +1,5 @@
 import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { randomBytes } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 interface PaginationParams {
@@ -58,6 +59,7 @@ export class AdminService {
           isBanned: true,
           createdAt: true,
           _count: { select: { works: true, reviews: true } },
+          subscription: { select: { plan: true, status: true, grantedBy: true } },
         },
       }),
       this.prisma.user.count({ where }),
@@ -155,5 +157,53 @@ export class AdminService {
     if (!review) throw new NotFoundException('Review not found');
 
     return this.prisma.review.delete({ where: { id: reviewId } });
+  }
+
+  // ─── Invite Codes ────────────────────────────────────────
+
+  private generateCode(): string {
+    return 'WW-' + randomBytes(4).toString('hex').toUpperCase();
+  }
+
+  async getInviteCodes() {
+    return this.prisma.inviteCode.findMany({
+      orderBy: { createdAt: 'desc' },
+      include: {
+        usages: {
+          include: { inviteCode: false },
+          orderBy: { usedAt: 'desc' },
+          take: 10,
+        },
+        _count: { select: { usages: true } },
+      },
+    });
+  }
+
+  async createInviteCode(
+    adminId: string,
+    opts: { label?: string; maxUses?: number; expiresAt?: string },
+  ) {
+    return this.prisma.inviteCode.create({
+      data: {
+        code: this.generateCode(),
+        label: opts.label || null,
+        maxUses: opts.maxUses || 1,
+        createdBy: adminId,
+        expiresAt: opts.expiresAt ? new Date(opts.expiresAt) : null,
+      },
+    });
+  }
+
+  async toggleInviteCode(id: string) {
+    const code = await this.prisma.inviteCode.findUnique({ where: { id } });
+    if (!code) throw new NotFoundException('Invite code not found');
+    return this.prisma.inviteCode.update({
+      where: { id },
+      data: { isActive: !code.isActive },
+    });
+  }
+
+  async deleteInviteCode(id: string) {
+    return this.prisma.inviteCode.delete({ where: { id } });
   }
 }

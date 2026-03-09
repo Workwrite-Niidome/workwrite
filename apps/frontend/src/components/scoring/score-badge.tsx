@@ -12,16 +12,24 @@ function getScoreColor(score: number) {
   return 'text-muted-foreground bg-muted border-border';
 }
 
+function getScoreLabel(score: number): string {
+  if (score >= 80) return '秀作';
+  if (score >= 60) return '良作';
+  if (score >= 40) return '佳作';
+  return '—';
+}
+
 export function ScoreBadge({ score, className }: ScoreBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center rounded-full border px-2 py-0.5 text-xs font-medium',
+        'inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-xs font-medium',
         getScoreColor(score),
         className,
       )}
     >
       {Math.round(score)}
+      <span className="opacity-70">{getScoreLabel(score)}</span>
     </span>
   );
 }
