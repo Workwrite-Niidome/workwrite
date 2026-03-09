@@ -159,6 +159,24 @@ export class CreationWizardController {
     return this.creationWizardService.calculateOriginality(workId);
   }
 
+  // ─── Story Summary ──────────────────────────────────────
+
+  @Post('works/:workId/creation/summary')
+  @ApiOperation({ summary: 'Update cached story summary (uses Haiku)' })
+  async updateStorySummary(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    await this.creationWizardService.updateStorySummary(workId, userId);
+    return { success: true };
+  }
+
+  @Get('works/:workId/creation/summary')
+  @ApiOperation({ summary: 'Get cached story summary' })
+  getStorySummary(@Param('workId') workId: string) {
+    return this.creationWizardService.getStorySummary(workId);
+  }
+
   // ─── Helpers ─────────────────────────────────────────────────
 
   private setSSEHeaders(res: Response) {

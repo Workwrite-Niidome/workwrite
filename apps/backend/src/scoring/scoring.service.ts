@@ -101,6 +101,7 @@ ${text}
   "improvementTips": ["<提案1>", "<提案2>", "<提案3>"]
 }`;
 
+    // Use Haiku for scoring (cost-efficient, structured output)
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -109,7 +110,7 @@ ${text}
         'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
+        model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       }),

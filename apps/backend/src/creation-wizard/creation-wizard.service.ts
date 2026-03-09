@@ -422,4 +422,100 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
       },
     };
   }
+
+  // ─── Story Summary (cached context for AI assist) ──────────
+
+  /**
+   * Generate/update a running story summary for efficient AI context.
+   * Uses Haiku for cost efficiency. Called after episode save.
+   */
+  async updateStorySummary(workId: string, userId: string): Promise<void> {
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) return;
+
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId },
+      orderBy: { orderIndex: 'asc' },
+      select: { title: true, content: true, orderIndex: true },
+    });
+
+    if (episodes.length === 0) return;
+
+    // Build episode texts (truncated for summary generation)
+    const episodeTexts = episodes
+      .map((ep) => `第${ep.orderIndex + 1}話「${ep.title}」:\n${ep.content.slice(0, 1000)}`)
+      .join('\n\n---\n\n');
+
+    const prompt = `以下は小説の各話の内容です。全体を通した要約を以下のJSON形式で作成してください:
+
+${episodeTexts}
+
+{
+  "overallSummary": "物語全体の要約（200字以内）",
+  "episodes": [
+    { "title": "話タイトル", "summary": "その話の要約（50字以内）", "keyEvents": ["重要な出来事1", "重要な出来事2"] }
+  ],
+  "characters": [
+    { "name": "キャラ名", "currentState": "現在の状況（30字以内）" }
+  ],
+  "openThreads": ["未解決の伏線1", "未解決の伏線2"],
+  "tone": "現在の物語のトーン（一言で）"
+}`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: 'claude-haiku-4-5-20251001',
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!response.ok) return;
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) return;
+
+      const summary = JSON.parse(jsonMatch[0]);
+
+      await this.prisma.workCreationPlan.upsert({
+        where: { workId },
+        update: { storySummary: summary },
+        create: { workId, storySummary: summary },
+      });
+
+      // Log usage
+      const inputTokens = data.usage?.input_tokens || 0;
+      const outputTokens = data.usage?.output_tokens || 0;
+      await this.prisma.aiUsageLog.create({
+        data: {
+          userId,
+          feature: 'story_summary',
+          inputTokens,
+          outputTokens,
+          model: 'claude-haiku-4-5-20251001',
+          durationMs: 0,
+        },
+      }).catch(() => {});
+    } catch (e) {
+      this.logger.error('Failed to update story summary', e);
+    }
+  }
+
+  /** Get cached story summary */
+  async getStorySummary(workId: string): Promise<unknown> {
+    const plan = await this.prisma.workCreationPlan.findUnique({
+      where: { workId },
+      select: { storySummary: true },
+    });
+    return plan?.storySummary || null;
+  }
 }

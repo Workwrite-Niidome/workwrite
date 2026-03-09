@@ -277,7 +277,16 @@ class ApiClient {
       plotOutline?: any;
       emotionBlueprint?: { coreMessage: string; targetEmotions: string; readerJourney: string };
       chapterOutline?: any[];
+      storySummary?: any;
     } }>(`/works/${workId}/creation/plan`);
+  }
+
+  async getStorySummary(workId: string) {
+    return this.request<any>(`/works/${workId}/creation/summary`);
+  }
+
+  async updateStorySummary(workId: string) {
+    return this.request<{ success: boolean }>(`/works/${workId}/creation/summary`, { method: 'POST' });
   }
 
   // Episodes

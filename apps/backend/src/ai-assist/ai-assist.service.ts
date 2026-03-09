@@ -25,7 +25,7 @@ export class AiAssistService {
   async checkStatus(userId?: string): Promise<{
     available: boolean;
     model: string;
-    tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null };
+    tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus: boolean; remainingFreeUses: number | null };
   }> {
     const enabled = await this.aiSettings.isAiEnabled();
     const model = await this.aiSettings.getModel();
@@ -67,10 +67,10 @@ export class AiAssistService {
       throw new ServiceUnavailableException('Rate limit exceeded. Please try again later.');
     }
 
-    // Check AI tier and get model config
-    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode);
-
     const template = await this.templates.findBySlug(templateSlug);
+
+    // Check AI tier and get model config (pass slug for model routing)
+    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug);
 
     // Build prompt from template
     let prompt = template.prompt;

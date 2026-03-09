@@ -27,7 +27,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [tier, setTier] = useState<{
-    plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null;
+    plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus?: boolean; remainingFreeUses: number | null;
   } | null>(null);
   const [premiumMode, setPremiumMode] = useState(false);
   const [charCount, setCharCount] = useState(1000);
@@ -35,6 +35,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [creationPlan, setCreationPlan] = useState<any>(null);
+  const [storySummary, setStorySummary] = useState<any>(null);
   const [episodes, setEpisodes] = useState<{ title: string; content: string }[]>([]);
   const { result, isStreaming, error, generate, abort, reset } = useAiStream();
 
@@ -49,25 +50,24 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       .then((res) => setTemplates(res.data))
       .catch(() => {});
     if (workId) {
-      // Load creation plan for context
+      // Load creation plan for context (includes storySummary)
       api.getCreationPlan(workId)
-        .then((res) => { if (res.data) setCreationPlan(res.data); })
+        .then((res) => {
+          if (res.data) {
+            setCreationPlan(res.data);
+            if (res.data.storySummary) setStorySummary(res.data.storySummary);
+          }
+        })
         .catch(() => {});
-      // Load previous episodes for story continuity
+      // Load episode titles as fallback (if no story summary)
       api.getEpisodes(workId)
         .then((res) => {
           if (res.data) {
             const sorted = [...res.data].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
-            // Keep all episodes with summaries for context
-            // Recent 3 episodes get more content, older ones get shorter summaries
-            const summaries = sorted.map((ep: any, i: number) => {
-              const contentLen = i >= sorted.length - 3 ? 800 : 200;
-              return {
-                title: ep.title,
-                content: (ep.content || '').slice(0, contentLen),
-              };
-            });
-            setEpisodes(summaries);
+            setEpisodes(sorted.map((ep: any) => ({
+              title: ep.title,
+              content: '',
+            })));
           }
         })
         .catch(() => {});
@@ -130,12 +130,30 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       }
     }
 
-    // Include previous episodes for story continuity
-    if (episodes.length > 0) {
-      const epSummary = episodes
-        .map((ep, i) => `第${i + 1}話「${ep.title}」: ${ep.content}...`)
-        .join('\n\n');
-      contextParts.push(`これまでの章:\n${epSummary}`);
+    // Use cached story summary if available (token-efficient)
+    if (storySummary) {
+      const parts: string[] = [];
+      if (storySummary.overallSummary) parts.push(`全体要約: ${storySummary.overallSummary}`);
+      if (storySummary.episodes?.length > 0) {
+        const isPremium = tier?.plan === 'premium';
+        const eps = isPremium ? storySummary.episodes : storySummary.episodes.slice(-3);
+        const epText = eps.map((ep: any) =>
+          `「${ep.title}」: ${ep.summary}${ep.keyEvents?.length ? ` [${ep.keyEvents.join(', ')}]` : ''}`
+        ).join('\n');
+        parts.push(`各話要約:\n${epText}`);
+      }
+      if (storySummary.characters?.length > 0) {
+        parts.push(`キャラ現況: ${storySummary.characters.map((c: any) => `${c.name}: ${c.currentState}`).join(' / ')}`);
+      }
+      if (storySummary.openThreads?.length > 0) {
+        parts.push(`伏線: ${storySummary.openThreads.join(', ')}`);
+      }
+      if (storySummary.tone) parts.push(`トーン: ${storySummary.tone}`);
+      contextParts.push(parts.join('\n'));
+    } else if (episodes.length > 0) {
+      // Fallback: episode titles only (minimal tokens)
+      const epList = episodes.map((ep, i) => `第${i + 1}話「${ep.title}」`).join('\n');
+      contextParts.push(`これまでの章:\n${epList}`);
     }
 
     if (contextParts.length > 0) {
@@ -191,7 +209,8 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           <div className="flex items-center justify-between text-xs">
             <span className="text-muted-foreground">
               {tier.plan === 'premium' && <><Crown className="inline h-3 w-3 text-amber-500 mr-1" />プレミアム</>}
-              {tier.plan === 'standard' && <><Sparkles className="inline h-3 w-3 text-blue-500 mr-1" />スタンダード</>}
+              {tier.plan === 'standard' && <><Crown className="inline h-3 w-3 text-purple-500 mr-1" />スタンダード</>}
+              {tier.plan === 'starter' && <><Sparkles className="inline h-3 w-3 text-blue-500 mr-1" />スターター</>}
               {tier.plan === 'free' && <>無料プラン（残り {tier.remainingFreeUses} 回/週）</>}
             </span>
             {tier.canUseThinking && (
@@ -204,7 +223,9 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 }`}
               >
                 <Crown className="h-2.5 w-2.5" />
-                {premiumMode ? 'じっくりモード ON' : 'じっくりモード'}
+                {premiumMode
+                  ? (tier.canUseOpus ? 'Opusモード ON' : 'じっくりモード ON')
+                  : (tier.canUseOpus ? 'Opusモード' : 'じっくりモード')}
               </button>
             )}
           </div>
@@ -229,8 +250,15 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
               {creationPlan?.chapterOutline?.length > 0 && (
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.chapterOutline.length}章立て</span>
               )}
-              {episodes.length > 0 && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{episodes.length}話の履歴</span>
+              {storySummary && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                  要約キャッシュ
+                </span>
+              )}
+              {!storySummary && episodes.length > 0 && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
+                  {episodes.length}話（タイトルのみ）
+                </span>
               )}
             </div>
           </div>

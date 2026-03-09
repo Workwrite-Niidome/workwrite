@@ -135,6 +135,8 @@ export function WritingEditor({
         router.push(`/works/${workId}/edit`);
       }
       await deleteDraft();
+      // Fire-and-forget: update cached story summary
+      api.updateStorySummary(workId).catch(() => {});
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '投稿に失敗しました');
     } finally {

@@ -672,6 +672,7 @@ model WorkCreationPlan {
   plotOutline      Json?
   emotionBlueprint Json?
   chapterOutline   Json?
+  storySummary     Json?    // Auto-generated running summary of all episodes (cached)
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 
