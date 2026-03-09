@@ -46,6 +46,10 @@ model User {
   following  Follow[] @relation("follower")
   followers  Follow[] @relation("following")
 
+  // Letters
+  lettersSent     Letter[] @relation("lettersSent")
+  lettersReceived Letter[] @relation("lettersReceived")
+
   // Stripe
   stripeCustomerId  String?
   stripeAccountId   String?
@@ -171,6 +175,7 @@ model Episode {
   readingProgress ReadingProgress[]
   highlights      Highlight[]
   comments        Comment[]
+  letters         Letter[]
 
   @@unique([workId, orderIndex])
   @@index([workId])
@@ -297,6 +302,43 @@ model Comment {
   @@index([episodeId])
   @@index([userId])
   @@index([parentId])
+}
+
+// ============================================================
+// Letters (有料ファンレター / 投げ銭)
+// ============================================================
+
+model Letter {
+  id               String       @id @default(cuid())
+  senderId         String
+  recipientId      String       // 著者のuserId
+  episodeId        String
+  type             LetterType
+  content          String       @db.Text
+  amount           Int          // 金額（円）。Free枠使用時は0
+  stampId          String?      // スタンプID（STANDARD以上）
+  isHighlighted    Boolean      @default(false) // PREMIUM以上: 上部固定表示
+  isFreeQuota      Boolean      @default(false) // Free枠使用時 true
+  paymentId        String?      // Payment.id
+  moderationStatus String       @default("approved") // approved / rejected / pending
+  moderationReason String?      // 検閲拒否理由
+  createdAt        DateTime     @default(now())
+
+  sender    User    @relation("lettersSent", fields: [senderId], references: [id])
+  recipient User    @relation("lettersReceived", fields: [recipientId], references: [id])
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([episodeId])
+  @@index([recipientId])
+  @@index([senderId])
+  @@index([createdAt])
+}
+
+enum LetterType {
+  SHORT     // ¥120, 140字
+  STANDARD  // ¥300, 500字
+  PREMIUM   // ¥500, 1000字
+  GIFT      // ¥1,000〜, 1000字
 }
 
 // ============================================================
@@ -464,6 +506,7 @@ model Payment {
 
 enum PaymentType {
   TIP
+  LETTER
   EPISODE_PURCHASE
   SUBSCRIPTION
 }

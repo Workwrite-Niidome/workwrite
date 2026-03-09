@@ -10,12 +10,11 @@ import {
   Moon,
   Sun,
   X,
-  MessageSquare,
+  Mail,
   Sparkles,
   Maximize,
   Minimize,
   Copy,
-  Reply,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -23,12 +22,13 @@ import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '
 import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime } from '@/lib/utils';
-import { api, type Episode, type Comment, type Highlight } from '@/lib/api';
+import { api, type Episode, type Highlight } from '@/lib/api';
 import { HighlightedText } from '@/components/reader/highlighted-text';
 import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
 import { HighlightDetailPopover } from '@/components/reader/highlight-detail-popover';
 import { EpisodeCompleteBanner } from '@/components/reader/episode-complete-banner';
 import { CompanionChat } from '@/components/ai/companion-chat';
+import { LetterPanel } from '@/components/reader/letter-panel';
 import { useReaderShortcuts } from '@/hooks/use-reader-shortcuts';
 import { ShortcutsHelp } from '@/components/reader/shortcuts-help';
 import { useSwipeNavigation } from '@/hooks/use-swipe-navigation';
@@ -122,11 +122,8 @@ export default function ReaderPage() {
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
-  const [showComments, setShowComments] = useState(false);
+  const [showLetters, setShowLetters] = useState(false);
   const [showCompanion, setShowCompanion] = useState(false);
-  const [comments, setComments] = useState<Comment[]>([]);
-  const [commentText, setCommentText] = useState('');
-  const [replyToId, setReplyToId] = useState<string | null>(null);
   const [progressPct, setProgressPct] = useState(0);
   const [immersiveMode, setImmersiveMode] = useState(false);
   const [headerVisible, setHeaderVisible] = useState(true);
@@ -229,7 +226,7 @@ export default function ReaderPage() {
     }
     setHeaderVisible(false);
     setShowSettings(false);
-    setShowComments(false);
+    setShowLetters(false);
     setShowCompanion(false);
 
     function handleMouseMove(e: MouseEvent) {
@@ -286,14 +283,14 @@ export default function ReaderPage() {
     onPrevEpisode: navigatePrev,
     onNextEpisode: navigateNext,
     onToggleSettings: () => setShowSettings((v) => !v),
-    onToggleComments: () => toggleComments(),
+    onToggleComments: () => toggleLetters(),
     onToggleCompanion: () => toggleCompanion(),
     onToggleImmersive: () => setImmersiveMode((v) => !v),
     onEscape: () => {
       if (showShortcutsHelp) setShowShortcutsHelp(false);
       else if (immersiveMode) setImmersiveMode(false);
       else if (showSettings) setShowSettings(false);
-      else if (showComments) setShowComments(false);
+      else if (showLetters) setShowLetters(false);
       else if (showCompanion) setShowCompanion(false);
     },
     onShowHelp: () => setShowShortcutsHelp((v) => !v),
@@ -305,43 +302,15 @@ export default function ReaderPage() {
     onSwipeRight: navigatePrev,
   });
 
-  // Comments
-  async function loadComments() {
-    try {
-      const res = await api.getCommentsForEpisode(episodeId);
-      setComments(res.data);
-    } catch {}
-  }
-
-  async function handlePostComment() {
-    if (!commentText.trim()) return;
-    try {
-      const body: { episodeId: string; content: string; parentId?: string } = {
-        episodeId,
-        content: commentText,
-      };
-      if (replyToId) body.parentId = replyToId;
-      const res = await api.createComment(body);
-      if (replyToId) {
-        // Reload all comments to get threaded structure
-        await loadComments();
-      } else {
-        setComments((prev) => [...prev, res.data]);
-      }
-      setCommentText('');
-      setReplyToId(null);
-    } catch {}
-  }
-
-  function toggleComments() {
-    if (!showComments) loadComments();
-    setShowComments(!showComments);
+  // Letters
+  function toggleLetters() {
+    setShowLetters(!showLetters);
     if (showCompanion) setShowCompanion(false);
   }
 
   function toggleCompanion() {
     setShowCompanion(!showCompanion);
-    if (showComments) setShowComments(false);
+    if (showLetters) setShowLetters(false);
   }
 
   // Highlights
@@ -443,75 +412,6 @@ export default function ReaderPage() {
   const fontSizeClass = FONT_SIZES[settings.fontSize];
   const lineHeightClass = LINE_HEIGHTS[settings.lineHeight].class;
   const maxWidthClass = MAX_WIDTHS[settings.maxWidth].class;
-
-  // Comment rendering helper
-  function renderComment(c: Comment, depth = 0) {
-    return (
-      <div key={c.id} className={depth > 0 ? 'ml-4 border-l border-border pl-3' : ''}>
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <span className="text-xs font-medium">
-              {c.user.displayName || c.user.name}
-            </span>
-            <span className="text-xs text-muted-foreground">
-              {new Date(c.createdAt).toLocaleDateString('ja-JP')}
-            </span>
-          </div>
-          <p className="text-sm">{c.content}</p>
-          {isAuthenticated && depth < 2 && (
-            <button
-              onClick={() => setReplyToId(c.id)}
-              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-            >
-              <Reply className="h-3 w-3" /> 返信
-            </button>
-          )}
-        </div>
-        {(c as Comment & { replies?: Comment[] }).replies?.map((reply) =>
-          renderComment(reply, depth + 1),
-        )}
-      </div>
-    );
-  }
-
-  const commentsContent = (
-    <>
-      <div className="flex-1 overflow-y-auto p-4 space-y-4">
-        {comments.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
-            コメントはまだありません
-          </p>
-        ) : (
-          comments.map((c) => renderComment(c))
-        )}
-      </div>
-      {isAuthenticated && (
-        <div className="p-4 border-t border-border">
-          {replyToId && (
-            <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground">
-              <span>返信中...</span>
-              <button onClick={() => setReplyToId(null)} className="hover:text-foreground">
-                <X className="h-3 w-3" />
-              </button>
-            </div>
-          )}
-          <div className="flex gap-2">
-            <input
-              type="text"
-              value={commentText}
-              onChange={(e) => setCommentText(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
-              placeholder={replyToId ? '返信を入力...' : 'コメントを入力...'}
-              className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
-            />
-            <Button size="sm" onClick={handlePostComment} className="min-h-[40px]">
-              送信
-            </Button>
-          </div>
-        </div>
-      )}
-    </>
-  );
 
   const settingsContent = (
     <div className="p-4 space-y-4">
@@ -643,8 +543,8 @@ export default function ReaderPage() {
           <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="AIコンパニオン (a)">
             <Sparkles className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={toggleComments} className="min-h-[44px] min-w-[44px]" title="コメント (c)">
-            <MessageSquare className="h-4 w-4" />
+          <Button variant="ghost" size="icon" onClick={toggleLetters} className="min-h-[44px] min-w-[44px]" title="レター (c)">
+            <Mail className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)} className="min-h-[44px] min-w-[44px]" title="設定 (s)">
             <Settings className="h-4 w-4" />
@@ -763,9 +663,9 @@ export default function ReaderPage() {
             <ChevronLeft className="h-4 w-4" />
             <span className="text-[10px]">前話</span>
           </Button>
-          <Button variant="ghost" size="sm" onClick={toggleComments} className="flex-col gap-0.5 h-auto py-1">
-            <MessageSquare className="h-4 w-4" />
-            <span className="text-[10px]">コメント</span>
+          <Button variant="ghost" size="sm" onClick={toggleLetters} className="flex-col gap-0.5 h-auto py-1">
+            <Mail className="h-4 w-4" />
+            <span className="text-[10px]">レター</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
             <Sparkles className="h-4 w-4" />
@@ -778,20 +678,20 @@ export default function ReaderPage() {
         </div>
       )}
 
-      {/* Comments sidebar / BottomSheet */}
+      {/* Letters sidebar / BottomSheet */}
       {isMobile ? (
-        <BottomSheet open={showComments} onClose={() => setShowComments(false)} title="コメント">
-          {commentsContent}
+        <BottomSheet open={showLetters} onClose={() => setShowLetters(false)} title="レター">
+          <LetterPanel episodeId={episodeId} isAuthenticated={isAuthenticated} />
         </BottomSheet>
-      ) : showComments ? (
+      ) : showLetters ? (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-80 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
-            <span className="font-medium text-sm">コメント</span>
-            <Button variant="ghost" size="icon" onClick={() => setShowComments(false)} className="h-9 w-9">
+            <span className="font-medium text-sm">レター</span>
+            <Button variant="ghost" size="icon" onClick={() => setShowLetters(false)} className="h-9 w-9">
               <X className="h-4 w-4" />
             </Button>
           </div>
-          {commentsContent}
+          <LetterPanel episodeId={episodeId} isAuthenticated={isAuthenticated} />
         </div>
       ) : null}
 

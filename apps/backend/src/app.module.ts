@@ -29,6 +29,7 @@ import { AiRecommendationsModule } from './ai-recommendations/ai-recommendations
 import { AiCompanionModule } from './ai-companion/ai-companion.module';
 import { WorkImportModule } from './work-import/work-import.module';
 import { FollowsModule } from './follows/follows.module';
+import { LettersModule } from './letters/letters.module';
 import { CreationWizardModule } from './creation-wizard/creation-wizard.module';
 import { HealthController } from './health.controller';
 
@@ -67,6 +68,7 @@ import { HealthController } from './health.controller';
     AiCompanionModule,
     WorkImportModule,
     FollowsModule,
+    LettersModule,
     CreationWizardModule,
   ],
   controllers: [HealthController],

@@ -1,0 +1,42 @@
+import { IsString, IsEnum, IsOptional, IsInt, Min, MaxLength } from 'class-validator';
+import { ApiProperty } from '@nestjs/swagger';
+
+export enum LetterTypeDto {
+  SHORT = 'SHORT',
+  STANDARD = 'STANDARD',
+  PREMIUM = 'PREMIUM',
+  GIFT = 'GIFT',
+}
+
+export const LETTER_CONFIG = {
+  SHORT: { price: 120, maxChars: 140, hasStamp: false, highlighted: false },
+  STANDARD: { price: 300, maxChars: 500, hasStamp: true, highlighted: false },
+  PREMIUM: { price: 500, maxChars: 1000, hasStamp: true, highlighted: true },
+  GIFT: { price: 1000, maxChars: 1000, hasStamp: true, highlighted: true },
+} as const;
+
+export class CreateLetterDto {
+  @ApiProperty()
+  @IsString()
+  episodeId: string;
+
+  @ApiProperty({ enum: LetterTypeDto })
+  @IsEnum(LetterTypeDto)
+  type: LetterTypeDto;
+
+  @ApiProperty()
+  @IsString()
+  @MaxLength(1000)
+  content: string;
+
+  @ApiProperty({ required: false })
+  @IsOptional()
+  @IsString()
+  stampId?: string;
+
+  @ApiProperty({ required: false, description: 'GIFTタイプ時の金額（¥1,000〜）' })
+  @IsOptional()
+  @IsInt()
+  @Min(1000)
+  giftAmount?: number;
+}

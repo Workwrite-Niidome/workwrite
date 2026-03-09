@@ -447,7 +447,7 @@ class ApiClient {
     return this.request<{ data: { deleted: boolean } }>(`/reading/highlights/${id}`, { method: 'DELETE' });
   }
 
-  // Comments
+  // Comments (legacy, kept for backward compat)
   async getCommentsForEpisode(episodeId: string) {
     return this.request<{ data: Comment[] }>(`/comments/episode/${episodeId}`);
   }
@@ -461,6 +461,34 @@ class ApiClient {
 
   async deleteComment(id: string) {
     return this.request<{ data: { deleted: boolean } }>(`/comments/${id}`, { method: 'DELETE' });
+  }
+
+  // Letters (有料ファンレター)
+  async getLettersForEpisode(episodeId: string) {
+    return this.request<Letter[]>(`/letters/episode/${episodeId}`);
+  }
+
+  async sendLetter(data: { episodeId: string; type: LetterType; content: string; stampId?: string; giftAmount?: number }) {
+    return this.request<Letter>('/letters', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getFreeLetterRemaining() {
+    return this.request<FreeLetterRemaining>('/letters/free-remaining');
+  }
+
+  async getReceivedLetters() {
+    return this.request<Letter[]>('/letters/received');
+  }
+
+  async getSentLetters() {
+    return this.request<Letter[]>('/letters/sent');
+  }
+
+  async getLetterEarnings() {
+    return this.request<LetterEarnings>('/letters/earnings');
   }
 
   // Discover
@@ -988,6 +1016,39 @@ export interface Comment {
   user: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
   replies?: Comment[];
   createdAt: string;
+}
+
+export type LetterType = 'SHORT' | 'STANDARD' | 'PREMIUM' | 'GIFT';
+
+export interface Letter {
+  id: string;
+  senderId: string;
+  recipientId: string;
+  episodeId: string;
+  type: LetterType;
+  content: string;
+  amount: number;
+  stampId: string | null;
+  isHighlighted: boolean;
+  isFreeQuota: boolean;
+  moderationStatus: string;
+  sender: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
+  episode?: { id: string; title: string; workId: string };
+  createdAt: string;
+}
+
+export interface FreeLetterRemaining {
+  used: number;
+  remaining: number;
+  limit: number;
+}
+
+export interface LetterEarnings {
+  totalLetters: number;
+  monthlyLetters: number;
+  totalEarnings: number;
+  monthlyEarnings: number;
+  platformCutRate: number;
 }
 
 export interface ReadingStats {
