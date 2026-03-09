@@ -256,17 +256,6 @@ export default function EditWorkPage() {
             </CardContent>
           </Card>
 
-          <Card>
-            <CardHeader>
-              <CardTitle className="text-base">情報</CardTitle>
-            </CardHeader>
-            <CardContent className="text-sm space-y-1 text-muted-foreground">
-              <p>ステータス: <Badge variant="secondary">{work.status}</Badge></p>
-              {work.genre && <p>ジャンル: {work.genre}</p>}
-              {work.qualityScore && <p>品質スコア: {Math.round(work.qualityScore.overall)}</p>}
-            </CardContent>
-          </Card>
-
           <CreationPlanCard workId={workId} creationPlan={creationPlan} onSaved={setCreationPlan} />
 
           {scoreDetail && <ScoreCard score={scoreDetail} />}
