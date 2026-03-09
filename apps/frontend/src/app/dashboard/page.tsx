@@ -2,11 +2,12 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScoreBadge } from '@/components/scoring/score-badge';
 import { api, type Work } from '@/lib/api';
 
 interface DashboardOverview {
@@ -33,7 +34,6 @@ export default function DashboardPage() {
     (api.getAuthorOverview() as Promise<{ data: DashboardOverview }>)
       .then((res) => setOverview(res.data))
       .catch(() => {
-        // Fallback to old API if not authenticated as author
         api.getMyWorks()
           .then((res) => setOverview({
             totalWorks: res.data.length,
@@ -63,9 +63,14 @@ export default function DashboardPage() {
     <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">作家ダッシュボード</h1>
-        <Link href="/works/new">
-          <Button><Plus className="h-4 w-4 mr-2" /> 新規作品</Button>
-        </Link>
+        <div className="flex gap-2">
+          <Link href="/works/import">
+            <Button variant="outline"><Upload className="h-4 w-4 mr-2" /> インポート</Button>
+          </Link>
+          <Link href="/works/new">
+            <Button><Plus className="h-4 w-4 mr-2" /> 新規作品</Button>
+          </Link>
+        </div>
       </div>
 
       {/* Stats Grid */}
@@ -113,9 +118,14 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">まだ作品がありません</p>
-            <Link href="/works/new">
-              <Button>最初の作品を作成する</Button>
-            </Link>
+            <div className="flex items-center justify-center gap-3">
+              <Link href="/works/new">
+                <Button>最初の作品を作成する</Button>
+              </Link>
+              <Link href="/works/import">
+                <Button variant="outline"><Upload className="h-4 w-4 mr-1.5" /> 他サイトから取り込む</Button>
+              </Link>
+            </div>
           </CardContent>
         </Card>
       ) : (
@@ -132,6 +142,9 @@ export default function DashboardPage() {
                     <Badge variant={work.status === 'PUBLISHED' ? 'default' : 'secondary'} className="shrink-0">
                       {STATUS_LABELS[work.status]}
                     </Badge>
+                    {work.qualityScore && (
+                      <ScoreBadge score={work.qualityScore.overall} />
+                    )}
                   </div>
                   <ChevronRight className="h-4 w-4 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity shrink-0" />
                 </CardHeader>
@@ -140,9 +153,6 @@ export default function DashboardPage() {
                     <span>{work._count?.episodes ?? 0} エピソード</span>
                     <span><Eye className="h-3 w-3 inline mr-0.5" />{work.totalViews}</span>
                     <span>{work._count?.reviews ?? 0} レビュー</span>
-                    {work.qualityScore && (
-                      <Badge variant="secondary">スコア {Math.round(work.qualityScore.overall)}</Badge>
-                    )}
                     {work.genre && <Badge variant="outline">{work.genre}</Badge>}
                   </div>
                 </CardContent>

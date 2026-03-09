@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, type AdminReview } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, Trash2 } from 'lucide-react';
 
 const PAGE_SIZE = 20;
@@ -27,14 +28,15 @@ export default function AdminReviewsPage() {
 
   useEffect(() => { fetchReviews(); }, [fetchReviews]);
 
-  async function handleDelete(reviewId: string) {
-    if (!confirm('Are you sure you want to delete this review? This action cannot be undone.')) return;
+  const [deleteReviewId, setDeleteReviewId] = useState<string | null>(null);
+
+  async function handleDelete() {
+    if (!deleteReviewId) return;
     try {
-      await api.deleteReviewAsAdmin(reviewId);
+      await api.deleteReviewAsAdmin(deleteReviewId);
       fetchReviews();
-    } catch (e: any) {
-      alert(e.message);
-    }
+    } catch {}
+    setDeleteReviewId(null);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -90,7 +92,7 @@ export default function AdminReviewsPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 text-xs text-destructive hover:text-destructive gap-1"
-                        onClick={() => handleDelete(review.id)}
+                        onClick={() => setDeleteReviewId(review.id)}
                       >
                         <Trash2 className="h-3.5 w-3.5" /> Delete
                       </Button>
@@ -117,6 +119,16 @@ export default function AdminReviewsPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!deleteReviewId}
+        onOpenChange={(v) => { if (!v) setDeleteReviewId(null); }}
+        title="レビュー削除"
+        message="このレビューを削除しますか？この操作は取り消せません。"
+        confirmLabel="削除する"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
     </div>
   );
 }

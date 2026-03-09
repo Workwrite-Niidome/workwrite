@@ -21,7 +21,7 @@ export class CommentsController {
   @ApiOperation({ summary: 'Post a comment' })
   create(
     @CurrentUser('id') userId: string,
-    @Body() body: { episodeId: string; content: string; paragraphId?: string },
+    @Body() body: { episodeId: string; content: string; paragraphId?: string; parentId?: string },
   ) {
     return this.commentsService.create(userId, body);
   }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, BookmarkPlus, Clock, User, Sparkles } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Clock, User, Sparkles, UserPlus, UserCheck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -21,13 +21,22 @@ export default function WorkDetailPage() {
   const [loading, setLoading] = useState(true);
   const [bookshelfAdding, setBookshelfAdding] = useState(false);
   const [bookshelfStatus, setBookshelfStatus] = useState<string | null>(null);
+  const [isFollowing, setIsFollowing] = useState(false);
+  const [followLoading, setFollowLoading] = useState(false);
 
   useEffect(() => {
     api.getWork(workId)
-      .then((res) => setWork(res.data))
+      .then((res) => {
+        setWork(res.data);
+        if (isAuthenticated && res.data.author?.id) {
+          api.isFollowing(res.data.author.id)
+            .then((fRes) => setIsFollowing(fRes.data.following))
+            .catch(() => {});
+        }
+      })
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));
-  }, [workId, router]);
+  }, [workId, router, isAuthenticated]);
 
   async function handleAddToBookshelf() {
     if (!isAuthenticated) {
@@ -77,6 +86,30 @@ export default function WorkDetailPage() {
                   <User className="h-4 w-4" />
                   {work.author.displayName || work.author.name}
                 </span>
+                {isAuthenticated && (
+                  <Button
+                    variant={isFollowing ? 'secondary' : 'outline'}
+                    size="sm"
+                    className="h-7 text-xs gap-1"
+                    disabled={followLoading}
+                    onClick={async () => {
+                      setFollowLoading(true);
+                      try {
+                        if (isFollowing) {
+                          await api.unfollowUser(work.author.id);
+                          setIsFollowing(false);
+                        } else {
+                          await api.followUser(work.author.id);
+                          setIsFollowing(true);
+                        }
+                      } catch {}
+                      setFollowLoading(false);
+                    }}
+                  >
+                    {isFollowing ? <UserCheck className="h-3 w-3" /> : <UserPlus className="h-3 w-3" />}
+                    {isFollowing ? 'フォロー中' : 'フォロー'}
+                  </Button>
+                )}
                 {work.genre && <Badge variant="secondary">{work.genre}</Badge>}
                 {work.qualityScore && (
                   <Badge variant="default">

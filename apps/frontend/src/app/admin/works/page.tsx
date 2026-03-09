@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { api, type AdminWork } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { ChevronLeft, ChevronRight, ExternalLink } from 'lucide-react';
 
 const STATUSES = ['DRAFT', 'PUBLISHED', 'UNPUBLISHED'] as const;
@@ -29,14 +30,15 @@ export default function AdminWorksPage() {
 
   useEffect(() => { fetchWorks(); }, [fetchWorks]);
 
-  async function handleStatusChange(workId: string, status: string) {
-    if (!confirm(`Change status to ${status}?`)) return;
+  const [pendingStatus, setPendingStatus] = useState<{ workId: string; status: string } | null>(null);
+
+  async function handleStatusChange() {
+    if (!pendingStatus) return;
     try {
-      await api.updateWorkStatus(workId, status);
+      await api.updateWorkStatus(pendingStatus.workId, pendingStatus.status);
       fetchWorks();
-    } catch (e: any) {
-      alert(e.message);
-    }
+    } catch {}
+    setPendingStatus(null);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -97,7 +99,7 @@ export default function AdminWorksPage() {
                     <td className="px-4 py-3">
                       <select
                         value={work.status}
-                        onChange={(e) => handleStatusChange(work.id, e.target.value)}
+                        onChange={(e) => setPendingStatus({ workId: work.id, status: e.target.value })}
                         className="h-8 rounded border border-border bg-transparent px-2 text-xs"
                         aria-label={`Status for ${work.title}`}
                       >
@@ -135,6 +137,15 @@ export default function AdminWorksPage() {
           </div>
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!pendingStatus}
+        onOpenChange={(v) => { if (!v) setPendingStatus(null); }}
+        title="ステータス変更"
+        message={`ステータスを ${pendingStatus?.status} に変更しますか？`}
+        confirmLabel="変更する"
+        onConfirm={handleStatusChange}
+      />
     </div>
   );
 }

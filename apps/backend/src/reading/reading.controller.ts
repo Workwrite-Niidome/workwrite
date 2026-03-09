@@ -21,6 +21,12 @@ export class ReadingController {
     return this.readingService.batchUpdateProgress(userId, dto);
   }
 
+  @Get('stats')
+  @ApiOperation({ summary: 'Get reading statistics' })
+  getStats(@CurrentUser('id') userId: string) {
+    return this.readingService.getStats(userId);
+  }
+
   @Get('progress/:workId')
   @ApiOperation({ summary: 'Get reading progress for a work' })
   getProgress(

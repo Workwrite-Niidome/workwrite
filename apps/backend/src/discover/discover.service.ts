@@ -9,7 +9,7 @@ export class DiscoverService {
     private searchService: SearchService,
   ) {}
 
-  async search(query: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number }) {
+  async search(query: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
     return this.searchService.search(query, options);
   }
 

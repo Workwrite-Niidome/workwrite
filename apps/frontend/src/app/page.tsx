@@ -12,6 +12,31 @@ import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime } from '@/lib/utils';
 import { api, type Work, type TopPageData, type ContinueReadingItem } from '@/lib/api';
 
+function FollowingFeedSection() {
+  const [feed, setFeed] = useState<Work[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.getFollowingFeed()
+      .then((res) => setFeed(res.data))
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (!loading && feed.length === 0) return null;
+
+  return (
+    <section>
+      <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">フォロー中の新着</h2>
+      <div>
+        {loading
+          ? Array.from({ length: 2 }).map((_, i) => <WorkCardSkeleton key={i} />)
+          : feed.slice(0, 5).map((work) => <WorkCard key={work.id} work={work} />)}
+      </div>
+    </section>
+  );
+}
+
 const MOOD_CARDS = [
   { mood: 'courage', label: '勇気をもらいたい' },
   { mood: 'tears', label: '泣きたい' },
@@ -212,6 +237,9 @@ export default function Home() {
             </div>
           </section>
         )}
+
+        {/* Following feed */}
+        {isAuthenticated && <FollowingFeedSection />}
 
         {/* Mood Discovery - minimal, text-based */}
         <section>

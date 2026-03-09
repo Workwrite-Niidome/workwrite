@@ -65,6 +65,7 @@ export class SearchService implements OnModuleInit {
     emotionTags?: string[];
     limit?: number;
     offset?: number;
+    sort?: string;
   }) {
     try {
       const filter: string[] = [];
@@ -74,10 +75,16 @@ export class SearchService implements OnModuleInit {
         filter.push(`(${tagFilters.join(' OR ')})`);
       }
 
+      const sortMap: Record<string, string[]> = {
+        newest: ['publishedAt:desc'],
+        score: ['qualityScore:desc'],
+      };
+
       const result = await this.worksIndex.search(query, {
         limit: options?.limit ?? 20,
         offset: options?.offset ?? 0,
         filter: filter.length > 0 ? filter.join(' AND ') : undefined,
+        sort: options?.sort && sortMap[options.sort] ? sortMap[options.sort] : undefined,
       });
 
       return {

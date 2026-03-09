@@ -7,6 +7,9 @@
   ],
   "scripts": {
     "dev": "turbo dev",
+    "dev:check": "bash scripts/check-services.sh && turbo dev",
+    "services:up": "docker compose up -d",
+    "services:down": "docker compose down",
     "build": "turbo build",
     "lint": "turbo lint",
     "test": "turbo test",

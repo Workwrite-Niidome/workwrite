@@ -41,6 +41,15 @@ export class HighlightsService {
     });
   }
 
+  async update(id: string, userId: string, data: { memo?: string; color?: string }) {
+    const hl = await this.prisma.highlight.findUnique({ where: { id } });
+    if (!hl || hl.userId !== userId) throw new NotFoundException();
+    return this.prisma.highlight.update({
+      where: { id },
+      data,
+    });
+  }
+
   async delete(id: string, userId: string) {
     const hl = await this.prisma.highlight.findUnique({ where: { id } });
     if (!hl || hl.userId !== userId) throw new NotFoundException();

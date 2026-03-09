@@ -5,6 +5,7 @@ import { api, type AdminUser } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { Search, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck } from 'lucide-react';
 
 const ROLES = ['READER', 'AUTHOR', 'EDITOR', 'ADMIN'] as const;
@@ -30,25 +31,25 @@ export default function AdminUsersPage() {
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
-  async function handleRoleChange(userId: string, role: string) {
-    if (!confirm(`Change role to ${role}?`)) return;
+  const [pendingRole, setPendingRole] = useState<{ userId: string; role: string } | null>(null);
+  const [pendingBan, setPendingBan] = useState<AdminUser | null>(null);
+
+  async function handleRoleChange() {
+    if (!pendingRole) return;
     try {
-      await api.updateUserRole(userId, role);
+      await api.updateUserRole(pendingRole.userId, pendingRole.role);
       fetchUsers();
-    } catch (e: any) {
-      alert(e.message);
-    }
+    } catch {}
+    setPendingRole(null);
   }
 
-  async function handleBanToggle(user: AdminUser) {
-    const action = user.isBanned ? 'unban' : 'ban';
-    if (!confirm(`Are you sure you want to ${action} ${user.name}?`)) return;
+  async function handleBanToggle() {
+    if (!pendingBan) return;
     try {
-      await api.banUser(user.id, !user.isBanned);
+      await api.banUser(pendingBan.id, !pendingBan.isBanned);
       fetchUsers();
-    } catch (e: any) {
-      alert(e.message);
-    }
+    } catch {}
+    setPendingBan(null);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -119,7 +120,7 @@ export default function AdminUsersPage() {
                     <td className="px-4 py-3">
                       <select
                         value={user.role}
-                        onChange={(e) => handleRoleChange(user.id, e.target.value)}
+                        onChange={(e) => setPendingRole({ userId: user.id, role: e.target.value })}
                         className="h-8 rounded border border-border bg-transparent px-2 text-xs"
                         aria-label={`Role for ${user.name}`}
                       >
@@ -139,7 +140,7 @@ export default function AdminUsersPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 text-xs gap-1"
-                        onClick={() => handleBanToggle(user)}
+                        onClick={() => setPendingBan(user)}
                       >
                         {user.isBanned ? (
                           <><ShieldCheck className="h-3.5 w-3.5" /> Unban</>
@@ -155,6 +156,25 @@ export default function AdminUsersPage() {
           </table>
         </div>
       </div>
+
+      <ConfirmDialog
+        open={!!pendingRole}
+        onOpenChange={(v) => { if (!v) setPendingRole(null); }}
+        title="ロール変更"
+        message={`ロールを ${pendingRole?.role} に変更しますか？`}
+        confirmLabel="変更する"
+        onConfirm={handleRoleChange}
+      />
+
+      <ConfirmDialog
+        open={!!pendingBan}
+        onOpenChange={(v) => { if (!v) setPendingBan(null); }}
+        title={pendingBan?.isBanned ? 'ユーザーの凍結解除' : 'ユーザーを凍結'}
+        message={`${pendingBan?.name} を${pendingBan?.isBanned ? '凍結解除' : '凍結'}しますか？`}
+        confirmLabel={pendingBan?.isBanned ? '解除する' : '凍結する'}
+        variant={pendingBan?.isBanned ? 'default' : 'destructive'}
+        onConfirm={handleBanToggle}
+      />
 
       {/* Pagination */}
       {totalPages > 1 && (

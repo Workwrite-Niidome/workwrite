@@ -278,16 +278,20 @@ model Comment {
   id          String   @id @default(cuid())
   userId      String
   episodeId   String
-  paragraphId String?  // for inline comments
+  paragraphId String?
+  parentId    String?
   content     String   @db.Text
   createdAt   DateTime @default(now())
   updatedAt   DateTime @updatedAt
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  parent  Comment?  @relation("CommentReplies", fields: [parentId], references: [id], onDelete: Cascade)
+  replies Comment[] @relation("CommentReplies")
 
   @@index([episodeId])
   @@index([userId])
+  @@index([parentId])
 }
 
 // ============================================================
@@ -596,4 +600,38 @@ model AiConversation {
   updatedAt DateTime @updatedAt
   @@unique([userId, workId])
   @@index([userId])
+}
+
+// ============================================================
+// Work Import
+// ============================================================
+
+model WorkImport {
+  id               String   @id @default(cuid())
+  userId           String
+  workId           String?
+  source           String   // "text_paste", "file_upload"
+  status           String   @default("PENDING")
+  totalChapters    Int      @default(0)
+  importedChapters Int      @default(0)
+  errorMessage     String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+  @@index([userId])
+}
+
+// ============================================================
+// Episode Snapshots (Version History)
+// ============================================================
+
+model EpisodeSnapshot {
+  id        String   @id @default(cuid())
+  episodeId String
+  userId    String
+  title     String
+  content   String   @db.Text
+  wordCount Int      @default(0)
+  label     String?
+  createdAt DateTime @default(now())
+  @@index([episodeId])
 }

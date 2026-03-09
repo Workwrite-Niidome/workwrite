@@ -8,6 +8,7 @@ const COLORS = [
   { value: 'green', bg: 'bg-green-400' },
   { value: 'blue', bg: 'bg-blue-400' },
   { value: 'pink', bg: 'bg-pink-400' },
+  { value: 'purple', bg: 'bg-purple-400' },
 ];
 
 interface HighlightToolbarProps {
@@ -32,14 +33,14 @@ export function HighlightToolbar({ position, onSave, onAiExplain, onClose }: Hig
           <button
             key={c.value}
             onClick={() => setColor(c.value)}
-            className={`h-6 w-6 rounded-full ${c.bg} ${color === c.value ? 'ring-2 ring-foreground ring-offset-1' : ''}`}
+            className={`h-8 w-8 min-h-[32px] min-w-[32px] rounded-full ${c.bg} ${color === c.value ? 'ring-2 ring-foreground ring-offset-1' : ''} touch-manipulation`}
           />
         ))}
         <div className="w-px h-5 bg-border mx-1" />
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => setShowMemo(!showMemo)} title="メモ">
+        <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[32px] min-w-[32px]" onClick={() => setShowMemo(!showMemo)} title="メモ">
           <Save className="h-3.5 w-3.5" />
         </Button>
-        <Button variant="ghost" size="icon" className="h-7 w-7" onClick={onAiExplain} title="AI解説">
+        <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[32px] min-w-[32px]" onClick={onAiExplain} title="AI解説">
           <Sparkles className="h-3.5 w-3.5" />
         </Button>
       </div>

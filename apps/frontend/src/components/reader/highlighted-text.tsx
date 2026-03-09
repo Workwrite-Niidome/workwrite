@@ -12,7 +12,7 @@ const HIGHLIGHT_COLORS: Record<string, string> = {
 interface HighlightedTextProps {
   text: string;
   highlights: Highlight[];
-  onHighlightClick?: (highlight: Highlight) => void;
+  onHighlightClick?: (highlight: Highlight, event?: React.MouseEvent) => void;
 }
 
 export function HighlightedText({ text, highlights, onHighlightClick }: HighlightedTextProps) {
@@ -43,7 +43,7 @@ export function HighlightedText({ text, highlights, onHighlightClick }: Highligh
           <mark
             key={i}
             className={`${HIGHLIGHT_COLORS[seg.highlight.color] || HIGHLIGHT_COLORS.yellow} cursor-pointer rounded-sm`}
-            onClick={() => onHighlightClick?.(seg.highlight!)}
+            onClick={(e) => onHighlightClick?.(seg.highlight!, e)}
             title={seg.highlight.memo || undefined}
           >
             {seg.text}

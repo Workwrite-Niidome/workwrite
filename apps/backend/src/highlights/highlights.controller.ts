@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
 
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { HighlightsService } from './highlights.service';
@@ -37,6 +37,16 @@ export class HighlightsController {
     @Param('workId') workId: string,
   ) {
     return this.highlightsService.findByWork(userId, workId);
+  }
+
+  @Patch(':id')
+  @ApiOperation({ summary: 'Update highlight' })
+  update(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { memo?: string; color?: string },
+  ) {
+    return this.highlightsService.update(id, userId, body);
   }
 
   @Delete(':id')

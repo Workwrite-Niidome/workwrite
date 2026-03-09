@@ -27,4 +27,12 @@ export class ScoringController {
   getAnalysis(@Param('workId') workId: string) {
     return this.scoringService.getScoreWithAnalysis(workId);
   }
+
+  @Post('episodes/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Score a single episode' })
+  scoreEpisode(@Param('id') id: string) {
+    return this.scoringService.scoreEpisode(id);
+  }
 }

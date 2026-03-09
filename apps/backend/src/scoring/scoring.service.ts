@@ -172,4 +172,26 @@ ${text}
       tips: (score.improvementTips as string[]) || [],
     };
   }
+
+  async scoreEpisode(episodeId: string): Promise<ScoringResult | null> {
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      include: { work: { select: { title: true } } },
+    });
+
+    if (!episode) return null;
+
+    const truncatedText = episode.content.slice(0, 15000);
+
+    try {
+      const result = await this.callLlmForScoring(
+        `${episode.work.title} - ${episode.title}`,
+        truncatedText,
+      );
+      return result;
+    } catch (e) {
+      this.logger.error('Episode scoring failed', e);
+      return null;
+    }
+  }
 }

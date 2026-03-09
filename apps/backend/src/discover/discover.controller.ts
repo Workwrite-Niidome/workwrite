@@ -29,18 +29,21 @@ export class DiscoverController {
   @ApiQuery({ name: 'q', required: true })
   @ApiQuery({ name: 'genre', required: false })
   @ApiQuery({ name: 'emotionTags', required: false })
+  @ApiQuery({ name: 'sort', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'offset', required: false })
   search(
     @Query('q') q: string,
     @Query('genre') genre?: string,
     @Query('emotionTags') emotionTags?: string,
+    @Query('sort') sort?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
   ) {
     return this.discoverService.search(q, {
       genre,
       emotionTags: emotionTags ? emotionTags.split(',') : undefined,
+      sort,
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
     });

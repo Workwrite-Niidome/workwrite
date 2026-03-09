@@ -61,6 +61,91 @@ export class ReadingService {
     });
   }
 
+  async getStats(userId: string) {
+    const [completedWorks, completedEpisodes, totalReadTime, emotionTags] = await Promise.all([
+      this.prisma.bookshelfEntry.count({ where: { userId, status: 'COMPLETED' } }),
+      this.prisma.readingProgress.count({ where: { userId, completed: true } }),
+      this.prisma.readingProgress.aggregate({ where: { userId }, _sum: { readTimeMs: true } }),
+      this.prisma.userEmotionTag.findMany({
+        where: { userId },
+        include: { tag: true },
+      }),
+    ]);
+
+    // Genre distribution
+    const completedBooks = await this.prisma.bookshelfEntry.findMany({
+      where: { userId, status: 'COMPLETED' },
+      include: { work: { select: { genre: true } } },
+    });
+    const genreMap: Record<string, number> = {};
+    for (const entry of completedBooks) {
+      const genre = entry.work.genre || 'other';
+      genreMap[genre] = (genreMap[genre] || 0) + 1;
+    }
+
+    // Reading streak (consecutive days with reading activity)
+    const recentProgress = await this.prisma.readingProgress.findMany({
+      where: { userId },
+      orderBy: { updatedAt: 'desc' },
+      select: { updatedAt: true },
+      take: 365,
+    });
+    const uniqueDays = new Set(recentProgress.map(p => p.updatedAt.toISOString().split('T')[0]));
+    const sortedDays = [...uniqueDays].sort().reverse();
+    let currentStreak = 0;
+    let maxStreak = 0;
+    const today = new Date().toISOString().split('T')[0];
+    let checkDate = new Date(today);
+    for (let i = 0; i < sortedDays.length; i++) {
+      const dayStr = checkDate.toISOString().split('T')[0];
+      if (sortedDays.includes(dayStr)) {
+        currentStreak++;
+        if (currentStreak > maxStreak) maxStreak = currentStreak;
+      } else {
+        if (i > 0) break;
+      }
+      checkDate.setDate(checkDate.getDate() - 1);
+    }
+
+    // Top emotion tags
+    const tagCounts: Record<string, { name: string; nameJa: string; count: number }> = {};
+    for (const et of emotionTags) {
+      const key = et.tagId;
+      if (!tagCounts[key]) {
+        tagCounts[key] = { name: et.tag.name, nameJa: et.tag.nameJa, count: 0 };
+      }
+      tagCounts[key].count++;
+    }
+    const topTags = Object.values(tagCounts).sort((a, b) => b.count - a.count).slice(0, 10);
+
+    // Monthly activity (last 12 months)
+    const monthlyActivity: { month: string; count: number }[] = [];
+    const now = new Date();
+    for (let i = 11; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
+      const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      const count = await this.prisma.readingProgress.count({
+        where: {
+          userId,
+          updatedAt: { gte: d, lt: nextMonth },
+        },
+      });
+      monthlyActivity.push({ month: monthStr, count });
+    }
+
+    return {
+      completedWorks,
+      completedEpisodes,
+      totalReadTimeMs: totalReadTime._sum.readTimeMs || 0,
+      currentStreak,
+      maxStreak,
+      genreDistribution: genreMap,
+      topEmotionTags: topTags,
+      monthlyActivity,
+    };
+  }
+
   async getResumePosition(userId: string, workId: string) {
     const latest = await this.prisma.readingProgress.findFirst({
       where: { userId, workId, completed: false },

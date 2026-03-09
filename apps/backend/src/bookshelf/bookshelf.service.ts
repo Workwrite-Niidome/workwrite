@@ -7,7 +7,7 @@ export class BookshelfService {
   constructor(private prisma: PrismaService) {}
 
   async getBookshelf(userId: string, status?: BookshelfStatus) {
-    return this.prisma.bookshelfEntry.findMany({
+    const entries = await this.prisma.bookshelfEntry.findMany({
       where: { userId, ...(status ? { status } : {}) },
       orderBy: { updatedAt: 'desc' },
       include: {
@@ -24,6 +24,34 @@ export class BookshelfService {
         },
       },
     });
+
+    // Enrich with reading progress
+    const enriched = await Promise.all(
+      entries.map(async (entry) => {
+        const totalEpisodes = entry.work._count.episodes;
+        if (totalEpisodes === 0) {
+          return { ...entry, progressPct: 0, currentEpisode: null };
+        }
+
+        const completedCount = await this.prisma.readingProgress.count({
+          where: { userId, workId: entry.workId, completed: true },
+        });
+
+        const latestProgress = await this.prisma.readingProgress.findFirst({
+          where: { userId, workId: entry.workId },
+          orderBy: { updatedAt: 'desc' },
+          include: { episode: { select: { id: true, title: true } } },
+        });
+
+        return {
+          ...entry,
+          progressPct: totalEpisodes > 0 ? completedCount / totalEpisodes : 0,
+          currentEpisode: latestProgress?.episode ?? null,
+        };
+      }),
+    );
+
+    return enriched;
   }
 
   async addToBookshelf(userId: string, workId: string) {

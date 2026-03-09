@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { api } from '@/lib/api';
 import { Plus, Pencil, Trash2, RotateCcw } from 'lucide-react';
 
@@ -89,16 +90,19 @@ export default function AdminTemplatesPage() {
     }
   }
 
-  async function handleDelete(id: string) {
-    if (!confirm('このテンプレートを削除しますか？')) return;
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+  const [confirmSeed, setConfirmSeed] = useState(false);
+
+  async function handleDelete() {
+    if (!confirmDeleteId) return;
     try {
-      await api.deleteTemplate(id);
+      await api.deleteTemplate(confirmDeleteId);
       await loadTemplates();
     } catch {}
+    setConfirmDeleteId(null);
   }
 
   async function handleSeed() {
-    if (!confirm('ビルトインテンプレートを再生成しますか？既存のビルトインテンプレートは上書きされます。')) return;
     try {
       await api.seedTemplates();
       await loadTemplates();
@@ -106,6 +110,7 @@ export default function AdminTemplatesPage() {
     } catch {
       setMessage('再生成に失敗しました');
     }
+    setConfirmSeed(false);
   }
 
   const categoryLabel = (c: string) =>
@@ -116,7 +121,7 @@ export default function AdminTemplatesPage() {
       <div className="flex items-center justify-between">
         <h2 className="text-lg font-semibold">Prompt Templates</h2>
         <div className="flex gap-2">
-          <Button size="sm" variant="outline" onClick={handleSeed}>
+          <Button size="sm" variant="outline" onClick={() => setConfirmSeed(true)}>
             <RotateCcw className="h-3.5 w-3.5 mr-1" /> デフォルト再生成
           </Button>
           <Button size="sm" onClick={startCreate}>
@@ -269,7 +274,7 @@ export default function AdminTemplatesPage() {
                     <Pencil className="h-3.5 w-3.5" />
                   </button>
                   <button
-                    onClick={() => handleDelete(t.id)}
+                    onClick={() => setConfirmDeleteId(t.id)}
                     className="text-muted-foreground hover:text-destructive p-1 ml-1"
                   >
                     <Trash2 className="h-3.5 w-3.5" />
@@ -285,6 +290,25 @@ export default function AdminTemplatesPage() {
           </p>
         )}
       </div>
+
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        onOpenChange={(v) => { if (!v) setConfirmDeleteId(null); }}
+        title="テンプレートを削除"
+        message="このテンプレートを削除しますか？"
+        confirmLabel="削除する"
+        variant="destructive"
+        onConfirm={handleDelete}
+      />
+
+      <ConfirmDialog
+        open={confirmSeed}
+        onOpenChange={setConfirmSeed}
+        title="テンプレート再生成"
+        message="ビルトインテンプレートを再生成しますか？既存のビルトインテンプレートは上書きされます。"
+        confirmLabel="再生成する"
+        onConfirm={handleSeed}
+      />
     </div>
   );
 }

@@ -3,50 +3,67 @@
 import { Suspense, useState, useEffect } from 'react';
 import { useSearchParams } from 'next/navigation';
 import Link from 'next/link';
-import { Search } from 'lucide-react';
+import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScoreBadge } from '@/components/scoring/score-badge';
+import { useAuth } from '@/lib/auth-context';
 import { api, type Work } from '@/lib/api';
 
-const GENRES = ['fantasy', 'sf', 'mystery', 'romance', 'horror', 'literary', 'adventure', 'comedy', 'drama', 'historical', 'other'];
+const GENRE_LABELS: Record<string, string> = {
+  fantasy: 'ファンタジー',
+  sf: 'SF',
+  mystery: 'ミステリー',
+  romance: '恋愛',
+  horror: 'ホラー',
+  literary: '純文学',
+  adventure: '冒険',
+  comedy: 'コメディ',
+  drama: 'ドラマ',
+  historical: '歴史',
+  other: 'その他',
+};
+
+const GENRES = Object.keys(GENRE_LABELS);
 const SORT_OPTIONS = [
-  { value: 'relevance', label: 'Relevance' },
-  { value: 'newest', label: 'Newest' },
-  { value: 'score', label: 'Highest Score' },
+  { value: 'relevance', label: '関連度' },
+  { value: 'newest', label: '新しい順' },
+  { value: 'score', label: 'スコア順' },
 ];
+
+const PAGE_SIZE = 20;
 
 function SearchContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
+  const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState(initialQuery);
   const [genre, setGenre] = useState('');
   const [sortBy, setSortBy] = useState('relevance');
   const [results, setResults] = useState<Work[]>([]);
   const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (initialQuery) doSearch(initialQuery);
+    if (initialQuery) doSearch(initialQuery, 0);
   }, [initialQuery]);
 
-  async function doSearch(q: string) {
+  async function doSearch(q: string, pageNum: number) {
     if (!q.trim()) return;
     setLoading(true);
     try {
-      const res = await api.searchWorks(q, { genre: genre || undefined });
-      let hits = res.data.hits;
-
-      if (sortBy === 'newest') {
-        hits = [...hits].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-      } else if (sortBy === 'score') {
-        hits = [...hits].sort((a, b) => (b.qualityScore?.overall ?? 0) - (a.qualityScore?.overall ?? 0));
-      }
-
-      setResults(hits);
+      const res = await api.searchWorks(q, {
+        genre: genre || undefined,
+        sort: sortBy !== 'relevance' ? sortBy : undefined,
+        limit: PAGE_SIZE,
+        offset: pageNum * PAGE_SIZE,
+      });
+      setResults(res.data.hits);
       setTotal(res.data.total);
+      setPage(pageNum);
     } catch {
       setResults([]);
     } finally {
@@ -56,8 +73,20 @@ function SearchContent() {
 
   function handleSubmit(e: React.FormEvent) {
     e.preventDefault();
-    doSearch(query);
+    doSearch(query, 0);
   }
+
+  function handleSortChange(value: string) {
+    setSortBy(value);
+    if (query) doSearch(query, 0);
+  }
+
+  function handleGenreChange(value: string) {
+    setGenre(value);
+    if (query) doSearch(query, 0);
+  }
+
+  const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8">
@@ -67,11 +96,11 @@ function SearchContent() {
           <Input
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Title, author, or tag..."
+            placeholder="タイトル、著者、タグで検索..."
             className="pl-9"
           />
         </div>
-        <Button type="submit" aria-label="Search">
+        <Button type="submit" aria-label="検索">
           <Search className="h-4 w-4" />
         </Button>
       </form>
@@ -80,18 +109,18 @@ function SearchContent() {
       <div className="flex flex-wrap gap-2 mb-6">
         <select
           value={genre}
-          onChange={(e) => { setGenre(e.target.value); if (query) doSearch(query); }}
+          onChange={(e) => handleGenreChange(e.target.value)}
           className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
-          aria-label="Filter by genre"
+          aria-label="ジャンルで絞り込み"
         >
-          <option value="">All genres</option>
-          {GENRES.map((g) => <option key={g} value={g}>{g}</option>)}
+          <option value="">すべてのジャンル</option>
+          {GENRES.map((g) => <option key={g} value={g}>{GENRE_LABELS[g]}</option>)}
         </select>
         <select
           value={sortBy}
-          onChange={(e) => { setSortBy(e.target.value); if (query) doSearch(query); }}
+          onChange={(e) => handleSortChange(e.target.value)}
           className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
-          aria-label="Sort by"
+          aria-label="並べ替え"
         >
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
@@ -109,7 +138,7 @@ function SearchContent() {
         </div>
       ) : results.length > 0 ? (
         <div>
-          <p className="text-xs text-muted-foreground mb-4">{total} results</p>
+          <p className="text-xs text-muted-foreground mb-4">{total}件の結果</p>
           {results.map((work) => (
             <Link key={work.id} href={`/works/${work.id}`} className="group block">
               <article className="py-4 border-b border-border last:border-b-0 transition-colors group-hover:bg-secondary/30 -mx-2 px-2 rounded">
@@ -126,30 +155,59 @@ function SearchContent() {
                     )}
                     <div className="flex items-center gap-2 mt-2 flex-wrap">
                       {work.genre && (
-                        <span className="text-[11px] text-muted-foreground">{work.genre}</span>
+                        <span className="text-[11px] text-muted-foreground">
+                          {GENRE_LABELS[work.genre] || work.genre}
+                        </span>
                       )}
                       {work.tags?.slice(0, 3).map((t) => (
                         <span key={t.id} className="text-[11px] text-muted-foreground">#{t.tag}</span>
                       ))}
                     </div>
                   </div>
-                  {work.qualityScore && (
-                    <span className="text-xs text-muted-foreground flex-shrink-0">
-                      score {Math.round(work.qualityScore.overall)}
-                    </span>
-                  )}
+                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
+                    {work.qualityScore && (
+                      <ScoreBadge score={work.qualityScore.overall} />
+                    )}
+                  </div>
                 </div>
               </article>
             </Link>
           ))}
+
+          {/* Pagination */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-center gap-2 mt-6">
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page === 0}
+                onClick={() => doSearch(query, page - 1)}
+                className="min-h-[36px]"
+              >
+                <ChevronLeft className="h-4 w-4" />
+              </Button>
+              <span className="text-sm text-muted-foreground">
+                {page + 1} / {totalPages}
+              </span>
+              <Button
+                variant="outline"
+                size="sm"
+                disabled={page >= totalPages - 1}
+                onClick={() => doSearch(query, page + 1)}
+                className="min-h-[36px]"
+              >
+                <ChevronRight className="h-4 w-4" />
+              </Button>
+            </div>
+          )}
         </div>
       ) : initialQuery ? (
         <div className="text-center py-16">
           <p className="text-sm text-muted-foreground">
-            No results for "{initialQuery}"
+            「{initialQuery}」の検索結果はありません
           </p>
           <p className="text-xs text-muted-foreground mt-2">
-            Try different keywords or remove filters.
+            別のキーワードで検索するか、フィルターを変更してください。
           </p>
         </div>
       ) : null}

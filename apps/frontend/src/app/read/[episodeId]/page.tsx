@@ -12,24 +12,49 @@ import {
   X,
   MessageSquare,
   Sparkles,
+  Maximize,
+  Minimize,
+  Copy,
+  Reply,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
+import { BottomSheet } from '@/components/ui/bottom-sheet';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime } from '@/lib/utils';
 import { api, type Episode, type Comment, type Highlight } from '@/lib/api';
 import { HighlightedText } from '@/components/reader/highlighted-text';
 import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
+import { HighlightDetailPopover } from '@/components/reader/highlight-detail-popover';
+import { EpisodeCompleteBanner } from '@/components/reader/episode-complete-banner';
 import { CompanionChat } from '@/components/ai/companion-chat';
+import { useReaderShortcuts } from '@/hooks/use-reader-shortcuts';
+import { useSwipeNavigation } from '@/hooks/use-swipe-navigation';
 
 type FontSize = 'sm' | 'base' | 'lg' | 'xl';
 type Theme = 'light' | 'dark' | 'sepia';
+type LineHeight = 'tight' | 'normal' | 'relaxed' | 'loose';
+type MaxWidth = 'narrow' | 'normal' | 'wide';
 
 const FONT_SIZES: Record<FontSize, string> = {
-  sm: 'text-sm leading-7',
-  base: 'text-base leading-8',
-  lg: 'text-lg leading-9',
-  xl: 'text-xl leading-10',
+  sm: 'text-sm',
+  base: 'text-base',
+  lg: 'text-lg',
+  xl: 'text-xl',
+};
+
+const LINE_HEIGHTS: Record<LineHeight, { class: string; label: string }> = {
+  tight: { class: 'leading-7', label: '狭い' },
+  normal: { class: 'leading-8', label: '普通' },
+  relaxed: { class: 'leading-9', label: '広い' },
+  loose: { class: 'leading-10', label: 'とても広い' },
+};
+
+const MAX_WIDTHS: Record<MaxWidth, { class: string; label: string; px: string }> = {
+  narrow: { class: 'max-w-[560px]', label: '狭い', px: '560px' },
+  normal: { class: 'max-w-2xl', label: '普通', px: '672px' },
+  wide: { class: 'max-w-[800px]', label: '広い', px: '800px' },
 };
 
 const THEMES: Record<Theme, { bg: string; text: string; label: string }> = {
@@ -40,35 +65,97 @@ const THEMES: Record<Theme, { bg: string; text: string; label: string }> = {
 
 const PROGRESS_DEBOUNCE = 5000;
 
+interface ReaderSettings {
+  fontSize: FontSize;
+  theme: Theme;
+  lineHeight: LineHeight;
+  maxWidth: MaxWidth;
+}
+
+const DEFAULT_SETTINGS: ReaderSettings = {
+  fontSize: 'base',
+  theme: 'light',
+  lineHeight: 'normal',
+  maxWidth: 'normal',
+};
+
+function loadSettings(): ReaderSettings {
+  if (typeof window === 'undefined') return DEFAULT_SETTINGS;
+  try {
+    const saved = localStorage.getItem('reader-settings');
+    if (saved) return { ...DEFAULT_SETTINGS, ...JSON.parse(saved) };
+  } catch {}
+  // Migrate old individual settings
+  const oldFont = localStorage.getItem('reader-font-size');
+  const oldTheme = localStorage.getItem('reader-theme');
+  const settings = { ...DEFAULT_SETTINGS };
+  if (oldFont) settings.fontSize = oldFont as FontSize;
+  if (oldTheme) settings.theme = oldTheme as Theme;
+  return settings;
+}
+
+function saveSettings(settings: ReaderSettings) {
+  localStorage.setItem('reader-settings', JSON.stringify(settings));
+}
+
+function useIsMobile() {
+  const [isMobile, setIsMobile] = useState(false);
+  useEffect(() => {
+    const check = () => setIsMobile(window.innerWidth < 768);
+    check();
+    window.addEventListener('resize', check);
+    return () => window.removeEventListener('resize', check);
+  }, []);
+  return isMobile;
+}
+
 export default function ReaderPage() {
   const params = useParams();
   const episodeId = params.episodeId as string;
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const isMobile = useIsMobile();
 
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [episodes, setEpisodes] = useState<{ id: string; title: string; orderIndex: number }[]>([]);
   const [loading, setLoading] = useState(true);
-  const [fontSize, setFontSize] = useState<FontSize>('base');
-  const [theme, setTheme] = useState<Theme>('light');
+  const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
   const [showComments, setShowComments] = useState(false);
   const [showCompanion, setShowCompanion] = useState(false);
   const [comments, setComments] = useState<Comment[]>([]);
   const [commentText, setCommentText] = useState('');
+  const [replyToId, setReplyToId] = useState<string | null>(null);
   const [progressPct, setProgressPct] = useState(0);
+  const [immersiveMode, setImmersiveMode] = useState(false);
+  const [headerVisible, setHeaderVisible] = useState(true);
+  const [showCompleteBanner, setShowCompleteBanner] = useState(false);
 
   // Highlight state
   const [highlights, setHighlights] = useState<Highlight[]>([]);
   const [showToolbar, setShowToolbar] = useState(false);
   const [toolbarPosition, setToolbarPosition] = useState({ top: 0, left: 0 });
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
+  const [selectedHighlight, setSelectedHighlight] = useState<Highlight | null>(null);
+  const [highlightPopoverPos, setHighlightPopoverPos] = useState({ top: 0, left: 0 });
+
+  // AI Explanation dialog
+  const [explainText, setExplainText] = useState('');
+  const [showExplainDialog, setShowExplainDialog] = useState(false);
 
   const contentRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
+  // Load settings
+  useEffect(() => {
+    setSettings(loadSettings());
+  }, []);
+
+  // Episode data loading
   useEffect(() => {
     setLoading(true);
+    setShowCompleteBanner(false);
     api.getEpisode(episodeId)
       .then((res) => {
         setEpisode(res.data);
@@ -91,15 +178,6 @@ export default function ReaderPage() {
       .then((res) => setHighlights(res.data))
       .catch(() => {});
   }, [episodeId, isAuthenticated]);
-
-  useEffect(() => {
-    if (typeof window !== 'undefined') {
-      const saved = localStorage.getItem('reader-font-size');
-      if (saved) setFontSize(saved as FontSize);
-      const savedTheme = localStorage.getItem('reader-theme');
-      if (savedTheme) setTheme(savedTheme as Theme);
-    }
-  }, []);
 
   const saveProgress = useCallback(
     (pct: number, scrollPos: number) => {
@@ -125,10 +203,15 @@ export default function ReaderPage() {
       const pct = docHeight > 0 ? Math.min(scrollTop / docHeight, 1) : 1;
       setProgressPct(pct);
       saveProgress(pct, scrollTop);
+
+      // Show complete banner at 90%
+      if (pct >= 0.9 && !showCompleteBanner) {
+        setShowCompleteBanner(true);
+      }
     }
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [saveProgress]);
+  }, [saveProgress, showCompleteBanner]);
 
   useEffect(() => {
     return () => {
@@ -136,16 +219,89 @@ export default function ReaderPage() {
     };
   }, []);
 
-  function handleFontSizeChange(size: FontSize) {
-    setFontSize(size);
-    localStorage.setItem('reader-font-size', size);
+  // Immersive mode: auto-hide cursor and header
+  useEffect(() => {
+    if (!immersiveMode) {
+      setHeaderVisible(true);
+      return;
+    }
+    setHeaderVisible(false);
+    setShowSettings(false);
+    setShowComments(false);
+    setShowCompanion(false);
+
+    function handleMouseMove(e: MouseEvent) {
+      // Show header when mouse near top
+      if (e.clientY < 60) {
+        setHeaderVisible(true);
+      } else {
+        setHeaderVisible(false);
+      }
+
+      // Auto-hide cursor
+      document.body.style.cursor = 'default';
+      if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
+      cursorTimerRef.current = setTimeout(() => {
+        if (immersiveMode) document.body.style.cursor = 'none';
+      }, 3000);
+    }
+
+    window.addEventListener('mousemove', handleMouseMove);
+    return () => {
+      window.removeEventListener('mousemove', handleMouseMove);
+      document.body.style.cursor = 'default';
+      if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
+    };
+  }, [immersiveMode]);
+
+  function updateSettings(partial: Partial<ReaderSettings>) {
+    setSettings((prev) => {
+      const next = { ...prev, ...partial };
+      saveSettings(next);
+      return next;
+    });
   }
 
-  function handleThemeChange(t: Theme) {
-    setTheme(t);
-    localStorage.setItem('reader-theme', t);
+  function resetSettings() {
+    setSettings(DEFAULT_SETTINGS);
+    saveSettings(DEFAULT_SETTINGS);
   }
 
+  // Navigation helpers
+  const currentIndex = episodes.findIndex((e) => e.id === episodeId);
+  const prevEp = currentIndex > 0 ? episodes[currentIndex - 1] : null;
+  const nextEp = currentIndex < episodes.length - 1 ? episodes[currentIndex + 1] : null;
+
+  function navigatePrev() {
+    if (prevEp) router.push(`/read/${prevEp.id}`);
+  }
+  function navigateNext() {
+    if (nextEp) router.push(`/read/${nextEp.id}`);
+  }
+
+  // Keyboard shortcuts
+  useReaderShortcuts({
+    onPrevEpisode: navigatePrev,
+    onNextEpisode: navigateNext,
+    onToggleSettings: () => setShowSettings((v) => !v),
+    onToggleComments: () => toggleComments(),
+    onToggleCompanion: () => toggleCompanion(),
+    onToggleImmersive: () => setImmersiveMode((v) => !v),
+    onEscape: () => {
+      if (immersiveMode) setImmersiveMode(false);
+      else if (showSettings) setShowSettings(false);
+      else if (showComments) setShowComments(false);
+      else if (showCompanion) setShowCompanion(false);
+    },
+  });
+
+  // Swipe navigation
+  const { swipeEdge } = useSwipeNavigation({
+    onSwipeLeft: navigateNext,
+    onSwipeRight: navigatePrev,
+  });
+
+  // Comments
   async function loadComments() {
     try {
       const res = await api.getCommentsForEpisode(episodeId);
@@ -156,9 +312,20 @@ export default function ReaderPage() {
   async function handlePostComment() {
     if (!commentText.trim()) return;
     try {
-      const res = await api.createComment({ episodeId, content: commentText });
-      setComments((prev) => [...prev, res.data]);
+      const body: { episodeId: string; content: string; parentId?: string } = {
+        episodeId,
+        content: commentText,
+      };
+      if (replyToId) body.parentId = replyToId;
+      const res = await api.createComment(body);
+      if (replyToId) {
+        // Reload all comments to get threaded structure
+        await loadComments();
+      } else {
+        setComments((prev) => [...prev, res.data]);
+      }
       setCommentText('');
+      setReplyToId(null);
     } catch {}
   }
 
@@ -173,24 +340,21 @@ export default function ReaderPage() {
     if (showComments) setShowComments(false);
   }
 
+  // Highlights
   function handleContentMouseUp() {
     if (!isAuthenticated || !episode) return;
     const selection = window.getSelection();
-    if (!selection || selection.isCollapsed || !selection.rangeCount) {
-      return;
-    }
+    if (!selection || selection.isCollapsed || !selection.rangeCount) return;
 
     const range = selection.getRangeAt(0);
     const text = selection.toString().trim();
     if (!text) return;
 
-    // Calculate position in the content string
     const contentEl = contentRef.current;
     if (!contentEl) return;
 
     const content = episode.content;
-    const selectedText = text;
-    const startIdx = content.indexOf(selectedText);
+    const startIdx = content.indexOf(text);
     if (startIdx === -1) return;
 
     const rect = range.getBoundingClientRect();
@@ -198,7 +362,7 @@ export default function ReaderPage() {
       top: rect.top + window.scrollY,
       left: rect.left + rect.width / 2,
     });
-    setSelectedRange({ start: startIdx, end: startIdx + selectedText.length });
+    setSelectedRange({ start: startIdx, end: startIdx + text.length });
     setShowToolbar(true);
   }
 
@@ -220,7 +384,6 @@ export default function ReaderPage() {
 
   async function handleAiExplain() {
     if (!selectedRange) return;
-    // Save highlight first, then explain
     try {
       const res = await api.createHighlight({
         episodeId,
@@ -230,11 +393,35 @@ export default function ReaderPage() {
       });
       setHighlights((prev) => [...prev, res.data]);
       const explainRes = await api.explainHighlight(res.data.id);
-      alert(explainRes.data.explanation);
+      setExplainText(explainRes.data.explanation);
+      setShowExplainDialog(true);
     } catch {}
     window.getSelection()?.removeAllRanges();
     setSelectedRange(null);
     setShowToolbar(false);
+  }
+
+  function handleHighlightClick(h: Highlight, event?: React.MouseEvent) {
+    const rect = event?.currentTarget?.getBoundingClientRect();
+    setHighlightPopoverPos({
+      top: rect ? rect.bottom + window.scrollY : 200,
+      left: rect ? rect.left + rect.width / 2 : window.innerWidth / 2,
+    });
+    setSelectedHighlight(h);
+  }
+
+  async function handleHighlightUpdate(id: string, data: { memo?: string; color?: string }) {
+    try {
+      const res = await api.updateHighlight(id, data);
+      setHighlights((prev) => prev.map((h) => (h.id === id ? { ...h, ...res.data } : h)));
+    } catch {}
+  }
+
+  async function handleHighlightDelete(id: string) {
+    try {
+      await api.deleteHighlight(id);
+      setHighlights((prev) => prev.filter((h) => h.id !== id));
+    } catch {}
   }
 
   if (loading) {
@@ -248,10 +435,162 @@ export default function ReaderPage() {
 
   if (!episode) return null;
 
-  const currentIndex = episodes.findIndex((e) => e.id === episodeId);
-  const prevEp = currentIndex > 0 ? episodes[currentIndex - 1] : null;
-  const nextEp = currentIndex < episodes.length - 1 ? episodes[currentIndex + 1] : null;
-  const themeStyle = THEMES[theme];
+  const themeStyle = THEMES[settings.theme];
+  const fontSizeClass = FONT_SIZES[settings.fontSize];
+  const lineHeightClass = LINE_HEIGHTS[settings.lineHeight].class;
+  const maxWidthClass = MAX_WIDTHS[settings.maxWidth].class;
+
+  // Comment rendering helper
+  function renderComment(c: Comment, depth = 0) {
+    return (
+      <div key={c.id} className={depth > 0 ? 'ml-4 border-l border-border pl-3' : ''}>
+        <div className="space-y-1">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium">
+              {c.user.displayName || c.user.name}
+            </span>
+            <span className="text-xs text-muted-foreground">
+              {new Date(c.createdAt).toLocaleDateString('ja-JP')}
+            </span>
+          </div>
+          <p className="text-sm">{c.content}</p>
+          {isAuthenticated && depth < 2 && (
+            <button
+              onClick={() => setReplyToId(c.id)}
+              className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+            >
+              <Reply className="h-3 w-3" /> 返信
+            </button>
+          )}
+        </div>
+        {(c as Comment & { replies?: Comment[] }).replies?.map((reply) =>
+          renderComment(reply, depth + 1),
+        )}
+      </div>
+    );
+  }
+
+  const commentsContent = (
+    <>
+      <div className="flex-1 overflow-y-auto p-4 space-y-4">
+        {comments.length === 0 ? (
+          <p className="text-sm text-muted-foreground text-center py-8">
+            コメントはまだありません
+          </p>
+        ) : (
+          comments.map((c) => renderComment(c))
+        )}
+      </div>
+      {isAuthenticated && (
+        <div className="p-4 border-t border-border">
+          {replyToId && (
+            <div className="flex items-center justify-between mb-2 text-xs text-muted-foreground">
+              <span>返信中...</span>
+              <button onClick={() => setReplyToId(null)} className="hover:text-foreground">
+                <X className="h-3 w-3" />
+              </button>
+            </div>
+          )}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={commentText}
+              onChange={(e) => setCommentText(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
+              placeholder={replyToId ? '返信を入力...' : 'コメントを入力...'}
+              className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
+            />
+            <Button size="sm" onClick={handlePostComment} className="min-h-[40px]">
+              送信
+            </Button>
+          </div>
+        </div>
+      )}
+    </>
+  );
+
+  const settingsContent = (
+    <div className="p-4 space-y-4">
+      <div className="flex items-center justify-between">
+        <span className="text-sm font-medium">表示設定</span>
+        {!isMobile && (
+          <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)} className="h-8 w-8">
+            <X className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">文字サイズ</label>
+        <div className="flex gap-1">
+          {(['sm', 'base', 'lg', 'xl'] as FontSize[]).map((s) => (
+            <Button
+              key={s}
+              variant={settings.fontSize === s ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateSettings({ fontSize: s })}
+              className="flex-1 text-xs min-h-[44px]"
+            >
+              {s === 'sm' ? '小' : s === 'base' ? '中' : s === 'lg' ? '大' : '特大'}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">行間</label>
+        <div className="flex gap-1">
+          {(Object.entries(LINE_HEIGHTS) as [LineHeight, typeof LINE_HEIGHTS.normal][]).map(([key, val]) => (
+            <Button
+              key={key}
+              variant={settings.lineHeight === key ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateSettings({ lineHeight: key })}
+              className="flex-1 text-xs min-h-[44px]"
+            >
+              {val.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">最大幅</label>
+        <div className="flex gap-1">
+          {(Object.entries(MAX_WIDTHS) as [MaxWidth, typeof MAX_WIDTHS.normal][]).map(([key, val]) => (
+            <Button
+              key={key}
+              variant={settings.maxWidth === key ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateSettings({ maxWidth: key })}
+              className="flex-1 text-xs min-h-[44px]"
+            >
+              {val.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">テーマ</label>
+        <div className="flex gap-1">
+          {(Object.entries(THEMES) as [Theme, typeof THEMES.light][]).map(([key, val]) => (
+            <Button
+              key={key}
+              variant={settings.theme === key ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => updateSettings({ theme: key })}
+              className="flex-1 text-xs min-h-[44px]"
+            >
+              {key === 'dark' ? <Moon className="h-3 w-3 mr-1" /> : key === 'light' ? <Sun className="h-3 w-3 mr-1" /> : null}
+              {val.label}
+            </Button>
+          ))}
+        </div>
+      </div>
+      <div className="pt-2 border-t border-border">
+        <Button variant="ghost" size="sm" onClick={resetSettings} className="w-full text-xs">
+          デフォルトに戻す
+        </Button>
+      </div>
+    </div>
+  );
 
   return (
     <div className={`min-h-screen ${themeStyle.bg} ${themeStyle.text} transition-colors`}>
@@ -263,8 +602,20 @@ export default function ReaderPage() {
         />
       </div>
 
+      {/* Swipe edge indicators */}
+      {swipeEdge === 'left' && prevEp && (
+        <div className="fixed left-0 top-0 bottom-0 w-1 bg-primary/50 z-50 animate-in fade-in" />
+      )}
+      {swipeEdge === 'right' && nextEp && (
+        <div className="fixed right-0 top-0 bottom-0 w-1 bg-primary/50 z-50 animate-in fade-in" />
+      )}
+
       {/* Top nav */}
-      <header className="sticky top-1 z-40 flex items-center justify-between px-4 py-2">
+      <header
+        className={`sticky top-1 z-40 flex items-center justify-between px-4 py-2 transition-all duration-300 ${
+          immersiveMode && !headerVisible ? 'opacity-0 pointer-events-none -translate-y-full' : 'opacity-100'
+        }`}
+      >
         <Link href={`/works/${episode.workId}`}>
           <Button variant="ghost" size="sm" className="gap-1 min-h-[44px]">
             <ChevronLeft className="h-4 w-4" /> 作品へ戻る
@@ -272,65 +623,41 @@ export default function ReaderPage() {
         </Link>
         <div className="flex items-center gap-1">
           {episode && (
-            <span className="text-xs text-muted-foreground mr-2">
+            <span className="text-xs text-muted-foreground mr-2 hidden sm:inline">
               残り {estimateReadingTime(Math.round(episode.wordCount * (1 - progressPct)))}
             </span>
           )}
-          <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="AIコンパニオン">
+          <Button
+            variant="ghost"
+            size="icon"
+            onClick={() => setImmersiveMode(!immersiveMode)}
+            className="min-h-[44px] min-w-[44px]"
+            title={immersiveMode ? '没入モード解除 (f)' : '没入モード (f)'}
+          >
+            {immersiveMode ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
+          </Button>
+          <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="AIコンパニオン (a)">
             <Sparkles className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={toggleComments} className="min-h-[44px] min-w-[44px]">
+          <Button variant="ghost" size="icon" onClick={toggleComments} className="min-h-[44px] min-w-[44px]" title="コメント (c)">
             <MessageSquare className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)} className="min-h-[44px] min-w-[44px]">
+          <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)} className="min-h-[44px] min-w-[44px]" title="設定 (s)">
             <Settings className="h-4 w-4" />
           </Button>
         </div>
       </header>
 
-      {/* Settings panel */}
-      {showSettings && (
-        <div className="fixed right-4 top-14 z-50 w-64 rounded-lg border border-border bg-card text-card-foreground p-4 shadow-lg space-y-4">
-          <div className="flex items-center justify-between">
-            <span className="text-sm font-medium">表示設定</span>
-            <Button variant="ghost" size="icon" onClick={() => setShowSettings(false)} className="h-8 w-8">
-              <X className="h-3 w-3" />
-            </Button>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">文字サイズ</label>
-            <div className="flex gap-1">
-              {(Object.keys(FONT_SIZES) as FontSize[]).map((s) => (
-                <Button
-                  key={s}
-                  variant={fontSize === s ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handleFontSizeChange(s)}
-                  className="flex-1 text-xs min-h-[44px]"
-                >
-                  {s === 'sm' ? '小' : s === 'base' ? '中' : s === 'lg' ? '大' : '特大'}
-                </Button>
-              ))}
-            </div>
-          </div>
-          <div className="space-y-2">
-            <label className="text-xs text-muted-foreground">テーマ</label>
-            <div className="flex gap-1">
-              {(Object.entries(THEMES) as [Theme, typeof THEMES.light][]).map(([key, val]) => (
-                <Button
-                  key={key}
-                  variant={theme === key ? 'default' : 'outline'}
-                  size="sm"
-                  onClick={() => handleThemeChange(key)}
-                  className="flex-1 text-xs min-h-[44px]"
-                >
-                  {key === 'dark' ? <Moon className="h-3 w-3 mr-1" /> : key === 'light' ? <Sun className="h-3 w-3 mr-1" /> : null}
-                  {val.label}
-                </Button>
-              ))}
-            </div>
-          </div>
+      {/* Settings panel - desktop: popover, mobile: bottom sheet */}
+      {showSettings && !isMobile && (
+        <div className="fixed right-4 top-14 z-50 w-72 rounded-lg border border-border bg-card text-card-foreground shadow-lg">
+          {settingsContent}
         </div>
+      )}
+      {isMobile && (
+        <BottomSheet open={showSettings} onClose={() => setShowSettings(false)} title="表示設定">
+          {settingsContent}
+        </BottomSheet>
       )}
 
       {/* Highlight toolbar */}
@@ -343,26 +670,63 @@ export default function ReaderPage() {
         />
       )}
 
+      {/* Highlight detail popover */}
+      {selectedHighlight && (
+        <HighlightDetailPopover
+          highlight={selectedHighlight}
+          position={highlightPopoverPos}
+          onUpdate={handleHighlightUpdate}
+          onDelete={handleHighlightDelete}
+          onClose={() => setSelectedHighlight(null)}
+        />
+      )}
+
+      {/* AI Explanation Dialog */}
+      <Dialog open={showExplainDialog} onOpenChange={setShowExplainDialog}>
+        <DialogHeader>
+          <DialogTitle>AI解説</DialogTitle>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-sm leading-relaxed whitespace-pre-wrap">{explainText}</p>
+        </DialogContent>
+        <DialogFooter>
+          <Button
+            variant="outline"
+            size="sm"
+            onClick={() => { navigator.clipboard.writeText(explainText); }}
+          >
+            <Copy className="h-3 w-3 mr-1" /> コピー
+          </Button>
+          <Button size="sm" onClick={() => setShowExplainDialog(false)}>
+            閉じる
+          </Button>
+        </DialogFooter>
+      </Dialog>
+
       {/* Main content */}
-      <article ref={contentRef} className="mx-auto max-w-2xl px-6 py-12" onMouseUp={handleContentMouseUp}>
+      <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
         <h1 className="text-2xl font-bold font-serif mb-8 text-center">
           {episode.title}
         </h1>
-        <div
-          className={`font-serif ${FONT_SIZES[fontSize]} whitespace-pre-wrap`}
-        >
+        <div className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap`}>
           <HighlightedText
             text={episode.content}
             highlights={highlights}
-            onHighlightClick={(h) => {
-              if (h.memo) alert(h.memo);
-            }}
+            onHighlightClick={(h, e) => handleHighlightClick(h, e)}
           />
         </div>
       </article>
 
+      {/* Episode complete banner */}
+      {showCompleteBanner && (
+        <EpisodeCompleteBanner
+          nextEpisodeId={nextEp?.id}
+          workId={episode.workId}
+        />
+      )}
+
       {/* Navigation */}
-      <nav className="mx-auto max-w-2xl px-6 py-8 flex justify-between border-t border-border/50">
+      <nav className={`mx-auto ${maxWidthClass} px-6 py-8 flex justify-between border-t border-border/50`}>
         {prevEp ? (
           <Link href={`/read/${prevEp.id}`}>
             <Button variant="outline" className="gap-1 min-h-[44px]">
@@ -385,8 +749,34 @@ export default function ReaderPage() {
         )}
       </nav>
 
-      {/* Comments sidebar */}
-      {showComments && (
+      {/* Mobile bottom navigation bar */}
+      {isMobile && !immersiveMode && (
+        <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border flex justify-around py-2 px-4">
+          <Button variant="ghost" size="sm" onClick={navigatePrev} disabled={!prevEp} className="flex-col gap-0.5 h-auto py-1">
+            <ChevronLeft className="h-4 w-4" />
+            <span className="text-[10px]">前話</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={toggleComments} className="flex-col gap-0.5 h-auto py-1">
+            <MessageSquare className="h-4 w-4" />
+            <span className="text-[10px]">コメント</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
+            <Sparkles className="h-4 w-4" />
+            <span className="text-[10px]">AI</span>
+          </Button>
+          <Button variant="ghost" size="sm" onClick={navigateNext} disabled={!nextEp} className="flex-col gap-0.5 h-auto py-1">
+            <ChevronRight className="h-4 w-4" />
+            <span className="text-[10px]">次話</span>
+          </Button>
+        </div>
+      )}
+
+      {/* Comments sidebar / BottomSheet */}
+      {isMobile ? (
+        <BottomSheet open={showComments} onClose={() => setShowComments(false)} title="コメント">
+          {commentsContent}
+        </BottomSheet>
+      ) : showComments ? (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-80 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
             <span className="font-medium text-sm">コメント</span>
@@ -394,49 +784,18 @@ export default function ReaderPage() {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-4">
-            {comments.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-8">
-                コメントはまだありません
-              </p>
-            ) : (
-              comments.map((c) => (
-                <div key={c.id} className="space-y-1">
-                  <div className="flex items-center gap-2">
-                    <span className="text-xs font-medium">
-                      {c.user.displayName || c.user.name}
-                    </span>
-                    <span className="text-xs text-muted-foreground">
-                      {new Date(c.createdAt).toLocaleDateString('ja-JP')}
-                    </span>
-                  </div>
-                  <p className="text-sm">{c.content}</p>
-                </div>
-              ))
-            )}
-          </div>
-          {isAuthenticated && (
-            <div className="p-4 border-t border-border">
-              <div className="flex gap-2">
-                <input
-                  type="text"
-                  value={commentText}
-                  onChange={(e) => setCommentText(e.target.value)}
-                  onKeyDown={(e) => e.key === 'Enter' && handlePostComment()}
-                  placeholder="コメントを入力..."
-                  className="flex-1 rounded-md border border-border bg-background px-3 py-2 text-sm"
-                />
-                <Button size="sm" onClick={handlePostComment} className="min-h-[40px]">
-                  送信
-                </Button>
-              </div>
-            </div>
-          )}
+          {commentsContent}
         </div>
-      )}
+      ) : null}
 
-      {/* Companion sidebar */}
-      {showCompanion && (
+      {/* Companion sidebar / BottomSheet */}
+      {isMobile ? (
+        <BottomSheet open={showCompanion} onClose={() => setShowCompanion(false)} title="AIコンパニオン">
+          <div className="h-[60vh]">
+            <CompanionChat workId={episode.workId} />
+          </div>
+        </BottomSheet>
+      ) : showCompanion ? (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-96 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
             <span className="font-medium text-sm">AIコンパニオン</span>
@@ -448,7 +807,7 @@ export default function ReaderPage() {
             <CompanionChat workId={episode.workId} />
           </div>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }

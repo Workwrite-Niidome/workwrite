@@ -5,18 +5,39 @@ import { PrismaService } from '../common/prisma/prisma.service';
 export class CommentsService {
   constructor(private prisma: PrismaService) {}
 
-  async create(userId: string, data: { episodeId: string; content: string; paragraphId?: string }) {
+  async create(userId: string, data: { episodeId: string; content: string; paragraphId?: string; parentId?: string }) {
     return this.prisma.comment.create({
       data: { userId, ...data },
-      include: { user: { select: { id: true, name: true, displayName: true, avatarUrl: true } } },
+      include: {
+        user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+        replies: {
+          include: {
+            user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+          },
+        },
+      },
     });
   }
 
   async findByEpisode(episodeId: string) {
     return this.prisma.comment.findMany({
-      where: { episodeId },
+      where: { episodeId, parentId: null },
       orderBy: { createdAt: 'asc' },
-      include: { user: { select: { id: true, name: true, displayName: true, avatarUrl: true } } },
+      include: {
+        user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+        replies: {
+          orderBy: { createdAt: 'asc' },
+          include: {
+            user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+            replies: {
+              orderBy: { createdAt: 'asc' },
+              include: {
+                user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+              },
+            },
+          },
+        },
+      },
     });
   }
 

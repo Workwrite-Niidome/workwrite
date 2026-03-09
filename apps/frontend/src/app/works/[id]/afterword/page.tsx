@@ -15,7 +15,7 @@ import { InsightCard } from '@/components/ai/insight-card';
 import { RecommendationCard } from '@/components/ai/recommendation-card';
 import { api, type Work, type EmotionTag, type AiInsightData, type AiRecommendation } from '@/lib/api';
 
-type Step = 'afterglow' | 'emotions' | 'stateChange' | 'insights' | 'nextBook' | 'review';
+type Step = 'afterglow' | 'emotions' | 'stateChange' | 'insights' | 'personalInsights' | 'nextBook' | 'review';
 
 const STATE_AXES = [
   { axis: 'confidence', label: '自信' },
@@ -49,6 +49,9 @@ export default function AfterwordPage() {
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState<AiInsightData | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
+  const [personalInsights, setPersonalInsights] = useState<{ resonance: string; personalMeaning: string; growthPoints: string[] } | null>(null);
+  const [personalInsightsLoading, setPersonalInsightsLoading] = useState(false);
+  const [tagIntensities, setTagIntensities] = useState<Record<string, number>>({});
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -73,7 +76,10 @@ export default function AfterwordPage() {
 
   async function handleEmotionSubmit() {
     if (selectedTags.length > 0) {
-      await api.addEmotionTags(workId, selectedTags.map((tagId) => ({ tagId }))).catch(() => {});
+      await api.addEmotionTags(
+        workId,
+        selectedTags.map((tagId) => ({ tagId, intensity: tagIntensities[tagId] || 3 })),
+      ).catch(() => {});
     }
     setStep('stateChange');
   }
@@ -95,6 +101,16 @@ export default function AfterwordPage() {
   }
 
   async function handleInsightsNext() {
+    // Load personal insights
+    setPersonalInsightsLoading(true);
+    api.getPersonalAiInsights(workId)
+      .then((res) => setPersonalInsights(res.data))
+      .catch(() => {})
+      .finally(() => setPersonalInsightsLoading(false));
+    setStep('personalInsights');
+  }
+
+  async function handlePersonalInsightsNext() {
     // Try AI recommendations first, fall back to getNextForMe
     api.getAiRecommendationsBecauseYouRead(workId)
       .then((res) => setAiRecommendations(res.data))
@@ -135,10 +151,20 @@ export default function AfterwordPage() {
               <h1 className="text-2xl font-serif font-bold">{work.title}</h1>
               <p className="text-muted-foreground">お疲れさまでした</p>
             </div>
-            <div className="pt-8">
+            <div className="pt-8 space-y-3">
               <Button onClick={() => setStep('emotions')} size="lg" className="min-h-[48px]">
                 読後の気持ちを記録する <ChevronRight className="h-4 w-4 ml-1" />
               </Button>
+              <div>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs text-muted-foreground"
+                  onClick={() => router.push('/bookshelf')}
+                >
+                  すべてスキップ
+                </Button>
+              </div>
             </div>
           </div>
         )}
@@ -152,18 +178,30 @@ export default function AfterwordPage() {
             </div>
             <div className="flex flex-wrap justify-center gap-2">
               {allEmotionTags.map((tag) => (
-                <button
-                  key={tag.id}
-                  onClick={() => toggleTag(tag.id)}
-                  className={cn(
-                    'px-4 py-2 rounded-full text-sm transition-all min-h-[44px]',
-                    selectedTags.includes(tag.id)
-                      ? 'bg-primary text-primary-foreground scale-105'
-                      : 'bg-muted text-foreground hover:bg-muted/80',
+                <div key={tag.id} className="flex flex-col items-center gap-1">
+                  <button
+                    onClick={() => toggleTag(tag.id)}
+                    className={cn(
+                      'px-4 py-2 rounded-full text-sm transition-all min-h-[44px]',
+                      selectedTags.includes(tag.id)
+                        ? 'bg-primary text-primary-foreground scale-105'
+                        : 'bg-muted text-foreground hover:bg-muted/80',
+                    )}
+                  >
+                    {tag.nameJa}
+                  </button>
+                  {selectedTags.includes(tag.id) && (
+                    <input
+                      type="range"
+                      min={1}
+                      max={5}
+                      value={tagIntensities[tag.id] || 3}
+                      onChange={(e) => setTagIntensities((prev) => ({ ...prev, [tag.id]: Number(e.target.value) }))}
+                      className="w-16 accent-primary"
+                      title={`強度: ${tagIntensities[tag.id] || 3}`}
+                    />
                   )}
-                >
-                  {tag.nameJa}
-                </button>
+                </div>
               ))}
             </div>
             <div className="flex justify-center pt-4">
@@ -314,6 +352,63 @@ export default function AfterwordPage() {
           </div>
         )}
 
+        {/* Step: Personal AI Insights */}
+        {step === 'personalInsights' && (
+          <div className="space-y-6 animate-in fade-in duration-500">
+            <div className="text-center">
+              <Sparkles className="h-8 w-8 mx-auto text-primary/60 mb-2" />
+              <h2 className="text-xl font-bold mb-2">あなたへのインサイト</h2>
+              <p className="text-sm text-muted-foreground">この作品があなたにとって持つ意味</p>
+            </div>
+            {personalInsightsLoading ? (
+              <div className="space-y-3">
+                <Skeleton className="h-16 w-full" />
+                <Skeleton className="h-16 w-full" />
+              </div>
+            ) : personalInsights ? (
+              <div className="space-y-4">
+                {personalInsights.resonance && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="text-sm font-medium mb-2">共鳴ポイント</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{personalInsights.resonance}</p>
+                    </CardContent>
+                  </Card>
+                )}
+                {personalInsights.personalMeaning && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="text-sm font-medium mb-2">個人的意味</h3>
+                      <p className="text-sm text-muted-foreground leading-relaxed">{personalInsights.personalMeaning}</p>
+                    </CardContent>
+                  </Card>
+                )}
+                {personalInsights.growthPoints?.length > 0 && (
+                  <Card>
+                    <CardContent className="p-4">
+                      <h3 className="text-sm font-medium mb-2">成長のヒント</h3>
+                      <ul className="space-y-1 list-disc list-inside text-sm text-muted-foreground">
+                        {personalInsights.growthPoints.map((p, i) => (
+                          <li key={i}>{p}</li>
+                        ))}
+                      </ul>
+                    </CardContent>
+                  </Card>
+                )}
+              </div>
+            ) : (
+              <p className="text-center text-muted-foreground py-8">
+                パーソナルインサイトを取得できませんでした
+              </p>
+            )}
+            <div className="flex justify-center pt-4">
+              <Button onClick={handlePersonalInsightsNext} size="lg" className="min-h-[48px]">
+                次へ <ChevronRight className="h-4 w-4 ml-1" />
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Step: Next Book */}
         {step === 'nextBook' && (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -390,6 +485,17 @@ export default function AfterwordPage() {
                 className="font-serif leading-relaxed"
               />
             </div>
+            {/* Share on X */}
+            <div className="flex justify-center">
+              <a
+                href={`https://x.com/intent/tweet?text=${encodeURIComponent(`「${work.title}」を読了しました！\n\n#Workwrite #読書`)}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+              >
+                Xで感想をシェア
+              </a>
+            </div>
             <div className="flex justify-center gap-3 pt-4">
               <Button onClick={() => { setReviewText(''); handleReviewSubmit(); }} variant="ghost" className="min-h-[48px]">
                 スキップ
@@ -403,7 +509,7 @@ export default function AfterwordPage() {
 
         {/* Progress indicator */}
         <div className="flex justify-center gap-2 mt-12">
-          {(['afterglow', 'emotions', 'stateChange', 'insights', 'nextBook', 'review'] as Step[]).map((s) => (
+          {(['afterglow', 'emotions', 'stateChange', 'insights', 'personalInsights', 'nextBook', 'review'] as Step[]).map((s) => (
             <div
               key={s}
               className={cn(

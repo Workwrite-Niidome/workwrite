@@ -27,6 +27,8 @@ import { AiAssistModule } from './ai-assist/ai-assist.module';
 import { AiInsightsModule } from './ai-insights/ai-insights.module';
 import { AiRecommendationsModule } from './ai-recommendations/ai-recommendations.module';
 import { AiCompanionModule } from './ai-companion/ai-companion.module';
+import { WorkImportModule } from './work-import/work-import.module';
+import { FollowsModule } from './follows/follows.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -62,6 +64,8 @@ import { HealthController } from './health.controller';
     AiInsightsModule,
     AiRecommendationsModule,
     AiCompanionModule,
+    WorkImportModule,
+    FollowsModule,
   ],
   controllers: [HealthController],
 })
