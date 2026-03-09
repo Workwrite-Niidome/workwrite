@@ -27,6 +27,9 @@ const VARIABLE_LABELS: Record<string, string> = {
   target_style: '目標の文体',
 };
 
+// Variables that are automatically filled by the system (not shown to users)
+const AUTO_VARIABLES = new Set(['content', 'context', 'char_count', 'custom_instruction']);
+
 interface TemplateSelectorProps {
   templates: PromptTemplate[];
   onGenerate: (slug: string, variables: Record<string, string>) => void;
@@ -87,7 +90,7 @@ export function TemplateSelector({ templates, onGenerate, isStreaming, currentCo
             <p className="text-xs text-muted-foreground">{selected.description}</p>
           )}
           {selected.variables
-            .filter((v) => v !== 'content')
+            .filter((v) => !AUTO_VARIABLES.has(v))
             .map((v) => (
               <div key={v}>
                 <label className="text-xs text-muted-foreground">{VARIABLE_LABELS[v] || v}</label>
@@ -107,7 +110,7 @@ export function TemplateSelector({ templates, onGenerate, isStreaming, currentCo
               isStreaming ||
               !currentContent.trim() ||
               selected.variables
-                .filter((v) => v !== 'content')
+                .filter((v) => !AUTO_VARIABLES.has(v))
                 .some((v) => !variableValues[v]?.trim())
             }
             className="w-full"

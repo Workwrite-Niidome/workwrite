@@ -31,6 +31,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   } | null>(null);
   const [premiumMode, setPremiumMode] = useState(false);
   const [charCount, setCharCount] = useState(1000);
+  const [customPrompt, setCustomPrompt] = useState('');
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [creationPlan, setCreationPlan] = useState<any>(null);
@@ -141,6 +142,9 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       vars.context = contextParts.join('\n\n');
     }
     vars.char_count = String(charCount);
+    if (customPrompt.trim()) {
+      vars.custom_instruction = customPrompt.trim();
+    }
     return vars;
   }
 
@@ -293,6 +297,18 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
             <span>100</span>
             <span>5000</span>
           </div>
+        </div>
+
+        {/* Custom instruction */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">追加指示（任意）</p>
+          <textarea
+            value={customPrompt}
+            onChange={(e) => setCustomPrompt(e.target.value)}
+            placeholder="例: 緊張感のある場面にして、主人公の心情を丁寧に描写して..."
+            rows={2}
+            className="w-full text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+          />
         </div>
 
         {/* Selected text preview */}

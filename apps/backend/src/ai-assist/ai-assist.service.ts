@@ -95,6 +95,11 @@ export class AiAssistService {
       prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), truncated);
     }
 
+    // Append custom instruction if provided
+    if (variables.custom_instruction) {
+      prompt += `\n\n【著者からの追加指示】\n${variables.custom_instruction}`;
+    }
+
     const startTime = Date.now();
     let inputTokens = 0;
     let outputTokens = 0;
