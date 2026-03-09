@@ -30,6 +30,9 @@ export interface WizardData {
   plotOutline: any;
   // Step 5: Chapters (AI-assisted)
   chapterOutline: any[];
+  // AI suggestion cache (persists across step navigation)
+  _aiCharacterSuggestions?: any;
+  _aiChapterSuggestions?: any;
 }
 
 const INITIAL_DATA: WizardData = {

@@ -67,7 +67,9 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
   const [vision, setVision] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRaw, setAiRaw] = useState('');
-  const [aiParsed, setAiParsed] = useState<{ characters: AiCharacter[]; suggestions: string } | null>(null);
+  const [aiParsed, setAiParsed] = useState<{ characters: AiCharacter[]; suggestions: string } | null>(
+    data._aiCharacterSuggestions || null
+  );
 
   const characters = (data.characters || []) as Character[];
 
@@ -157,9 +159,12 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           } catch { /* skip */ }
         }
       }
-      // Parse complete response
+      // Parse complete response and persist to wizard data
       const result = parseAiResponse(accumulated);
-      if (result) setAiParsed(result);
+      if (result) {
+        setAiParsed(result);
+        onChange({ _aiCharacterSuggestions: result });
+      }
     } catch {
       setAiRaw('AIの提案を取得できませんでした。');
     } finally {

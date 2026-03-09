@@ -46,7 +46,9 @@ function parseAiChapters(raw: string): { chapters: AiChapter[]; suggestions: str
 export function StepChapterOutline({ data, onChange }: Props) {
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRaw, setAiRaw] = useState('');
-  const [aiParsed, setAiParsed] = useState<{ chapters: AiChapter[]; suggestions: string } | null>(null);
+  const [aiParsed, setAiParsed] = useState<{ chapters: AiChapter[]; suggestions: string } | null>(
+    data._aiChapterSuggestions || null
+  );
   const chapters = (data.chapterOutline || []) as Chapter[];
 
   function addChapter() {
@@ -144,7 +146,10 @@ export function StepChapterOutline({ data, onChange }: Props) {
         }
       }
       const result = parseAiChapters(accumulated);
-      if (result) setAiParsed(result);
+      if (result) {
+        setAiParsed(result);
+        onChange({ _aiChapterSuggestions: result });
+      }
     } catch {
       setAiRaw('AIの提案を取得できませんでした。');
     } finally {

@@ -52,24 +52,28 @@ function plotToText(plot: AiPlot): string {
 }
 
 export function StepPlotArchitect({ data, onChange }: Props) {
-  const [ownIdeas, setOwnIdeas] = useState(
-    typeof data.plotOutline === 'string' ? data.plotOutline : data.plotOutline?.text || ''
-  );
+  // Restore text from saved plotOutline
+  const savedText = typeof data.plotOutline === 'string'
+    ? data.plotOutline
+    : data.plotOutline?.text || '';
+  const savedAiData = data.plotOutline?.aiData as AiPlot | undefined;
+
+  const [ownIdeas, setOwnIdeas] = useState(savedText);
   const [aiLoading, setAiLoading] = useState(false);
   const [aiRaw, setAiRaw] = useState('');
-  const [aiParsed, setAiParsed] = useState<AiPlot | null>(null);
-  const [adopted, setAdopted] = useState(false);
+  const [aiParsed, setAiParsed] = useState<AiPlot | null>(savedAiData || null);
+  const [adopted, setAdopted] = useState(!!savedAiData);
 
   function saveOwnIdeas(text: string) {
     setOwnIdeas(text);
-    onChange({ plotOutline: { text, aiAssisted: false } });
+    onChange({ plotOutline: { text, aiAssisted: false, aiData: aiParsed } });
   }
 
   function adoptPlot() {
     if (!aiParsed) return;
     const text = plotToText(aiParsed);
     setOwnIdeas(text);
-    onChange({ plotOutline: { text, aiAssisted: true } });
+    onChange({ plotOutline: { text, aiAssisted: true, aiData: aiParsed } });
     setAdopted(true);
   }
 
@@ -128,7 +132,14 @@ export function StepPlotArchitect({ data, onChange }: Props) {
         }
       }
       const result = parseAiPlot(accumulated);
-      if (result) setAiParsed(result);
+      if (result) {
+        setAiParsed(result);
+        // Auto-save AI data to wizard state so it persists across step navigation
+        const text = plotToText(result);
+        setOwnIdeas(text);
+        onChange({ plotOutline: { text, aiAssisted: true, aiData: result } });
+        setAdopted(true);
+      }
     } catch {
       setAiRaw('AIの提案を取得できませんでした。');
     } finally {
@@ -188,16 +199,19 @@ export function StepPlotArchitect({ data, onChange }: Props) {
         {!aiLoading && aiParsed && (
           <div className="space-y-3">
             <div className="flex items-center justify-between">
-              <p className="text-xs text-muted-foreground">AIの提案（プロット構想に取り入れましょう）</p>
-              <Button
-                variant={adopted ? 'ghost' : 'secondary'}
-                size="sm"
-                onClick={adoptPlot}
-                disabled={adopted}
-                className="gap-1 text-xs"
-              >
-                {adopted ? <><Check className="h-3 w-3" /> 採用済み</> : '構想に反映'}
-              </Button>
+              <p className="text-xs text-muted-foreground">
+                {adopted ? 'AIの提案をプロット構想に反映しました。上のテキストを自由に編集できます。' : 'AIの提案（プロット構想に取り入れましょう）'}
+              </p>
+              {!adopted && (
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={adoptPlot}
+                  className="gap-1 text-xs"
+                >
+                  構想に反映
+                </Button>
+              )}
             </div>
 
             <div className="p-4 bg-muted/30 rounded-lg border border-border/50 space-y-3">
