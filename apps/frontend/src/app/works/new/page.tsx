@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import { Wand2, Zap } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -22,6 +22,14 @@ const GENRE_LABELS: Record<string, string> = {
 };
 
 export default function NewWorkPage() {
+  return (
+    <Suspense fallback={<div className="mx-auto max-w-2xl px-4 py-12 text-center text-muted-foreground">読み込み中...</div>}>
+      <NewWorkPageInner />
+    </Suspense>
+  );
+}
+
+function NewWorkPageInner() {
   const searchParams = useSearchParams();
   const urlMode = searchParams.get('mode');
   const urlDraft = searchParams.get('draft');
