@@ -217,6 +217,15 @@ class ApiClient {
     });
   }
 
+  async getCreationPlan(workId: string) {
+    return this.request<{ data: {
+      characters?: any[];
+      plotOutline?: any;
+      emotionBlueprint?: { coreMessage: string; targetEmotions: string; readerJourney: string };
+      chapterOutline?: any[];
+    } }>(`/works/${workId}/creation/plan`);
+  }
+
   // Episodes
   async getEpisodes(workId: string) {
     return this.request<{ data: Episode[] }>(`/works/${workId}/episodes`);

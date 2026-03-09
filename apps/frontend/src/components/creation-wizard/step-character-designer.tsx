@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Plus, Trash2 } from 'lucide-react';
+import { Sparkles, Plus, Trash2, UserPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -19,10 +19,55 @@ interface Character {
   aiSuggested: boolean;
 }
 
+interface AiCharacter {
+  name: string;
+  role: string;
+  personality?: string;
+  background?: string;
+  motivation?: string;
+  relationships?: string;
+  uniqueTrait?: string;
+}
+
+function parseAiResponse(raw: string): { characters: AiCharacter[]; suggestions: string } | null {
+  try {
+    // Strip markdown code fences
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    // Find the JSON object
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+    const json = JSON.parse(cleaned.slice(start, end + 1));
+    return {
+      characters: json.characters || [],
+      suggestions: json.suggestions || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
+function aiCharToCharacter(ai: AiCharacter): Character {
+  const parts = [
+    ai.personality && `性格: ${ai.personality}`,
+    ai.background && `背景: ${ai.background}`,
+    ai.motivation && `動機: ${ai.motivation}`,
+    ai.relationships && `関係: ${ai.relationships}`,
+    ai.uniqueTrait && `特徴: ${ai.uniqueTrait}`,
+  ].filter(Boolean);
+  return {
+    name: ai.name,
+    role: ai.role || '',
+    description: parts.join('\n'),
+    aiSuggested: true,
+  };
+}
+
 export function StepCharacterDesigner({ data, onChange }: Props) {
   const [vision, setVision] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestions, setAiSuggestions] = useState('');
+  const [aiRaw, setAiRaw] = useState('');
+  const [aiParsed, setAiParsed] = useState<{ characters: AiCharacter[]; suggestions: string } | null>(null);
 
   const characters = (data.characters || []) as Character[];
 
@@ -42,14 +87,33 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
     onChange({ characters: characters.filter((_, i) => i !== index) });
   }
 
+  function adoptCharacter(ai: AiCharacter) {
+    const exists = characters.some((c) => c.name === ai.name);
+    if (exists) return;
+    onChange({ characters: [...characters, aiCharToCharacter(ai)] });
+  }
+
+  function adoptAllCharacters() {
+    if (!aiParsed) return;
+    const existingNames = new Set(characters.map((c) => c.name));
+    const newChars = aiParsed.characters
+      .filter((ai) => !existingNames.has(ai.name))
+      .map(aiCharToCharacter);
+    onChange({ characters: [...characters, ...newChars] });
+  }
+
   async function handleAiSuggest() {
     if (!vision.trim()) return;
     setAiLoading(true);
-    setAiSuggestions('');
+    setAiRaw('');
+    setAiParsed(null);
+    let accumulated = '';
     try {
       const prompt = [
         data.genre && `ジャンル: ${data.genre}`,
         data.coreMessage && `テーマ: ${data.coreMessage}`,
+        data.targetEmotions && `読者に感じてほしい感情: ${data.targetEmotions}`,
+        data.readerJourney && `読者の旅路: ${data.readerJourney}`,
         `著者のビジョン: ${vision}`,
       ].filter(Boolean).join('\n');
 
@@ -81,12 +145,18 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           if (d === '[DONE]') break;
           try {
             const parsed = JSON.parse(d);
-            if (parsed.text) setAiSuggestions((prev) => prev + parsed.text);
+            if (parsed.text) {
+              accumulated += parsed.text;
+              setAiRaw(accumulated);
+            }
           } catch { /* skip */ }
         }
       }
+      // Parse complete response
+      const result = parseAiResponse(accumulated);
+      if (result) setAiParsed(result);
     } catch {
-      setAiSuggestions('AIの提案を取得できませんでした。');
+      setAiRaw('AIの提案を取得できませんでした。');
     } finally {
       setAiLoading(false);
     }
@@ -130,7 +200,7 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
               value={char.description}
               onChange={(e) => updateCharacter(i, 'description', e.target.value)}
               placeholder="性格、背景、動機など"
-              rows={2}
+              rows={3}
               className="text-sm"
             />
           </div>
@@ -166,10 +236,69 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           <Sparkles className="h-3.5 w-3.5" />
           {aiLoading ? '考え中...' : 'AIに提案してもらう'}
         </Button>
-        {aiSuggestions && (
+
+        {/* Streaming raw text while loading */}
+        {aiLoading && aiRaw && (
           <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-2">AIの提案（参考にして自分のキャラクターを作りましょう）:</p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiSuggestions}</div>
+            <p className="text-xs text-muted-foreground mb-2">生成中...</p>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground max-h-40 overflow-y-auto">{aiRaw.slice(0, 200)}...</div>
+          </div>
+        )}
+
+        {/* Parsed AI suggestions */}
+        {!aiLoading && aiParsed && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">AIの提案（気に入ったキャラクターを採用しましょう）</p>
+              <Button variant="outline" size="sm" onClick={adoptAllCharacters} className="gap-1 text-xs">
+                <UserPlus className="h-3 w-3" />
+                すべて採用
+              </Button>
+            </div>
+            {aiParsed.characters.map((ai, i) => {
+              const alreadyAdded = characters.some((c) => c.name === ai.name);
+              return (
+                <div key={i} className="p-4 bg-muted/30 rounded-lg border border-border/50 space-y-2">
+                  <div className="flex items-center justify-between">
+                    <div>
+                      <span className="font-medium text-sm">{ai.name}</span>
+                      {ai.role && <span className="text-xs text-muted-foreground ml-2">({ai.role})</span>}
+                    </div>
+                    <Button
+                      variant={alreadyAdded ? 'ghost' : 'secondary'}
+                      size="sm"
+                      onClick={() => adoptCharacter(ai)}
+                      disabled={alreadyAdded}
+                      className="gap-1 text-xs"
+                    >
+                      <UserPlus className="h-3 w-3" />
+                      {alreadyAdded ? '採用済み' : '採用'}
+                    </Button>
+                  </div>
+                  <div className="text-xs text-muted-foreground space-y-1">
+                    {ai.personality && <p><strong>性格:</strong> {ai.personality}</p>}
+                    {ai.background && <p><strong>背景:</strong> {ai.background}</p>}
+                    {ai.motivation && <p><strong>動機:</strong> {ai.motivation}</p>}
+                    {ai.relationships && <p><strong>関係:</strong> {ai.relationships}</p>}
+                    {ai.uniqueTrait && <p><strong>特徴:</strong> {ai.uniqueTrait}</p>}
+                  </div>
+                </div>
+              );
+            })}
+            {aiParsed.suggestions && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">アドバイス</p>
+                <p className="text-xs text-blue-700 dark:text-blue-400 whitespace-pre-wrap">{aiParsed.suggestions}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Fallback: raw text if parsing failed */}
+        {!aiLoading && aiRaw && !aiParsed && (
+          <div className="p-4 bg-muted/50 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-2">AIの提案:</p>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
           </div>
         )}
       </div>

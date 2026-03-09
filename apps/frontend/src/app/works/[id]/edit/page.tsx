@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Pencil, Eye, GripVertical } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -46,6 +46,8 @@ export default function EditWorkPage() {
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [deleteEpisodeId, setDeleteEpisodeId] = useState<string | null>(null);
+  const [creationPlan, setCreationPlan] = useState<any>(null);
+  const [planOpen, setPlanOpen] = useState(false);
 
   // Drag state
   const dragItemRef = useRef<number | null>(null);
@@ -65,6 +67,10 @@ export default function EditWorkPage() {
 
     api.getScoreAnalysis(workId)
       .then((res) => { if (res.data) setScoreDetail(res.data); })
+      .catch(() => {});
+
+    api.getCreationPlan(workId)
+      .then((res) => { if (res.data) setCreationPlan(res.data); })
       .catch(() => {});
   }, [workId, router]);
 
@@ -260,6 +266,75 @@ export default function EditWorkPage() {
               {work.qualityScore && <p>品質スコア: {Math.round(work.qualityScore.overall)}</p>}
             </CardContent>
           </Card>
+
+          {creationPlan && (
+            <Card>
+              <CardHeader
+                className="cursor-pointer flex flex-row items-center justify-between space-y-0"
+                onClick={() => setPlanOpen(!planOpen)}
+              >
+                <CardTitle className="text-base flex items-center gap-1.5">
+                  <BookOpen className="h-4 w-4" /> 設計メモ
+                </CardTitle>
+                {planOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
+              </CardHeader>
+              {planOpen && (
+                <CardContent className="text-sm space-y-4">
+                  {creationPlan.emotionBlueprint && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">テーマ・想い</p>
+                      {creationPlan.emotionBlueprint.coreMessage && (
+                        <p className="text-xs">{creationPlan.emotionBlueprint.coreMessage}</p>
+                      )}
+                      {creationPlan.emotionBlueprint.targetEmotions && (
+                        <p className="text-xs text-muted-foreground mt-1">感情: {creationPlan.emotionBlueprint.targetEmotions}</p>
+                      )}
+                      {creationPlan.emotionBlueprint.readerJourney && (
+                        <p className="text-xs text-muted-foreground mt-1">読者の旅路: {creationPlan.emotionBlueprint.readerJourney}</p>
+                      )}
+                    </div>
+                  )}
+                  {creationPlan.characters?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">キャラクター</p>
+                      <div className="space-y-2">
+                        {creationPlan.characters.map((c: any, i: number) => (
+                          <div key={i} className="p-2 bg-muted/50 rounded text-xs">
+                            <span className="font-medium">{c.name}</span>
+                            {c.role && <span className="text-muted-foreground ml-1">({c.role})</span>}
+                            {c.description && <p className="text-muted-foreground mt-0.5">{c.description}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                  {creationPlan.plotOutline && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">プロット</p>
+                      <p className="text-xs whitespace-pre-wrap">
+                        {typeof creationPlan.plotOutline === 'string'
+                          ? creationPlan.plotOutline
+                          : creationPlan.plotOutline.text || JSON.stringify(creationPlan.plotOutline, null, 2)}
+                      </p>
+                    </div>
+                  )}
+                  {creationPlan.chapterOutline?.length > 0 && (
+                    <div>
+                      <p className="text-xs font-medium text-muted-foreground mb-1">章立て</p>
+                      <div className="space-y-1">
+                        {creationPlan.chapterOutline.map((ch: any, i: number) => (
+                          <div key={i} className="text-xs">
+                            <span className="font-medium">第{i + 1}話: {ch.title}</span>
+                            {ch.summary && <p className="text-muted-foreground">{ch.summary}</p>}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </CardContent>
+              )}
+            </Card>
+          )}
 
           {scoreDetail && <ScoreCard score={scoreDetail} />}
         </div>

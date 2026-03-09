@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Plus, Trash2, GripVertical } from 'lucide-react';
+import { Sparkles, Plus, Trash2, GripVertical, ListPlus } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -18,9 +18,35 @@ interface Chapter {
   aiSuggested: boolean;
 }
 
+interface AiChapter {
+  number?: number;
+  title: string;
+  summary: string;
+  keyScenes?: string[];
+  emotionTarget?: string;
+  wordCountEstimate?: number;
+}
+
+function parseAiChapters(raw: string): { chapters: AiChapter[]; suggestions: string } | null {
+  try {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+    const json = JSON.parse(cleaned.slice(start, end + 1));
+    return {
+      chapters: json.chapters || [],
+      suggestions: json.suggestions || json.pacing || '',
+    };
+  } catch {
+    return null;
+  }
+}
+
 export function StepChapterOutline({ data, onChange }: Props) {
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [aiRaw, setAiRaw] = useState('');
+  const [aiParsed, setAiParsed] = useState<{ chapters: AiChapter[]; suggestions: string } | null>(null);
   const chapters = (data.chapterOutline || []) as Chapter[];
 
   function addChapter() {
@@ -39,10 +65,40 @@ export function StepChapterOutline({ data, onChange }: Props) {
     onChange({ chapterOutline: chapters.filter((_, i) => i !== index) });
   }
 
+  function adoptChapter(ai: AiChapter) {
+    const summary = [
+      ai.summary,
+      ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
+      ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
+    ].join('');
+    onChange({
+      chapterOutline: [...chapters, { title: ai.title, summary, aiSuggested: true }],
+    });
+  }
+
+  function adoptAllChapters() {
+    if (!aiParsed) return;
+    const newChapters = aiParsed.chapters.map((ai) => {
+      const summary = [
+        ai.summary,
+        ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
+        ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
+      ].join('');
+      return { title: ai.title, summary, aiSuggested: true };
+    });
+    onChange({ chapterOutline: [...chapters, ...newChapters] });
+  }
+
   async function handleAiSuggest() {
     setAiLoading(true);
-    setAiSuggestion('');
+    setAiRaw('');
+    setAiParsed(null);
+    let accumulated = '';
     try {
+      const characterContext = data.characters.length > 0
+        ? data.characters.map((c: any) => `${c.name}(${c.role}): ${c.description || ''}`).join('\n')
+        : undefined;
+
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/works/none/creation/chapters`,
         {
@@ -53,7 +109,7 @@ export function StepChapterOutline({ data, onChange }: Props) {
           },
           body: JSON.stringify({
             plotOutline: data.plotOutline,
-            characters: data.characters.length > 0 ? data.characters : undefined,
+            characters: characterContext,
             emotionBlueprint: data.coreMessage ? {
               coreMessage: data.coreMessage,
               targetEmotions: data.targetEmotions,
@@ -79,12 +135,17 @@ export function StepChapterOutline({ data, onChange }: Props) {
           if (d === '[DONE]') break;
           try {
             const parsed = JSON.parse(d);
-            if (parsed.text) setAiSuggestion((prev) => prev + parsed.text);
+            if (parsed.text) {
+              accumulated += parsed.text;
+              setAiRaw(accumulated);
+            }
           } catch { /* skip */ }
         }
       }
+      const result = parseAiChapters(accumulated);
+      if (result) setAiParsed(result);
     } catch {
-      setAiSuggestion('AIの提案を取得できませんでした。');
+      setAiRaw('AIの提案を取得できませんでした。');
     } finally {
       setAiLoading(false);
     }
@@ -150,10 +211,58 @@ export function StepChapterOutline({ data, onChange }: Props) {
           <Sparkles className="h-3.5 w-3.5" />
           {aiLoading ? '考え中...' : 'AIに提案してもらう'}
         </Button>
-        {aiSuggestion && (
+
+        {aiLoading && aiRaw && (
           <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-2">AIの提案（参考にして自分の章立てを作りましょう）:</p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiSuggestion}</div>
+            <p className="text-xs text-muted-foreground mb-2">生成中...</p>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground max-h-40 overflow-y-auto">{aiRaw.slice(0, 200)}...</div>
+          </div>
+        )}
+
+        {!aiLoading && aiParsed && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">AIの提案（気に入った章を採用しましょう）</p>
+              <Button variant="outline" size="sm" onClick={adoptAllChapters} className="gap-1 text-xs">
+                <ListPlus className="h-3 w-3" />
+                すべて採用
+              </Button>
+            </div>
+            {aiParsed.chapters.map((ai, i) => (
+              <div key={i} className="p-3 bg-muted/30 rounded-lg border border-border/50">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">
+                    第{ai.number ?? i + 1}話: {ai.title}
+                  </span>
+                  <Button variant="secondary" size="sm" onClick={() => adoptChapter(ai)} className="gap-1 text-xs">
+                    <Plus className="h-3 w-3" /> 採用
+                  </Button>
+                </div>
+                <p className="text-xs text-muted-foreground">{ai.summary}</p>
+                {ai.keyScenes && ai.keyScenes.length > 0 && (
+                  <p className="text-xs text-muted-foreground mt-1">キーシーン: {ai.keyScenes.join('、')}</p>
+                )}
+                {ai.emotionTarget && (
+                  <p className="text-xs text-muted-foreground mt-0.5">感情: {ai.emotionTarget}</p>
+                )}
+                {ai.wordCountEstimate && (
+                  <p className="text-xs text-muted-foreground mt-0.5">目安: {ai.wordCountEstimate.toLocaleString()}字</p>
+                )}
+              </div>
+            ))}
+            {aiParsed.suggestions && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">構成アドバイス</p>
+                <p className="text-xs text-blue-700 dark:text-blue-400 whitespace-pre-wrap">{aiParsed.suggestions}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!aiLoading && aiRaw && !aiParsed && (
+          <div className="p-4 bg-muted/50 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-2">AIの提案:</p>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
           </div>
         )}
       </div>

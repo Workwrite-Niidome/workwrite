@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles } from 'lucide-react';
+import { Sparkles, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import type { WizardData } from './wizard-shell';
@@ -11,22 +11,79 @@ interface Props {
   onChange: (partial: Partial<WizardData>) => void;
 }
 
+interface AiPlot {
+  premise?: string;
+  threeActStructure?: {
+    act1?: { title: string; summary: string; keyEvents?: string[] };
+    act2?: { title: string; summary: string; keyEvents?: string[] };
+    act3?: { title: string; summary: string; keyEvents?: string[] };
+  };
+  centralConflict?: string;
+  themes?: string[];
+  turningPoints?: string[];
+  suggestions?: string;
+}
+
+function parseAiPlot(raw: string): AiPlot | null {
+  try {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end === -1) return null;
+    return JSON.parse(cleaned.slice(start, end + 1));
+  } catch {
+    return null;
+  }
+}
+
+function plotToText(plot: AiPlot): string {
+  const parts: string[] = [];
+  if (plot.premise) parts.push(`【前提】${plot.premise}`);
+  if (plot.centralConflict) parts.push(`【中心的葛藤】${plot.centralConflict}`);
+  if (plot.threeActStructure) {
+    const s = plot.threeActStructure;
+    if (s.act1) parts.push(`【第一幕: ${s.act1.title}】\n${s.act1.summary}${s.act1.keyEvents?.length ? '\n- ' + s.act1.keyEvents.join('\n- ') : ''}`);
+    if (s.act2) parts.push(`【第二幕: ${s.act2.title}】\n${s.act2.summary}${s.act2.keyEvents?.length ? '\n- ' + s.act2.keyEvents.join('\n- ') : ''}`);
+    if (s.act3) parts.push(`【第三幕: ${s.act3.title}】\n${s.act3.summary}${s.act3.keyEvents?.length ? '\n- ' + s.act3.keyEvents.join('\n- ') : ''}`);
+  }
+  if (plot.turningPoints?.length) parts.push(`【転換点】\n- ${plot.turningPoints.join('\n- ')}`);
+  if (plot.themes?.length) parts.push(`【テーマ】${plot.themes.join('、')}`);
+  return parts.join('\n\n');
+}
+
 export function StepPlotArchitect({ data, onChange }: Props) {
   const [ownIdeas, setOwnIdeas] = useState(
     typeof data.plotOutline === 'string' ? data.plotOutline : data.plotOutline?.text || ''
   );
   const [aiLoading, setAiLoading] = useState(false);
-  const [aiSuggestion, setAiSuggestion] = useState('');
+  const [aiRaw, setAiRaw] = useState('');
+  const [aiParsed, setAiParsed] = useState<AiPlot | null>(null);
+  const [adopted, setAdopted] = useState(false);
 
   function saveOwnIdeas(text: string) {
     setOwnIdeas(text);
     onChange({ plotOutline: { text, aiAssisted: false } });
   }
 
+  function adoptPlot() {
+    if (!aiParsed) return;
+    const text = plotToText(aiParsed);
+    setOwnIdeas(text);
+    onChange({ plotOutline: { text, aiAssisted: true } });
+    setAdopted(true);
+  }
+
   async function handleAiSuggest() {
     setAiLoading(true);
-    setAiSuggestion('');
+    setAiRaw('');
+    setAiParsed(null);
+    setAdopted(false);
+    let accumulated = '';
     try {
+      const characterContext = data.characters.length > 0
+        ? data.characters.map((c: any) => `${c.name}(${c.role}): ${c.description || ''}`).join('\n')
+        : undefined;
+
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/works/none/creation/plot`,
         {
@@ -39,7 +96,7 @@ export function StepPlotArchitect({ data, onChange }: Props) {
             themes: data.coreMessage || ownIdeas,
             message: data.targetEmotions,
             emotionGoals: data.readerJourney,
-            characters: data.characters.length > 0 ? data.characters : undefined,
+            characters: characterContext,
           }),
         }
       );
@@ -60,12 +117,17 @@ export function StepPlotArchitect({ data, onChange }: Props) {
           if (d === '[DONE]') break;
           try {
             const parsed = JSON.parse(d);
-            if (parsed.text) setAiSuggestion((prev) => prev + parsed.text);
+            if (parsed.text) {
+              accumulated += parsed.text;
+              setAiRaw(accumulated);
+            }
           } catch { /* skip */ }
         }
       }
+      const result = parseAiPlot(accumulated);
+      if (result) setAiParsed(result);
     } catch {
-      setAiSuggestion('AIの提案を取得できませんでした。');
+      setAiRaw('AIの提案を取得できませんでした。');
     } finally {
       setAiLoading(false);
     }
@@ -112,10 +174,84 @@ export function StepPlotArchitect({ data, onChange }: Props) {
           <Sparkles className="h-3.5 w-3.5" />
           {aiLoading ? '考え中...' : 'AIに提案してもらう'}
         </Button>
-        {aiSuggestion && (
+
+        {aiLoading && aiRaw && (
           <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-2">AIの提案（あなたの構想に取り入れてみてください）:</p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiSuggestion}</div>
+            <p className="text-xs text-muted-foreground mb-2">生成中...</p>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground max-h-40 overflow-y-auto">{aiRaw.slice(0, 200)}...</div>
+          </div>
+        )}
+
+        {!aiLoading && aiParsed && (
+          <div className="space-y-3">
+            <div className="flex items-center justify-between">
+              <p className="text-xs text-muted-foreground">AIの提案（プロット構想に取り入れましょう）</p>
+              <Button
+                variant={adopted ? 'ghost' : 'secondary'}
+                size="sm"
+                onClick={adoptPlot}
+                disabled={adopted}
+                className="gap-1 text-xs"
+              >
+                {adopted ? <><Check className="h-3 w-3" /> 採用済み</> : '構想に反映'}
+              </Button>
+            </div>
+
+            <div className="p-4 bg-muted/30 rounded-lg border border-border/50 space-y-3">
+              {aiParsed.premise && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">前提</p>
+                  <p className="text-sm">{aiParsed.premise}</p>
+                </div>
+              )}
+              {aiParsed.centralConflict && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">中心的葛藤</p>
+                  <p className="text-sm">{aiParsed.centralConflict}</p>
+                </div>
+              )}
+              {aiParsed.threeActStructure && (
+                <div className="space-y-2">
+                  {(['act1', 'act2', 'act3'] as const).map((key, i) => {
+                    const act = aiParsed.threeActStructure?.[key];
+                    if (!act) return null;
+                    return (
+                      <div key={key} className="pl-3 border-l-2 border-primary/30">
+                        <p className="text-xs font-medium">第{i + 1}幕: {act.title}</p>
+                        <p className="text-xs text-muted-foreground">{act.summary}</p>
+                        {act.keyEvents?.length ? (
+                          <ul className="text-xs text-muted-foreground mt-1 list-disc list-inside">
+                            {act.keyEvents.map((e, j) => <li key={j}>{e}</li>)}
+                          </ul>
+                        ) : null}
+                      </div>
+                    );
+                  })}
+                </div>
+              )}
+              {aiParsed.turningPoints?.length ? (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground">転換点</p>
+                  <ul className="text-xs text-muted-foreground list-disc list-inside">
+                    {aiParsed.turningPoints.map((tp, i) => <li key={i}>{tp}</li>)}
+                  </ul>
+                </div>
+              ) : null}
+            </div>
+
+            {aiParsed.suggestions && (
+              <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
+                <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">構成アドバイス</p>
+                <p className="text-xs text-blue-700 dark:text-blue-400 whitespace-pre-wrap">{aiParsed.suggestions}</p>
+              </div>
+            )}
+          </div>
+        )}
+
+        {!aiLoading && aiRaw && !aiParsed && (
+          <div className="p-4 bg-muted/50 rounded-lg">
+            <p className="text-xs text-muted-foreground mb-2">AIの提案:</p>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
           </div>
         )}
       </div>

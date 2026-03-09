@@ -1,8 +1,8 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
-import { Check } from 'lucide-react';
+import { Check, Save } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
@@ -48,15 +48,61 @@ const STEPS = [
   { label: '確認', key: 'review' },
 ];
 
+const STORAGE_KEY = 'workwrite-wizard-draft';
+
+function loadDraft(): { step: number; data: WizardData } | null {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw);
+    if (parsed && parsed.data && typeof parsed.step === 'number') return parsed;
+  } catch { /* ignore corrupt data */ }
+  return null;
+}
+
 export function WizardShell() {
-  const [step, setStep] = useState(0);
-  const [data, setData] = useState<WizardData>(INITIAL_DATA);
+  const draft = typeof window !== 'undefined' ? loadDraft() : null;
+  const [step, setStep] = useState(draft?.step ?? 0);
+  const [data, setData] = useState<WizardData>(draft?.data ?? INITIAL_DATA);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [saveStatus, setSaveStatus] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [showRestore, setShowRestore] = useState(!!draft);
+  const saveTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const router = useRouter();
+
+  const saveDraft = useCallback((currentStep: number, currentData: WizardData) => {
+    setSaveStatus('saving');
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify({ step: currentStep, data: currentData, savedAt: Date.now() }));
+    } catch { /* storage full */ }
+    setSaveStatus('saved');
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => setSaveStatus('idle'), 2000);
+  }, []);
+
+  // Auto-save on data or step change (debounced)
+  const debounceRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  useEffect(() => {
+    if (debounceRef.current) clearTimeout(debounceRef.current);
+    debounceRef.current = setTimeout(() => saveDraft(step, data), 1000);
+    return () => { if (debounceRef.current) clearTimeout(debounceRef.current); };
+  }, [step, data, saveDraft]);
+
+  function clearDraft() {
+    localStorage.removeItem(STORAGE_KEY);
+  }
+
+  function handleDiscard() {
+    setStep(0);
+    setData(INITIAL_DATA);
+    clearDraft();
+    setShowRestore(false);
+  }
 
   function updateData(partial: Partial<WizardData>) {
     setData((prev) => ({ ...prev, ...partial }));
+    setShowRestore(false);
   }
 
   function canProceed(): boolean {
@@ -95,6 +141,7 @@ export function WizardShell() {
         }
       }
 
+      clearDraft();
       router.push(`/works/${workId}/edit`);
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : '作成に失敗しました');
@@ -104,6 +151,16 @@ export function WizardShell() {
 
   return (
     <div className="mx-auto max-w-3xl px-4 py-8">
+      {/* Restore banner */}
+      {showRestore && (
+        <div className="flex items-center justify-between p-3 mb-4 bg-muted/50 rounded-lg border border-border">
+          <p className="text-sm text-muted-foreground">前回の下書きを復元しました</p>
+          <Button variant="ghost" size="sm" className="text-xs" onClick={handleDiscard}>
+            破棄して最初から
+          </Button>
+        </div>
+      )}
+
       {/* Step indicator */}
       <nav className="mb-8">
         <ol className="flex items-center gap-1">
@@ -144,6 +201,7 @@ export function WizardShell() {
 
       {/* Navigation */}
       <div className="flex items-center justify-between mt-8 pt-6 border-t border-border">
+        <div className="flex items-center gap-3">
         <Button
           variant="ghost"
           onClick={() => setStep((s) => s - 1)}
@@ -151,6 +209,16 @@ export function WizardShell() {
         >
           戻る
         </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs gap-1 text-muted-foreground"
+            onClick={() => saveDraft(step, data)}
+          >
+            <Save className="h-3 w-3" />
+            {saveStatus === 'saved' ? '保存済み' : '下書き保存'}
+          </Button>
+        </div>
 
         <div className="flex items-center gap-2">
           {step >= 2 && step < 5 && (
