@@ -153,20 +153,25 @@ export function WritingEditor({
   return (
     <div className={`flex flex-col h-screen overflow-hidden ${focusMode ? 'fixed inset-0 z-50 bg-background' : ''}`}>
       {/* Toolbar */}
-      <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b ${focusMode ? 'justify-center' : ''}`}>
-        <div className={`flex-1 ${focusMode ? 'max-w-2xl' : ''}`}>
-          <Input
-            value={title}
-            onChange={(e) => setTitle(e.target.value)}
-            placeholder="エピソードタイトル"
-            className="border-0 text-lg font-medium focus-visible:ring-0 px-0"
-          />
+      <div className={`flex-shrink-0 border-b ${focusMode ? '' : ''}`}>
+        {/* Row 1: Title */}
+        <div className={`flex items-center gap-2 px-4 pt-2 pb-1 ${focusMode ? 'justify-center' : ''}`}>
+          <div className={`flex-1 min-w-0 ${focusMode ? 'max-w-2xl' : ''}`}>
+            <Input
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="エピソードタイトル"
+              className="border-0 text-lg font-medium focus-visible:ring-0 px-0"
+            />
+          </div>
         </div>
-        <div className="flex items-center gap-1.5">
+        {/* Row 2: Actions */}
+        <div className={`flex items-center gap-1.5 px-4 pb-2 ${focusMode ? 'justify-center' : ''}`}>
           <span className="text-xs text-muted-foreground mr-1">{content.length.toLocaleString()}字</span>
           {saveStatus === 'saving' && <span className="text-xs text-muted-foreground">保存中...</span>}
           {saveStatus === 'saved' && <span className="text-xs text-muted-foreground">保存済み</span>}
           {saveStatus === 'error' && <span className="text-xs text-destructive">保存エラー</span>}
+          <div className="flex-1" />
           {!focusMode && episodeId && (
             <Button
               size="sm"
@@ -175,7 +180,7 @@ export function WritingEditor({
               className="text-xs"
             >
               <History className="h-3.5 w-3.5 mr-1" />
-              履歴
+              <span className="hidden sm:inline">履歴</span>
             </Button>
           )}
           {!focusMode && (
@@ -186,7 +191,7 @@ export function WritingEditor({
               className="text-xs"
             >
               <Sparkles className="h-3.5 w-3.5 mr-1" />
-              AI
+              <span className="hidden sm:inline">AI</span>
             </Button>
           )}
           <Button
@@ -201,7 +206,7 @@ export function WritingEditor({
             onClick={handleSubmit}
             disabled={submitting || !title.trim() || !content.trim()}
           >
-            {submitting ? '投稿中...' : episodeId ? '更新する' : '投稿する'}
+            {submitting ? '投稿中...' : episodeId ? '更新' : '投稿'}
           </Button>
         </div>
       </div>
@@ -254,16 +259,24 @@ export function WritingEditor({
 
       {/* Mobile AI panel - bottom sheet */}
       {showAi && !focusMode && (
-        <div className="md:hidden fixed inset-x-0 bottom-0 h-[60vh] bg-background border-t z-40 flex flex-col">
-          <AiAssistPanel
-            workId={workId}
-            currentContent={content}
-            selectedText={selectedText}
-            onInsert={handleInsertAi}
-            onReplace={handleReplaceSelection}
-            onClose={() => setShowAi(false)}
-          />
-        </div>
+        <>
+          <div className="md:hidden fixed inset-0 bg-black/30 z-30" onClick={() => setShowAi(false)} />
+          <div className="md:hidden fixed inset-x-0 bottom-0 h-[70vh] bg-background border-t z-40 flex flex-col rounded-t-xl">
+            <div className="flex-shrink-0 flex justify-center py-2">
+              <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
+            </div>
+            <div className="flex-1 min-h-0 overflow-hidden">
+              <AiAssistPanel
+                workId={workId}
+                currentContent={content}
+                selectedText={selectedText}
+                onInsert={handleInsertAi}
+                onReplace={handleReplaceSelection}
+                onClose={() => setShowAi(false)}
+              />
+            </div>
+          </div>
+        </>
       )}
 
       {/* Draft restore dialog */}
