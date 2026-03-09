@@ -60,7 +60,7 @@ export function useAiStream(): UseAiStreamReturn {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6).trim();
-          if (data === '[DONE]') break;
+          if (data === '[DONE]') continue;
 
           try {
             const parsed = JSON.parse(data);
@@ -73,6 +73,23 @@ export function useAiStream(): UseAiStreamReturn {
             }
           } catch {
             // Skip malformed data
+          }
+        }
+      }
+      // Process remaining buffer
+      if (buffer.trim()) {
+        const remaining = buffer.trim();
+        if (remaining.startsWith('data: ')) {
+          const d = remaining.slice(6).trim();
+          if (d !== '[DONE]') {
+            try {
+              const parsed = JSON.parse(d);
+              if (parsed.error) {
+                setError(parsed.error);
+              } else if (parsed.text) {
+                setResult((prev) => prev + parsed.text);
+              }
+            } catch { /* skip */ }
           }
         }
       }

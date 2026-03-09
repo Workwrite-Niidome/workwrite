@@ -137,7 +137,7 @@ export function StepChapterOutline({ data, onChange }: Props) {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const d = line.slice(6).trim();
-          if (d === '[DONE]') break;
+          if (d === '[DONE]') continue;
           try {
             const parsed = JSON.parse(d);
             if (parsed.text) {
@@ -145,6 +145,22 @@ export function StepChapterOutline({ data, onChange }: Props) {
               setAiRaw(accumulated);
             }
           } catch { /* skip */ }
+        }
+      }
+      // Process remaining buffer
+      if (buffer.trim()) {
+        const remaining = buffer.trim();
+        if (remaining.startsWith('data: ')) {
+          const d = remaining.slice(6).trim();
+          if (d !== '[DONE]') {
+            try {
+              const parsed = JSON.parse(d);
+              if (parsed.text) {
+                accumulated += parsed.text;
+                setAiRaw(accumulated);
+              }
+            } catch { /* skip */ }
+          }
         }
       }
       const result = parseAiChapters(accumulated);
