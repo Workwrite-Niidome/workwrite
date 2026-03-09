@@ -71,11 +71,42 @@ export class PromptTemplatesService {
 function getBuiltInTemplates() {
   return [
     {
+      slug: 'chapter-opening',
+      name: '章の書き出し',
+      description: '作品設定とこれまでの展開を踏まえ、章の冒頭を生成します',
+      category: 'writing',
+      prompt: `あなたは小説の執筆アシスタントです。以下の作品情報を踏まえ、章の冒頭（書き出し）を生成してください。
+
+{{#context}}
+【作品設定】
+{{context}}
+{{/context}}
+
+{{#content}}
+【現在の原稿】
+{{content}}
+{{/content}}
+
+【指示】
+- 読者を引き込む魅力的な書き出しを500〜800文字で書いてください
+- これまでの物語の流れを自然に受け継ぎつつ、新しい章の始まりにふさわしい導入にしてください
+- キャラクターの性格や口調の一貫性を保ってください
+- 情景描写、キャラクターの行動、内面描写のいずれかから始めてください
+- 読者が「続きを読みたい」と思える展開を心がけてください`,
+      variables: ['content', 'context'],
+      sortOrder: 0,
+    },
+    {
       slug: 'continue-writing',
       name: '続きを書く',
       description: '現在の文体とトーンを維持しながら、物語の続きを生成します',
       category: 'writing',
       prompt: `あなたは小説の執筆アシスタントです。以下の文章の続きを、同じ文体・トーン・視点を維持しながら自然に書き続けてください。
+
+{{#context}}
+【作品設定】
+{{context}}
+{{/context}}
 
 【これまでの文章】
 {{content}}
@@ -83,10 +114,11 @@ function getBuiltInTemplates() {
 【指示】
 - 既存の文体、語り口、テンポを忠実に再現してください
 - キャラクターの性格や口調の一貫性を保ってください
+- 作品設定がある場合、テーマやキャラクター設定との整合性を保ってください
 - 自然な流れで500〜1000文字程度の続きを書いてください
 - 新しい展開や転換点を含めても構いません`,
-      variables: ['content'],
-      sortOrder: 0,
+      variables: ['content', 'context'],
+      sortOrder: 1,
     },
     {
       slug: 'character-dev',
@@ -95,6 +127,11 @@ function getBuiltInTemplates() {
       category: 'writing',
       prompt: `あなたは小説の執筆アシスタントです。以下のテキストに登場する「{{character_name}}」というキャラクターについて、より深みのある描写を提案してください。
 
+{{#context}}
+【作品設定】
+{{context}}
+{{/context}}
+
 【テキスト】
 {{content}}
 
@@ -102,9 +139,10 @@ function getBuiltInTemplates() {
 - このキャラクターの内面（感情、葛藤、欲望）を掘り下げてください
 - 過去の経験や背景が現在の行動にどう影響しているかを示す描写を提案してください
 - キャラクター固有の癖、言い回し、思考パターンを提案してください
+- 作品設定がある場合、キャラクター設定との整合性を保ってください
 - 500〜800文字程度で、物語に組み込めるような具体的な描写を書いてください`,
-      variables: ['content', 'character_name'],
-      sortOrder: 1,
+      variables: ['content', 'character_name', 'context'],
+      sortOrder: 2,
     },
     {
       slug: 'scene-enhance',
@@ -122,7 +160,7 @@ function getBuiltInTemplates() {
 - 情景の雰囲気や空気感が伝わるようにしてください
 - 元のテキストの意図やプロットは変えずに、描写の質を向上させてください`,
       variables: ['content'],
-      sortOrder: 2,
+      sortOrder: 3,
     },
     {
       slug: 'dialogue-improve',
@@ -141,7 +179,7 @@ function getBuiltInTemplates() {
 - 適切な間（沈黙）や仕草の描写を会話に織り交ぜてください
 - 会話のテンポとリズムを意識してください`,
       variables: ['content'],
-      sortOrder: 3,
+      sortOrder: 4,
     },
     {
       slug: 'plot-ideas',
@@ -173,7 +211,7 @@ function getBuiltInTemplates() {
 - 王道の展開、意外性のある展開、読者の感情を揺さぶる展開をバランスよく提案してください
 - ジャンルの特性を活かした提案にしてください`,
       variables: ['content', 'genre'],
-      sortOrder: 4,
+      sortOrder: 5,
     },
     {
       slug: 'style-adjust',
@@ -192,7 +230,7 @@ function getBuiltInTemplates() {
 - 語彙、文の長さ、リズム、比喩表現などを目標の文体に合わせてください
 - 文体の変更が自然で、読んでいて違和感がないようにしてください`,
       variables: ['content', 'target_style'],
-      sortOrder: 5,
+      sortOrder: 6,
     },
     {
       slug: 'proofread',
@@ -219,7 +257,7 @@ function getBuiltInTemplates() {
 
 最後に、修正を反映した全文を出力してください。`,
       variables: ['content'],
-      sortOrder: 6,
+      sortOrder: 7,
     },
     {
       slug: 'synopsis-gen',
@@ -238,7 +276,7 @@ function getBuiltInTemplates() {
 - 読者が「読んでみたい」と思える魅力的な文章にしてください
 - 結末は明かさず、期待感を持たせる形で終えてください`,
       variables: ['content'],
-      sortOrder: 7,
+      sortOrder: 8,
     },
   ];
 }

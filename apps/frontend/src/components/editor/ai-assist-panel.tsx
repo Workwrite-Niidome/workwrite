@@ -5,9 +5,10 @@ import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream } from '@/lib/use-ai-stream';
 import { api } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles } from 'lucide-react';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText } from 'lucide-react';
 
 interface AiAssistPanelProps {
+  workId: string;
   currentContent: string;
   selectedText?: string;
   onInsert: (text: string) => void;
@@ -21,7 +22,7 @@ interface HistoryItem {
   timestamp: Date;
 }
 
-export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
+export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [tier, setTier] = useState<{
@@ -30,6 +31,8 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
   const [premiumMode, setPremiumMode] = useState(false);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
+  const [creationPlan, setCreationPlan] = useState<any>(null);
+  const [episodes, setEpisodes] = useState<{ title: string; content: string }[]>([]);
   const { result, isStreaming, error, generate, abort, reset } = useAiStream();
 
   useEffect(() => {
@@ -42,7 +45,27 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
     api.getPromptTemplates()
       .then((res) => setTemplates(res.data))
       .catch(() => {});
-  }, []);
+    if (workId) {
+      // Load creation plan for context
+      api.getCreationPlan(workId)
+        .then((res) => { if (res.data) setCreationPlan(res.data); })
+        .catch(() => {});
+      // Load previous episodes for story continuity
+      api.getEpisodes(workId)
+        .then((res) => {
+          if (res.data) {
+            const sorted = [...res.data].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+            // Keep last 3 episodes' summaries for context (not full content to save tokens)
+            const summaries = sorted.slice(-3).map((ep: any) => ({
+              title: ep.title,
+              content: (ep.content || '').slice(0, 500),
+            }));
+            setEpisodes(summaries);
+          }
+        })
+        .catch(() => {});
+    }
+  }, [workId]);
 
   // Save to history when generation completes
   useEffect(() => {
@@ -60,10 +83,54 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
     setTimeout(() => setCopied(false), 2000);
   }
 
+  function buildContextVars(): Record<string, string> {
+    const vars: Record<string, string> = { content: selectedText || currentContent };
+    const contextParts: string[] = [];
+
+    if (creationPlan) {
+      if (creationPlan.emotionBlueprint) {
+        const eb = creationPlan.emotionBlueprint;
+        if (eb.coreMessage) contextParts.push(`テーマ: ${eb.coreMessage}`);
+        if (eb.targetEmotions) contextParts.push(`読者に届けたい感情: ${eb.targetEmotions}`);
+        if (eb.readerJourney) contextParts.push(`読者の旅路: ${eb.readerJourney}`);
+      }
+      if (creationPlan.characters?.length > 0) {
+        const charSummary = creationPlan.characters
+          .map((c: any) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.description || ''}`.trim())
+          .join('\n');
+        contextParts.push(`キャラクター:\n${charSummary}`);
+      }
+      if (creationPlan.plotOutline) {
+        const plot = typeof creationPlan.plotOutline === 'string'
+          ? creationPlan.plotOutline
+          : creationPlan.plotOutline.text || '';
+        if (plot) contextParts.push(`プロット:\n${plot}`);
+      }
+      if (creationPlan.chapterOutline?.length > 0) {
+        const chapterSummary = creationPlan.chapterOutline
+          .map((ch: any, i: number) => `第${i + 1}話「${ch.title}」: ${ch.summary || ''}`.trim())
+          .join('\n');
+        contextParts.push(`章立て:\n${chapterSummary}`);
+      }
+    }
+
+    // Include previous episodes for story continuity
+    if (episodes.length > 0) {
+      const epSummary = episodes
+        .map((ep) => `「${ep.title}」: ${ep.content}...`)
+        .join('\n\n');
+      contextParts.push(`これまでの章（直近）:\n${epSummary}`);
+    }
+
+    if (contextParts.length > 0) {
+      vars.context = contextParts.join('\n\n');
+    }
+    return vars;
+  }
+
   function handleQuickAction(slug: string) {
     reset();
-    const vars: Record<string, string> = { content: selectedText || currentContent };
-    generate(slug, vars, premiumMode);
+    generate(slug, buildContextVars(), premiumMode);
   }
 
   if (available === false || (tier && !tier.canUseAi)) {
@@ -123,10 +190,36 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
           </div>
         )}
 
+        {/* Creation plan context indicator */}
+        {creationPlan && (
+          <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50">
+            <p className="text-[10px] font-medium text-blue-800 dark:text-blue-300 flex items-center gap-1">
+              <BookCheck className="h-3 w-3" /> 設計メモを読み込み済み
+            </p>
+            <p className="text-[10px] text-blue-700 dark:text-blue-400 mt-0.5">
+              {[
+                creationPlan.emotionBlueprint?.coreMessage && 'テーマ',
+                creationPlan.characters?.length > 0 && `${creationPlan.characters.length}キャラ`,
+                creationPlan.plotOutline && 'プロット',
+                creationPlan.chapterOutline?.length > 0 && `${creationPlan.chapterOutline.length}章`,
+              ].filter(Boolean).join(' · ')}
+            </p>
+          </div>
+        )}
+
         {/* Quick actions */}
         <div className="space-y-1.5">
           <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
           <div className="flex flex-wrap gap-1.5">
+            <Button
+              size="sm"
+              variant="outline"
+              className="text-xs h-7 gap-1"
+              onClick={() => handleQuickAction('chapter-opening')}
+              disabled={isStreaming}
+            >
+              <FileText className="h-3 w-3" /> 章の書き出し
+            </Button>
             <Button
               size="sm"
               variant="outline"
@@ -171,7 +264,8 @@ export function AiAssistPanel({ currentContent, selectedText, onInsert, onReplac
           templates={templates}
           onGenerate={(slug, vars) => {
             reset();
-            generate(slug, vars, premiumMode);
+            const contextVars = buildContextVars();
+            generate(slug, { ...contextVars, ...vars }, premiumMode);
           }}
           isStreaming={isStreaming}
           currentContent={selectedText || currentContent}

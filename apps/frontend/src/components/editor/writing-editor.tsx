@@ -287,6 +287,7 @@ export function WritingEditor({
         {showAi && !focusMode && (
           <div className="w-80 border-l hidden md:block">
             <AiAssistPanel
+              workId={workId}
               currentContent={content}
               selectedText={selectedText}
               onInsert={handleInsertAi}
@@ -343,6 +344,7 @@ export function WritingEditor({
       {showAi && !focusMode && (
         <div className="md:hidden fixed inset-x-0 bottom-0 h-[60vh] bg-background border-t z-40 overflow-hidden">
           <AiAssistPanel
+            workId={workId}
             currentContent={content}
             selectedText={selectedText}
             onInsert={handleInsertAi}

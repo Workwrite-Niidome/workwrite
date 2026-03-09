@@ -74,8 +74,24 @@ export class AiAssistService {
 
     // Build prompt from template
     let prompt = template.prompt;
+
+    // Handle conditional sections: {{#key}}...{{/key}} - include block only if variable exists
     for (const [key, value] of Object.entries(variables)) {
-      const truncated = key === 'content' ? value.slice(0, MAX_CONTENT_LENGTH) : value;
+      const sectionRegex = new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{/${key}\\}\\}`, 'g');
+      if (value && value.trim()) {
+        // Keep the section content (remove markers)
+        prompt = prompt.replace(sectionRegex, '$1');
+      } else {
+        // Remove entire section
+        prompt = prompt.replace(sectionRegex, '');
+      }
+    }
+    // Remove any remaining conditional sections for variables not provided
+    prompt = prompt.replace(/\{\{#\w+\}\}[\s\S]*?\{\{\/\w+\}\}/g, '');
+
+    // Replace variable placeholders
+    for (const [key, value] of Object.entries(variables)) {
+      const truncated = key === 'content' ? value.slice(0, MAX_CONTENT_LENGTH) : value.slice(0, MAX_CONTENT_LENGTH);
       prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), truncated);
     }
 
