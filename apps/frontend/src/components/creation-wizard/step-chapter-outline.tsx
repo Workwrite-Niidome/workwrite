@@ -150,8 +150,8 @@ export function StepChapterOutline({ data, onChange }: Props) {
       const result = parseAiChapters(accumulated);
       if (result) {
         setAiParsed(result);
-        onChange({ _aiChapterSuggestions: result });
-        // Auto-adopt all chapters
+        // Auto-adopt all chapters (single onChange call to avoid overwrite)
+        const currentChapters = (data.chapterOutline || []) as Chapter[];
         const newChapters = result.chapters.map((ai) => {
           const summary = [
             ai.summary,
@@ -160,7 +160,10 @@ export function StepChapterOutline({ data, onChange }: Props) {
           ].join('');
           return { title: ai.title, summary, aiSuggested: true };
         });
-        onChange({ chapterOutline: [...chapters, ...newChapters], _aiChapterSuggestions: result });
+        onChange({
+          chapterOutline: [...currentChapters, ...newChapters],
+          _aiChapterSuggestions: result,
+        });
       }
     } catch (err) {
       setAiRaw(`AIの提案を取得できませんでした。${err instanceof Error ? `\n${err.message}` : ''}`);
