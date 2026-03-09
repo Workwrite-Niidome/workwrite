@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
+import { ConfirmDialog } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScoreBadge } from '@/components/scoring/score-badge';
@@ -31,14 +32,17 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<WizardDraft[]>([]);
+  const [confirmDeleteDraftId, setConfirmDeleteDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     setDrafts(loadDrafts());
   }, []);
 
-  function handleDeleteDraft(id: string) {
-    deleteDraft(id);
+  function handleDeleteDraft() {
+    if (!confirmDeleteDraftId) return;
+    deleteDraft(confirmDeleteDraftId);
     setDrafts(loadDrafts());
+    setConfirmDeleteDraftId(null);
   }
 
   useEffect(() => {
@@ -175,7 +179,7 @@ export default function DashboardPage() {
                   </CardContent>
                 </Link>
                 <button
-                  onClick={(e) => { e.preventDefault(); handleDeleteDraft(draft.id); }}
+                  onClick={(e) => { e.preventDefault(); setConfirmDeleteDraftId(draft.id); }}
                   className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1"
                   title="下書きを削除"
                 >
@@ -252,6 +256,16 @@ export default function DashboardPage() {
           ))}
         </div>
       )}
+
+      <ConfirmDialog
+        open={!!confirmDeleteDraftId}
+        onOpenChange={(v) => { if (!v) setConfirmDeleteDraftId(null); }}
+        title="下書きを削除"
+        message="この下書きを削除しますか？この操作は取り消せません。"
+        confirmLabel="削除する"
+        variant="destructive"
+        onConfirm={handleDeleteDraft}
+      />
     </div>
   );
 }
