@@ -1,8 +1,6 @@
 import type { Metadata, Viewport } from 'next';
 import { ThemeProvider } from 'next-themes';
-import { Header } from '@/components/layout/header';
-import { Footer } from '@/components/layout/footer';
-import { BottomNav } from '@/components/layout/bottom-nav';
+import { LayoutShell } from '@/components/layout/layout-shell';
 import { AuthProvider } from '@/lib/auth-context';
 import './globals.css';
 
@@ -28,10 +26,7 @@ export default function RootLayout({
       <body className="flex min-h-screen flex-col">
         <ThemeProvider attribute="class" defaultTheme="system" enableSystem>
           <AuthProvider>
-            <Header />
-            <main className="flex-1">{children}</main>
-            <Footer />
-            <BottomNav />
+            <LayoutShell>{children}</LayoutShell>
           </AuthProvider>
         </ThemeProvider>
       </body>

@@ -111,7 +111,7 @@ export class AiAssistService {
     // Build request body with optional extended thinking
     const requestBody: Record<string, unknown> = {
       model: modelConfig.model,
-      max_tokens: modelConfig.thinking ? 16000 : baseMaxTokens,
+      max_tokens: modelConfig.thinking ? modelConfig.budgetTokens + 8000 : baseMaxTokens,
       stream: true,
       messages: [{ role: 'user', content: prompt }],
     };
@@ -128,7 +128,7 @@ export class AiAssistService {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': '2025-04-15',
       },
       body: JSON.stringify(requestBody),
     });

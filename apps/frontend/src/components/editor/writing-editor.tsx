@@ -151,7 +151,7 @@ export function WritingEditor({
   }
 
   return (
-    <div className={`flex flex-col h-[calc(100vh-4rem)] overflow-hidden ${focusMode ? 'fixed inset-0 z-50 bg-background' : ''}`}>
+    <div className={`flex flex-col h-screen overflow-hidden ${focusMode ? 'fixed inset-0 z-50 bg-background' : ''}`}>
       {/* Toolbar */}
       <div className={`flex-shrink-0 flex items-center gap-2 px-4 py-2 border-b ${focusMode ? 'justify-center' : ''}`}>
         <div className={`flex-1 ${focusMode ? 'max-w-2xl' : ''}`}>
