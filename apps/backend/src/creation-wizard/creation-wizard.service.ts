@@ -267,20 +267,20 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
     const systemPrompt = `あなたは小説の章立て構成を支援するAIです。プロット、キャラクター、感情設計を統合し、具体的な章立てを提案します。
 各章は作者が自由に変更・並べ替え・削除できる「叩き台」です。AIは構成の一貫性を保つ視点を提供します。
 
-以下のJSON形式で出力してください:
+重要: 出力はJSON形式のみにしてください。前置きや説明は不要です。JSONの前後にテキストを含めないでください。
+
+以下の形式で出力してください:
 {
-  "totalChapters": 10,
   "chapters": [
     {
       "number": 1,
       "title": "章タイトル案",
-      "summary": "章の概要",
+      "summary": "章の概要（2-3文）",
       "keyScenes": ["シーン1", "シーン2"],
       "emotionTarget": "この章で狙う感情",
       "wordCountEstimate": 3000
     }
   ],
-  "pacing": "ペース配分に関する説明",
   "suggestions": "章構成への補足アドバイス"
 }`;
 

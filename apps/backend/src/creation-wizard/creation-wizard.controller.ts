@@ -101,7 +101,7 @@ export class CreationWizardController {
   }
 
   @Post('works/:workId/creation/chapters')
-  @ApiOperation({ summary: 'Generate chapter outline (SSE stream)' })
+  @ApiOperation({ summary: 'Generate chapter outline (SSE stream with parsed JSON)' })
   async generateChapterOutline(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
@@ -111,8 +111,15 @@ export class CreationWizardController {
     this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateChapterOutline(userId, workId, dto);
+      let fullOutput = '';
       for await (const chunk of stream) {
+        fullOutput += chunk;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      // Parse the accumulated output and send structured data
+      const parsed = this.parseChapterJson(fullOutput);
+      if (parsed) {
+        res.write(`data: ${JSON.stringify({ parsed })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
     } catch (err: unknown) {
@@ -121,6 +128,89 @@ export class CreationWizardController {
     } finally {
       res.end();
     }
+  }
+
+  private parseChapterJson(raw: string): { chapters: any[]; suggestions: string } | null {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+    // Strategy 1: JSON object with "chapters" key
+    try {
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        const json = JSON.parse(cleaned.slice(start, end + 1));
+        if (json.chapters && Array.isArray(json.chapters) && json.chapters.length > 0) {
+          return { chapters: json.chapters, suggestions: json.suggestions || json.pacing || '' };
+        }
+      }
+    } catch { /* next */ }
+
+    // Strategy 2: JSON array directly
+    try {
+      const arrStart = cleaned.indexOf('[');
+      const arrEnd = cleaned.lastIndexOf(']');
+      if (arrStart !== -1 && arrEnd > arrStart) {
+        const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+        if (Array.isArray(arr) && arr.length > 0 && arr[0].title) {
+          return { chapters: arr, suggestions: '' };
+        }
+      }
+    } catch { /* next */ }
+
+    // Strategy 3: Extract individual JSON objects with "title"
+    try {
+      const chapters: any[] = [];
+      // Match nested JSON objects that contain "title"
+      let depth = 0;
+      let objStart = -1;
+      for (let i = 0; i < cleaned.length; i++) {
+        if (cleaned[i] === '{') {
+          if (depth === 0) objStart = i;
+          depth++;
+        } else if (cleaned[i] === '}') {
+          depth--;
+          if (depth === 0 && objStart !== -1) {
+            try {
+              const obj = JSON.parse(cleaned.slice(objStart, i + 1));
+              if (obj.title && typeof obj.title === 'string') {
+                chapters.push(obj);
+              }
+            } catch { /* skip */ }
+            objStart = -1;
+          }
+        }
+      }
+      if (chapters.length > 0) {
+        return { chapters, suggestions: '' };
+      }
+    } catch { /* next */ }
+
+    // Strategy 4: Plain text pattern matching
+    try {
+      const chapters: any[] = [];
+      const lines = cleaned.split('\n');
+      let current: { number: number; title: string; summary: string } | null = null;
+
+      for (const line of lines) {
+        const chMatch = line.match(/^(?:第(\d+)話|(\d+)\.)\s*[：:「]?\s*(.+?)[」]?\s*$/);
+        if (chMatch) {
+          if (current) chapters.push(current);
+          current = {
+            number: parseInt(chMatch[1] || chMatch[2], 10),
+            title: chMatch[3].trim(),
+            summary: '',
+          };
+        } else if (current && line.trim()) {
+          current.summary += (current.summary ? ' ' : '') + line.trim();
+        }
+      }
+      if (current) chapters.push(current);
+      if (chapters.length > 0) {
+        return { chapters, suggestions: '' };
+      }
+    } catch { /* skip */ }
+
+    return null;
   }
 
   // ─── Plan CRUD ───────────────────────────────────────────────

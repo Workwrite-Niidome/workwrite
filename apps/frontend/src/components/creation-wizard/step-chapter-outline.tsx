@@ -143,11 +143,29 @@ export function StepChapterOutline({ data, onChange }: Props) {
     onChange({ chapterOutline: [...chapters, ...newChapters] });
   }
 
+  function applyParsedResult(result: { chapters: AiChapter[]; suggestions: string }) {
+    setAiParsed(result);
+    const currentChapters = (data.chapterOutline || []) as Chapter[];
+    const newChapters = result.chapters.map((ai) => {
+      const summary = [
+        ai.summary,
+        ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
+        ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
+      ].join('');
+      return { title: ai.title, summary, aiSuggested: true };
+    });
+    onChange({
+      chapterOutline: [...currentChapters, ...newChapters],
+      _aiChapterSuggestions: result,
+    });
+  }
+
   async function handleAiSuggest() {
     setAiLoading(true);
     setAiRaw('');
     setAiParsed(null);
     let accumulated = '';
+    let serverParsed: { chapters: AiChapter[]; suggestions: string } | null = null;
     try {
       const res = await api.fetchSSE('/works/none/creation/chapters', {
         plotOutline: data.plotOutline || undefined,
@@ -174,47 +192,36 @@ export function StepChapterOutline({ data, onChange }: Props) {
           const d = line.slice(6).trim();
           if (d === '[DONE]') continue;
           try {
-            const parsed = JSON.parse(d);
-            if (parsed.text) {
-              accumulated += parsed.text;
+            const event = JSON.parse(d);
+            if (event.text) {
+              accumulated += event.text;
               setAiRaw(accumulated);
+            }
+            // Backend sends parsed chapters as a structured event
+            if (event.parsed) {
+              serverParsed = event.parsed;
             }
           } catch { /* skip */ }
         }
       }
       // Process remaining buffer
       if (buffer.trim()) {
-        const remaining = buffer.trim();
-        if (remaining.startsWith('data: ')) {
-          const d = remaining.slice(6).trim();
-          if (d !== '[DONE]') {
-            try {
-              const parsed = JSON.parse(d);
-              if (parsed.text) {
-                accumulated += parsed.text;
-                setAiRaw(accumulated);
-              }
-            } catch { /* skip */ }
-          }
+        for (const line of buffer.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') continue;
+          try {
+            const event = JSON.parse(d);
+            if (event.text) { accumulated += event.text; setAiRaw(accumulated); }
+            if (event.parsed) serverParsed = event.parsed;
+          } catch { /* skip */ }
         }
       }
-      const result = parseAiChapters(accumulated);
+
+      // Priority: use server-parsed data, then try client-side parsing as fallback
+      const result = serverParsed || parseAiChapters(accumulated);
       if (result) {
-        setAiParsed(result);
-        // Auto-adopt all chapters (single onChange call to avoid overwrite)
-        const currentChapters = (data.chapterOutline || []) as Chapter[];
-        const newChapters = result.chapters.map((ai) => {
-          const summary = [
-            ai.summary,
-            ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
-            ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
-          ].join('');
-          return { title: ai.title, summary, aiSuggested: true };
-        });
-        onChange({
-          chapterOutline: [...currentChapters, ...newChapters],
-          _aiChapterSuggestions: result,
-        });
+        applyParsedResult(result);
       }
     } catch (err) {
       setAiRaw(`AIの提案を取得できませんでした。${err instanceof Error ? `\n${err.message}` : ''}`);
