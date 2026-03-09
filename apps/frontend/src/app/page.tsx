@@ -317,11 +317,19 @@ export default function Home() {
           <p className="text-sm text-muted-foreground mb-6">
             AIが作品の品質を分析し、読者の感情変化を可視化します。
           </p>
-          <Link href="/register">
-            <Button variant="outline" className="gap-2">
-              始める <ArrowRight className="h-4 w-4" />
-            </Button>
-          </Link>
+          {isAuthenticated ? (
+            <Link href="/dashboard">
+              <Button variant="outline" className="gap-2">
+                執筆をはじめる <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          ) : (
+            <Link href="/register">
+              <Button variant="outline" className="gap-2">
+                始める <ArrowRight className="h-4 w-4" />
+              </Button>
+            </Link>
+          )}
         </section>
       </div>
     </div>
