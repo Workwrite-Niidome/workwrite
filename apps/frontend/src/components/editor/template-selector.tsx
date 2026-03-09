@@ -28,7 +28,7 @@ const VARIABLE_LABELS: Record<string, string> = {
 };
 
 // Variables that are automatically filled by the system (not shown to users)
-const AUTO_VARIABLES = new Set(['content', 'context', 'char_count', 'custom_instruction']);
+const AUTO_VARIABLES = new Set(['content', 'context', 'char_count', 'custom_instruction', 'user_prompt']);
 
 interface TemplateSelectorProps {
   templates: PromptTemplate[];
@@ -62,7 +62,7 @@ export function TemplateSelector({ templates, onGenerate, isStreaming, currentCo
           </p>
           <div className="flex flex-wrap gap-1.5">
             {templates
-              .filter((t) => t.category === cat)
+              .filter((t) => t.category === cat && t.slug !== 'free-prompt')
               .map((t) => (
                 <button
                   key={t.slug}

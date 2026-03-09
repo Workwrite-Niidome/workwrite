@@ -29,35 +29,70 @@ interface AiChapter {
 }
 
 function parseAiChapters(raw: string): { chapters: AiChapter[]; suggestions: string } | null {
+  // Strip markdown code fences and any leading/trailing text around JSON
+  const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+  // Strategy 1: Find JSON object with "chapters" array
   try {
-    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    const start = cleaned.indexOf('{');
-    const end = cleaned.lastIndexOf('}');
-    if (start === -1 || end === -1) return null;
-    const json = JSON.parse(cleaned.slice(start, end + 1));
-    if (json.chapters && Array.isArray(json.chapters) && json.chapters.length > 0) {
-      return {
-        chapters: json.chapters,
-        suggestions: json.suggestions || json.pacing || '',
-      };
-    }
-    // Try top-level array format
-    return null;
-  } catch {
-    // Try to find JSON array directly
-    try {
-      const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const arrStart = cleaned.indexOf('[');
-      const arrEnd = cleaned.lastIndexOf(']');
-      if (arrStart !== -1 && arrEnd !== -1) {
-        const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
-        if (Array.isArray(arr) && arr.length > 0 && arr[0].title) {
-          return { chapters: arr, suggestions: '' };
-        }
+    const objStart = cleaned.indexOf('{');
+    const objEnd = cleaned.lastIndexOf('}');
+    if (objStart !== -1 && objEnd > objStart) {
+      const json = JSON.parse(cleaned.slice(objStart, objEnd + 1));
+      if (json.chapters && Array.isArray(json.chapters) && json.chapters.length > 0) {
+        return {
+          chapters: json.chapters,
+          suggestions: json.suggestions || json.pacing || '',
+        };
       }
-    } catch { /* skip */ }
-    return null;
-  }
+    }
+  } catch { /* try next strategy */ }
+
+  // Strategy 2: Find JSON array directly (AI returns [{...}, {...}])
+  try {
+    const arrStart = cleaned.indexOf('[');
+    const arrEnd = cleaned.lastIndexOf(']');
+    if (arrStart !== -1 && arrEnd > arrStart) {
+      const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+      if (Array.isArray(arr) && arr.length > 0 && arr[0].title) {
+        return { chapters: arr, suggestions: '' };
+      }
+    }
+  } catch { /* try next strategy */ }
+
+  // Strategy 3: Multiple JSON objects separated by text (AI outputs each chapter as separate JSON)
+  try {
+    const jsonObjects: AiChapter[] = [];
+    const regex = /\{[^{}]*"title"\s*:\s*"[^"]*"[^{}]*\}/g;
+    let match: RegExpExecArray | null;
+    while ((match = regex.exec(cleaned)) !== null) {
+      try {
+        const obj = JSON.parse(match[0]);
+        if (obj.title) jsonObjects.push(obj);
+      } catch { /* skip individual parse failures */ }
+    }
+    if (jsonObjects.length > 0) {
+      return { chapters: jsonObjects, suggestions: '' };
+    }
+  } catch { /* skip */ }
+
+  // Strategy 4: Extract structured data from plain text (fallback)
+  try {
+    const chapters: AiChapter[] = [];
+    // Match patterns like "第1話: タイトル" or "第1話「タイトル」" or "Chapter 1: Title"
+    const chapterRegex = /(?:第(\d+)話|Chapter\s*(\d+))[：:\s「]*([^」\n]+)[」]?\s*\n([\s\S]*?)(?=(?:第\d+話|Chapter\s*\d+|$))/gi;
+    let m: RegExpExecArray | null;
+    while ((m = chapterRegex.exec(cleaned)) !== null) {
+      const num = parseInt(m[1] || m[2], 10);
+      const title = m[3].trim();
+      const summary = m[4].trim().split('\n').filter(Boolean).join(' ');
+      if (title) chapters.push({ number: num, title, summary });
+    }
+    if (chapters.length > 0) {
+      return { chapters, suggestions: '' };
+    }
+  } catch { /* skip */ }
+
+  return null;
 }
 
 export function StepChapterOutline({ data, onChange }: Props) {
@@ -312,9 +347,14 @@ export function StepChapterOutline({ data, onChange }: Props) {
         )}
 
         {!aiLoading && aiRaw && !aiParsed && (
-          <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-2">AIの提案:</p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
+          <div className="space-y-2">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800/50">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">自動解析できませんでした</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">下の提案を参考に、手動で章を追加してください。</p>
+            </div>
+            <div className="p-4 bg-muted/50 rounded-lg">
+              <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
+            </div>
           </div>
         )}
       </div>

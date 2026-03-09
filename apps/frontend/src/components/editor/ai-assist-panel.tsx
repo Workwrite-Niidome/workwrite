@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream } from '@/lib/use-ai-stream';
 import { api } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal } from 'lucide-react';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal, Send } from 'lucide-react';
 
 interface AiAssistPanelProps {
   workId: string;
@@ -32,6 +32,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [premiumMode, setPremiumMode] = useState(false);
   const [charCount, setCharCount] = useState(1000);
   const [customPrompt, setCustomPrompt] = useState('');
+  const [freePrompt, setFreePrompt] = useState('');
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [creationPlan, setCreationPlan] = useState<any>(null);
@@ -195,15 +196,15 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   }
 
   return (
-    <div className="h-full flex flex-col">
-      <div className="flex items-center justify-between p-3 border-b">
+    <div className="h-full flex flex-col overflow-hidden">
+      <div className="flex-shrink-0 flex items-center justify-between p-3 border-b">
         <h3 className="text-sm font-medium">AI アシスト</h3>
         <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
           <X className="h-4 w-4" />
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto p-3 space-y-3">
+      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-3">
         {/* Tier info */}
         {tier && (
           <div className="flex items-center justify-between text-xs">
@@ -337,6 +338,47 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
             rows={2}
             className="w-full text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
           />
+        </div>
+
+        {/* Free-form prompt */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <Send className="h-3 w-3" /> AIに直接指示
+          </p>
+          <div className="flex gap-1.5">
+            <textarea
+              value={freePrompt}
+              onChange={(e) => setFreePrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming) {
+                  e.preventDefault();
+                  const vars = buildContextVars();
+                  vars.user_prompt = freePrompt.trim();
+                  reset();
+                  generate('free-prompt', vars, premiumMode);
+                  setFreePrompt('');
+                }
+              }}
+              placeholder="AIへの指示を入力... (Ctrl+Enter で送信)"
+              rows={2}
+              className="flex-1 text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+            />
+            <Button
+              size="sm"
+              variant="default"
+              className="self-end h-8 px-2"
+              disabled={!freePrompt.trim() || isStreaming}
+              onClick={() => {
+                const vars = buildContextVars();
+                vars.user_prompt = freePrompt.trim();
+                reset();
+                generate('free-prompt', vars, premiumMode);
+                setFreePrompt('');
+              }}
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          </div>
         </div>
 
         {/* Selected text preview */}

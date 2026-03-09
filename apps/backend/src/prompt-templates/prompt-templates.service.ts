@@ -278,5 +278,27 @@ function getBuiltInTemplates() {
       variables: ['content'],
       sortOrder: 8,
     },
+    {
+      slug: 'free-prompt',
+      name: '自由プロンプト',
+      description: '自由にプロンプトを入力してAIに指示できます',
+      category: 'writing',
+      prompt: `あなたは小説の執筆を支援するAIアシスタントです。
+
+{{#context}}
+【作品設定】
+{{context}}
+{{/context}}
+
+{{#content}}
+【現在の原稿】
+{{content}}
+{{/content}}
+
+【ユーザーからの指示】
+{{user_prompt}}`,
+      variables: ['content', 'context', 'user_prompt'],
+      sortOrder: 9,
+    },
   ];
 }
