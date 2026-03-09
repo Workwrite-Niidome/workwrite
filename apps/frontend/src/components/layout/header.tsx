@@ -65,6 +65,14 @@ export function Header() {
                   {user?.displayName || user?.name || 'マイページ'}
                 </Button>
               </Link>
+              <Button
+                variant="ghost"
+                size="sm"
+                className="hidden md:inline-flex text-xs gap-1 h-8 text-muted-foreground"
+                onClick={handleLogout}
+              >
+                <LogOut className="h-3.5 w-3.5" />
+              </Button>
             </>
           ) : (
             <Link href="/login" className="hidden md:inline-flex">
