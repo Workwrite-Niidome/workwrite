@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -267,74 +267,7 @@ export default function EditWorkPage() {
             </CardContent>
           </Card>
 
-          {creationPlan && (
-            <Card>
-              <CardHeader
-                className="cursor-pointer flex flex-row items-center justify-between space-y-0"
-                onClick={() => setPlanOpen(!planOpen)}
-              >
-                <CardTitle className="text-base flex items-center gap-1.5">
-                  <BookOpen className="h-4 w-4" /> 設計メモ
-                </CardTitle>
-                {planOpen ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />}
-              </CardHeader>
-              {planOpen && (
-                <CardContent className="text-sm space-y-4">
-                  {creationPlan.emotionBlueprint && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1">テーマ・想い</p>
-                      {creationPlan.emotionBlueprint.coreMessage && (
-                        <p className="text-xs">{creationPlan.emotionBlueprint.coreMessage}</p>
-                      )}
-                      {creationPlan.emotionBlueprint.targetEmotions && (
-                        <p className="text-xs text-muted-foreground mt-1">感情: {creationPlan.emotionBlueprint.targetEmotions}</p>
-                      )}
-                      {creationPlan.emotionBlueprint.readerJourney && (
-                        <p className="text-xs text-muted-foreground mt-1">読者の旅路: {creationPlan.emotionBlueprint.readerJourney}</p>
-                      )}
-                    </div>
-                  )}
-                  {creationPlan.characters?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1">キャラクター</p>
-                      <div className="space-y-2">
-                        {creationPlan.characters.map((c: any, i: number) => (
-                          <div key={i} className="p-2 bg-muted/50 rounded text-xs">
-                            <span className="font-medium">{c.name}</span>
-                            {c.role && <span className="text-muted-foreground ml-1">({c.role})</span>}
-                            {c.description && <p className="text-muted-foreground mt-0.5">{c.description}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                  {creationPlan.plotOutline && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1">プロット</p>
-                      <p className="text-xs whitespace-pre-wrap">
-                        {typeof creationPlan.plotOutline === 'string'
-                          ? creationPlan.plotOutline
-                          : creationPlan.plotOutline.text || JSON.stringify(creationPlan.plotOutline, null, 2)}
-                      </p>
-                    </div>
-                  )}
-                  {creationPlan.chapterOutline?.length > 0 && (
-                    <div>
-                      <p className="text-xs font-medium text-muted-foreground mb-1">章立て</p>
-                      <div className="space-y-1">
-                        {creationPlan.chapterOutline.map((ch: any, i: number) => (
-                          <div key={i} className="text-xs">
-                            <span className="font-medium">第{i + 1}話: {ch.title}</span>
-                            {ch.summary && <p className="text-muted-foreground">{ch.summary}</p>}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-                </CardContent>
-              )}
-            </Card>
-          )}
+          <CreationPlanCard workId={workId} creationPlan={creationPlan} onSaved={setCreationPlan} />
 
           {scoreDetail && <ScoreCard score={scoreDetail} />}
         </div>
@@ -379,5 +312,341 @@ export default function EditWorkPage() {
         onConfirm={handleDeleteEpisode}
       />
     </div>
+  );
+}
+
+// ─── Creation Plan Editor ─────────────────────────────────────
+
+function CreationPlanCard({
+  workId,
+  creationPlan,
+  onSaved,
+}: {
+  workId: string;
+  creationPlan: any;
+  onSaved: (plan: any) => void;
+}) {
+  const [open, setOpen] = useState(false);
+  const [editing, setEditing] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  // Editable state
+  const [coreMessage, setCoreMessage] = useState('');
+  const [targetEmotions, setTargetEmotions] = useState('');
+  const [readerJourney, setReaderJourney] = useState('');
+  const [characters, setCharacters] = useState<{ name: string; role: string; description: string }[]>([]);
+  const [plotText, setPlotText] = useState('');
+  const [chapters, setChapters] = useState<{ title: string; summary: string }[]>([]);
+
+  function startEditing() {
+    const eb = creationPlan?.emotionBlueprint || {};
+    setCoreMessage(eb.coreMessage || '');
+    setTargetEmotions(eb.targetEmotions || '');
+    setReaderJourney(eb.readerJourney || '');
+    setCharacters(
+      (creationPlan?.characters || []).map((c: any) => ({
+        name: c.name || '',
+        role: c.role || '',
+        description: c.description || '',
+      }))
+    );
+    const po = creationPlan?.plotOutline;
+    setPlotText(
+      typeof po === 'string' ? po : po?.text || ''
+    );
+    setChapters(
+      (creationPlan?.chapterOutline || []).map((ch: any) => ({
+        title: ch.title || '',
+        summary: ch.summary || '',
+      }))
+    );
+    setEditing(true);
+  }
+
+  async function handleSave() {
+    setSaving(true);
+    try {
+      const plan: any = {};
+      if (coreMessage || targetEmotions || readerJourney) {
+        plan.emotionBlueprint = { coreMessage, targetEmotions, readerJourney };
+      }
+      if (characters.length > 0) {
+        plan.characters = characters.filter((c) => c.name.trim());
+      }
+      if (plotText.trim()) {
+        plan.plotOutline = { text: plotText, aiAssisted: false };
+      }
+      if (chapters.length > 0) {
+        plan.chapterOutline = chapters.filter((ch) => ch.title.trim());
+      }
+      await api.saveCreationPlan(workId, plan);
+      onSaved({ ...creationPlan, ...plan });
+      setEditing(false);
+    } catch {
+      // silently fail
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  const hasPlan = creationPlan && (
+    creationPlan.emotionBlueprint ||
+    creationPlan.characters?.length > 0 ||
+    creationPlan.plotOutline ||
+    creationPlan.chapterOutline?.length > 0
+  );
+
+  if (!hasPlan && !editing) {
+    return (
+      <Card>
+        <CardHeader className="flex flex-row items-center justify-between space-y-0">
+          <CardTitle className="text-base flex items-center gap-1.5">
+            <BookOpen className="h-4 w-4" /> 設計メモ
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-2">キャラクター、プロット、感情設計などのメモを追加できます。</p>
+          <Button variant="outline" size="sm" onClick={startEditing} className="gap-1 text-xs">
+            <Plus className="h-3 w-3" /> 設計メモを追加
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
+
+  return (
+    <Card>
+      <CardHeader
+        className="cursor-pointer flex flex-row items-center justify-between space-y-0"
+        onClick={() => !editing && setOpen(!open)}
+      >
+        <CardTitle className="text-base flex items-center gap-1.5">
+          <BookOpen className="h-4 w-4" /> 設計メモ
+        </CardTitle>
+        <div className="flex items-center gap-1">
+          {!editing && (
+            <Button
+              variant="ghost"
+              size="sm"
+              className="h-6 w-6 p-0"
+              onClick={(e) => { e.stopPropagation(); startEditing(); setOpen(true); }}
+            >
+              <Pencil className="h-3 w-3" />
+            </Button>
+          )}
+          {!editing && (open ? <ChevronUp className="h-4 w-4" /> : <ChevronDown className="h-4 w-4" />)}
+        </div>
+      </CardHeader>
+      {(open || editing) && (
+        <CardContent className="text-sm space-y-4">
+          {editing ? (
+            <>
+              {/* Emotion Blueprint */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">テーマ・想い</p>
+                <Input
+                  value={coreMessage}
+                  onChange={(e) => setCoreMessage(e.target.value)}
+                  placeholder="核となるメッセージ"
+                  className="text-xs h-8"
+                />
+                <Input
+                  value={targetEmotions}
+                  onChange={(e) => setTargetEmotions(e.target.value)}
+                  placeholder="読者に届けたい感情"
+                  className="text-xs h-8"
+                />
+                <Input
+                  value={readerJourney}
+                  onChange={(e) => setReaderJourney(e.target.value)}
+                  placeholder="読者の旅路"
+                  className="text-xs h-8"
+                />
+              </div>
+
+              {/* Characters */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">キャラクター</p>
+                {characters.map((c, i) => (
+                  <div key={i} className="p-2 bg-muted/50 rounded space-y-1">
+                    <div className="flex gap-1">
+                      <Input
+                        value={c.name}
+                        onChange={(e) => {
+                          const u = [...characters];
+                          u[i] = { ...u[i], name: e.target.value };
+                          setCharacters(u);
+                        }}
+                        placeholder="名前"
+                        className="text-xs h-7 flex-1"
+                      />
+                      <Input
+                        value={c.role}
+                        onChange={(e) => {
+                          const u = [...characters];
+                          u[i] = { ...u[i], role: e.target.value };
+                          setCharacters(u);
+                        }}
+                        placeholder="役割"
+                        className="text-xs h-7 w-24"
+                      />
+                      <button
+                        onClick={() => setCharacters(characters.filter((_, j) => j !== i))}
+                        className="text-muted-foreground hover:text-destructive"
+                      >
+                        <Trash2 className="h-3 w-3" />
+                      </button>
+                    </div>
+                    <Textarea
+                      value={c.description}
+                      onChange={(e) => {
+                        const u = [...characters];
+                        u[i] = { ...u[i], description: e.target.value };
+                        setCharacters(u);
+                      }}
+                      placeholder="性格、背景、動機など"
+                      rows={2}
+                      className="text-xs"
+                    />
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1"
+                  onClick={() => setCharacters([...characters, { name: '', role: '', description: '' }])}
+                >
+                  <Plus className="h-3 w-3" /> 追加
+                </Button>
+              </div>
+
+              {/* Plot */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">プロット</p>
+                <Textarea
+                  value={plotText}
+                  onChange={(e) => setPlotText(e.target.value)}
+                  placeholder="プロット構想"
+                  rows={4}
+                  className="text-xs"
+                />
+              </div>
+
+              {/* Chapters */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">章立て</p>
+                {chapters.map((ch, i) => (
+                  <div key={i} className="flex gap-1 items-start">
+                    <span className="text-[10px] text-muted-foreground mt-2 w-6 shrink-0">{i + 1}.</span>
+                    <div className="flex-1 space-y-1">
+                      <Input
+                        value={ch.title}
+                        onChange={(e) => {
+                          const u = [...chapters];
+                          u[i] = { ...u[i], title: e.target.value };
+                          setChapters(u);
+                        }}
+                        placeholder="章タイトル"
+                        className="text-xs h-7"
+                      />
+                      <Textarea
+                        value={ch.summary}
+                        onChange={(e) => {
+                          const u = [...chapters];
+                          u[i] = { ...u[i], summary: e.target.value };
+                          setChapters(u);
+                        }}
+                        placeholder="概要"
+                        rows={1}
+                        className="text-xs"
+                      />
+                    </div>
+                    <button
+                      onClick={() => setChapters(chapters.filter((_, j) => j !== i))}
+                      className="text-muted-foreground hover:text-destructive mt-2"
+                    >
+                      <Trash2 className="h-3 w-3" />
+                    </button>
+                  </div>
+                ))}
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs gap-1"
+                  onClick={() => setChapters([...chapters, { title: '', summary: '' }])}
+                >
+                  <Plus className="h-3 w-3" /> 追加
+                </Button>
+              </div>
+
+              {/* Save / Cancel */}
+              <div className="flex gap-2 pt-2 border-t border-border">
+                <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1 text-xs">
+                  <Save className="h-3 w-3" />
+                  {saving ? '保存中...' : '保存'}
+                </Button>
+                <Button variant="ghost" size="sm" onClick={() => setEditing(false)} className="gap-1 text-xs">
+                  <X className="h-3 w-3" /> キャンセル
+                </Button>
+              </div>
+            </>
+          ) : (
+            <>
+              {creationPlan.emotionBlueprint && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">テーマ・想い</p>
+                  {creationPlan.emotionBlueprint.coreMessage && (
+                    <p className="text-xs">{creationPlan.emotionBlueprint.coreMessage}</p>
+                  )}
+                  {creationPlan.emotionBlueprint.targetEmotions && (
+                    <p className="text-xs text-muted-foreground mt-1">感情: {creationPlan.emotionBlueprint.targetEmotions}</p>
+                  )}
+                  {creationPlan.emotionBlueprint.readerJourney && (
+                    <p className="text-xs text-muted-foreground mt-1">読者の旅路: {creationPlan.emotionBlueprint.readerJourney}</p>
+                  )}
+                </div>
+              )}
+              {creationPlan.characters?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">キャラクター</p>
+                  <div className="space-y-2">
+                    {creationPlan.characters.map((c: any, i: number) => (
+                      <div key={i} className="p-2 bg-muted/50 rounded text-xs">
+                        <span className="font-medium">{c.name}</span>
+                        {c.role && <span className="text-muted-foreground ml-1">({c.role})</span>}
+                        {c.description && <p className="text-muted-foreground mt-0.5">{c.description}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+              {creationPlan.plotOutline && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">プロット</p>
+                  <p className="text-xs whitespace-pre-wrap">
+                    {typeof creationPlan.plotOutline === 'string'
+                      ? creationPlan.plotOutline
+                      : creationPlan.plotOutline.text || JSON.stringify(creationPlan.plotOutline, null, 2)}
+                  </p>
+                </div>
+              )}
+              {creationPlan.chapterOutline?.length > 0 && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">章立て</p>
+                  <div className="space-y-1">
+                    {creationPlan.chapterOutline.map((ch: any, i: number) => (
+                      <div key={i} className="text-xs">
+                        <span className="font-medium">第{i + 1}話: {ch.title}</span>
+                        {ch.summary && <p className="text-muted-foreground">{ch.summary}</p>}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </>
+          )}
+        </CardContent>
+      )}
+    </Card>
   );
 }
