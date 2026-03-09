@@ -62,8 +62,27 @@ export function StepChapterOutline({ data, onChange }: Props) {
           }),
         }
       );
-      const text = await res.text();
-      setAiSuggestion(text);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(d);
+            if (parsed.text) setAiSuggestion((prev) => prev + parsed.text);
+          } catch { /* skip */ }
+        }
+      }
     } catch {
       setAiSuggestion('AIの提案を取得できませんでした。');
     } finally {

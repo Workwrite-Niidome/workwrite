@@ -53,7 +53,6 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
         `著者のビジョン: ${vision}`,
       ].filter(Boolean).join('\n');
 
-      // Use streaming endpoint if available, fallback to simple fetch
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/works/none/creation/characters`,
         {
@@ -65,8 +64,27 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           body: JSON.stringify({ vision: prompt, genre: data.genre, themes: data.coreMessage }),
         }
       );
-      const text = await res.text();
-      setAiSuggestions(text);
+
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') break;
+          try {
+            const parsed = JSON.parse(d);
+            if (parsed.text) setAiSuggestions((prev) => prev + parsed.text);
+          } catch { /* skip */ }
+        }
+      }
     } catch {
       setAiSuggestions('AIの提案を取得できませんでした。');
     } finally {
