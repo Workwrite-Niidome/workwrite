@@ -1,22 +1,22 @@
 @import "tailwindcss";
 
 :root {
-  --color-background: #fafaf9;
-  --color-foreground: #1c1917;
-  --color-primary: #292524;
-  --color-primary-foreground: #fafaf9;
-  --color-secondary: #f5f5f4;
-  --color-secondary-foreground: #1c1917;
-  --color-accent: #78716c;
-  --color-accent-foreground: #fafaf9;
-  --color-muted: #f5f5f4;
-  --color-muted-foreground: #78716c;
-  --color-border: #e7e5e4;
+  --color-background: #f5f0e8;
+  --color-foreground: #2c2418;
+  --color-primary: #3d3127;
+  --color-primary-foreground: #f5f0e8;
+  --color-secondary: #ece5d8;
+  --color-secondary-foreground: #2c2418;
+  --color-accent: #8a7e6e;
+  --color-accent-foreground: #f5f0e8;
+  --color-muted: #ece5d8;
+  --color-muted-foreground: #8a7e6e;
+  --color-border: #ddd5c5;
   --color-destructive: #b91c1c;
-  --color-destructive-foreground: #fafaf9;
-  --color-card: #ffffff;
-  --color-card-foreground: #1c1917;
-  --color-surface: #fafaf9;
+  --color-destructive-foreground: #f5f0e8;
+  --color-card: #faf6ef;
+  --color-card-foreground: #2c2418;
+  --color-surface: #f5f0e8;
 }
 
 .dark {
