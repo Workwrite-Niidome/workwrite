@@ -125,9 +125,14 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
             'Content-Type': 'application/json',
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           },
-          body: JSON.stringify({ vision: prompt, genre: data.genre, themes: data.coreMessage }),
+          body: JSON.stringify({ vision: prompt, genre: data.genre || undefined, themes: data.coreMessage || undefined }),
         }
       );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('No stream');

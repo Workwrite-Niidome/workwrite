@@ -196,7 +196,9 @@ ${dto.themes ? `テーマ: ${dto.themes}` : ''}
   "suggestions": "プロット構成への補足アドバイス"
 }`;
 
-    const charInfo = dto.characters ? `\nキャラクター情報: ${JSON.stringify(dto.characters)}` : '';
+    const charInfo = dto.characters
+      ? `\nキャラクター情報: ${typeof dto.characters === 'string' ? dto.characters : JSON.stringify(dto.characters)}`
+      : '';
     const userPrompt = `テーマ: ${dto.themes}
 ${dto.message ? `伝えたいメッセージ: ${dto.message}` : ''}
 ${dto.emotionGoals ? `読者に与えたい感情: ${dto.emotionGoals}` : ''}${charInfo}

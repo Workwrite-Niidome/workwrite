@@ -95,10 +95,6 @@ export function StepChapterOutline({ data, onChange }: Props) {
     setAiParsed(null);
     let accumulated = '';
     try {
-      const characterContext = data.characters.length > 0
-        ? data.characters.map((c: any) => `${c.name}(${c.role}): ${c.description || ''}`).join('\n')
-        : undefined;
-
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/works/none/creation/chapters`,
         {
@@ -108,8 +104,8 @@ export function StepChapterOutline({ data, onChange }: Props) {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           },
           body: JSON.stringify({
-            plotOutline: data.plotOutline,
-            characters: characterContext,
+            plotOutline: data.plotOutline || undefined,
+            characters: data.characters.length > 0 ? data.characters : undefined,
             emotionBlueprint: data.coreMessage ? {
               coreMessage: data.coreMessage,
               targetEmotions: data.targetEmotions,
@@ -118,6 +114,11 @@ export function StepChapterOutline({ data, onChange }: Props) {
           }),
         }
       );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('No stream');

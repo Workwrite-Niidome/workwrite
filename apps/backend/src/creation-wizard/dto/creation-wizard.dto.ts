@@ -11,7 +11,7 @@ export class GeneratePlotDto {
   @ApiProperty() @IsString() themes: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() message?: string;
   @ApiProperty({ required: false }) @IsOptional() @IsString() emotionGoals?: string;
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() characters?: any;
+  @ApiProperty({ required: false }) @IsOptional() characters?: any;
 }
 
 export class GenerateEmotionBlueprintDto {
@@ -21,9 +21,9 @@ export class GenerateEmotionBlueprintDto {
 }
 
 export class GenerateChapterOutlineDto {
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() plotOutline?: any;
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() characters?: any;
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() emotionBlueprint?: any;
+  @ApiProperty({ required: false }) @IsOptional() plotOutline?: any;
+  @ApiProperty({ required: false }) @IsOptional() characters?: any;
+  @ApiProperty({ required: false }) @IsOptional() emotionBlueprint?: any;
   @ApiProperty({ required: false }) @IsOptional() @IsString() additionalNotes?: string;
 }
 

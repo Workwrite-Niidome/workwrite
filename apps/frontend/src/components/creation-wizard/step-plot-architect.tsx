@@ -80,9 +80,7 @@ export function StepPlotArchitect({ data, onChange }: Props) {
     setAdopted(false);
     let accumulated = '';
     try {
-      const characterContext = data.characters.length > 0
-        ? data.characters.map((c: any) => `${c.name}(${c.role}): ${c.description || ''}`).join('\n')
-        : undefined;
+      const themes = data.coreMessage || ownIdeas || 'ストーリーのプロットを提案してください';
 
       const res = await fetch(
         `${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/works/none/creation/plot`,
@@ -93,13 +91,18 @@ export function StepPlotArchitect({ data, onChange }: Props) {
             'Authorization': `Bearer ${localStorage.getItem('accessToken')}`,
           },
           body: JSON.stringify({
-            themes: data.coreMessage || ownIdeas,
-            message: data.targetEmotions,
-            emotionGoals: data.readerJourney,
-            characters: characterContext,
+            themes,
+            message: data.targetEmotions || undefined,
+            emotionGoals: data.readerJourney || undefined,
+            characters: data.characters.length > 0 ? data.characters : undefined,
           }),
         }
       );
+
+      if (!res.ok) {
+        const err = await res.text();
+        throw new Error(err);
+      }
 
       const reader = res.body?.getReader();
       if (!reader) throw new Error('No stream');
