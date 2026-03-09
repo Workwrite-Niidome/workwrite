@@ -127,8 +127,8 @@ export function WizardShell() {
             } : undefined,
             chapterOutline: data.chapterOutline.length > 0 ? data.chapterOutline : undefined,
           });
-        } catch {
-          // Plan save failure is non-critical
+        } catch (e) {
+          console.error('Failed to save creation plan:', e);
         }
       }
 

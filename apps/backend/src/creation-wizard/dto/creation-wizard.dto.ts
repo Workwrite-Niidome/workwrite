@@ -28,10 +28,10 @@ export class GenerateChapterOutlineDto {
 }
 
 export class SaveCreationPlanDto {
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() characters?: any;
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() plotOutline?: any;
+  @ApiProperty({ required: false }) @IsOptional() characters?: any;
+  @ApiProperty({ required: false }) @IsOptional() plotOutline?: any;
   @ApiProperty({ required: false }) @IsOptional() @IsObject() emotionBlueprint?: any;
-  @ApiProperty({ required: false }) @IsOptional() @IsObject() chapterOutline?: any;
+  @ApiProperty({ required: false }) @IsOptional() chapterOutline?: any;
 }
 
 export class AiFeedbackDto {
