@@ -99,10 +99,14 @@ export class AiAssistService {
     let inputTokens = 0;
     let outputTokens = 0;
 
+    // Scale max_tokens based on requested char_count (Japanese ~2 tokens/char)
+    const requestedChars = variables.char_count ? parseInt(variables.char_count, 10) : 1000;
+    const baseMaxTokens = Math.max(4000, Math.min(12000, requestedChars * 3));
+
     // Build request body with optional extended thinking
     const requestBody: Record<string, unknown> = {
       model: modelConfig.model,
-      max_tokens: modelConfig.thinking ? 16000 : 4000,
+      max_tokens: modelConfig.thinking ? 16000 : baseMaxTokens,
       stream: true,
       messages: [{ role: 'user', content: prompt }],
     };

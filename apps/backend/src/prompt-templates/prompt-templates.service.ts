@@ -88,12 +88,12 @@ function getBuiltInTemplates() {
 {{/content}}
 
 【指示】
-- 読者を引き込む魅力的な書き出しを500〜800文字で書いてください
+- 読者を引き込む魅力的な書き出しを{{char_count}}文字程度で書いてください
 - これまでの物語の流れを自然に受け継ぎつつ、新しい章の始まりにふさわしい導入にしてください
 - キャラクターの性格や口調の一貫性を保ってください
 - 情景描写、キャラクターの行動、内面描写のいずれかから始めてください
 - 読者が「続きを読みたい」と思える展開を心がけてください`,
-      variables: ['content', 'context'],
+      variables: ['content', 'context', 'char_count'],
       sortOrder: 0,
     },
     {
@@ -115,9 +115,9 @@ function getBuiltInTemplates() {
 - 既存の文体、語り口、テンポを忠実に再現してください
 - キャラクターの性格や口調の一貫性を保ってください
 - 作品設定がある場合、テーマやキャラクター設定との整合性を保ってください
-- 自然な流れで500〜1000文字程度の続きを書いてください
+- 自然な流れで{{char_count}}文字程度の続きを書いてください
 - 新しい展開や転換点を含めても構いません`,
-      variables: ['content', 'context'],
+      variables: ['content', 'context', 'char_count'],
       sortOrder: 1,
     },
     {

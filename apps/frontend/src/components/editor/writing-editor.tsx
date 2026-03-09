@@ -8,10 +8,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { AiAssistPanel } from './ai-assist-panel';
 import { VersionHistoryPanel } from './version-history-panel';
-import { WordCountGoal } from './word-count-goal';
 import { useAutosave } from '@/lib/use-autosave';
 import { api } from '@/lib/api';
-import { Sparkles, Maximize2, Minimize2, History, Loader2 } from 'lucide-react';
+import { Sparkles, Maximize2, Minimize2, History } from 'lucide-react';
 
 interface WritingEditorProps {
   workId: string;
@@ -36,16 +35,12 @@ export function WritingEditor({
   const [showHistory, setShowHistory] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [scheduled, setScheduled] = useState(false);
-  const [scheduledAt, setScheduledAt] = useState('');
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [confirmDraft, setConfirmDraft] = useState<{ title: string; content: string } | null>(null);
   const [selectedText, setSelectedText] = useState('');
-  const [scoring, setScoring] = useState(false);
-  const [scoreResult, setScoreResult] = useState<{ overall: number; tips: string[] } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
 
-  const { status: saveStatus, lastSavedAt, deleteDraft } = useAutosave({
+  const { status: saveStatus, deleteDraft } = useAutosave({
     workId,
     episodeId,
     title,
@@ -96,10 +91,6 @@ export function WritingEditor({
     setSelectedText(selected);
   }, [content]);
 
-  const wordCount = content.length;
-  const paragraphCount = content.split(/\n\s*\n/).filter((p) => p.trim()).length;
-  const estimatedReadTime = Math.max(1, Math.ceil(wordCount / 500));
-
   const handleInsertAi = useCallback((text: string) => {
     const textarea = textareaRef.current;
     if (!textarea) {
@@ -138,11 +129,7 @@ export function WritingEditor({
     setError('');
     try {
       if (onPublish) {
-        await onPublish({
-          title,
-          content,
-          scheduledAt: scheduled ? scheduledAt : undefined,
-        });
+        await onPublish({ title, content });
       } else {
         await api.createEpisode(workId, { title, content });
         router.push(`/works/${workId}/edit`);
@@ -155,34 +142,11 @@ export function WritingEditor({
     }
   }
 
-  async function handleAiCheck() {
-    if (!episodeId) return;
-    setScoring(true);
-    setScoreResult(null);
-    try {
-      const res = await api.scoreEpisode(episodeId);
-      if (res.data) {
-        setScoreResult({ overall: res.data.overall, tips: res.data.tips });
-      }
-    } catch {}
-    setScoring(false);
-  }
-
   function handleVersionRestore(restoredTitle: string, restoredContent: string) {
     setTitle(restoredTitle);
     setContent(restoredContent);
     setShowHistory(false);
   }
-
-  const saveStatusText = (() => {
-    switch (saveStatus) {
-      case 'saving': return '保存中...';
-      case 'saved': return `保存済み ${lastSavedAt?.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' }) ?? ''}`;
-      case 'unsaved': return '未保存';
-      case 'error': return '保存エラー';
-      default: return '';
-    }
-  })();
 
   return (
     <div className={`flex flex-col h-[calc(100vh-4rem)] ${focusMode ? 'fixed inset-0 z-50 bg-background' : ''}`}>
@@ -197,6 +161,10 @@ export function WritingEditor({
           />
         </div>
         <div className="flex items-center gap-1.5">
+          <span className="text-xs text-muted-foreground mr-1">{content.length.toLocaleString()}字</span>
+          {saveStatus === 'saving' && <span className="text-xs text-muted-foreground">保存中...</span>}
+          {saveStatus === 'saved' && <span className="text-xs text-muted-foreground">保存済み</span>}
+          {saveStatus === 'error' && <span className="text-xs text-destructive">保存エラー</span>}
           {!focusMode && episodeId && (
             <Button
               size="sm"
@@ -226,17 +194,6 @@ export function WritingEditor({
           >
             {focusMode ? <Minimize2 className="h-3.5 w-3.5" /> : <Maximize2 className="h-3.5 w-3.5" />}
           </Button>
-          {episodeId && (
-            <Button
-              size="sm"
-              variant="outline"
-              onClick={handleAiCheck}
-              disabled={scoring || !content.trim()}
-              className="text-xs"
-            >
-              {scoring ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : 'AIチェック'}
-            </Button>
-          )}
           <Button
             size="sm"
             onClick={handleSubmit}
@@ -251,44 +208,28 @@ export function WritingEditor({
         <div className="px-4 py-2 text-sm text-destructive bg-destructive/10">{error}</div>
       )}
 
-      {/* Score result */}
-      {scoreResult && (
-        <div className="px-4 py-2 border-b bg-muted/30">
-          <div className="flex items-center justify-between mb-1">
-            <span className="text-sm font-medium">AIチェック結果: {Math.round(scoreResult.overall)}点</span>
-            <button onClick={() => setScoreResult(null)} className="text-xs text-muted-foreground hover:text-foreground">閉じる</button>
-          </div>
-          {scoreResult.tips.length > 0 && (
-            <ul className="space-y-0.5">
-              {scoreResult.tips.map((tip, i) => (
-                <li key={i} className="text-xs text-muted-foreground">{'>'} {tip}</li>
-              ))}
-            </ul>
-          )}
-        </div>
-      )}
-
       {/* Main area */}
-      <div className="flex-1 flex overflow-hidden">
+      <div className="flex-1 flex min-h-0">
         {/* Editor */}
-        <div className={`flex-1 flex flex-col ${focusMode ? 'max-w-2xl mx-auto w-full' : ''}`}>
+        <div className={`flex-1 flex flex-col min-h-0 ${focusMode ? 'max-w-2xl mx-auto w-full' : ''}`}>
           <Textarea
             ref={textareaRef}
             value={content}
             onChange={(e) => setContent(e.target.value)}
             onSelect={handleSelect}
             placeholder="本文を書き始めましょう..."
-            className="flex-1 resize-none border-0 rounded-none focus-visible:ring-0 text-base leading-loose p-6"
+            className="flex-1 resize-none border-0 rounded-none focus-visible:ring-0 text-base leading-loose p-6 overflow-y-auto"
             style={{ fontFamily: '"Noto Serif JP", "游明朝", "YuMincho", serif' }}
           />
         </div>
 
         {/* AI Panel */}
         {showAi && !focusMode && (
-          <div className="w-80 border-l hidden md:block">
+          <div className="w-80 border-l hidden md:flex md:flex-col min-h-0">
             <AiAssistPanel
               workId={workId}
               currentContent={content}
+              currentTitle={title}
               selectedText={selectedText}
               onInsert={handleInsertAi}
               onReplace={handleReplaceSelection}
@@ -299,7 +240,7 @@ export function WritingEditor({
 
         {/* Version History Panel */}
         {showHistory && !focusMode && episodeId && (
-          <div className="w-72 border-l hidden md:block">
+          <div className="w-72 border-l hidden md:flex md:flex-col min-h-0">
             <VersionHistoryPanel
               episodeId={episodeId}
               onRestore={handleVersionRestore}
@@ -309,40 +250,9 @@ export function WritingEditor({
         )}
       </div>
 
-      {/* Status bar */}
-      <div className="flex items-center justify-between px-4 py-1.5 border-t text-xs text-muted-foreground">
-        <div className="flex items-center gap-4">
-          <span>{wordCount.toLocaleString()} 文字</span>
-          <span>{paragraphCount} 段落</span>
-          <span>約{estimatedReadTime}分</span>
-          <span>{saveStatusText}</span>
-          <WordCountGoal currentCount={wordCount} />
-        </div>
-        <div className="flex items-center gap-3">
-          {/* Scheduled publish */}
-          <label className="flex items-center gap-1.5 cursor-pointer">
-            <input
-              type="checkbox"
-              checked={scheduled}
-              onChange={(e) => setScheduled(e.target.checked)}
-              className="rounded"
-            />
-            <span>予約公開</span>
-          </label>
-          {scheduled && (
-            <input
-              type="datetime-local"
-              value={scheduledAt}
-              onChange={(e) => setScheduledAt(e.target.value)}
-              className="text-xs border rounded px-1.5 py-0.5 bg-background"
-            />
-          )}
-        </div>
-      </div>
-
       {/* Mobile AI panel - bottom sheet */}
       {showAi && !focusMode && (
-        <div className="md:hidden fixed inset-x-0 bottom-0 h-[60vh] bg-background border-t z-40 overflow-hidden">
+        <div className="md:hidden fixed inset-x-0 bottom-0 h-[60vh] bg-background border-t z-40 flex flex-col">
           <AiAssistPanel
             workId={workId}
             currentContent={content}

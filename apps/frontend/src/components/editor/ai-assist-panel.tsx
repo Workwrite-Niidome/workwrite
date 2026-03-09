@@ -5,11 +5,12 @@ import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream } from '@/lib/use-ai-stream';
 import { api } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText } from 'lucide-react';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal } from 'lucide-react';
 
 interface AiAssistPanelProps {
   workId: string;
   currentContent: string;
+  currentTitle?: string;
   selectedText?: string;
   onInsert: (text: string) => void;
   onReplace?: (text: string) => void;
@@ -22,13 +23,14 @@ interface HistoryItem {
   timestamp: Date;
 }
 
-export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
+export function AiAssistPanel({ workId, currentContent, currentTitle, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [tier, setTier] = useState<{
     plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null;
   } | null>(null);
   const [premiumMode, setPremiumMode] = useState(false);
+  const [charCount, setCharCount] = useState(1000);
   const [copied, setCopied] = useState(false);
   const [history, setHistory] = useState<HistoryItem[]>([]);
   const [creationPlan, setCreationPlan] = useState<any>(null);
@@ -55,11 +57,15 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
         .then((res) => {
           if (res.data) {
             const sorted = [...res.data].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
-            // Keep last 3 episodes' summaries for context (not full content to save tokens)
-            const summaries = sorted.slice(-3).map((ep: any) => ({
-              title: ep.title,
-              content: (ep.content || '').slice(0, 500),
-            }));
+            // Keep all episodes with summaries for context
+            // Recent 3 episodes get more content, older ones get shorter summaries
+            const summaries = sorted.map((ep: any, i: number) => {
+              const contentLen = i >= sorted.length - 3 ? 800 : 200;
+              return {
+                title: ep.title,
+                content: (ep.content || '').slice(0, contentLen),
+              };
+            });
             setEpisodes(summaries);
           }
         })
@@ -86,6 +92,15 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
   function buildContextVars(): Record<string, string> {
     const vars: Record<string, string> = { content: selectedText || currentContent };
     const contextParts: string[] = [];
+
+    // Current chapter info
+    if (currentTitle) {
+      contextParts.push(`現在執筆中の章: 「${currentTitle}」`);
+    }
+    if (currentContent && currentContent.length > 100) {
+      const summary = currentContent.slice(0, 300).replace(/\n+/g, ' ');
+      contextParts.push(`現在の原稿冒頭: ${summary}...`);
+    }
 
     if (creationPlan) {
       if (creationPlan.emotionBlueprint) {
@@ -117,14 +132,15 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
     // Include previous episodes for story continuity
     if (episodes.length > 0) {
       const epSummary = episodes
-        .map((ep) => `「${ep.title}」: ${ep.content}...`)
+        .map((ep, i) => `第${i + 1}話「${ep.title}」: ${ep.content}...`)
         .join('\n\n');
-      contextParts.push(`これまでの章（直近）:\n${epSummary}`);
+      contextParts.push(`これまでの章:\n${epSummary}`);
     }
 
     if (contextParts.length > 0) {
       vars.context = contextParts.join('\n\n');
     }
+    vars.char_count = String(charCount);
     return vars;
   }
 
@@ -190,24 +206,27 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
           </div>
         )}
 
-        {/* Creation plan context indicator */}
-        {creationPlan && (
+        {/* Context indicator */}
+        {(creationPlan || episodes.length > 0) && (
           <div className="p-2 bg-muted/50 rounded-md border border-border">
             <p className="text-xs font-medium text-foreground flex items-center gap-1.5">
-              <BookCheck className="h-3.5 w-3.5 text-muted-foreground" /> 設計メモを読み込み済み
+              <BookCheck className="h-3.5 w-3.5 text-muted-foreground" /> コンテキスト読み込み済み
             </p>
             <div className="flex flex-wrap gap-1.5 mt-1.5">
-              {creationPlan.emotionBlueprint?.coreMessage && (
+              {creationPlan?.emotionBlueprint?.coreMessage && (
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">テーマ</span>
               )}
-              {creationPlan.characters?.length > 0 && (
+              {creationPlan?.characters?.length > 0 && (
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.characters.length}キャラ</span>
               )}
-              {creationPlan.plotOutline && (
+              {creationPlan?.plotOutline && (
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">プロット</span>
               )}
-              {creationPlan.chapterOutline?.length > 0 && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.chapterOutline.length}章</span>
+              {creationPlan?.chapterOutline?.length > 0 && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.chapterOutline.length}章立て</span>
+              )}
+              {episodes.length > 0 && (
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{episodes.length}話の履歴</span>
               )}
             </div>
           </div>
@@ -256,6 +275,26 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
           </div>
         </div>
 
+        {/* Character count */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <SlidersHorizontal className="h-3 w-3" /> 生成文字数: {charCount.toLocaleString()}字
+          </p>
+          <input
+            type="range"
+            min={100}
+            max={5000}
+            step={100}
+            value={charCount}
+            onChange={(e) => setCharCount(Number(e.target.value))}
+            className="w-full h-1.5 accent-foreground"
+          />
+          <div className="flex justify-between text-[10px] text-muted-foreground">
+            <span>100</span>
+            <span>5000</span>
+          </div>
+        </div>
+
         {/* Selected text preview */}
         {selectedText && (
           <div className="space-y-1">
@@ -296,7 +335,7 @@ export function AiAssistPanel({ workId, currentContent, selectedText, onInsert, 
                 </button>
               )}
             </div>
-            <div className="p-3 bg-secondary/50 rounded-md text-sm leading-relaxed whitespace-pre-wrap max-h-64 overflow-y-auto">
+            <div className="p-3 bg-secondary/50 rounded-md text-sm leading-relaxed whitespace-pre-wrap">
               {result}
               {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
             </div>

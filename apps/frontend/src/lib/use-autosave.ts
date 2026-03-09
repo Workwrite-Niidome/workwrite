@@ -16,6 +16,8 @@ export function useAutosave({ workId, episodeId, title, content, debounceMs = 20
   const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
   const timerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const lastSavedRef = useRef({ title: '', content: '' });
+  const initialRef = useRef({ title, content });
+  const mountedRef = useRef(false);
 
   const save = useCallback(async (t: string, c: string) => {
     if (t === lastSavedRef.current.title && c === lastSavedRef.current.content) return;
@@ -33,7 +35,15 @@ export function useAutosave({ workId, episodeId, title, content, debounceMs = 20
   }, [workId, episodeId]);
 
   useEffect(() => {
-    if (status === 'idle') return;
+    // Skip first render (initial values)
+    if (!mountedRef.current) {
+      mountedRef.current = true;
+      return;
+    }
+
+    // Skip if content hasn't changed from initial values
+    if (title === initialRef.current.title && content === initialRef.current.content) return;
+
     setStatus('unsaved');
 
     if (timerRef.current) clearTimeout(timerRef.current);
