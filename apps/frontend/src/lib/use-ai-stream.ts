@@ -1,6 +1,5 @@
 import { useState, useRef, useCallback } from 'react';
-
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+import { api } from './api';
 
 interface UseAiStreamReturn {
   result: string;
@@ -38,21 +37,11 @@ export function useAiStream(): UseAiStreamReturn {
     abortRef.current = controller;
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      const response = await fetch(`${API_BASE}/ai/assist`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ templateSlug, variables, ...(premiumMode ? { premiumMode: true } : {}) }),
-        signal: controller.signal,
-      });
-
-      if (!response.ok) {
-        const err = await response.json().catch(() => ({ message: 'AI request failed' }));
-        throw new Error(err.message || `Error: ${response.status}`);
-      }
+      const response = await api.fetchSSE(
+        '/ai/assist',
+        { templateSlug, variables, ...(premiumMode ? { premiumMode: true } : {}) },
+        controller.signal,
+      );
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response stream');

@@ -64,7 +64,7 @@ class ApiClient {
   }
 
   /** Make an SSE streaming fetch with auto token refresh on 401. */
-  async fetchSSE(path: string, body: any): Promise<Response> {
+  async fetchSSE(path: string, body: any, signal?: AbortSignal): Promise<Response> {
     const token = this.getToken();
     const url = `${API_BASE}${path}`;
 
@@ -75,6 +75,7 @@ class ApiClient {
         ...(token ? { Authorization: `Bearer ${token}` } : {}),
       },
       body: JSON.stringify(body),
+      signal,
     });
 
     if (res.status === 401) {
@@ -88,6 +89,7 @@ class ApiClient {
             ...(newToken ? { Authorization: `Bearer ${newToken}` } : {}),
           },
           body: JSON.stringify(body),
+          signal,
         });
       } else {
         this.setToken(null);
