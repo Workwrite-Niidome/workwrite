@@ -117,7 +117,7 @@ export default function ReaderPage() {
 
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [episodes, setEpisodes] = useState<{ id: string; title: string; orderIndex: number }[]>([]);
-  const [prologue, setPrologue] = useState<string | null>(null);
+  const [prologue] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -154,7 +154,6 @@ export default function ReaderPage() {
   useEffect(() => {
     setLoading(true);
     setShowCompleteBanner(false);
-    setPrologue(null);
     api.getEpisode(episodeId)
       .then((res) => {
         setEpisode(res.data);
@@ -167,10 +166,7 @@ export default function ReaderPage() {
         const sorted = (epRes.data as { id: string; title: string; orderIndex: number }[])
           .sort((a, b) => a.orderIndex - b.orderIndex);
         setEpisodes(sorted);
-        // Show prologue only on the first episode
-        if (sorted.length > 0 && sorted[0].id === episodeId && workRes.data.prologue) {
-          setPrologue(workRes.data.prologue);
-        }
+        // Prologue is shown on the work detail page, not in the reader
       })
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));
