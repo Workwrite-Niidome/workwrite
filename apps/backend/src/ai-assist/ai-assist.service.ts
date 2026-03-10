@@ -129,7 +129,7 @@ export class AiAssistService {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2025-04-15',
+        'anthropic-version': '2023-06-01',
       },
       body: JSON.stringify(requestBody),
     });
@@ -137,7 +137,7 @@ export class AiAssistService {
     if (!response.ok) {
       const errorText = await response.text();
       this.logger.error(`Claude API error: ${response.status} ${errorText}`);
-      throw new ServiceUnavailableException('AI service error');
+      throw new ServiceUnavailableException(`AI service error (${response.status})`);
     }
 
     const reader = response.body?.getReader();
@@ -227,7 +227,7 @@ JSONのみを出力してください。`;
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
-          'anthropic-version': '2025-04-15',
+          'anthropic-version': '2023-06-01',
         },
         body: JSON.stringify({
           model: HAIKU_MODEL,
