@@ -127,6 +127,15 @@ export function WizardShell() {
             } : undefined,
             chapterOutline: data.chapterOutline.length > 0 ? data.chapterOutline : undefined,
           });
+
+          // Auto-migrate characters to StoryCharacter table for AI context
+          if (data.characters.length > 0) {
+            try {
+              await api.migrateCharacters(workId);
+            } catch {
+              // Non-critical: characters can be migrated later
+            }
+          }
         } catch (e) {
           console.error('Failed to save creation plan:', e);
         }

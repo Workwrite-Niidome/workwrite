@@ -5,7 +5,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api, type StoryCharacter } from '@/lib/api';
-import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Eye, EyeOff, X, Sparkles, UserPlus, ScanSearch } from 'lucide-react';
+import {
+  Plus, Trash2, ChevronDown, ChevronRight, Upload,
+  Eye, EyeOff, X, Sparkles, UserPlus, ScanSearch,
+  User, Save, MoreHorizontal,
+} from 'lucide-react';
+import { cn } from '@/lib/utils';
 
 interface Props {
   workId: string;
@@ -14,6 +19,16 @@ interface Props {
 
 const ROLE_OPTIONS = ['主人公', 'ヒロイン', 'ライバル', '敵役', 'メンター', '脇役', 'その他'];
 const GENDER_OPTIONS = ['男性', '女性', 'その他', '不明'];
+
+const ROLE_COLORS: Record<string, string> = {
+  '主人公': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  'ヒロイン': 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300',
+  'ライバル': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  '敵役': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  'メンター': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  '脇役': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
+  'その他': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
+};
 
 interface AiSuggestedChar {
   name: string;
@@ -29,6 +44,236 @@ interface AiSuggestedChar {
   relationships?: string;
   uniqueTrait?: string;
 }
+
+// ─── Inline field component ─────────────────────────────────────
+
+function Field({ label, children, className }: { label: string; children: React.ReactNode; className?: string }) {
+  return (
+    <div className={className}>
+      <label className="text-[11px] font-medium text-muted-foreground mb-0.5 block">{label}</label>
+      {children}
+    </div>
+  );
+}
+
+// ─── Character card (expanded) ──────────────────────────────────
+
+function CharacterForm({
+  char,
+  onUpdate,
+  onDelete,
+  saving,
+}: {
+  char: StoryCharacter;
+  onUpdate: (id: string, data: Partial<StoryCharacter>) => void;
+  onDelete: (id: string) => void;
+  saving: boolean;
+}) {
+  const [local, setLocal] = useState(char);
+  const [dirty, setDirty] = useState(false);
+  const [showMore, setShowMore] = useState(false);
+
+  // Sync from parent when char changes externally
+  useEffect(() => {
+    setLocal(char);
+    setDirty(false);
+  }, [char.id]);
+
+  function set(partial: Partial<StoryCharacter>) {
+    setLocal((prev) => ({ ...prev, ...partial }));
+    setDirty(true);
+  }
+
+  function save() {
+    if (!dirty) return;
+    onUpdate(local.id, {
+      name: local.name,
+      role: local.role,
+      gender: local.gender,
+      age: local.age,
+      firstPerson: local.firstPerson,
+      personality: local.personality,
+      speechStyle: local.speechStyle,
+      appearance: local.appearance,
+      background: local.background,
+      motivation: local.motivation,
+      arc: local.arc,
+      notes: local.notes,
+      isPublic: local.isPublic,
+    });
+    setDirty(false);
+  }
+
+  const hasOptionalContent = local.appearance || local.background || local.motivation || local.arc || local.notes;
+
+  return (
+    <div className="px-3 pb-3 space-y-3 border-t border-border/50 pt-3">
+      {/* Row 1: Name + Role */}
+      <div className="grid grid-cols-[1fr_auto] gap-2">
+        <Field label="名前">
+          <Input
+            value={local.name}
+            onChange={(e) => set({ name: e.target.value })}
+            onBlur={save}
+            className="h-8 text-sm font-medium"
+          />
+        </Field>
+        <Field label="役割">
+          <select
+            value={local.role}
+            onChange={(e) => { set({ role: e.target.value }); setTimeout(save, 0); }}
+            className="h-8 text-sm rounded-md border border-border bg-background px-2 min-w-[90px]"
+          >
+            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+          </select>
+        </Field>
+      </div>
+
+      {/* Row 2: Gender, Age, FirstPerson */}
+      <div className="grid grid-cols-3 gap-2">
+        <Field label="性別">
+          <select
+            value={local.gender || ''}
+            onChange={(e) => { set({ gender: e.target.value }); setTimeout(save, 0); }}
+            className="w-full h-8 text-sm rounded-md border border-border bg-background px-2"
+          >
+            <option value="">—</option>
+            {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
+          </select>
+        </Field>
+        <Field label="年齢">
+          <Input
+            value={local.age || ''}
+            onChange={(e) => set({ age: e.target.value })}
+            onBlur={save}
+            placeholder="17歳"
+            className="h-8 text-sm"
+          />
+        </Field>
+        <Field label="一人称">
+          <Input
+            value={local.firstPerson || ''}
+            onChange={(e) => set({ firstPerson: e.target.value })}
+            onBlur={save}
+            placeholder="僕/私/俺"
+            className="h-8 text-sm"
+          />
+        </Field>
+      </div>
+
+      {/* Row 3: Personality + SpeechStyle (core fields) */}
+      <Field label="性格">
+        <Input
+          value={local.personality || ''}
+          onChange={(e) => set({ personality: e.target.value })}
+          onBlur={save}
+          placeholder="内向的だが正義感が強い"
+          className="h-8 text-sm"
+        />
+      </Field>
+      <Field label="口調・話し方">
+        <Input
+          value={local.speechStyle || ''}
+          onChange={(e) => set({ speechStyle: e.target.value })}
+          onBlur={save}
+          placeholder="丁寧語、「〜だと思います」が口癖"
+          className="h-8 text-sm"
+        />
+      </Field>
+
+      {/* Collapsible optional fields */}
+      <button
+        onClick={() => setShowMore(!showMore)}
+        className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+      >
+        <MoreHorizontal className="h-3 w-3" />
+        {showMore ? '詳細を閉じる' : `詳細を開く${hasOptionalContent ? '（入力あり）' : ''}`}
+      </button>
+
+      {showMore && (
+        <div className="space-y-3 pl-2 border-l-2 border-border/50">
+          <Field label="外見">
+            <Textarea
+              value={local.appearance || ''}
+              onChange={(e) => set({ appearance: e.target.value })}
+              onBlur={save}
+              placeholder="黒髪のショートカット、常にメガネ"
+              rows={2}
+              className="text-sm"
+            />
+          </Field>
+          <Field label="背景・過去">
+            <Textarea
+              value={local.background || ''}
+              onChange={(e) => set({ background: e.target.value })}
+              onBlur={save}
+              placeholder="幼少期に家族を失い..."
+              rows={2}
+              className="text-sm"
+            />
+          </Field>
+          <Field label="動機・目標">
+            <Input
+              value={local.motivation || ''}
+              onChange={(e) => set({ motivation: e.target.value })}
+              onBlur={save}
+              placeholder="仲間を守るために強くなりたい"
+              className="h-8 text-sm"
+            />
+          </Field>
+          <Field label="成長アーク">
+            <Input
+              value={local.arc || ''}
+              onChange={(e) => set({ arc: e.target.value })}
+              onBlur={save}
+              placeholder="臆病 → 勇気を持つ"
+              className="h-8 text-sm"
+            />
+          </Field>
+          <Field label="著者メモ">
+            <Textarea
+              value={local.notes || ''}
+              onChange={(e) => set({ notes: e.target.value })}
+              onBlur={save}
+              placeholder="第3章で退場予定..."
+              rows={2}
+              className="text-sm"
+            />
+          </Field>
+        </div>
+      )}
+
+      {/* Footer: Public toggle + save indicator + delete */}
+      <div className="flex items-center justify-between pt-1 border-t border-border/30">
+        <button
+          onClick={() => { set({ isPublic: !local.isPublic }); setTimeout(save, 0); }}
+          className={cn(
+            'flex items-center gap-1 text-xs transition-colors rounded-full px-2 py-0.5',
+            local.isPublic
+              ? 'bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400'
+              : 'text-muted-foreground hover:text-foreground',
+          )}
+        >
+          {local.isPublic ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
+          {local.isPublic ? '読者に公開' : '非公開'}
+        </button>
+        <div className="flex items-center gap-2">
+          {saving && <span className="text-xs text-muted-foreground animate-pulse">保存中...</span>}
+          {dirty && !saving && (
+            <Button size="sm" variant="ghost" onClick={save} className="h-6 gap-1 text-xs text-primary">
+              <Save className="h-3 w-3" /> 保存
+            </Button>
+          )}
+          <button onClick={() => onDelete(local.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1 rounded">
+            <Trash2 className="h-3.5 w-3.5" />
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── Main panel ──────────────────────────────────────────────────
 
 export function CharacterRegistryPanel({ workId, onClose }: Props) {
   const [characters, setCharacters] = useState<StoryCharacter[]>([]);
@@ -47,6 +292,9 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
   // Extract from text state
   const [extracting, setExtracting] = useState(false);
   const [extractedChars, setExtractedChars] = useState<AiSuggestedChar[]>([]);
+
+  // Bottom action menu
+  const [showActions, setShowActions] = useState(false);
 
   useEffect(() => {
     loadCharacters();
@@ -131,7 +379,6 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
           } catch { /* skip */ }
         }
       }
-      // Parse remaining
       if (buffer.trim()) {
         for (const line of buffer.split('\n')) {
           if (!line.startsWith('data: ')) continue;
@@ -143,7 +390,6 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
           } catch { /* skip */ }
         }
       }
-      // Parse JSON
       const cleaned = accumulated.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       const start = cleaned.indexOf('{');
       const end = cleaned.lastIndexOf('}');
@@ -185,10 +431,8 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
     setExtracting(true);
     setExtractedChars([]);
     try {
-      // Get episodes for this work
       const work = await api.getWork(workId);
       const episodes = (work as any).data?.episodes || (work as any).episodes || [];
-      // Concatenate episode content (limit to prevent token overflow)
       let text = '';
       for (const ep of episodes) {
         if (ep.content) {
@@ -224,12 +468,18 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
     } catch { /* ignore */ }
   }
 
+  // ─── Render ───────────────────────────────────────────────
+
   if (loading) {
     return (
       <div className="h-full flex flex-col">
-        <div className="flex items-center justify-between p-3 border-b">
-          <h3 className="text-sm font-medium">キャラクター設定</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        <div className="flex items-center justify-between px-4 py-3 border-b">
+          <h3 className="text-sm font-semibold flex items-center gap-1.5">
+            <User className="h-4 w-4" /> キャラクター設定
+          </h3>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+            <X className="h-4 w-4" />
+          </button>
         </div>
         <div className="flex-1 flex items-center justify-center text-sm text-muted-foreground">読み込み中...</div>
       </div>
@@ -238,261 +488,178 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
-      <div className="flex-shrink-0 flex items-center justify-between p-3 border-b">
-        <h3 className="text-sm font-medium">キャラクター設定</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+      {/* Header */}
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-muted/20">
+        <h3 className="text-sm font-semibold flex items-center gap-1.5">
+          <User className="h-4 w-4" /> キャラクター設定
+          <span className="text-xs font-normal text-muted-foreground ml-1">
+            {characters.length}人
+          </span>
+        </h3>
+        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
+          <X className="h-4 w-4" />
+        </button>
       </div>
 
-      <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2" style={{ WebkitOverflowScrolling: 'touch' }}>
+      {/* Character list */}
+      <div className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
         {characters.length === 0 && !showAiPanel && (
-          <div className="text-center py-6 space-y-3">
-            <p className="text-sm text-muted-foreground">キャラクターが未登録です</p>
-            <Button size="sm" variant="outline" onClick={handleMigrate} disabled={migrating} className="gap-1 text-xs">
-              <Upload className="h-3 w-3" />
-              {migrating ? '移行中...' : '作品設定から移行'}
-            </Button>
+          <div className="text-center py-10 px-4 space-y-4">
+            <div className="mx-auto w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
+              <User className="h-6 w-6 text-muted-foreground" />
+            </div>
+            <div>
+              <p className="text-sm font-medium">キャラクターが未登録です</p>
+              <p className="text-xs text-muted-foreground mt-1">手動で追加するか、AIに提案してもらいましょう</p>
+            </div>
+            <div className="flex flex-col gap-2 max-w-[200px] mx-auto">
+              <Button size="sm" onClick={handleAdd} className="gap-1">
+                <Plus className="h-3.5 w-3.5" /> 追加する
+              </Button>
+              <Button size="sm" variant="outline" onClick={() => setShowAiPanel(true)} className="gap-1">
+                <Sparkles className="h-3.5 w-3.5" /> AIに提案してもらう
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleMigrate} disabled={migrating} className="gap-1 text-xs text-muted-foreground">
+                <Upload className="h-3 w-3" /> {migrating ? '移行中...' : '作品設定から移行'}
+              </Button>
+            </div>
           </div>
         )}
 
-        {characters.map((char) => {
-          const isExpanded = expandedId === char.id;
-          return (
-            <div key={char.id} className="border border-border rounded-lg">
-              <button
-                onClick={() => setExpandedId(isExpanded ? null : char.id)}
-                className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/30 transition-colors"
+        <div className="p-2 space-y-1">
+          {characters.map((char) => {
+            const isExpanded = expandedId === char.id;
+            const roleColor = ROLE_COLORS[char.role] || ROLE_COLORS['その他'];
+            const summary = [char.personality, char.speechStyle && `口調: ${char.speechStyle}`].filter(Boolean).join(' / ');
+
+            return (
+              <div
+                key={char.id}
+                className={cn(
+                  'rounded-lg border transition-all',
+                  isExpanded
+                    ? 'border-primary/30 bg-card shadow-sm'
+                    : 'border-border hover:border-border/80 hover:bg-muted/20',
+                )}
               >
-                {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
-                <div className="flex-1 min-w-0">
-                  <span className="text-sm font-medium truncate block">{char.name}</span>
-                  <span className="text-[10px] text-muted-foreground">{char.role}{char.gender ? ` · ${char.gender}` : ''}{char.firstPerson ? ` · 「${char.firstPerson}」` : ''}</span>
-                </div>
-                {char.isPublic && <Eye className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
-              </button>
-
-              {isExpanded && (
-                <div className="px-3 pb-3 space-y-2 border-t border-border/50 pt-2">
-                  <div className="grid grid-cols-2 gap-2">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">名前</label>
-                      <Input
-                        value={char.name}
-                        onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, name: e.target.value } : c))}
-                        onBlur={() => handleUpdate(char.id, { name: char.name })}
-                        className="h-7 text-xs"
-                      />
+                {/* Collapsed header */}
+                <button
+                  onClick={() => setExpandedId(isExpanded ? null : char.id)}
+                  className="w-full flex items-center gap-2.5 p-3 text-left transition-colors"
+                >
+                  {isExpanded
+                    ? <ChevronDown className="h-4 w-4 text-primary flex-shrink-0" />
+                    : <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
+                  }
+                  <div className="flex-1 min-w-0">
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium truncate">{char.name}</span>
+                      <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium flex-shrink-0', roleColor)}>
+                        {char.role}
+                      </span>
                     </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">役割</label>
-                      <select
-                        value={char.role}
-                        onChange={(e) => { setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, role: e.target.value } : c)); handleUpdate(char.id, { role: e.target.value }); }}
-                        className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
-                      >
-                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </select>
-                    </div>
+                    {!isExpanded && summary && (
+                      <p className="text-xs text-muted-foreground truncate mt-0.5">{summary}</p>
+                    )}
+                    {!isExpanded && (char.gender || char.age || char.firstPerson) && (
+                      <p className="text-[10px] text-muted-foreground/70 mt-0.5">
+                        {[char.gender, char.age, char.firstPerson && `「${char.firstPerson}」`].filter(Boolean).join(' · ')}
+                      </p>
+                    )}
                   </div>
+                  {char.isPublic && !isExpanded && (
+                    <Eye className="h-3 w-3 text-green-500 flex-shrink-0" />
+                  )}
+                </button>
 
-                  <div className="grid grid-cols-3 gap-2">
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">性別</label>
-                      <select
-                        value={char.gender || ''}
-                        onChange={(e) => { setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, gender: e.target.value } : c)); handleUpdate(char.id, { gender: e.target.value }); }}
-                        className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
-                      >
-                        <option value="">未設定</option>
-                        {GENDER_OPTIONS.map((g) => <option key={g} value={g}>{g}</option>)}
-                      </select>
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">一人称</label>
-                      <Input
-                        value={char.firstPerson || ''}
-                        onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, firstPerson: e.target.value } : c))}
-                        onBlur={() => handleUpdate(char.id, { firstPerson: char.firstPerson })}
-                        placeholder="僕/私/俺"
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                    <div>
-                      <label className="text-[10px] text-muted-foreground">年齢</label>
-                      <Input
-                        value={char.age || ''}
-                        onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, age: e.target.value } : c))}
-                        onBlur={() => handleUpdate(char.id, { age: char.age })}
-                        placeholder="17歳"
-                        className="h-7 text-xs"
-                      />
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">性格</label>
-                    <Input
-                      value={char.personality || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, personality: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { personality: char.personality })}
-                      placeholder="内向的だが正義感が強い"
-                      className="h-7 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">口調</label>
-                    <Input
-                      value={char.speechStyle || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, speechStyle: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { speechStyle: char.speechStyle })}
-                      placeholder="丁寧語、「〜だと思います」が口癖"
-                      className="h-7 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">外見</label>
-                    <Textarea
-                      value={char.appearance || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, appearance: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { appearance: char.appearance })}
-                      placeholder="黒髪のショートカット、常にメガネ"
-                      rows={2} className="text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">背景・過去</label>
-                    <Textarea
-                      value={char.background || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, background: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { background: char.background })}
-                      rows={2} className="text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">動機・目標</label>
-                    <Input
-                      value={char.motivation || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, motivation: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { motivation: char.motivation })}
-                      className="h-7 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">キャラクターアーク（成長の方向）</label>
-                    <Input
-                      value={char.arc || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, arc: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { arc: char.arc })}
-                      placeholder="臆病→勇気を持つ"
-                      className="h-7 text-xs"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="text-[10px] text-muted-foreground">著者メモ</label>
-                    <Textarea
-                      value={char.notes || ''}
-                      onChange={(e) => setCharacters((prev) => prev.map((c) => c.id === char.id ? { ...c, notes: e.target.value } : c))}
-                      onBlur={() => handleUpdate(char.id, { notes: char.notes })}
-                      rows={2} className="text-xs"
-                    />
-                  </div>
-
-                  <div className="flex items-center justify-between pt-1">
-                    <button
-                      onClick={() => handleUpdate(char.id, { isPublic: !char.isPublic })}
-                      className="flex items-center gap-1 text-[10px] text-muted-foreground hover:text-foreground"
-                    >
-                      {char.isPublic ? <Eye className="h-3 w-3" /> : <EyeOff className="h-3 w-3" />}
-                      {char.isPublic ? '読者に公開中' : '非公開'}
-                    </button>
-                    <div className="flex gap-1">
-                      {saving === char.id && <span className="text-[10px] text-muted-foreground">保存中...</span>}
-                      <button onClick={() => handleDelete(char.id)} className="text-muted-foreground hover:text-destructive">
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </button>
-                    </div>
-                  </div>
-                </div>
-              )}
-            </div>
-          );
-        })}
+                {/* Expanded form */}
+                {isExpanded && (
+                  <CharacterForm
+                    char={char}
+                    onUpdate={handleUpdate}
+                    onDelete={handleDelete}
+                    saving={saving === char.id}
+                  />
+                )}
+              </div>
+            );
+          })}
+        </div>
 
         {/* ─── AI Suggestion Panel ───────────────────────────── */}
         {showAiPanel && (
-          <div className="border border-primary/20 rounded-lg p-3 space-y-2 bg-primary/[0.02]">
+          <div className="mx-2 mb-2 border border-primary/20 rounded-lg p-4 space-y-3 bg-primary/[0.02]">
             <div className="flex items-center justify-between">
-              <h4 className="text-xs font-medium flex items-center gap-1">
-                <Sparkles className="h-3 w-3 text-primary" />
+              <h4 className="text-sm font-medium flex items-center gap-1.5">
+                <Sparkles className="h-4 w-4 text-primary" />
                 AIにキャラクターを提案してもらう
               </h4>
               <button onClick={() => { setShowAiPanel(false); setAiSuggestions([]); }} className="text-muted-foreground hover:text-foreground">
-                <X className="h-3.5 w-3.5" />
+                <X className="h-4 w-4" />
               </button>
             </div>
             <Textarea
               value={aiVision}
               onChange={(e) => setAiVision(e.target.value)}
-              rows={2}
-              placeholder="どんなキャラクターが必要ですか？（例: 主人公の相棒になる陽気な盗賊）"
-              className="text-xs"
+              rows={3}
+              placeholder="どんなキャラクターが必要ですか？&#10;例: 主人公の相棒になる陽気な盗賊、物語の黒幕になる知的な敵キャラ"
+              className="text-sm"
             />
             <Button
               size="sm"
-              variant="secondary"
               onClick={handleAiSuggest}
               disabled={aiLoading || !aiVision.trim()}
-              className="w-full gap-1 text-xs"
+              className="w-full gap-1"
             >
-              <Sparkles className="h-3 w-3" />
+              <Sparkles className="h-3.5 w-3.5" />
               {aiLoading ? '考え中...' : 'AIに提案してもらう'}
             </Button>
 
             {/* AI Suggestions */}
             {aiSuggestions.length > 0 && (
-              <div className="space-y-2 pt-1">
-                <p className="text-[10px] text-muted-foreground">提案されたキャラクター（採用すると自動保存されます）</p>
+              <div className="space-y-2 pt-2 border-t border-border/50">
+                <p className="text-xs text-muted-foreground">提案されたキャラクター</p>
                 {aiSuggestions.map((ai, i) => {
                   const alreadyExists = characters.some((c) => c.name === ai.name);
                   return (
-                    <div key={i} className="p-2.5 bg-muted/30 rounded-md border border-border/50 space-y-1">
+                    <div key={i} className="p-3 bg-background rounded-lg border border-border/50 space-y-2">
                       <div className="flex items-center justify-between">
-                        <div>
-                          <span className="text-xs font-medium">{ai.name}</span>
-                          <span className="text-[10px] text-muted-foreground ml-1.5">({ai.role})</span>
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium">{ai.name}</span>
+                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', ROLE_COLORS[ai.role] || ROLE_COLORS['その他'])}>
+                            {ai.role}
+                          </span>
                         </div>
                         <Button
                           size="sm"
-                          variant={alreadyExists ? 'ghost' : 'secondary'}
+                          variant={alreadyExists ? 'ghost' : 'default'}
                           onClick={() => handleAdoptAiChar(ai)}
                           disabled={alreadyExists}
-                          className="h-6 gap-1 text-[10px] px-2"
+                          className="h-7 gap-1 text-xs px-3"
                         >
                           <UserPlus className="h-3 w-3" />
                           {alreadyExists ? '登録済み' : '採用'}
                         </Button>
                       </div>
-                      <div className="text-[10px] text-muted-foreground space-y-0.5">
+                      <div className="text-xs text-muted-foreground space-y-0.5">
                         {(ai.gender || ai.age || ai.firstPerson) && (
-                          <p>{[ai.gender, ai.age, ai.firstPerson && `一人称「${ai.firstPerson}」`].filter(Boolean).join(' / ')}</p>
+                          <p className="font-medium text-foreground/70">
+                            {[ai.gender, ai.age, ai.firstPerson && `一人称「${ai.firstPerson}」`].filter(Boolean).join(' / ')}
+                          </p>
                         )}
-                        {ai.personality && <p>性格: {ai.personality}</p>}
-                        {ai.speechStyle && <p>口調: {ai.speechStyle}</p>}
-                        {ai.appearance && <p>外見: {ai.appearance}</p>}
-                        {ai.background && <p>背景: {ai.background}</p>}
-                        {ai.motivation && <p>動機: {ai.motivation}</p>}
+                        {ai.personality && <p><span className="text-foreground/50">性格:</span> {ai.personality}</p>}
+                        {ai.speechStyle && <p><span className="text-foreground/50">口調:</span> {ai.speechStyle}</p>}
+                        {ai.appearance && <p><span className="text-foreground/50">外見:</span> {ai.appearance}</p>}
+                        {ai.background && <p><span className="text-foreground/50">背景:</span> {ai.background}</p>}
+                        {ai.motivation && <p><span className="text-foreground/50">動機:</span> {ai.motivation}</p>}
                       </div>
                     </div>
                   );
                 })}
                 {aiAdvice && (
-                  <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50">
-                    <p className="text-[10px] text-blue-700 dark:text-blue-400">{aiAdvice}</p>
+                  <div className="p-3 bg-blue-50 dark:bg-blue-950/30 rounded-lg border border-blue-200 dark:border-blue-800/50">
+                    <p className="text-xs font-medium text-blue-800 dark:text-blue-300 mb-1">アドバイス</p>
+                    <p className="text-xs text-blue-700 dark:text-blue-400">{aiAdvice}</p>
                   </div>
                 )}
               </div>
@@ -502,26 +669,32 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
 
         {/* ─── Extracted characters ──────────────────────────── */}
         {extractedChars.length > 0 && (
-          <div className="border border-amber-200 dark:border-amber-800/50 rounded-lg p-3 space-y-2 bg-amber-50/50 dark:bg-amber-950/20">
-            <h4 className="text-xs font-medium flex items-center gap-1">
-              <ScanSearch className="h-3 w-3 text-amber-600" />
+          <div className="mx-2 mb-2 border border-amber-200 dark:border-amber-800/50 rounded-lg p-4 space-y-2 bg-amber-50/50 dark:bg-amber-950/20">
+            <h4 className="text-sm font-medium flex items-center gap-1.5">
+              <ScanSearch className="h-4 w-4 text-amber-600" />
               本文から検出されたキャラクター
             </h4>
             {extractedChars.map((ex, i) => {
               const alreadyExists = characters.some((c) => c.name === ex.name);
               return (
-                <div key={i} className="flex items-center justify-between p-2 bg-background/80 rounded-md border border-border/50">
+                <div key={i} className="flex items-center justify-between p-2.5 bg-background/80 rounded-lg border border-border/50">
                   <div className="min-w-0">
-                    <span className="text-xs font-medium">{ex.name}</span>
-                    <span className="text-[10px] text-muted-foreground ml-1.5">({ex.role})</span>
-                    {ex.personality && <p className="text-[10px] text-muted-foreground truncate">{ex.personality}</p>}
+                    <div className="flex items-center gap-2">
+                      <span className="text-sm font-medium">{ex.name}</span>
+                      {ex.role && (
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', ROLE_COLORS[ex.role] || ROLE_COLORS['その他'])}>
+                          {ex.role}
+                        </span>
+                      )}
+                    </div>
+                    {ex.personality && <p className="text-xs text-muted-foreground truncate mt-0.5">{ex.personality}</p>}
                   </div>
                   <Button
                     size="sm"
                     variant={alreadyExists ? 'ghost' : 'secondary'}
                     onClick={() => handleAdoptExtracted(ex)}
                     disabled={alreadyExists}
-                    className="h-6 gap-1 text-[10px] px-2 flex-shrink-0"
+                    className="h-7 gap-1 text-xs px-3 flex-shrink-0 ml-2"
                   >
                     <UserPlus className="h-3 w-3" />
                     {alreadyExists ? '登録済み' : '採用'}
@@ -533,33 +706,56 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
         )}
       </div>
 
-      <div className="flex-shrink-0 p-3 border-t space-y-1.5">
-        <Button size="sm" variant="outline" onClick={handleAdd} className="w-full gap-1 text-xs">
-          <Plus className="h-3 w-3" /> 手動で追加
-        </Button>
-        <Button
-          size="sm"
-          variant="outline"
-          onClick={() => setShowAiPanel(!showAiPanel)}
-          className="w-full gap-1 text-xs"
-        >
-          <Sparkles className="h-3 w-3" />
-          AIに提案してもらう
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={handleExtractFromText}
-          disabled={extracting}
-          className="w-full gap-1 text-xs text-muted-foreground"
-        >
-          <ScanSearch className="h-3 w-3" />
-          {extracting ? '検出中...' : '本文からキャラクターを検出'}
-        </Button>
-        {characters.length === 0 && (
-          <Button size="sm" variant="ghost" onClick={handleMigrate} disabled={migrating} className="w-full gap-1 text-xs text-muted-foreground">
-            <Upload className="h-3 w-3" /> {migrating ? '移行中...' : '作品設定から移行'}
-          </Button>
+      {/* Footer: Primary action + expandable menu */}
+      <div className="flex-shrink-0 border-t bg-muted/10">
+        {characters.length > 0 && (
+          <>
+            <div className="px-3 pt-2 pb-1">
+              <Button size="sm" onClick={handleAdd} className="w-full gap-1">
+                <Plus className="h-3.5 w-3.5" /> キャラクターを追加
+              </Button>
+            </div>
+
+            {showActions && (
+              <div className="px-3 pb-1 space-y-1 animate-in slide-in-from-bottom-2 duration-200">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={() => { setShowAiPanel(!showAiPanel); setShowActions(false); }}
+                  className="w-full gap-1 text-xs"
+                >
+                  <Sparkles className="h-3 w-3" /> AIに提案してもらう
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { handleExtractFromText(); setShowActions(false); }}
+                  disabled={extracting}
+                  className="w-full gap-1 text-xs text-muted-foreground"
+                >
+                  <ScanSearch className="h-3 w-3" /> {extracting ? '検出中...' : '本文からキャラクターを検出'}
+                </Button>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={() => { handleMigrate(); setShowActions(false); }}
+                  disabled={migrating}
+                  className="w-full gap-1 text-xs text-muted-foreground"
+                >
+                  <Upload className="h-3 w-3" /> {migrating ? '移行中...' : '作品設定から移行'}
+                </Button>
+              </div>
+            )}
+
+            <div className="px-3 pb-2">
+              <button
+                onClick={() => setShowActions(!showActions)}
+                className="w-full text-center text-xs text-muted-foreground hover:text-foreground py-1 transition-colors"
+              >
+                {showActions ? '閉じる' : 'その他のアクション ▾'}
+              </button>
+            </div>
+          </>
         )}
       </div>
     </div>

@@ -346,7 +346,6 @@ function CreationPlanCard({
   const [coreMessage, setCoreMessage] = useState('');
   const [targetEmotions, setTargetEmotions] = useState('');
   const [readerJourney, setReaderJourney] = useState('');
-  const [characters, setCharacters] = useState<{ name: string; role: string; description: string }[]>([]);
   const [plotText, setPlotText] = useState('');
   const [chapters, setChapters] = useState<{ title: string; summary: string }[]>([]);
 
@@ -355,13 +354,6 @@ function CreationPlanCard({
     setCoreMessage(eb.coreMessage || '');
     setTargetEmotions(eb.targetEmotions || '');
     setReaderJourney(eb.readerJourney || '');
-    setCharacters(
-      (creationPlan?.characters || []).map((c: any) => ({
-        name: c.name || '',
-        role: c.role || '',
-        description: c.description || '',
-      }))
-    );
     const po = creationPlan?.plotOutline;
     setPlotText(
       typeof po === 'string' ? po : po?.text || ''
@@ -381,9 +373,6 @@ function CreationPlanCard({
       const plan: any = {};
       if (coreMessage || targetEmotions || readerJourney) {
         plan.emotionBlueprint = { coreMessage, targetEmotions, readerJourney };
-      }
-      if (characters.length > 0) {
-        plan.characters = characters.filter((c) => c.name.trim());
       }
       if (plotText.trim()) {
         plan.plotOutline = { text: plotText, aiAssisted: false };
@@ -476,60 +465,10 @@ function CreationPlanCard({
                 />
               </div>
 
-              {/* Characters */}
-              <div className="space-y-2">
+              {/* Characters — managed via Character Registry panel */}
+              <div className="space-y-1">
                 <p className="text-xs font-medium text-muted-foreground">キャラクター</p>
-                {characters.map((c, i) => (
-                  <div key={i} className="p-2 bg-muted/50 rounded space-y-1">
-                    <div className="flex gap-1">
-                      <Input
-                        value={c.name}
-                        onChange={(e) => {
-                          const u = [...characters];
-                          u[i] = { ...u[i], name: e.target.value };
-                          setCharacters(u);
-                        }}
-                        placeholder="名前"
-                        className="text-xs h-7 flex-1"
-                      />
-                      <Input
-                        value={c.role}
-                        onChange={(e) => {
-                          const u = [...characters];
-                          u[i] = { ...u[i], role: e.target.value };
-                          setCharacters(u);
-                        }}
-                        placeholder="役割"
-                        className="text-xs h-7 w-24"
-                      />
-                      <button
-                        onClick={() => setCharacters(characters.filter((_, j) => j !== i))}
-                        className="text-muted-foreground hover:text-destructive"
-                      >
-                        <Trash2 className="h-3 w-3" />
-                      </button>
-                    </div>
-                    <Textarea
-                      value={c.description}
-                      onChange={(e) => {
-                        const u = [...characters];
-                        u[i] = { ...u[i], description: e.target.value };
-                        setCharacters(u);
-                      }}
-                      placeholder="性格、背景、動機など"
-                      rows={2}
-                      className="text-xs"
-                    />
-                  </div>
-                ))}
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="text-xs gap-1"
-                  onClick={() => setCharacters([...characters, { name: '', role: '', description: '' }])}
-                >
-                  <Plus className="h-3 w-3" /> 追加
-                </Button>
+                <p className="text-[10px] text-muted-foreground">キャラクターの編集は「キャラクター設定」パネルから行えます</p>
               </div>
 
               {/* Plot */}
@@ -621,15 +560,9 @@ function CreationPlanCard({
               {creationPlan.characters?.length > 0 && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">キャラクター</p>
-                  <div className="space-y-2">
-                    {creationPlan.characters.map((c: any, i: number) => (
-                      <div key={i} className="p-2 bg-muted/50 rounded text-xs">
-                        <span className="font-medium">{c.name}</span>
-                        {c.role && <span className="text-muted-foreground ml-1">({c.role})</span>}
-                        {c.description && <p className="text-muted-foreground mt-0.5">{c.description}</p>}
-                      </div>
-                    ))}
-                  </div>
+                  <p className="text-[10px] text-muted-foreground">
+                    {creationPlan.characters.length}人のキャラクター設定あり — 詳細は「キャラクター設定」パネルで管理
+                  </p>
                 </div>
               )}
               {creationPlan.plotOutline && (
