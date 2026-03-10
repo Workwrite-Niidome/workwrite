@@ -23,7 +23,12 @@ interface Character {
 interface AiCharacter {
   name: string;
   role: string;
+  gender?: string;
+  age?: string;
+  firstPerson?: string;
   personality?: string;
+  speechStyle?: string;
+  appearance?: string;
   background?: string;
   motivation?: string;
   relationships?: string;
@@ -50,7 +55,12 @@ function parseAiResponse(raw: string): { characters: AiCharacter[]; suggestions:
 
 function aiCharToCharacter(ai: AiCharacter): Character {
   const parts = [
+    ai.gender && `性別: ${ai.gender}`,
+    ai.age && `年齢: ${ai.age}`,
+    ai.firstPerson && `一人称: ${ai.firstPerson}`,
     ai.personality && `性格: ${ai.personality}`,
+    ai.speechStyle && `口調: ${ai.speechStyle}`,
+    ai.appearance && `外見: ${ai.appearance}`,
     ai.background && `背景: ${ai.background}`,
     ai.motivation && `動機: ${ai.motivation}`,
     ai.relationships && `関係: ${ai.relationships}`,
@@ -292,7 +302,14 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
                     </Button>
                   </div>
                   <div className="text-xs text-muted-foreground space-y-1">
+                    {(ai.gender || ai.age || ai.firstPerson) && (
+                      <p className="text-foreground/60">
+                        {[ai.gender, ai.age, ai.firstPerson && `一人称「${ai.firstPerson}」`].filter(Boolean).join(' / ')}
+                      </p>
+                    )}
                     {ai.personality && <p><strong>性格:</strong> {ai.personality}</p>}
+                    {ai.speechStyle && <p><strong>口調:</strong> {ai.speechStyle}</p>}
+                    {ai.appearance && <p><strong>外見:</strong> {ai.appearance}</p>}
                     {ai.background && <p><strong>背景:</strong> {ai.background}</p>}
                     {ai.motivation && <p><strong>動機:</strong> {ai.motivation}</p>}
                     {ai.relationships && <p><strong>関係:</strong> {ai.relationships}</p>}

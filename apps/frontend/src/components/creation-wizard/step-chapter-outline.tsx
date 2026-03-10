@@ -24,7 +24,9 @@ interface AiChapter {
   title: string;
   summary: string;
   keyScenes?: string[];
+  characters?: string[];
   emotionTarget?: string;
+  emotionIntensity?: number;
   wordCountEstimate?: number;
 }
 
@@ -119,41 +121,35 @@ export function StepChapterOutline({ data, onChange }: Props) {
     onChange({ chapterOutline: chapters.filter((_, i) => i !== index) });
   }
 
-  function adoptChapter(ai: AiChapter) {
-    const summary = [
+  function buildChapterSummary(ai: AiChapter): string {
+    return [
       ai.summary,
+      ai.characters?.length ? `\n登場: ${ai.characters.join('、')}` : '',
       ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
-      ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
+      ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}${ai.emotionIntensity != null ? `(${ai.emotionIntensity}/10)` : ''}` : '',
     ].join('');
+  }
+
+  function adoptChapter(ai: AiChapter) {
     onChange({
-      chapterOutline: [...chapters, { title: ai.title, summary, aiSuggested: true }],
+      chapterOutline: [...chapters, { title: ai.title, summary: buildChapterSummary(ai), aiSuggested: true }],
     });
   }
 
   function adoptAllChapters() {
     if (!aiParsed) return;
-    const newChapters = aiParsed.chapters.map((ai) => {
-      const summary = [
-        ai.summary,
-        ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
-        ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
-      ].join('');
-      return { title: ai.title, summary, aiSuggested: true };
-    });
+    const newChapters = aiParsed.chapters.map((ai) => ({
+      title: ai.title, summary: buildChapterSummary(ai), aiSuggested: true,
+    }));
     onChange({ chapterOutline: [...chapters, ...newChapters] });
   }
 
   function applyParsedResult(result: { chapters: AiChapter[]; suggestions: string }) {
     setAiParsed(result);
     const currentChapters = (data.chapterOutline || []) as Chapter[];
-    const newChapters = result.chapters.map((ai) => {
-      const summary = [
-        ai.summary,
-        ai.keyScenes?.length ? `\nキーシーン: ${ai.keyScenes.join('、')}` : '',
-        ai.emotionTarget ? `\n感情目標: ${ai.emotionTarget}` : '',
-      ].join('');
-      return { title: ai.title, summary, aiSuggested: true };
-    });
+    const newChapters = result.chapters.map((ai) => ({
+      title: ai.title, summary: buildChapterSummary(ai), aiSuggested: true,
+    }));
     onChange({
       chapterOutline: [...currentChapters, ...newChapters],
       _aiChapterSuggestions: result,
@@ -332,11 +328,17 @@ export function StepChapterOutline({ data, onChange }: Props) {
                     </Button>
                   </div>
                   <p className="text-xs text-muted-foreground">{ai.summary}</p>
+                  {ai.characters && ai.characters.length > 0 && (
+                    <p className="text-xs text-muted-foreground mt-1">登場: {ai.characters.join('、')}</p>
+                  )}
                   {ai.keyScenes && ai.keyScenes.length > 0 && (
                     <p className="text-xs text-muted-foreground mt-1">キーシーン: {ai.keyScenes.join('、')}</p>
                   )}
                   {ai.emotionTarget && (
-                    <p className="text-xs text-muted-foreground mt-0.5">感情: {ai.emotionTarget}</p>
+                    <p className="text-xs text-muted-foreground mt-0.5">
+                      感情: {ai.emotionTarget}
+                      {ai.emotionIntensity != null && <span className="ml-1 text-primary/60">({ai.emotionIntensity}/10)</span>}
+                    </p>
                   )}
                   {ai.wordCountEstimate && (
                     <p className="text-xs text-muted-foreground mt-0.5">目安: {ai.wordCountEstimate.toLocaleString()}字</p>

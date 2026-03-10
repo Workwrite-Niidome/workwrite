@@ -138,13 +138,24 @@ export class CreationWizardService {
     const systemPrompt = `あなたは小説の創作支援AIです。作者のビジョンを尊重しながら、キャラクターデザインの「提案」を行います。
 最終的な決定権は常に作者にあります。AIはあくまで発想の触媒です。
 
+【絶対遵守ルール】
+- 各キャラクターの性別・一人称・口調・性格は設定内で必ず一貫させること
+- 一人称は日本語の小説で自然なもの（僕/私/俺/あたし/わたくし等）を選ぶこと
+- 口調の例文を必ず含めること（そのキャラクターらしいセリフ）
+- キャラクター同士の関係性を明確にすること
+
 以下の形式でキャラクター提案をJSON形式で出力してください:
 {
   "characters": [
     {
       "name": "提案する名前",
-      "role": "主人公/ヒロイン/ライバル/メンター等",
+      "role": "主人公/ヒロイン/ライバル/メンター/敵役/脇役等",
+      "gender": "男性/女性/その他/不明",
+      "age": "年齢や年代（例: 17歳、20代後半）",
+      "firstPerson": "一人称（僕/私/俺/あたし等）",
       "personality": "性格の説明",
+      "speechStyle": "口調の特徴と例文（例: 丁寧語。「〜だと思います」「〜ですね」）",
+      "appearance": "外見の特徴",
       "background": "背景設定",
       "motivation": "動機・目的",
       "relationships": "他キャラとの関係性",
@@ -182,6 +193,12 @@ ${dto.themes ? `テーマ: ${dto.themes}` : ''}
     const systemPrompt = `あなたは小説のプロット設計を支援するAIです。作者のテーマとメッセージを深く理解し、物語の骨格を提案します。
 最終的な決定権は常に作者にあります。AIは構造的な視点から提案を行うツールです。
 
+【絶対遵守ルール】
+- キャラクター情報が提供されている場合、各キャラの性別・一人称・口調・性格を厳守すること
+- プロットはキャラクターの性格・動機・アークに基づいて駆動させること
+- キャラクターの行動は性格設定から自然に導かれるものにすること
+- 設定と矛盾する展開を提案しないこと
+
 以下のJSON形式で出力してください:
 {
   "premise": "物語の前提",
@@ -196,14 +213,12 @@ ${dto.themes ? `テーマ: ${dto.themes}` : ''}
   "suggestions": "プロット構成への補足アドバイス"
 }`;
 
-    const charInfo = dto.characters
-      ? `\nキャラクター情報: ${typeof dto.characters === 'string' ? dto.characters : JSON.stringify(dto.characters)}`
-      : '';
+    const charInfo = dto.characters ? this.formatCharactersForPrompt(dto.characters) : '';
     const userPrompt = `テーマ: ${dto.themes}
 ${dto.message ? `伝えたいメッセージ: ${dto.message}` : ''}
-${dto.emotionGoals ? `読者に与えたい感情: ${dto.emotionGoals}` : ''}${charInfo}
+${dto.emotionGoals ? `読者に与えたい感情: ${dto.emotionGoals}` : ''}${charInfo ? `\n\n${charInfo}` : ''}
 
-このテーマに沿った物語のプロット構造を提案してください。`;
+このテーマとキャラクター設定に沿った物語のプロット構造を提案してください。キャラクターの性格・動機・関係性を活かした展開にしてください。`;
 
     let fullOutput = '';
     for await (const chunk of this.streamFromClaude(
@@ -225,6 +240,11 @@ ${dto.emotionGoals ? `読者に与えたい感情: ${dto.emotionGoals}` : ''}${c
 
     const systemPrompt = `あなたは読者の感情体験を設計する支援AIです。作者が意図する感情の流れを可視化し、各場面でどんな感情を読者に届けたいかを整理する手助けをします。
 最終的な感情設計は作者の感性に委ねられます。AIは感情の地図を描く補助ツールです。
+
+【重要】
+- 感情の強度は1〜10で設計すること（1=微かに、10=圧倒的に）
+- 感情の対比（例: 絶望→希望、孤独→つながり）を意識すること
+- 読者がキャラクターに感情移入できるポイントを明示すること
 
 以下のJSON形式で出力してください:
 {
@@ -267,6 +287,12 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
     const systemPrompt = `あなたは小説の章立て構成を支援するAIです。プロット、キャラクター、感情設計を統合し、具体的な章立てを提案します。
 各章は作者が自由に変更・並べ替え・削除できる「叩き台」です。AIは構成の一貫性を保つ視点を提供します。
 
+【絶対遵守ルール】
+- キャラクター情報が提供されている場合、各キャラの性別・一人称・口調・性格を厳守すること
+- 各章に登場するキャラクターを明示し、そのキャラの動機や性格に基づくシーンにすること
+- 感情設計が提供されている場合、各章の感情目標と強度を感情ブループリントと整合させること
+- プロット構成と矛盾する章展開を提案しないこと
+
 重要: 出力はJSON形式のみにしてください。前置きや説明は不要です。JSONの前後にテキストを含めないでください。
 
 以下の形式で出力してください:
@@ -277,7 +303,9 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
       "title": "章タイトル案",
       "summary": "章の概要（2-3文）",
       "keyScenes": ["シーン1", "シーン2"],
+      "characters": ["登場するキャラ名1", "登場するキャラ名2"],
       "emotionTarget": "この章で狙う感情",
+      "emotionIntensity": 5,
       "wordCountEstimate": 3000
     }
   ],
@@ -285,14 +313,31 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
 }`;
 
     const parts: string[] = [];
-    if (dto.plotOutline) parts.push(`プロット構成: ${JSON.stringify(dto.plotOutline)}`);
-    if (dto.characters) parts.push(`キャラクター: ${JSON.stringify(dto.characters)}`);
-    if (dto.emotionBlueprint) parts.push(`感情ブループリント: ${JSON.stringify(dto.emotionBlueprint)}`);
-    if (dto.additionalNotes) parts.push(`追加メモ: ${dto.additionalNotes}`);
+    if (dto.plotOutline) {
+      const plotText = typeof dto.plotOutline === 'string'
+        ? dto.plotOutline
+        : dto.plotOutline.text || JSON.stringify(dto.plotOutline);
+      parts.push(`【プロット構成】\n${plotText}`);
+    }
+    if (dto.characters) {
+      parts.push(this.formatCharactersForPrompt(dto.characters));
+    }
+    if (dto.emotionBlueprint) {
+      const eb = dto.emotionBlueprint;
+      const emotionParts = [
+        eb.coreMessage && `核となるメッセージ: ${eb.coreMessage}`,
+        eb.targetEmotions && `届けたい感情: ${eb.targetEmotions}`,
+        eb.readerJourney && `読者の旅路: ${eb.readerJourney}`,
+      ].filter(Boolean);
+      if (emotionParts.length > 0) {
+        parts.push(`【感情ブループリント】\n${emotionParts.join('\n')}`);
+      }
+    }
+    if (dto.additionalNotes) parts.push(`【追加メモ】\n${dto.additionalNotes}`);
 
     const userPrompt = `${parts.join('\n\n')}
 
-これらの情報を統合して、章立て構成を提案してください。`;
+これらの情報を統合して、章立て構成を提案してください。各章に登場キャラクターと感情目標を明示してください。`;
 
     let fullOutput = '';
     const inputLen = parts.join('').length;
@@ -304,6 +349,35 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
     }
 
     await this.logCreationAction(workId, userId, 'chapter_outline', 'generated', inputLen, fullOutput.length);
+  }
+
+  // ─── Character formatting ───────────────────────────────────
+
+  private formatCharactersForPrompt(characters: any): string {
+    if (!characters) return '';
+    const chars = Array.isArray(characters) ? characters : [];
+    if (chars.length === 0) return '';
+
+    const sheets = chars.map((c: any) => {
+      const lines = [`■ ${c.name || '名前未定'}（${c.role || '役割未定'}）`];
+      if (c.gender) lines.push(`  性別: ${c.gender}`);
+      if (c.age) lines.push(`  年齢: ${c.age}`);
+      if (c.firstPerson) lines.push(`  一人称: ${c.firstPerson}`);
+      if (c.personality) lines.push(`  性格: ${c.personality}`);
+      if (c.speechStyle) lines.push(`  口調: ${c.speechStyle}`);
+      if (c.appearance) lines.push(`  外見: ${c.appearance}`);
+      if (c.background) lines.push(`  背景: ${c.background}`);
+      if (c.motivation) lines.push(`  動機: ${c.motivation}`);
+      if (c.relationships) lines.push(`  関係: ${c.relationships}`);
+      if (c.uniqueTrait) lines.push(`  特徴: ${c.uniqueTrait}`);
+      // Fallback: description field from wizard format
+      if (c.description && !c.personality && !c.speechStyle) {
+        lines.push(`  詳細: ${c.description}`);
+      }
+      return lines.join('\n');
+    });
+
+    return `【キャラクター設定（厳守）】\n${sheets.join('\n\n')}`;
   }
 
   // ─── Plan CRUD ───────────────────────────────────────────────
