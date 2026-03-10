@@ -1,30 +1,43 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Trash2 } from 'lucide-react';
+import { Send, Trash2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, type CompanionMessage } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 interface CompanionChatProps {
   workId: string;
 }
 
 export function CompanionChat({ workId }: CompanionChatProps) {
+  const { isAuthenticated } = useAuth();
   const [messages, setMessages] = useState<CompanionMessage[]>([]);
   const [input, setInput] = useState('');
   const [loading, setLoading] = useState(true);
   const [streaming, setStreaming] = useState(false);
+  const [error, setError] = useState('');
+  const [tier, setTier] = useState<{ plan: string; canUseAi: boolean; remainingFreeUses: number | null } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
-    api.getCompanionHistory(workId)
-      .then((res) => {
-        const msgs = (res as any).data || (res as any).messages || [];
-        setMessages(Array.isArray(msgs) ? msgs : []);
-      })
-      .catch(() => {})
-      .finally(() => setLoading(false));
-  }, [workId]);
+    if (!isAuthenticated) {
+      setLoading(false);
+      return;
+    }
+
+    Promise.all([
+      api.getCompanionHistory(workId).catch(() => ({ data: [], messages: [] })),
+      api.getAiStatus().catch(() => ({ data: { available: false, model: '', tier: undefined } })),
+    ]).then(([histRes, statusRes]) => {
+      const msgs = (histRes as any).data || (histRes as any).messages || [];
+      setMessages(Array.isArray(msgs) ? msgs : []);
+      const statusData = (statusRes as any).data || statusRes;
+      if (statusData.tier) {
+        setTier(statusData.tier);
+      }
+    }).finally(() => setLoading(false));
+  }, [workId, isAuthenticated]);
 
   useEffect(() => {
     scrollRef.current?.scrollTo({ top: scrollRef.current.scrollHeight, behavior: 'smooth' });
@@ -32,6 +45,7 @@ export function CompanionChat({ workId }: CompanionChatProps) {
 
   async function handleSend() {
     if (!input.trim() || streaming) return;
+    setError('');
     const userMsg: CompanionMessage = { role: 'user', content: input.trim(), timestamp: new Date().toISOString() };
     setMessages((prev) => [...prev, userMsg]);
     setInput('');
@@ -42,8 +56,6 @@ export function CompanionChat({ workId }: CompanionChatProps) {
 
     try {
       const response = await api.fetchSSE(`/ai/companion/${workId}/chat`, { message: userMsg.content });
-
-
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No stream');
 
@@ -64,6 +76,16 @@ export function CompanionChat({ workId }: CompanionChatProps) {
           if (data === '[DONE]') break;
           try {
             const parsed = JSON.parse(data);
+            if (parsed.error) {
+              setError(parsed.error);
+              // Remove empty assistant message
+              setMessages((prev) => {
+                const last = prev[prev.length - 1];
+                if (last?.role === 'assistant' && !last.content) return prev.slice(0, -1);
+                return prev;
+              });
+              break;
+            }
             if (parsed.text) {
               setMessages((prev) => {
                 const updated = [...prev];
@@ -98,6 +120,18 @@ export function CompanionChat({ workId }: CompanionChatProps) {
     setMessages([]);
   }
 
+  if (!isAuthenticated) {
+    return (
+      <div className="flex flex-col items-center justify-center h-full px-6 text-center space-y-4">
+        <Lock className="h-8 w-8 text-muted-foreground" />
+        <div>
+          <p className="text-sm font-medium">ログインが必要です</p>
+          <p className="text-xs text-muted-foreground mt-1">AI読書コンパニオンを利用するにはログインしてください。</p>
+        </div>
+      </div>
+    );
+  }
+
   if (loading) {
     return (
       <div className="space-y-4 p-4">
@@ -107,12 +141,20 @@ export function CompanionChat({ workId }: CompanionChatProps) {
     );
   }
 
+  const isFree = tier?.plan === 'free';
+  const remainingUses = tier?.remainingFreeUses ?? null;
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex items-center justify-between px-4 py-2 border-b border-border">
         <div>
           <p className="text-sm font-medium">AI読書コンパニオン</p>
-          <p className="text-xs text-muted-foreground">ネタバレなしで作品について語れます</p>
+          <p className="text-xs text-muted-foreground">
+            ネタバレなしで作品について語れます
+            {isFree && remainingUses !== null && (
+              <span className="ml-1">（残り{remainingUses}回/週）</span>
+            )}
+          </p>
         </div>
         <Button variant="ghost" size="icon" onClick={handleClear} className="h-8 w-8" title="会話をクリア">
           <Trash2 className="h-4 w-4" />
@@ -127,7 +169,7 @@ export function CompanionChat({ workId }: CompanionChatProps) {
         )}
         {messages.map((msg, i) => (
           <div key={i} className={`flex ${msg.role === 'user' ? 'justify-end' : 'justify-start'}`}>
-            <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm leading-relaxed ${
+            <div className={`max-w-[80%] rounded-lg px-3 py-2 text-sm leading-relaxed whitespace-pre-wrap ${
               msg.role === 'user'
                 ? 'bg-primary text-primary-foreground'
                 : 'bg-muted text-foreground'
@@ -143,6 +185,12 @@ export function CompanionChat({ workId }: CompanionChatProps) {
           </div>
         ))}
       </div>
+
+      {error && (
+        <div className="px-4 py-2 text-xs text-destructive bg-destructive/10 border-t border-destructive/20">
+          {error}
+        </div>
+      )}
 
       <div className="p-4 border-t border-border">
         <div className="flex gap-2">

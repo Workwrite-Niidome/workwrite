@@ -431,14 +431,19 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
     setExtracting(true);
     setExtractedChars([]);
     try {
-      const work = await api.getWork(workId);
-      const episodes = (work as any).data?.episodes || (work as any).episodes || [];
+      // getWork doesn't return episode content, so fetch episode list then load content
+      const epRes = await api.getEpisodes(workId);
+      const episodeList = (epRes as any).data || epRes || [];
       let text = '';
-      for (const ep of episodes) {
-        if (ep.content) {
-          text += ep.content.slice(0, 2000) + '\n\n';
-          if (text.length > 8000) break;
-        }
+      for (const ep of episodeList) {
+        try {
+          const full = await api.getEpisode(ep.id);
+          const content = (full as any).data?.content || (full as any).content || '';
+          if (content) {
+            text += content.slice(0, 2000) + '\n\n';
+            if (text.length > 8000) break;
+          }
+        } catch { /* skip episode */ }
       }
       if (!text.trim()) {
         setExtracting(false);
@@ -519,8 +524,8 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
               <Button size="sm" variant="outline" onClick={() => setShowAiPanel(true)} className="gap-1">
                 <Sparkles className="h-3.5 w-3.5" /> AIに提案してもらう
               </Button>
-              <Button size="sm" variant="ghost" onClick={handleMigrate} disabled={migrating} className="gap-1 text-xs text-muted-foreground">
-                <Upload className="h-3 w-3" /> {migrating ? '移行中...' : '作品設定から移行'}
+              <Button size="sm" variant="ghost" onClick={handleExtractFromText} disabled={extracting} className="gap-1 text-xs text-muted-foreground">
+                <ScanSearch className="h-3 w-3" /> {extracting ? '検出中...' : '本文からキャラクターを検出'}
               </Button>
             </div>
           </div>

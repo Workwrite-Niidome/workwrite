@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Param, Body, Res, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Body, Res, UseGuards, ForbiddenException, HttpStatus } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AiCompanionService } from './ai-companion.service';
@@ -20,6 +20,7 @@ export class AiCompanionController {
     @Body() body: { message: string },
     @Res() res: Response,
   ) {
+    // Start SSE stream
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');

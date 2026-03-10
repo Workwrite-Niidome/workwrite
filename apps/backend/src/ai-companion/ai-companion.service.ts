@@ -1,6 +1,7 @@
 import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { AiTierService } from '../ai-settings/ai-tier.service';
 
 const MAX_WORK_TEXT_LENGTH = 30000;
 
@@ -16,6 +17,7 @@ export class AiCompanionService {
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private aiTier: AiTierService,
   ) {}
 
   async *streamChat(
@@ -23,13 +25,16 @@ export class AiCompanionService {
     workId: string,
     userMessage: string,
   ): AsyncGenerator<string> {
+    // Check tier (enforces free weekly limit, throws ForbiddenException if exceeded)
+    const modelConfig = await this.aiTier.getModelConfig(userId, false, 'companion');
+
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
 
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    const model = await this.aiSettings.getModel();
+    const model = modelConfig.model;
 
     // Load or create conversation
     let conversation = await this.prisma.aiConversation.findUnique({
