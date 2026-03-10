@@ -58,7 +58,7 @@ export class CreationWizardService {
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4000,
+        max_tokens: 8000,
         stream: true,
         system: systemPrompt,
         messages: [{ role: 'user', content: userPrompt }],

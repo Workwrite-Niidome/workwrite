@@ -26,15 +26,43 @@ interface AiPlot {
 }
 
 function parseAiPlot(raw: string): AiPlot | null {
+  const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+
+  // Strategy 1: Standard JSON parse
   try {
-    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
-    if (start === -1 || end === -1) return null;
-    return JSON.parse(cleaned.slice(start, end + 1));
-  } catch {
-    return null;
-  }
+    if (start !== -1 && end > start) {
+      const result = JSON.parse(cleaned.slice(start, end + 1));
+      if (result.premise || result.threeActStructure || result.centralConflict) {
+        return result;
+      }
+    }
+  } catch { /* try next */ }
+
+  // Strategy 2: Truncated JSON repair — find the outermost { and try to close it
+  try {
+    const start = cleaned.indexOf('{');
+    if (start !== -1) {
+      let attempt = cleaned.slice(start);
+      // Close any open strings, arrays, objects
+      const openBraces = (attempt.match(/\{/g) || []).length;
+      const closeBraces = (attempt.match(/\}/g) || []).length;
+      const openBrackets = (attempt.match(/\[/g) || []).length;
+      const closeBrackets = (attempt.match(/\]/g) || []).length;
+      // Remove trailing partial tokens (incomplete string, trailing comma)
+      attempt = attempt.replace(/,\s*$/, '');
+      attempt = attempt.replace(/"[^"]*$/, '""');
+      for (let i = 0; i < openBrackets - closeBrackets; i++) attempt += ']';
+      for (let i = 0; i < openBraces - closeBraces; i++) attempt += '}';
+      const result = JSON.parse(attempt);
+      if (result.premise || result.threeActStructure || result.centralConflict) {
+        return result;
+      }
+    }
+  } catch { /* skip */ }
+
+  return null;
 }
 
 function plotToText(plot: AiPlot): string {
@@ -84,6 +112,7 @@ export function StepPlotArchitect({ data, onChange }: Props) {
     setAiParsed(null);
     setAdopted(false);
     let accumulated = '';
+    let serverParsed: AiPlot | null = null;
     try {
       const themes = data.coreMessage || ownIdeas || 'ストーリーのプロットを提案してください';
 
@@ -109,34 +138,34 @@ export function StepPlotArchitect({ data, onChange }: Props) {
           const d = line.slice(6).trim();
           if (d === '[DONE]') continue;
           try {
-            const parsed = JSON.parse(d);
-            if (parsed.text) {
-              accumulated += parsed.text;
+            const event = JSON.parse(d);
+            if (event.text) {
+              accumulated += event.text;
               setAiRaw(accumulated);
+            }
+            if (event.parsed) {
+              serverParsed = event.parsed;
             }
           } catch { /* skip */ }
         }
       }
       // Process remaining buffer
       if (buffer.trim()) {
-        const remaining = buffer.trim();
-        if (remaining.startsWith('data: ')) {
-          const d = remaining.slice(6).trim();
-          if (d !== '[DONE]') {
-            try {
-              const parsed = JSON.parse(d);
-              if (parsed.text) {
-                accumulated += parsed.text;
-                setAiRaw(accumulated);
-              }
-            } catch { /* skip */ }
-          }
+        for (const line of buffer.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') continue;
+          try {
+            const event = JSON.parse(d);
+            if (event.text) { accumulated += event.text; setAiRaw(accumulated); }
+            if (event.parsed) serverParsed = event.parsed;
+          } catch { /* skip */ }
         }
       }
-      const result = parseAiPlot(accumulated);
+      // Priority: server-parsed > client-parsed
+      const result = serverParsed || parseAiPlot(accumulated);
       if (result) {
         setAiParsed(result);
-        // Auto-save AI data to wizard state so it persists across step navigation
         const text = plotToText(result);
         setOwnIdeas(text);
         onChange({ plotOutline: { text, aiAssisted: true, aiData: result } });
@@ -268,9 +297,14 @@ export function StepPlotArchitect({ data, onChange }: Props) {
         )}
 
         {!aiLoading && aiRaw && !aiParsed && (
-          <div className="p-4 bg-muted/50 rounded-lg">
-            <p className="text-xs text-muted-foreground mb-2">AIの提案:</p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
+          <div className="space-y-2">
+            <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800/50">
+              <p className="text-xs font-medium text-amber-800 dark:text-amber-300 mb-1">自動解析できませんでした</p>
+              <p className="text-xs text-amber-700 dark:text-amber-400">下の提案を参考に、上のテキスト欄にプロット構想を手入力してください。</p>
+            </div>
+            <div className="p-4 bg-muted/50 rounded-lg max-h-80 overflow-y-auto">
+              <div className="text-sm whitespace-pre-wrap leading-relaxed">{aiRaw}</div>
+            </div>
           </div>
         )}
       </div>

@@ -55,7 +55,7 @@ export class CreationWizardController {
   }
 
   @Post('works/:workId/creation/plot')
-  @ApiOperation({ summary: 'Generate plot outline (SSE stream)' })
+  @ApiOperation({ summary: 'Generate plot outline (SSE stream with parsed JSON)' })
   async generatePlot(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
@@ -65,8 +65,15 @@ export class CreationWizardController {
     this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generatePlot(userId, workId, dto);
+      let fullOutput = '';
       for await (const chunk of stream) {
+        fullOutput += chunk;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      // Parse and send structured data
+      const parsed = this.parsePlotJson(fullOutput);
+      if (parsed) {
+        res.write(`data: ${JSON.stringify({ parsed })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
     } catch (err: unknown) {
@@ -210,6 +217,21 @@ export class CreationWizardController {
       }
     } catch { /* skip */ }
 
+    return null;
+  }
+
+  private parsePlotJson(raw: string): any | null {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    try {
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        const json = JSON.parse(cleaned.slice(start, end + 1));
+        if (json.premise || json.threeActStructure || json.centralConflict) {
+          return json;
+        }
+      }
+    } catch { /* skip */ }
     return null;
   }
 

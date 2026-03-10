@@ -1,7 +1,7 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Plus, Trash2, UserPlus } from 'lucide-react';
+import { Sparkles, Plus, Trash2, UserPlus, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,10 +13,22 @@ interface Props {
   onChange: (partial: Partial<WizardData>) => void;
 }
 
-interface Character {
+/** Structured character — all fields stored individually for downstream AI use */
+export interface WizardCharacter {
   name: string;
   role: string;
-  description: string;
+  gender?: string;
+  age?: string;
+  firstPerson?: string;
+  personality?: string;
+  speechStyle?: string;
+  appearance?: string;
+  background?: string;
+  motivation?: string;
+  relationships?: string;
+  uniqueTrait?: string;
+  /** Legacy flat description (manual input or fallback) */
+  description?: string;
   aiSuggested: boolean;
 }
 
@@ -35,11 +47,11 @@ interface AiCharacter {
   uniqueTrait?: string;
 }
 
+const ROLE_OPTIONS = ['主人公', 'ヒロイン', 'ライバル', '敵役', 'メンター', '脇役', 'その他'];
+
 function parseAiResponse(raw: string): { characters: AiCharacter[]; suggestions: string } | null {
   try {
-    // Strip markdown code fences
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-    // Find the JSON object
     const start = cleaned.indexOf('{');
     const end = cleaned.lastIndexOf('}');
     if (start === -1 || end === -1) return null;
@@ -53,23 +65,20 @@ function parseAiResponse(raw: string): { characters: AiCharacter[]; suggestions:
   }
 }
 
-function aiCharToCharacter(ai: AiCharacter): Character {
-  const parts = [
-    ai.gender && `性別: ${ai.gender}`,
-    ai.age && `年齢: ${ai.age}`,
-    ai.firstPerson && `一人称: ${ai.firstPerson}`,
-    ai.personality && `性格: ${ai.personality}`,
-    ai.speechStyle && `口調: ${ai.speechStyle}`,
-    ai.appearance && `外見: ${ai.appearance}`,
-    ai.background && `背景: ${ai.background}`,
-    ai.motivation && `動機: ${ai.motivation}`,
-    ai.relationships && `関係: ${ai.relationships}`,
-    ai.uniqueTrait && `特徴: ${ai.uniqueTrait}`,
-  ].filter(Boolean);
+function aiCharToCharacter(ai: AiCharacter): WizardCharacter {
   return {
     name: ai.name,
     role: ai.role || '',
-    description: parts.join('\n'),
+    gender: ai.gender,
+    age: ai.age,
+    firstPerson: ai.firstPerson,
+    personality: ai.personality,
+    speechStyle: ai.speechStyle,
+    appearance: ai.appearance,
+    background: ai.background,
+    motivation: ai.motivation,
+    relationships: ai.relationships,
+    uniqueTrait: ai.uniqueTrait,
     aiSuggested: true,
   };
 }
@@ -81,16 +90,17 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
   const [aiParsed, setAiParsed] = useState<{ characters: AiCharacter[]; suggestions: string } | null>(
     data._aiCharacterSuggestions || null
   );
+  const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
 
-  const characters = (data.characters || []) as Character[];
+  const characters = (data.characters || []) as WizardCharacter[];
 
   function addCharacter() {
-    onChange({
-      characters: [...characters, { name: '', role: '', description: '', aiSuggested: false }],
-    });
+    const newChars = [...characters, { name: '', role: '', aiSuggested: false }];
+    onChange({ characters: newChars });
+    setExpandedIndex(newChars.length - 1);
   }
 
-  function updateCharacter(index: number, field: keyof Character, value: string) {
+  function updateCharacter(index: number, field: string, value: string) {
     const updated = [...characters];
     updated[index] = { ...updated[index], [field]: value };
     onChange({ characters: updated });
@@ -98,12 +108,15 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
 
   function removeCharacter(index: number) {
     onChange({ characters: characters.filter((_, i) => i !== index) });
+    if (expandedIndex === index) setExpandedIndex(null);
   }
 
   function adoptCharacter(ai: AiCharacter) {
     const exists = characters.some((c) => c.name === ai.name);
     if (exists) return;
-    onChange({ characters: [...characters, aiCharToCharacter(ai)] });
+    const newChars = [...characters, aiCharToCharacter(ai)];
+    onChange({ characters: newChars });
+    setExpandedIndex(newChars.length - 1);
   }
 
   function adoptAllCharacters() {
@@ -159,7 +172,6 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           } catch { /* skip */ }
         }
       }
-      // Process remaining buffer
       if (buffer.trim()) {
         const remaining = buffer.trim();
         if (remaining.startsWith('data: ')) {
@@ -175,7 +187,6 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           }
         }
       }
-      // Parse complete response and persist to wizard data
       const result = parseAiResponse(accumulated);
       if (result) {
         setAiParsed(result);
@@ -188,6 +199,15 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
     }
   }
 
+  function charSummary(c: WizardCharacter): string {
+    const parts = [
+      c.gender,
+      c.age,
+      c.firstPerson && `「${c.firstPerson}」`,
+    ].filter(Boolean);
+    return parts.length > 0 ? parts.join(' / ') : '';
+  }
+
   return (
     <div className="space-y-6">
       <div>
@@ -197,40 +217,163 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
         </p>
       </div>
 
-      {/* Manual character creation */}
-      <div className="space-y-4">
-        {characters.map((char, i) => (
-          <div key={i} className="p-4 border border-border rounded-lg space-y-3">
-            <div className="flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">
-                キャラクター {i + 1}
-                {char.aiSuggested && <span className="ml-1 text-blue-500">(AI提案)</span>}
-              </span>
-              <button onClick={() => removeCharacter(i)} className="text-muted-foreground hover:text-destructive">
-                <Trash2 className="h-3.5 w-3.5" />
+      {/* Character list */}
+      <div className="space-y-3">
+        {characters.map((char, i) => {
+          const isExpanded = expandedIndex === i;
+          return (
+            <div key={i} className="border border-border rounded-lg overflow-hidden">
+              {/* Collapsed header */}
+              <button
+                type="button"
+                onClick={() => setExpandedIndex(isExpanded ? null : i)}
+                className="w-full flex items-center gap-2 p-3 text-left hover:bg-muted/30 transition-colors"
+              >
+                {isExpanded
+                  ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                  : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />}
+                <div className="flex-1 min-w-0">
+                  <span className="text-sm font-medium truncate block">
+                    {char.name || '名前未入力'}
+                    {char.aiSuggested && <span className="ml-1.5 text-[10px] text-blue-500">(AI提案)</span>}
+                  </span>
+                  <span className="text-[10px] text-muted-foreground">
+                    {char.role || '役割未設定'}
+                    {charSummary(char) && ` · ${charSummary(char)}`}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={(e) => { e.stopPropagation(); removeCharacter(i); }}
+                  className="text-muted-foreground hover:text-destructive flex-shrink-0 p-1"
+                >
+                  <Trash2 className="h-3.5 w-3.5" />
+                </button>
               </button>
+
+              {/* Expanded form */}
+              {isExpanded && (
+                <div className="px-3 pb-3 space-y-2 border-t border-border/50 pt-2">
+                  <div className="grid grid-cols-2 gap-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">名前</label>
+                      <Input
+                        value={char.name}
+                        onChange={(e) => updateCharacter(i, 'name', e.target.value)}
+                        placeholder="キャラクター名"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">役割</label>
+                      <select
+                        value={char.role}
+                        onChange={(e) => updateCharacter(i, 'role', e.target.value)}
+                        className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
+                      >
+                        <option value="">選択してください</option>
+                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
+                      </select>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-3 gap-2">
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">性別</label>
+                      <select
+                        value={char.gender || ''}
+                        onChange={(e) => updateCharacter(i, 'gender', e.target.value)}
+                        className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
+                      >
+                        <option value="">未設定</option>
+                        <option value="男性">男性</option>
+                        <option value="女性">女性</option>
+                        <option value="その他">その他</option>
+                        <option value="不明">不明</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">一人称</label>
+                      <Input
+                        value={char.firstPerson || ''}
+                        onChange={(e) => updateCharacter(i, 'firstPerson', e.target.value)}
+                        placeholder="僕/私/俺"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-[10px] text-muted-foreground">年齢</label>
+                      <Input
+                        value={char.age || ''}
+                        onChange={(e) => updateCharacter(i, 'age', e.target.value)}
+                        placeholder="17歳"
+                        className="h-7 text-xs"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">性格</label>
+                    <Input
+                      value={char.personality || ''}
+                      onChange={(e) => updateCharacter(i, 'personality', e.target.value)}
+                      placeholder="内向的だが正義感が強い"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">口調</label>
+                    <Input
+                      value={char.speechStyle || ''}
+                      onChange={(e) => updateCharacter(i, 'speechStyle', e.target.value)}
+                      placeholder="丁寧語。「〜だと思います」が口癖"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">外見</label>
+                    <Input
+                      value={char.appearance || ''}
+                      onChange={(e) => updateCharacter(i, 'appearance', e.target.value)}
+                      placeholder="黒髪のショートカット、常にメガネ"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">背景・過去</label>
+                    <Textarea
+                      value={char.background || ''}
+                      onChange={(e) => updateCharacter(i, 'background', e.target.value)}
+                      rows={2} className="text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">動機・目的</label>
+                    <Input
+                      value={char.motivation || ''}
+                      onChange={(e) => updateCharacter(i, 'motivation', e.target.value)}
+                      className="h-7 text-xs"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-[10px] text-muted-foreground">他キャラとの関係</label>
+                    <Input
+                      value={char.relationships || ''}
+                      onChange={(e) => updateCharacter(i, 'relationships', e.target.value)}
+                      placeholder="主人公の幼馴染、ライバルとは元友人"
+                      className="h-7 text-xs"
+                    />
+                  </div>
+                </div>
+              )}
             </div>
-            <Input
-              value={char.name}
-              onChange={(e) => updateCharacter(i, 'name', e.target.value)}
-              placeholder="名前"
-              className="text-sm"
-            />
-            <Input
-              value={char.role}
-              onChange={(e) => updateCharacter(i, 'role', e.target.value)}
-              placeholder="役割（主人公、ヒロイン、敵役など）"
-              className="text-sm"
-            />
-            <Textarea
-              value={char.description}
-              onChange={(e) => updateCharacter(i, 'description', e.target.value)}
-              placeholder="性格、背景、動機など"
-              rows={3}
-              className="text-sm"
-            />
-          </div>
-        ))}
+          );
+        })}
         <Button variant="outline" size="sm" onClick={addCharacter} className="gap-1">
           <Plus className="h-3.5 w-3.5" />
           キャラクターを追加
@@ -267,7 +410,7 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
         {aiLoading && aiRaw && (
           <div className="p-4 bg-muted/50 rounded-lg">
             <p className="text-xs text-muted-foreground mb-2">生成中...</p>
-            <div className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground max-h-40 overflow-y-auto">{aiRaw.slice(0, 200)}...</div>
+            <div className="text-sm whitespace-pre-wrap leading-relaxed text-muted-foreground max-h-40 overflow-y-auto">{aiRaw.slice(0, 300)}...</div>
           </div>
         )}
 
