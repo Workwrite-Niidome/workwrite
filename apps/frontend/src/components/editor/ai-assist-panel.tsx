@@ -147,39 +147,43 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       contextParts.push(`現在の原稿冒頭: ${summary}...`);
     }
 
-    // Prefer structured context from StoryCharacter + StoryArc tables
+    // Structured context from StoryCharacter + StoryArc tables (characters + arc)
     if (structuredContext) {
       contextParts.push(structuredContext);
+    } else if (creationPlan?.characters?.length > 0) {
+      // Fallback: character sheets from creation plan JSON
+      const charSheets = creationPlan.characters.map((c: any) => {
+        const lines = [`■ ${c.name}${c.role ? `（${c.role}）` : ''}`];
+        if (c.description) lines.push(`  概要: ${c.description}`);
+        if (c.personality) lines.push(`  性格: ${c.personality}`);
+        if (c.firstPerson) lines.push(`  一人称: ${c.firstPerson}`);
+        if (c.speechStyle) lines.push(`  口調: ${c.speechStyle}`);
+        if (c.gender) lines.push(`  性別: ${c.gender}`);
+        if (c.background) lines.push(`  背景: ${c.background}`);
+        if (c.motivation) lines.push(`  動機: ${c.motivation}`);
+        return lines.join('\n');
+      }).join('\n\n');
+      contextParts.push(`【登場キャラクター設定（厳守）】\n${charSheets}`);
     }
 
-    // Fallback: use creation plan JSON if no structured data
-    if (!structuredContext && creationPlan) {
-      if (creationPlan.characters?.length > 0) {
-        const charSheets = creationPlan.characters.map((c: any) => {
-          const lines = [`■ ${c.name}${c.role ? `（${c.role}）` : ''}`];
-          if (c.description) lines.push(`  概要: ${c.description}`);
-          if (c.personality) lines.push(`  性格: ${c.personality}`);
-          if (c.firstPerson) lines.push(`  一人称: ${c.firstPerson}`);
-          if (c.speechStyle) lines.push(`  口調: ${c.speechStyle}`);
-          if (c.gender) lines.push(`  性別: ${c.gender}`);
-          if (c.background) lines.push(`  背景: ${c.background}`);
-          if (c.motivation) lines.push(`  動機: ${c.motivation}`);
-          return lines.join('\n');
-        }).join('\n\n');
-        contextParts.push(`【登場キャラクター設定（厳守）】\n${charSheets}`);
-      }
-      if (creationPlan.plotOutline) {
-        const plot = typeof creationPlan.plotOutline === 'string'
-          ? creationPlan.plotOutline
-          : creationPlan.plotOutline.text || '';
-        if (plot) contextParts.push(`プロット:\n${plot}`);
-      }
-      if (creationPlan.chapterOutline?.length > 0) {
-        const chapterSummary = creationPlan.chapterOutline
-          .map((ch: any, i: number) => `第${i + 1}話「${ch.title}」: ${ch.summary || ''}`.trim())
-          .join('\n');
-        contextParts.push(`章立て:\n${chapterSummary}`);
-      }
+    // Plot and chapter outline (always from creation plan, regardless of structuredContext)
+    if (creationPlan?.plotOutline) {
+      const plot = typeof creationPlan.plotOutline === 'string'
+        ? creationPlan.plotOutline
+        : creationPlan.plotOutline.text || '';
+      if (plot) contextParts.push(`【プロット】\n${plot}`);
+    }
+    if (creationPlan?.chapterOutline?.length > 0) {
+      const chapterSummary = creationPlan.chapterOutline
+        .map((ch: any, i: number) => {
+          const parts = [`第${i + 1}話「${ch.title}」`];
+          if (ch.summary) parts.push(`: ${ch.summary}`);
+          if (ch.emotionTarget) parts.push(` [感情: ${ch.emotionTarget}]`);
+          if (ch.characters?.length > 0) parts.push(` [登場: ${ch.characters.join('、')}]`);
+          return parts.join('');
+        })
+        .join('\n');
+      contextParts.push(`【章立て】\n${chapterSummary}`);
     }
 
     // Emotion blueprint (always from creation plan)
