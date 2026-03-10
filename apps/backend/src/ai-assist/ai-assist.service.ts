@@ -202,7 +202,10 @@ export class AiAssistService {
     existingCharacters: { name: string; role?: string }[],
   ): Promise<{ characters: { name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }[] }> {
     const apiKey = await this.aiSettings.getApiKey();
-    if (!apiKey) return { characters: [] };
+    if (!apiKey) {
+      this.logger.error('extractNewCharacters: API key is not configured');
+      throw new ServiceUnavailableException('AI APIキーが設定されていません');
+    }
 
     const existingNames = existingCharacters.map((c) => c.name).join('、');
     const prompt = `以下の小説テキストから、新しく登場したキャラクターを抽出してください。
@@ -222,36 +225,40 @@ ${generatedText.slice(0, 30000)}
 
 JSONのみを出力してください。`;
 
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': ANTHROPIC_VERSION,
-        },
-        body: JSON.stringify({
-          model: HAIKU_MODEL,
-          max_tokens: 2000,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-      });
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: HAIKU_MODEL,
+        max_tokens: 2000,
+        messages: [{ role: 'user', content: prompt }],
+      }),
+    });
 
-      if (!response.ok) return { characters: [] };
+    if (!response.ok) {
+      const errorText = await response.text().catch(() => '');
+      this.logger.error(`Claude API error ${response.status}: ${errorText}`);
+      throw new ServiceUnavailableException(`AI APIエラー (${response.status})`);
+    }
 
-      const data = await response.json() as { content: { type: string; text?: string }[] };
-      const text = data.content?.[0]?.text || '';
-      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
-      const start = cleaned.indexOf('{');
-      const end = cleaned.lastIndexOf('}');
-      if (start !== -1 && end > start) {
+    const data = await response.json() as { content: { type: string; text?: string }[] };
+    const text = data.content?.[0]?.text || '';
+    const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start !== -1 && end > start) {
+      try {
         const parsed = JSON.parse(cleaned.slice(start, end + 1));
         if (parsed.characters && Array.isArray(parsed.characters)) {
           return { characters: parsed.characters };
         }
+      } catch (e) {
+        this.logger.error('Failed to parse character extraction response', text);
       }
-    } catch (e) {
-      this.logger.error('Failed to extract characters', e);
     }
 
     return { characters: [] };
