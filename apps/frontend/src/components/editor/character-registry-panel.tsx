@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api, type StoryCharacter } from '@/lib/api';
-import { Plus, Trash2, ChevronDown, ChevronRight, Save, Upload, Eye, EyeOff, X } from 'lucide-react';
+import { Plus, Trash2, ChevronDown, ChevronRight, Upload, Eye, EyeOff, X, Sparkles, UserPlus, ScanSearch } from 'lucide-react';
 
 interface Props {
   workId: string;
@@ -15,12 +15,38 @@ interface Props {
 const ROLE_OPTIONS = ['主人公', 'ヒロイン', 'ライバル', '敵役', 'メンター', '脇役', 'その他'];
 const GENDER_OPTIONS = ['男性', '女性', 'その他', '不明'];
 
+interface AiSuggestedChar {
+  name: string;
+  role: string;
+  gender?: string;
+  age?: string;
+  firstPerson?: string;
+  personality?: string;
+  speechStyle?: string;
+  appearance?: string;
+  background?: string;
+  motivation?: string;
+  relationships?: string;
+  uniqueTrait?: string;
+}
+
 export function CharacterRegistryPanel({ workId, onClose }: Props) {
   const [characters, setCharacters] = useState<StoryCharacter[]>([]);
   const [loading, setLoading] = useState(true);
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [saving, setSaving] = useState<string | null>(null);
   const [migrating, setMigrating] = useState(false);
+
+  // AI suggestion state
+  const [showAiPanel, setShowAiPanel] = useState(false);
+  const [aiVision, setAiVision] = useState('');
+  const [aiLoading, setAiLoading] = useState(false);
+  const [aiSuggestions, setAiSuggestions] = useState<AiSuggestedChar[]>([]);
+  const [aiAdvice, setAiAdvice] = useState('');
+
+  // Extract from text state
+  const [extracting, setExtracting] = useState(false);
+  const [extractedChars, setExtractedChars] = useState<AiSuggestedChar[]>([]);
 
   useEffect(() => {
     loadCharacters();
@@ -73,6 +99,131 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
     finally { setMigrating(false); }
   }
 
+  // ─── AI Suggestion ─────────────────────────────────────────
+
+  async function handleAiSuggest() {
+    if (!aiVision.trim()) return;
+    setAiLoading(true);
+    setAiSuggestions([]);
+    setAiAdvice('');
+    let accumulated = '';
+    try {
+      const res = await api.fetchSSE('/works/none/creation/characters', {
+        vision: aiVision,
+      });
+      const reader = res.body?.getReader();
+      if (!reader) throw new Error('No stream');
+      const decoder = new TextDecoder();
+      let buffer = '';
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(d);
+            if (parsed.text) accumulated += parsed.text;
+          } catch { /* skip */ }
+        }
+      }
+      // Parse remaining
+      if (buffer.trim()) {
+        for (const line of buffer.split('\n')) {
+          if (!line.startsWith('data: ')) continue;
+          const d = line.slice(6).trim();
+          if (d === '[DONE]') continue;
+          try {
+            const parsed = JSON.parse(d);
+            if (parsed.text) accumulated += parsed.text;
+          } catch { /* skip */ }
+        }
+      }
+      // Parse JSON
+      const cleaned = accumulated.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        const json = JSON.parse(cleaned.slice(start, end + 1));
+        setAiSuggestions(json.characters || []);
+        setAiAdvice(json.suggestions || '');
+      }
+    } catch {
+      // Silently fail
+    } finally {
+      setAiLoading(false);
+    }
+  }
+
+  async function handleAdoptAiChar(ai: AiSuggestedChar) {
+    try {
+      const res = await api.createCharacter(workId, {
+        name: ai.name,
+        role: ai.role || '脇役',
+        gender: ai.gender,
+        age: ai.age,
+        firstPerson: ai.firstPerson,
+        personality: ai.personality,
+        speechStyle: ai.speechStyle,
+        appearance: ai.appearance,
+        background: ai.background,
+        motivation: ai.motivation,
+      });
+      const newChar = (res as any).data || res;
+      setCharacters((prev) => [...prev, newChar]);
+      setExpandedId(newChar.id);
+    } catch { /* ignore */ }
+  }
+
+  // ─── Extract from episodes ────────────────────────────────
+
+  async function handleExtractFromText() {
+    setExtracting(true);
+    setExtractedChars([]);
+    try {
+      // Get episodes for this work
+      const work = await api.getWork(workId);
+      const episodes = (work as any).data?.episodes || (work as any).episodes || [];
+      // Concatenate episode content (limit to prevent token overflow)
+      let text = '';
+      for (const ep of episodes) {
+        if (ep.content) {
+          text += ep.content.slice(0, 2000) + '\n\n';
+          if (text.length > 8000) break;
+        }
+      }
+      if (!text.trim()) {
+        setExtracting(false);
+        return;
+      }
+      const existing = characters.map((c) => ({ name: c.name, role: c.role }));
+      const res = await api.extractCharacters(text, existing);
+      const chars = (res as any).data?.characters || (res as any).characters || [];
+      setExtractedChars(chars);
+    } catch { /* ignore */ }
+    finally { setExtracting(false); }
+  }
+
+  async function handleAdoptExtracted(ex: AiSuggestedChar) {
+    try {
+      const res = await api.createCharacter(workId, {
+        name: ex.name,
+        role: ex.role || '脇役',
+        gender: ex.gender,
+        personality: ex.personality,
+        speechStyle: ex.speechStyle,
+      });
+      const newChar = (res as any).data || res;
+      setCharacters((prev) => [...prev, newChar]);
+      setExtractedChars((prev) => prev.filter((c) => c.name !== ex.name));
+      setExpandedId(newChar.id);
+    } catch { /* ignore */ }
+  }
+
   if (loading) {
     return (
       <div className="h-full flex flex-col">
@@ -93,7 +244,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 space-y-2" style={{ WebkitOverflowScrolling: 'touch' }}>
-        {characters.length === 0 && (
+        {characters.length === 0 && !showAiPanel && (
           <div className="text-center py-6 space-y-3">
             <p className="text-sm text-muted-foreground">キャラクターが未登録です</p>
             <Button size="sm" variant="outline" onClick={handleMigrate} disabled={migrating} className="gap-1 text-xs">
@@ -107,7 +258,6 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
           const isExpanded = expandedId === char.id;
           return (
             <div key={char.id} className="border border-border rounded-lg">
-              {/* Header */}
               <button
                 onClick={() => setExpandedId(isExpanded ? null : char.id)}
                 className="w-full flex items-center gap-2 p-2.5 text-left hover:bg-muted/30 transition-colors"
@@ -120,7 +270,6 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
                 {char.isPublic && <Eye className="h-3 w-3 text-muted-foreground flex-shrink-0" />}
               </button>
 
-              {/* Expanded Form */}
               {isExpanded && (
                 <div className="px-3 pb-3 space-y-2 border-t border-border/50 pt-2">
                   <div className="grid grid-cols-2 gap-2">
@@ -273,11 +422,139 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
             </div>
           );
         })}
+
+        {/* ─── AI Suggestion Panel ───────────────────────────── */}
+        {showAiPanel && (
+          <div className="border border-primary/20 rounded-lg p-3 space-y-2 bg-primary/[0.02]">
+            <div className="flex items-center justify-between">
+              <h4 className="text-xs font-medium flex items-center gap-1">
+                <Sparkles className="h-3 w-3 text-primary" />
+                AIにキャラクターを提案してもらう
+              </h4>
+              <button onClick={() => { setShowAiPanel(false); setAiSuggestions([]); }} className="text-muted-foreground hover:text-foreground">
+                <X className="h-3.5 w-3.5" />
+              </button>
+            </div>
+            <Textarea
+              value={aiVision}
+              onChange={(e) => setAiVision(e.target.value)}
+              rows={2}
+              placeholder="どんなキャラクターが必要ですか？（例: 主人公の相棒になる陽気な盗賊）"
+              className="text-xs"
+            />
+            <Button
+              size="sm"
+              variant="secondary"
+              onClick={handleAiSuggest}
+              disabled={aiLoading || !aiVision.trim()}
+              className="w-full gap-1 text-xs"
+            >
+              <Sparkles className="h-3 w-3" />
+              {aiLoading ? '考え中...' : 'AIに提案してもらう'}
+            </Button>
+
+            {/* AI Suggestions */}
+            {aiSuggestions.length > 0 && (
+              <div className="space-y-2 pt-1">
+                <p className="text-[10px] text-muted-foreground">提案されたキャラクター（採用すると自動保存されます）</p>
+                {aiSuggestions.map((ai, i) => {
+                  const alreadyExists = characters.some((c) => c.name === ai.name);
+                  return (
+                    <div key={i} className="p-2.5 bg-muted/30 rounded-md border border-border/50 space-y-1">
+                      <div className="flex items-center justify-between">
+                        <div>
+                          <span className="text-xs font-medium">{ai.name}</span>
+                          <span className="text-[10px] text-muted-foreground ml-1.5">({ai.role})</span>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant={alreadyExists ? 'ghost' : 'secondary'}
+                          onClick={() => handleAdoptAiChar(ai)}
+                          disabled={alreadyExists}
+                          className="h-6 gap-1 text-[10px] px-2"
+                        >
+                          <UserPlus className="h-3 w-3" />
+                          {alreadyExists ? '登録済み' : '採用'}
+                        </Button>
+                      </div>
+                      <div className="text-[10px] text-muted-foreground space-y-0.5">
+                        {(ai.gender || ai.age || ai.firstPerson) && (
+                          <p>{[ai.gender, ai.age, ai.firstPerson && `一人称「${ai.firstPerson}」`].filter(Boolean).join(' / ')}</p>
+                        )}
+                        {ai.personality && <p>性格: {ai.personality}</p>}
+                        {ai.speechStyle && <p>口調: {ai.speechStyle}</p>}
+                        {ai.appearance && <p>外見: {ai.appearance}</p>}
+                        {ai.background && <p>背景: {ai.background}</p>}
+                        {ai.motivation && <p>動機: {ai.motivation}</p>}
+                      </div>
+                    </div>
+                  );
+                })}
+                {aiAdvice && (
+                  <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800/50">
+                    <p className="text-[10px] text-blue-700 dark:text-blue-400">{aiAdvice}</p>
+                  </div>
+                )}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* ─── Extracted characters ──────────────────────────── */}
+        {extractedChars.length > 0 && (
+          <div className="border border-amber-200 dark:border-amber-800/50 rounded-lg p-3 space-y-2 bg-amber-50/50 dark:bg-amber-950/20">
+            <h4 className="text-xs font-medium flex items-center gap-1">
+              <ScanSearch className="h-3 w-3 text-amber-600" />
+              本文から検出されたキャラクター
+            </h4>
+            {extractedChars.map((ex, i) => {
+              const alreadyExists = characters.some((c) => c.name === ex.name);
+              return (
+                <div key={i} className="flex items-center justify-between p-2 bg-background/80 rounded-md border border-border/50">
+                  <div className="min-w-0">
+                    <span className="text-xs font-medium">{ex.name}</span>
+                    <span className="text-[10px] text-muted-foreground ml-1.5">({ex.role})</span>
+                    {ex.personality && <p className="text-[10px] text-muted-foreground truncate">{ex.personality}</p>}
+                  </div>
+                  <Button
+                    size="sm"
+                    variant={alreadyExists ? 'ghost' : 'secondary'}
+                    onClick={() => handleAdoptExtracted(ex)}
+                    disabled={alreadyExists}
+                    className="h-6 gap-1 text-[10px] px-2 flex-shrink-0"
+                  >
+                    <UserPlus className="h-3 w-3" />
+                    {alreadyExists ? '登録済み' : '採用'}
+                  </Button>
+                </div>
+              );
+            })}
+          </div>
+        )}
       </div>
 
       <div className="flex-shrink-0 p-3 border-t space-y-1.5">
         <Button size="sm" variant="outline" onClick={handleAdd} className="w-full gap-1 text-xs">
-          <Plus className="h-3 w-3" /> キャラクターを追加
+          <Plus className="h-3 w-3" /> 手動で追加
+        </Button>
+        <Button
+          size="sm"
+          variant="outline"
+          onClick={() => setShowAiPanel(!showAiPanel)}
+          className="w-full gap-1 text-xs"
+        >
+          <Sparkles className="h-3 w-3" />
+          AIに提案してもらう
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={handleExtractFromText}
+          disabled={extracting}
+          className="w-full gap-1 text-xs text-muted-foreground"
+        >
+          <ScanSearch className="h-3 w-3" />
+          {extracting ? '検出中...' : '本文からキャラクターを検出'}
         </Button>
         {characters.length === 0 && (
           <Button size="sm" variant="ghost" onClick={handleMigrate} disabled={migrating} className="w-full gap-1 text-xs text-muted-foreground">
