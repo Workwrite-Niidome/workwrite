@@ -199,7 +199,7 @@ export default function EditWorkPage() {
           </Button>
         </div>
 
-        <div className="space-y-4">
+        <div className="space-y-4 min-w-0">
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">エピソード</CardTitle>
@@ -270,7 +270,7 @@ export default function EditWorkPage() {
             </CardHeader>
             <CardContent>
               {showCharacters ? (
-                <div className="border rounded-lg -mx-2" style={{ height: '500px' }}>
+                <div className="border rounded-lg -mx-2 overflow-hidden" style={{ height: '500px' }}>
                   <CharacterRegistryPanel workId={workId} onClose={() => setShowCharacters(false)} />
                 </div>
               ) : (

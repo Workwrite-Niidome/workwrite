@@ -487,9 +487,9 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
   }
 
   return (
-    <div className="h-full flex flex-col overflow-hidden">
+    <div className="h-full flex flex-col overflow-hidden min-w-0 max-w-full">
       {/* Header */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-muted/20">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-3 border-b bg-muted/20 min-w-0">
         <h3 className="text-sm font-semibold flex items-center gap-1.5">
           <User className="h-4 w-4" /> キャラクター設定
           <span className="text-xs font-normal text-muted-foreground ml-1">
@@ -502,7 +502,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
       </div>
 
       {/* Character list */}
-      <div className="flex-1 min-h-0 overflow-y-auto" style={{ WebkitOverflowScrolling: 'touch' }}>
+      <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
         {characters.length === 0 && !showAiPanel && (
           <div className="text-center py-10 px-4 space-y-4">
             <div className="mx-auto w-12 h-12 rounded-full bg-muted/50 flex items-center justify-center">
