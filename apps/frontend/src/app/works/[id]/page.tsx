@@ -212,8 +212,8 @@ export default function WorkDetailPage() {
           </Card>
         )}
 
-        <div className="flex gap-3">
-          <Button onClick={handleStartReading} size="lg" disabled={!work.episodes?.length}>
+        <div className="flex flex-wrap gap-2 sm:gap-3">
+          <Button onClick={handleStartReading} disabled={!work.episodes?.length}>
             <BookOpen className="h-4 w-4 mr-2" />
             読み始める
           </Button>
@@ -221,7 +221,6 @@ export default function WorkDetailPage() {
             <Button
               onClick={handleAddToBookshelf}
               variant="outline"
-              size="lg"
               disabled={bookshelfAdding}
             >
               <BookmarkPlus className="h-4 w-4 mr-2" />
@@ -234,7 +233,7 @@ export default function WorkDetailPage() {
             </Badge>
           )}
           <Link href={`/works/${workId}/companion`}>
-            <Button variant="outline" size="lg">
+            <Button variant="outline">
               <Sparkles className="h-4 w-4 mr-2" />
               AIと語る
             </Button>
