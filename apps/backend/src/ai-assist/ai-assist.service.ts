@@ -6,6 +6,7 @@ import { PromptTemplatesService } from '../prompt-templates/prompt-templates.ser
 
 const MAX_CONTENT_LENGTH = 10000;
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const ANTHROPIC_VERSION = '2023-06-01';
 
 // In-memory rate limiter: userId -> timestamps
 const rateLimitMap = new Map<string, number[]>();
@@ -129,7 +130,7 @@ export class AiAssistService {
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
+        'anthropic-version': ANTHROPIC_VERSION,
       },
       body: JSON.stringify(requestBody),
     });
@@ -227,7 +228,7 @@ JSONのみを出力してください。`;
         headers: {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
+          'anthropic-version': ANTHROPIC_VERSION,
         },
         body: JSON.stringify({
           model: HAIKU_MODEL,
