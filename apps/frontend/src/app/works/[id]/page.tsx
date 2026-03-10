@@ -3,14 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, BookmarkPlus, Clock, User, Sparkles, UserPlus, UserCheck, X } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime, cn } from '@/lib/utils';
-import { api, type Work } from '@/lib/api';
+import { api, type Work, type StoryCharacter } from '@/lib/api';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -23,6 +23,8 @@ export default function WorkDetailPage() {
   const [bookshelfStatus, setBookshelfStatus] = useState<string | null>(null);
   const [isFollowing, setIsFollowing] = useState(false);
   const [followLoading, setFollowLoading] = useState(false);
+  const [publicCharacters, setPublicCharacters] = useState<StoryCharacter[]>([]);
+  const [expandedCharId, setExpandedCharId] = useState<string | null>(null);
 
   useEffect(() => {
     api.getWork(workId)
@@ -36,6 +38,13 @@ export default function WorkDetailPage() {
       })
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));
+
+    api.getPublicCharacters(workId)
+      .then((res) => {
+        const chars = Array.isArray(res) ? res : (res as any).data || [];
+        setPublicCharacters(chars);
+      })
+      .catch(() => {});
   }, [workId, router, isAuthenticated]);
 
   async function handleAddToBookshelf() {
@@ -161,6 +170,54 @@ export default function WorkDetailPage() {
               <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                 {work.synopsis}
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {work.prologue && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-sm font-medium mb-3">序章</h2>
+              <div className="text-sm whitespace-pre-wrap leading-relaxed border-l-2 border-primary/20 pl-4">
+                {work.prologue}
+              </div>
+            </CardContent>
+          </Card>
+        )}
+
+        {publicCharacters.length > 0 && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                <Users className="h-4 w-4" /> 登場人物
+              </h2>
+              <div className="space-y-1">
+                {publicCharacters.map((char) => {
+                  const isExpanded = expandedCharId === char.id;
+                  return (
+                    <div key={char.id} className="border border-border rounded-lg">
+                      <button
+                        onClick={() => setExpandedCharId(isExpanded ? null : char.id)}
+                        className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                      >
+                        {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                        <span className="text-sm font-medium">{char.name}</span>
+                        <span className="text-xs text-muted-foreground">({char.role})</span>
+                      </button>
+                      {isExpanded && (
+                        <div className="px-4 pb-3 text-xs text-muted-foreground space-y-1 border-t border-border/50 pt-2">
+                          {(char.gender || char.age) && (
+                            <p>{[char.gender, char.age].filter(Boolean).join(' / ')}</p>
+                          )}
+                          {char.personality && <p>性格: {char.personality}</p>}
+                          {char.appearance && <p>外見: {char.appearance}</p>}
+                          {char.background && <p>背景: {char.background}</p>}
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
             </CardContent>
           </Card>
         )}

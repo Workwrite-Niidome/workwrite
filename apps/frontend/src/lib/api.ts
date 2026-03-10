@@ -701,6 +701,10 @@ class ApiClient {
     return this.request<StoryCharacter[]>(`/works/${workId}/characters`);
   }
 
+  async getPublicCharacters(workId: string) {
+    return this.request<StoryCharacter[]>(`/works/${workId}/characters/public`);
+  }
+
   async createCharacter(workId: string, data: Partial<StoryCharacter>) {
     return this.request<StoryCharacter>(`/works/${workId}/characters`, {
       method: 'POST',
@@ -1035,6 +1039,7 @@ export interface Work {
   id: string;
   title: string;
   synopsis: string | null;
+  prologue: string | null;
   coverUrl: string | null;
   status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
   genre: string | null;

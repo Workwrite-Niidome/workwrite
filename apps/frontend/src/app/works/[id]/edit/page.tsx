@@ -38,6 +38,7 @@ export default function EditWorkPage() {
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
   const [title, setTitle] = useState('');
   const [synopsis, setSynopsis] = useState('');
+  const [prologue, setPrologue] = useState('');
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [scoreDetail, setScoreDetail] = useState<QualityScoreDetail | null>(null);
@@ -61,6 +62,7 @@ export default function EditWorkPage() {
         setWork(res.data);
         setTitle(res.data.title);
         setSynopsis(res.data.synopsis || '');
+        setPrologue(res.data.prologue || '');
         if (res.data.episodes) {
           setEpisodes(res.data.episodes as EpisodeItem[]);
         }
@@ -80,7 +82,7 @@ export default function EditWorkPage() {
     setSaving(true);
     setMessage('');
     try {
-      const res = await api.updateWork(workId, { title, synopsis } as Partial<Work>);
+      const res = await api.updateWork(workId, { title, synopsis, prologue } as Partial<Work>);
       setWork(res.data);
       setMessage('保存しました');
     } catch {
@@ -192,6 +194,16 @@ export default function EditWorkPage() {
               value={synopsis}
               onChange={(e) => setSynopsis(e.target.value)}
               rows={5}
+            />
+          </div>
+          <div className="space-y-2">
+            <label className="text-sm font-medium">序章</label>
+            <p className="text-xs text-muted-foreground">読者が作品ページで最初に読む導入文です。設定すると目次の前に表示されます。</p>
+            <Textarea
+              value={prologue}
+              onChange={(e) => setPrologue(e.target.value)}
+              rows={8}
+              placeholder="物語の世界観や雰囲気を伝える序章を書いてみましょう..."
             />
           </div>
           <Button onClick={handleSave} disabled={saving}>

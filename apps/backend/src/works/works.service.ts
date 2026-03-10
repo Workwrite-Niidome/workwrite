@@ -100,6 +100,7 @@ export class WorksService {
     const updateData: Record<string, unknown> = {};
     if (dto.title !== undefined) updateData.title = dto.title;
     if (dto.synopsis !== undefined) updateData.synopsis = dto.synopsis;
+    if (dto.prologue !== undefined) updateData.prologue = dto.prologue;
     if (dto.coverUrl !== undefined) updateData.coverUrl = dto.coverUrl;
     if (dto.genre !== undefined) updateData.genre = dto.genre;
     if (dto.status !== undefined) {

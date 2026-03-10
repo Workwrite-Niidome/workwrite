@@ -14,6 +14,12 @@ export class CreateWorkDto {
   @MaxLength(5000)
   synopsis?: string;
 
+  @ApiPropertyOptional({ description: '序章テキスト（読者に表示される導入文）' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20000)
+  prologue?: string;
+
   @ApiPropertyOptional()
   @IsOptional()
   @IsString()
@@ -43,6 +49,12 @@ export class UpdateWorkDto {
   @IsString()
   @MaxLength(5000)
   synopsis?: string;
+
+  @ApiPropertyOptional({ description: '序章テキスト' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(20000)
+  prologue?: string;
 
   @ApiPropertyOptional()
   @IsOptional()

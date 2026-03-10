@@ -113,6 +113,7 @@ model Work {
   authorId    String
   title       String
   synopsis    String?    @db.Text
+  prologue    String?    @db.Text
   coverUrl    String?
   status      WorkStatus @default(DRAFT)
   genre       String?

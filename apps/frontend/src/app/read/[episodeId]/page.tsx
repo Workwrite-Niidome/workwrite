@@ -117,6 +117,7 @@ export default function ReaderPage() {
 
   const [episode, setEpisode] = useState<Episode | null>(null);
   const [episodes, setEpisodes] = useState<{ id: string; title: string; orderIndex: number }[]>([]);
+  const [prologue, setPrologue] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [settings, setSettings] = useState<ReaderSettings>(DEFAULT_SETTINGS);
   const [showSettings, setShowSettings] = useState(false);
@@ -153,16 +154,23 @@ export default function ReaderPage() {
   useEffect(() => {
     setLoading(true);
     setShowCompleteBanner(false);
+    setPrologue(null);
     api.getEpisode(episodeId)
       .then((res) => {
         setEpisode(res.data);
-        return api.getEpisodes(res.data.workId);
+        return Promise.all([
+          api.getEpisodes(res.data.workId),
+          api.getWork(res.data.workId),
+        ]);
       })
-      .then((res) => {
-        setEpisodes(
-          (res.data as { id: string; title: string; orderIndex: number }[])
-            .sort((a, b) => a.orderIndex - b.orderIndex),
-        );
+      .then(([epRes, workRes]) => {
+        const sorted = (epRes.data as { id: string; title: string; orderIndex: number }[])
+          .sort((a, b) => a.orderIndex - b.orderIndex);
+        setEpisodes(sorted);
+        // Show prologue only on the first episode
+        if (sorted.length > 0 && sorted[0].id === episodeId && workRes.data.prologue) {
+          setPrologue(workRes.data.prologue);
+        }
       })
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));
@@ -601,6 +609,14 @@ export default function ReaderPage() {
 
       {/* Main content */}
       <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
+        {prologue && (
+          <div className="mb-12 border-l-2 border-primary/30 pl-5">
+            <p className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap text-muted-foreground italic`}>
+              {prologue}
+            </p>
+            <div className="mt-6 border-t border-border/50" />
+          </div>
+        )}
         <h1 className="text-2xl font-bold font-serif mb-8 text-center">
           {episode.title}
         </h1>
