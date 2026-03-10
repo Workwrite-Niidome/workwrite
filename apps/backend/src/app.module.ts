@@ -31,6 +31,7 @@ import { WorkImportModule } from './work-import/work-import.module';
 import { FollowsModule } from './follows/follows.module';
 import { LettersModule } from './letters/letters.module';
 import { CreationWizardModule } from './creation-wizard/creation-wizard.module';
+import { StoryStructureModule } from './story-structure/story-structure.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -70,6 +71,7 @@ import { HealthController } from './health.controller';
     FollowsModule,
     LettersModule,
     CreationWizardModule,
+    StoryStructureModule,
   ],
   controllers: [HealthController],
 })

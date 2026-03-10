@@ -689,6 +689,85 @@ class ApiClient {
     } }>('/ai/status');
   }
 
+  async extractCharacters(generatedText: string, existingCharacters: { name: string; role?: string }[]) {
+    return this.request<{ characters: { name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }[] }>('/ai/extract-characters', {
+      method: 'POST',
+      body: JSON.stringify({ generatedText, existingCharacters }),
+    });
+  }
+
+  // Story Structure - Characters
+  async getCharacters(workId: string) {
+    return this.request<StoryCharacter[]>(`/works/${workId}/characters`);
+  }
+
+  async createCharacter(workId: string, data: Partial<StoryCharacter>) {
+    return this.request<StoryCharacter>(`/works/${workId}/characters`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateCharacter(workId: string, id: string, data: Partial<StoryCharacter>) {
+    return this.request<StoryCharacter>(`/works/${workId}/characters/${id}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteCharacter(workId: string, id: string) {
+    return this.request<{ deleted: boolean }>(`/works/${workId}/characters/${id}`, { method: 'DELETE' });
+  }
+
+  async setCharacterRelation(workId: string, fromId: string, data: { toCharacterId: string; relationType: string; description?: string }) {
+    return this.request<any>(`/works/${workId}/characters/${fromId}/relations`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async migrateCharacters(workId: string) {
+    return this.request<{ migrated: number }>(`/works/${workId}/characters/migrate`, { method: 'POST' });
+  }
+
+  // Story Structure - Arc
+  async getStoryArc(workId: string) {
+    return this.request<StoryArc | null>(`/works/${workId}/story-arc`);
+  }
+
+  async upsertStoryArc(workId: string, data: { premise?: string; centralConflict?: string; themes?: string[]; acts?: { actNumber: number; title: string; summary?: string; turningPoint?: string }[] }) {
+    return this.request<StoryArc>(`/works/${workId}/story-arc`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async createScene(workId: string, data: { actId: string; title: string; summary?: string; emotionTarget?: string; intensity?: number; characters?: string[] }) {
+    return this.request<StoryScene>(`/works/${workId}/story-arc/scenes`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateScene(workId: string, sceneId: string, data: Partial<StoryScene>) {
+    return this.request<StoryScene>(`/works/${workId}/story-arc/scenes/${sceneId}`, {
+      method: 'PUT',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteScene(workId: string, sceneId: string) {
+    return this.request<{ deleted: boolean }>(`/works/${workId}/story-arc/scenes/${sceneId}`, { method: 'DELETE' });
+  }
+
+  async migrateStoryArc(workId: string) {
+    return this.request<{ migrated: boolean }>(`/works/${workId}/story-arc/migrate`, { method: 'POST' });
+  }
+
+  async getStoryContext(workId: string) {
+    return this.request<string | null>(`/works/${workId}/story-context`);
+  }
+
   // Invite codes
   async getInviteCodes() {
     return this.request<{ data: InviteCode[] }>('/admin/invite-codes');
@@ -1264,6 +1343,61 @@ export interface InviteCode {
   expiresAt: string | null;
   createdAt: string;
   _count?: { usages: number };
+}
+
+// Story Structure
+export interface StoryCharacter {
+  id: string;
+  workId: string;
+  name: string;
+  role: string;
+  gender?: string | null;
+  age?: string | null;
+  personality?: string | null;
+  speechStyle?: string | null;
+  firstPerson?: string | null;
+  appearance?: string | null;
+  background?: string | null;
+  motivation?: string | null;
+  arc?: string | null;
+  notes?: string | null;
+  isPublic: boolean;
+  sortOrder: number;
+  relationsFrom?: { relationType: string; description?: string; to: { id: string; name: string } }[];
+  relationsTo?: { relationType: string; description?: string; from: { id: string; name: string } }[];
+}
+
+export interface StoryScene {
+  id: string;
+  actId: string;
+  episodeId?: string | null;
+  title: string;
+  summary?: string | null;
+  emotionTarget?: string | null;
+  intensity?: number | null;
+  characters: string[];
+  status: string;
+  sortOrder: number;
+}
+
+export interface StoryAct {
+  id: string;
+  arcId: string;
+  actNumber: number;
+  title: string;
+  summary?: string | null;
+  turningPoint?: string | null;
+  sortOrder: number;
+  scenes: StoryScene[];
+}
+
+export interface StoryArc {
+  id: string;
+  workId: string;
+  premise?: string | null;
+  centralConflict?: string | null;
+  themes: string[];
+  acts: StoryAct[];
 }
 
 export const api = new ApiClient();

@@ -5,7 +5,7 @@ import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream } from '@/lib/use-ai-stream';
 import { api } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal, Send } from 'lucide-react';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal, Send, UserPlus, Check, Loader2 } from 'lucide-react';
 
 interface AiAssistPanelProps {
   workId: string;
@@ -38,6 +38,10 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [creationPlan, setCreationPlan] = useState<any>(null);
   const [storySummary, setStorySummary] = useState<any>(null);
   const [episodes, setEpisodes] = useState<{ title: string; content: string }[]>([]);
+  const [structuredContext, setStructuredContext] = useState<string | null>(null);
+  const [extracting, setExtracting] = useState(false);
+  const [newChars, setNewChars] = useState<{ name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }[] | null>(null);
+  const [savedChars, setSavedChars] = useState<Set<string>>(new Set());
   const { result, isStreaming, error, generate, abort, reset } = useAiStream();
 
   useEffect(() => {
@@ -59,6 +63,10 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
             if (res.data.storySummary) setStorySummary(res.data.storySummary);
           }
         })
+        .catch(() => {});
+      // Load structured context from StoryCharacter + StoryArc tables
+      api.getStoryContext(workId)
+        .then((res) => { if (res) setStructuredContext(typeof res === 'string' ? res : (res as any).data || null); })
         .catch(() => {});
       // Load episode titles as fallback (if no story summary)
       api.getEpisodes(workId)
@@ -91,6 +99,41 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     setTimeout(() => setCopied(false), 2000);
   }
 
+  async function handleExtractCharacters() {
+    if (!result) return;
+    setExtracting(true);
+    setNewChars(null);
+    try {
+      const existing = (creationPlan?.characters || []).map((c: any) => ({ name: c.name, role: c.role }));
+      const res = await api.extractCharacters(result, existing);
+      setNewChars(res.characters || []);
+    } catch {
+      setNewChars([]);
+    } finally {
+      setExtracting(false);
+    }
+  }
+
+  async function handleSaveCharacter(char: { name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }) {
+    if (!workId || savedChars.has(char.name)) return;
+    const existingChars = creationPlan?.characters || [];
+    const newChar = {
+      name: char.name,
+      role: char.role,
+      description: char.description,
+      personality: char.personality,
+      speechStyle: char.speechStyle,
+      gender: char.gender,
+      aiSuggested: true,
+    };
+    const updatedChars = [...existingChars, newChar];
+    try {
+      await api.saveCreationPlan(workId, { characters: updatedChars });
+      setCreationPlan((prev: any) => ({ ...prev, characters: updatedChars }));
+      setSavedChars((prev) => new Set([...prev, char.name]));
+    } catch { /* ignore */ }
+  }
+
   function buildContextVars(): Record<string, string> {
     const vars: Record<string, string> = { content: selectedText || currentContent };
     const contextParts: string[] = [];
@@ -104,18 +147,26 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       contextParts.push(`現在の原稿冒頭: ${summary}...`);
     }
 
-    if (creationPlan) {
-      if (creationPlan.emotionBlueprint) {
-        const eb = creationPlan.emotionBlueprint;
-        if (eb.coreMessage) contextParts.push(`テーマ: ${eb.coreMessage}`);
-        if (eb.targetEmotions) contextParts.push(`読者に届けたい感情: ${eb.targetEmotions}`);
-        if (eb.readerJourney) contextParts.push(`読者の旅路: ${eb.readerJourney}`);
-      }
+    // Prefer structured context from StoryCharacter + StoryArc tables
+    if (structuredContext) {
+      contextParts.push(structuredContext);
+    }
+
+    // Fallback: use creation plan JSON if no structured data
+    if (!structuredContext && creationPlan) {
       if (creationPlan.characters?.length > 0) {
-        const charSummary = creationPlan.characters
-          .map((c: any) => `${c.name}${c.role ? `(${c.role})` : ''}: ${c.description || ''}`.trim())
-          .join('\n');
-        contextParts.push(`キャラクター:\n${charSummary}`);
+        const charSheets = creationPlan.characters.map((c: any) => {
+          const lines = [`■ ${c.name}${c.role ? `（${c.role}）` : ''}`];
+          if (c.description) lines.push(`  概要: ${c.description}`);
+          if (c.personality) lines.push(`  性格: ${c.personality}`);
+          if (c.firstPerson) lines.push(`  一人称: ${c.firstPerson}`);
+          if (c.speechStyle) lines.push(`  口調: ${c.speechStyle}`);
+          if (c.gender) lines.push(`  性別: ${c.gender}`);
+          if (c.background) lines.push(`  背景: ${c.background}`);
+          if (c.motivation) lines.push(`  動機: ${c.motivation}`);
+          return lines.join('\n');
+        }).join('\n\n');
+        contextParts.push(`【登場キャラクター設定（厳守）】\n${charSheets}`);
       }
       if (creationPlan.plotOutline) {
         const plot = typeof creationPlan.plotOutline === 'string'
@@ -129,6 +180,14 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           .join('\n');
         contextParts.push(`章立て:\n${chapterSummary}`);
       }
+    }
+
+    // Emotion blueprint (always from creation plan)
+    if (creationPlan?.emotionBlueprint) {
+      const eb = creationPlan.emotionBlueprint;
+      if (eb.coreMessage) contextParts.push(`テーマ: ${eb.coreMessage}`);
+      if (eb.targetEmotions) contextParts.push(`読者に届けたい感情: ${eb.targetEmotions}`);
+      if (eb.readerJourney) contextParts.push(`読者の旅路: ${eb.readerJourney}`);
     }
 
     // Use cached story summary if available (token-efficient)
@@ -426,18 +485,64 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
               {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
             </div>
             {!isStreaming && result && (
-              <div className="flex gap-1.5">
-                <Button size="sm" variant="outline" onClick={() => onInsert(result)} className="flex-1 text-xs">
-                  <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
-                </Button>
-                {selectedText && onReplace && (
-                  <Button size="sm" variant="outline" onClick={() => onReplace(result)} className="flex-1 text-xs">
-                    <Replace className="h-3 w-3 mr-1" /> 置換
+              <div className="space-y-2">
+                <div className="flex gap-1.5">
+                  <Button size="sm" variant="outline" onClick={() => onInsert(result)} className="flex-1 text-xs">
+                    <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
                   </Button>
-                )}
-                <Button size="sm" variant="outline" onClick={handleCopy} className="flex-1 text-xs">
-                  <Copy className="h-3 w-3 mr-1" /> {copied ? 'コピー済み' : 'コピー'}
+                  {selectedText && onReplace && (
+                    <Button size="sm" variant="outline" onClick={() => onReplace(result)} className="flex-1 text-xs">
+                      <Replace className="h-3 w-3 mr-1" /> 置換
+                    </Button>
+                  )}
+                  <Button size="sm" variant="outline" onClick={handleCopy} className="flex-1 text-xs">
+                    <Copy className="h-3 w-3 mr-1" /> {copied ? 'コピー済み' : 'コピー'}
+                  </Button>
+                </div>
+
+                {/* Extract new characters */}
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  onClick={handleExtractCharacters}
+                  disabled={extracting}
+                  className="w-full text-xs text-muted-foreground gap-1"
+                >
+                  {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                  {extracting ? '検出中...' : '新キャラクター・設定を検出'}
                 </Button>
+
+                {newChars !== null && newChars.length === 0 && (
+                  <p className="text-xs text-muted-foreground text-center">新しいキャラクターは検出されませんでした</p>
+                )}
+
+                {newChars && newChars.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs font-medium text-muted-foreground">検出されたキャラクター:</p>
+                    {newChars.map((ch) => {
+                      const isSaved = savedChars.has(ch.name);
+                      return (
+                        <div key={ch.name} className="p-2 bg-muted/30 rounded border border-border/50 text-xs space-y-0.5">
+                          <div className="flex items-center justify-between">
+                            <span className="font-medium">{ch.name}（{ch.role}）</span>
+                            <Button
+                              size="sm"
+                              variant={isSaved ? 'ghost' : 'secondary'}
+                              className="h-6 text-[10px] gap-0.5"
+                              onClick={() => handleSaveCharacter(ch)}
+                              disabled={isSaved}
+                            >
+                              {isSaved ? <><Check className="h-2.5 w-2.5" /> 保存済み</> : '設定に追加'}
+                            </Button>
+                          </div>
+                          <p className="text-muted-foreground">{ch.gender} / {ch.personality}</p>
+                          {ch.speechStyle && <p className="text-muted-foreground">口調: {ch.speechStyle}</p>}
+                          <p className="text-muted-foreground">{ch.description}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
             )}
           </div>

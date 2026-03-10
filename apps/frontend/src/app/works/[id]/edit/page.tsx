@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -13,6 +13,7 @@ import { ConfirmDialog } from '@/components/ui/dialog';
 import { Loading } from '@/components/layout/loading';
 import { ScoreCard } from '@/components/scoring/score-card';
 import { api, type Work, type QualityScoreDetail } from '@/lib/api';
+import { CharacterRegistryPanel } from '@/components/editor/character-registry-panel';
 
 interface EpisodeItem {
   id: string;
@@ -48,6 +49,7 @@ export default function EditWorkPage() {
   const [deleteEpisodeId, setDeleteEpisodeId] = useState<string | null>(null);
   const [creationPlan, setCreationPlan] = useState<any>(null);
   const [planOpen, setPlanOpen] = useState(false);
+  const [showCharacters, setShowCharacters] = useState(false);
 
   // Drag state
   const dragItemRef = useRef<number | null>(null);
@@ -257,6 +259,27 @@ export default function EditWorkPage() {
           </Card>
 
           <CreationPlanCard workId={workId} creationPlan={creationPlan} onSaved={setCreationPlan} />
+
+          {/* Character Registry */}
+          <Card>
+            <CardHeader className="pb-2">
+              <CardTitle className="text-sm flex items-center gap-2">
+                <Users className="h-4 w-4" />
+                キャラクター設定
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {showCharacters ? (
+                <div className="border rounded-lg -mx-2" style={{ height: '500px' }}>
+                  <CharacterRegistryPanel workId={workId} onClose={() => setShowCharacters(false)} />
+                </div>
+              ) : (
+                <Button size="sm" variant="outline" onClick={() => setShowCharacters(true)} className="w-full text-xs gap-1">
+                  <Users className="h-3 w-3" /> キャラクター管理を開く
+                </Button>
+              )}
+            </CardContent>
+          </Card>
 
           {scoreDetail && <ScoreCard score={scoreDetail} />}
         </div>

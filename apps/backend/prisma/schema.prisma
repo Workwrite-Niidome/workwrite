@@ -139,6 +139,10 @@ model Work {
   creationPlan    WorkCreationPlan?
   aiCreationLogs  AiCreationLog[]
 
+  // Story Structure
+  storyCharacters StoryCharacter[]
+  storyArc        StoryArc?
+
   // Denormalized stats
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
@@ -176,6 +180,7 @@ model Episode {
   highlights      Highlight[]
   comments        Comment[]
   letters         Letter[]
+  scenes          StoryScene[]
 
   @@unique([workId, orderIndex])
   @@index([workId])
@@ -720,6 +725,97 @@ model WorkCreationPlan {
   updatedAt        DateTime @updatedAt
 
   work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+}
+
+// ============================================================
+// Story Structure (Structured Character & Plot Data)
+// ============================================================
+
+model StoryCharacter {
+  id           String   @id @default(cuid())
+  workId       String
+  name         String
+  role         String               // 主人公/ヒロイン/敵役/脇役/メンター
+  gender       String?
+  age          String?              // "17歳" or "20代後半"
+  personality  String?
+  speechStyle  String?              // 口調（丁寧語、ぶっきらぼう等）
+  firstPerson  String?              // 一人称（僕/私/俺/わたし等）
+  appearance   String?   @db.Text
+  background   String?   @db.Text
+  motivation   String?
+  arc          String?              // キャラクターアーク（成長・変化の方向）
+  notes        String?   @db.Text   // 著者メモ
+  isPublic     Boolean  @default(false)
+  sortOrder    Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  work          Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+  relationsFrom StoryCharacterRelation[] @relation("FromCharacter")
+  relationsTo   StoryCharacterRelation[] @relation("ToCharacter")
+
+  @@index([workId])
+}
+
+model StoryCharacterRelation {
+  id             String @id @default(cuid())
+  fromCharacterId String
+  toCharacterId   String
+  relationType   String              // 恋人/親友/ライバル/師弟/家族/敵対
+  description    String?
+
+  from StoryCharacter @relation("FromCharacter", fields: [fromCharacterId], references: [id], onDelete: Cascade)
+  to   StoryCharacter @relation("ToCharacter", fields: [toCharacterId], references: [id], onDelete: Cascade)
+
+  @@unique([fromCharacterId, toCharacterId])
+}
+
+model StoryArc {
+  id              String   @id @default(cuid())
+  workId          String   @unique
+  premise         String?  @db.Text
+  centralConflict String?
+  themes          String[]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+  acts StoryAct[]
+}
+
+model StoryAct {
+  id           String @id @default(cuid())
+  arcId        String
+  actNumber    Int                  // 1, 2, 3
+  title        String
+  summary      String? @db.Text
+  turningPoint String?
+  sortOrder    Int     @default(0)
+
+  arc    StoryArc    @relation(fields: [arcId], references: [id], onDelete: Cascade)
+  scenes StoryScene[]
+
+  @@index([arcId])
+}
+
+model StoryScene {
+  id            String   @id @default(cuid())
+  actId         String
+  episodeId     String?
+  title         String
+  summary       String?  @db.Text
+  emotionTarget String?
+  intensity     Int?                 // 1-10
+  characters    String[]             // キャラクター名の配列
+  status        String   @default("planned") // planned/writing/done
+  sortOrder     Int      @default(0)
+
+  act     StoryAct @relation(fields: [actId], references: [id], onDelete: Cascade)
+  episode Episode? @relation(fields: [episodeId], references: [id])
+
+  @@index([actId])
+  @@index([episodeId])
 }
 
 // ============================================================

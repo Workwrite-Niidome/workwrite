@@ -2,7 +2,7 @@ import { Controller, Get, Post, Put, Delete, Body, Param, Query, Res, UseGuards,
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AiAssistService } from './ai-assist.service';
-import { AiAssistDto, SaveDraftDto } from './dto/ai-assist.dto';
+import { AiAssistDto, ExtractCharactersDto, SaveDraftDto } from './dto/ai-assist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PrismaService } from '../common/prisma/prisma.service';
@@ -50,6 +50,17 @@ export class AiAssistController {
     } finally {
       res.end();
     }
+  }
+
+  @Post('ai/extract-characters')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Extract new characters from generated text' })
+  async extractCharacters(@Body() dto: ExtractCharactersDto) {
+    return this.aiAssist.extractNewCharacters(
+      dto.generatedText,
+      dto.existingCharacters || [],
+    );
   }
 
   // === Draft endpoints ===

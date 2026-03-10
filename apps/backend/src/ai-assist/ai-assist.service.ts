@@ -5,6 +5,7 @@ import { AiTierService } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 
 const MAX_CONTENT_LENGTH = 10000;
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
 // In-memory rate limiter: userId -> timestamps
 const rateLimitMap = new Map<string, number[]>();
@@ -192,5 +193,66 @@ export class AiAssistService {
         },
       }).catch((e) => this.logger.error('Failed to log AI usage', e));
     }
+  }
+
+  /** Extract new characters/settings from generated text using Haiku */
+  async extractNewCharacters(
+    generatedText: string,
+    existingCharacters: { name: string; role?: string }[],
+  ): Promise<{ characters: { name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }[] }> {
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) return { characters: [] };
+
+    const existingNames = existingCharacters.map((c) => c.name).join('、');
+    const prompt = `以下の小説テキストから、新しく登場したキャラクターを抽出してください。
+
+【既存キャラクター（除外してください）】
+${existingNames || '（なし）'}
+
+【テキスト】
+${generatedText.slice(0, 5000)}
+
+【指示】
+- 既存キャラクターに含まれない、新しく登場したキャラクターのみを抽出してください
+- 名前のない一般的な通行人やモブキャラクターは除外してください
+- 以下のJSON形式で出力してください。新しいキャラクターがいなければ空配列を返してください
+
+{"characters":[{"name":"名前","role":"役割（主人公/ヒロイン/ライバル/脇役など）","gender":"性別","personality":"性格の要約","speechStyle":"口調の特徴（例: 丁寧語、ぶっきらぼう、関西弁）","description":"人物の概要"}]}
+
+JSONのみを出力してください。`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2025-04-15',
+        },
+        body: JSON.stringify({
+          model: HAIKU_MODEL,
+          max_tokens: 2000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!response.ok) return { characters: [] };
+
+      const data = await response.json() as { content: { type: string; text?: string }[] };
+      const text = data.content?.[0]?.text || '';
+      const cleaned = text.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        const parsed = JSON.parse(cleaned.slice(start, end + 1));
+        if (parsed.characters && Array.isArray(parsed.characters)) {
+          return { characters: parsed.characters };
+        }
+      }
+    } catch (e) {
+      this.logger.error('Failed to extract characters', e);
+    }
+
+    return { characters: [] };
   }
 }

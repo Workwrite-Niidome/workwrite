@@ -1,5 +1,6 @@
-import { IsString, IsOptional, IsObject, IsBoolean } from 'class-validator';
+import { IsString, IsOptional, IsObject, IsBoolean, IsArray, ValidateNested } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
+import { Type } from 'class-transformer';
 
 export class AiAssistDto {
   @ApiProperty({ example: 'continue-writing' })
@@ -14,6 +15,28 @@ export class AiAssistDto {
   @IsOptional()
   @IsBoolean()
   premiumMode?: boolean;
+}
+
+class ExistingCharacterDto {
+  @IsString()
+  name: string;
+
+  @IsOptional()
+  @IsString()
+  role?: string;
+}
+
+export class ExtractCharactersDto {
+  @ApiProperty({ description: 'The generated text to analyze' })
+  @IsString()
+  generatedText: string;
+
+  @ApiPropertyOptional({ description: 'Existing characters to exclude' })
+  @IsOptional()
+  @IsArray()
+  @ValidateNested({ each: true })
+  @Type(() => ExistingCharacterDto)
+  existingCharacters?: ExistingCharacterDto[];
 }
 
 export class SaveDraftDto {
