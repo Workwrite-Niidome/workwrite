@@ -12,8 +12,6 @@ import {
   X,
   Mail,
   Sparkles,
-  Maximize,
-  Minimize,
   Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -59,7 +57,7 @@ const MAX_WIDTHS: Record<MaxWidth, { class: string; label: string; px: string }>
 };
 
 const THEMES: Record<Theme, { bg: string; text: string; label: string }> = {
-  light: { bg: 'bg-white dark:bg-gray-50', text: 'text-gray-900', label: '明るい' },
+  light: { bg: 'bg-background', text: 'text-foreground', label: '標準' },
   dark: { bg: 'bg-gray-900', text: 'text-gray-100', label: '暗い' },
   sepia: { bg: 'bg-amber-50 dark:bg-amber-950', text: 'text-amber-950 dark:text-amber-100', label: 'セピア' },
 };
@@ -531,15 +529,6 @@ export default function ReaderPage() {
               残り {estimateReadingTime(Math.round(episode.wordCount * (1 - progressPct)))}
             </span>
           )}
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={() => setImmersiveMode(!immersiveMode)}
-            className="min-h-[44px] min-w-[44px]"
-            title={immersiveMode ? '没入モード解除 (f)' : '没入モード (f)'}
-          >
-            {immersiveMode ? <Minimize className="h-4 w-4" /> : <Maximize className="h-4 w-4" />}
-          </Button>
           <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="AIコンパニオン (a)">
             <Sparkles className="h-4 w-4" />
           </Button>

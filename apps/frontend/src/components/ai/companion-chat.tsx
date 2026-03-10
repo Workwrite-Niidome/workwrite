@@ -5,8 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, type CompanionMessage } from '@/lib/api';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
-
 interface CompanionChatProps {
   workId: string;
 }
@@ -20,7 +18,10 @@ export function CompanionChat({ workId }: CompanionChatProps) {
 
   useEffect(() => {
     api.getCompanionHistory(workId)
-      .then((res) => setMessages(res.data))
+      .then((res) => {
+        const msgs = (res as any).data || (res as any).messages || [];
+        setMessages(Array.isArray(msgs) ? msgs : []);
+      })
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [workId]);
@@ -40,17 +41,8 @@ export function CompanionChat({ workId }: CompanionChatProps) {
     setMessages((prev) => [...prev, assistantMsg]);
 
     try {
-      const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
-      const response = await fetch(`${API_BASE}/ai/companion/${workId}/chat`, {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          ...(token ? { Authorization: `Bearer ${token}` } : {}),
-        },
-        body: JSON.stringify({ message: userMsg.content }),
-      });
+      const response = await api.fetchSSE(`/ai/companion/${workId}/chat`, { message: userMsg.content });
 
-      if (!response.ok) throw new Error('Chat failed');
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No stream');
