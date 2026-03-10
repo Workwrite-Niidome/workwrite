@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Wand2, Zap } from 'lucide-react';
+import { Wand2, Zap, Sparkles, Users, GitBranch, Brain } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -52,35 +52,55 @@ function NewWorkPageInner() {
         あなたの物語を始めましょう
       </p>
 
-      <div className="grid gap-4 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2">
         <button
           onClick={() => setMode('wizard')}
-          className="group p-6 rounded-xl border border-border hover:border-primary/50 transition-colors text-left space-y-3"
+          className="group relative p-6 rounded-xl border-2 border-primary/30 hover:border-primary transition-colors text-left space-y-4 bg-primary/[0.02]"
         >
+          <div className="absolute -top-2.5 left-4 px-2 py-0.5 bg-primary text-primary-foreground text-[10px] font-medium rounded-full flex items-center gap-1">
+            <Sparkles className="h-3 w-3" />
+            おすすめ
+          </div>
           <div className="h-10 w-10 rounded-lg bg-primary/10 flex items-center justify-center group-hover:bg-primary/20 transition-colors">
             <Wand2 className="h-5 w-5 text-primary" />
           </div>
           <div>
-            <h2 className="font-semibold mb-1">じっくり設計する</h2>
-            <p className="text-xs text-muted-foreground leading-relaxed">
-              キャラクター、プロット、感情設計…AIと相談しながら作品の骨格を作ります。
-              あなたの想いを形にする6ステップ。
+            <h2 className="font-semibold mb-1.5">じっくり設計する</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+              AIと対話しながら作品の骨格を設計。キャラクター・プロット・感情設計を6ステップで形にします。
             </p>
+            <div className="space-y-1.5">
+              <div className="flex items-center gap-2 text-[11px] text-foreground/70">
+                <Users className="h-3.5 w-3.5 text-primary/60 flex-shrink-0" />
+                <span>キャラの口調・性格をAIが一貫して守る</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-foreground/70">
+                <GitBranch className="h-3.5 w-3.5 text-primary/60 flex-shrink-0" />
+                <span>プロット構成に沿った執筆サポート</span>
+              </div>
+              <div className="flex items-center gap-2 text-[11px] text-foreground/70">
+                <Brain className="h-3.5 w-3.5 text-primary/60 flex-shrink-0" />
+                <span>設定を活かした高品質なAI提案</span>
+              </div>
+            </div>
           </div>
         </button>
 
         <button
           onClick={() => setMode('quick')}
-          className="group p-6 rounded-xl border border-border hover:border-primary/50 transition-colors text-left space-y-3"
+          className="group p-6 rounded-xl border border-border hover:border-primary/50 transition-colors text-left space-y-4"
         >
           <div className="h-10 w-10 rounded-lg bg-muted flex items-center justify-center group-hover:bg-muted/80 transition-colors">
             <Zap className="h-5 w-5 text-muted-foreground" />
           </div>
           <div>
-            <h2 className="font-semibold mb-1">すぐに書き始める</h2>
+            <h2 className="font-semibold mb-1.5">すぐに書き始める</h2>
             <p className="text-xs text-muted-foreground leading-relaxed">
               タイトルだけ決めて、すぐに執筆を開始。
               設定は後からいつでも追加できます。
+            </p>
+            <p className="text-[10px] text-muted-foreground/60 mt-2">
+              ※ AI支援の精度は設計モードより限定的です
             </p>
           </div>
         </button>
