@@ -440,8 +440,8 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
           const full = await api.getEpisode(ep.id);
           const content = (full as any).data?.content || (full as any).content || '';
           if (content) {
-            text += content.slice(0, 2000) + '\n\n';
-            if (text.length > 8000) break;
+            text += content.slice(0, 10000) + '\n\n';
+            if (text.length > 30000) break;
           }
         } catch { /* skip episode */ }
       }

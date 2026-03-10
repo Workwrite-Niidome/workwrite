@@ -211,7 +211,7 @@ export class AiAssistService {
 ${existingNames || '（なし）'}
 
 【テキスト】
-${generatedText.slice(0, 5000)}
+${generatedText.slice(0, 30000)}
 
 【指示】
 - 既存キャラクターに含まれない、新しく登場したキャラクターのみを抽出してください
