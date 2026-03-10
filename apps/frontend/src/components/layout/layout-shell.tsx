@@ -7,9 +7,9 @@ import { BottomNav } from './bottom-nav';
 
 /** Paths where the full-screen editor is used — hide Header/Footer/BottomNav */
 function isWritingPage(pathname: string): boolean {
-  // /works/[id]/edit, /works/[id]/episodes/new, /works/[id]/episodes/[episodeId]/edit
-  return /^\/works\/[^/]+\/edit/.test(pathname) ||
-    /^\/works\/[^/]+\/episodes\/[^/]+\/edit/.test(pathname) ||
+  // /works/[id]/episodes/[episodeId]/edit, /works/[id]/episodes/new
+  // NOTE: /works/[id]/edit is the work management page — keep chrome there
+  return /^\/works\/[^/]+\/episodes\/[^/]+\/edit/.test(pathname) ||
     /^\/works\/[^/]+\/episodes\/new/.test(pathname);
 }
 
