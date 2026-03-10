@@ -88,68 +88,66 @@ export default function WorkDetailPage() {
     <div className="mx-auto max-w-4xl px-4 py-8">
       <div className="space-y-6">
         <div>
-          <div className="flex items-start justify-between gap-4">
-            <div className="space-y-2">
-              <h1 className="text-3xl font-bold">{work.title}</h1>
-              <div className="flex items-center gap-3 text-muted-foreground">
-                <span className="flex items-center gap-1">
-                  <User className="h-4 w-4" />
-                  {work.author.displayName || work.author.name}
-                </span>
-                {isAuthenticated && (
-                  <Button
-                    variant={isFollowing ? 'default' : 'outline'}
-                    size="sm"
-                    className={cn(
-                      'h-7 text-xs gap-1 group',
-                      isFollowing && 'hover:bg-destructive hover:text-destructive-foreground hover:border-destructive',
-                    )}
-                    disabled={followLoading}
-                    onClick={async () => {
-                      setFollowLoading(true);
-                      try {
-                        if (isFollowing) {
-                          await api.unfollowUser(work.author.id);
-                          setIsFollowing(false);
-                        } else {
-                          await api.followUser(work.author.id);
-                          setIsFollowing(true);
-                        }
-                      } catch {}
-                      setFollowLoading(false);
-                    }}
-                  >
-                    {isFollowing ? (
-                      <>
-                        <UserCheck className="h-3 w-3 group-hover:hidden" />
-                        <X className="h-3 w-3 hidden group-hover:block" />
-                        <span className="group-hover:hidden">フォロー中</span>
-                        <span className="hidden group-hover:inline">フォロー解除</span>
-                      </>
-                    ) : (
-                      <>
-                        <UserPlus className="h-3 w-3" />
-                        フォローする
-                      </>
-                    )}
-                  </Button>
-                )}
-                {work.genre && <Badge variant="secondary">{work.genre}</Badge>}
-                {work.qualityScore && (
-                  <Badge variant="default">
-                    スコア {Math.round(work.qualityScore.overall)}
-                  </Badge>
-                )}
-              </div>
+          <div className="space-y-2">
+            <h1 className="text-2xl sm:text-3xl font-bold break-words">{work.title}</h1>
+            <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
+              <span className="flex items-center gap-1 shrink-0">
+                <User className="h-4 w-4" />
+                {work.author.displayName || work.author.name}
+              </span>
+              {isAuthenticated && (
+                <Button
+                  variant={isFollowing ? 'default' : 'outline'}
+                  size="sm"
+                  className={cn(
+                    'h-7 text-xs gap-1 group shrink-0',
+                    isFollowing && 'hover:bg-destructive hover:text-destructive-foreground hover:border-destructive',
+                  )}
+                  disabled={followLoading}
+                  onClick={async () => {
+                    setFollowLoading(true);
+                    try {
+                      if (isFollowing) {
+                        await api.unfollowUser(work.author.id);
+                        setIsFollowing(false);
+                      } else {
+                        await api.followUser(work.author.id);
+                        setIsFollowing(true);
+                      }
+                    } catch {}
+                    setFollowLoading(false);
+                  }}
+                >
+                  {isFollowing ? (
+                    <>
+                      <UserCheck className="h-3 w-3 group-hover:hidden" />
+                      <X className="h-3 w-3 hidden group-hover:block" />
+                      <span className="group-hover:hidden">フォロー中</span>
+                      <span className="hidden group-hover:inline">フォロー解除</span>
+                    </>
+                  ) : (
+                    <>
+                      <UserPlus className="h-3 w-3" />
+                      フォローする
+                    </>
+                  )}
+                </Button>
+              )}
+              {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
+              {work.qualityScore && (
+                <Badge variant="default" className="shrink-0">
+                  スコア {Math.round(work.qualityScore.overall)}
+                </Badge>
+              )}
             </div>
           </div>
 
-          <div className="flex items-center gap-2 mt-4 text-sm text-muted-foreground">
-            <Clock className="h-4 w-4" />
+          <div className="flex flex-wrap items-center gap-x-2 gap-y-1 mt-4 text-sm text-muted-foreground">
+            <Clock className="h-4 w-4 shrink-0" />
             <span>全{work.episodes?.length ?? 0}話</span>
-            <span className="mx-1">/</span>
+            <span>/</span>
             <span>{totalWords.toLocaleString()}字</span>
-            <span className="mx-1">/</span>
+            <span>/</span>
             <span>{estimateReadingTime(totalWords)}</span>
           </div>
 
@@ -212,28 +210,28 @@ export default function WorkDetailPage() {
           </Card>
         )}
 
-        <div className="flex flex-wrap gap-2 sm:gap-3">
-          <Button onClick={handleStartReading} disabled={!work.episodes?.length}>
+        <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
+          <Button onClick={handleStartReading} disabled={!work.episodes?.length} className="w-full sm:w-auto">
             <BookOpen className="h-4 w-4 mr-2" />
             読み始める
           </Button>
-          {!bookshelfStatus && (
+          {!bookshelfStatus ? (
             <Button
               onClick={handleAddToBookshelf}
               variant="outline"
               disabled={bookshelfAdding}
+              className="w-full sm:w-auto"
             >
               <BookmarkPlus className="h-4 w-4 mr-2" />
               本棚に追加
             </Button>
-          )}
-          {bookshelfStatus && (
-            <Badge variant="secondary" className="self-center px-4 py-2">
+          ) : (
+            <Button variant="secondary" disabled className="w-full sm:w-auto">
               本棚に追加済み
-            </Badge>
+            </Button>
           )}
-          <Link href={`/works/${workId}/companion`}>
-            <Button variant="outline">
+          <Link href={`/works/${workId}/companion`} className="col-span-2 sm:col-span-1">
+            <Button variant="outline" className="w-full sm:w-auto">
               <Sparkles className="h-4 w-4 mr-2" />
               AIと語る
             </Button>
@@ -270,15 +268,15 @@ export default function WorkDetailPage() {
                   <li key={ep.id}>
                     <Link
                       href={`/read/${ep.id}`}
-                      className="flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors min-h-[44px]"
+                      className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors min-h-[44px]"
                     >
-                      <span className="text-sm">
+                      <span className="text-sm min-w-0 truncate">
                         <span className="text-muted-foreground mr-2">
                           第{ep.orderIndex + 1}話
                         </span>
                         {ep.title}
                       </span>
-                      <span className="text-xs text-muted-foreground">
+                      <span className="text-xs text-muted-foreground shrink-0">
                         {ep.wordCount.toLocaleString()}字 / {estimateReadingTime(ep.wordCount)}
                       </span>
                     </Link>
