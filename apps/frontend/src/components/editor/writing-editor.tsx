@@ -17,7 +17,9 @@ interface WritingEditorProps {
   episodeId?: string;
   initialTitle?: string;
   initialContent?: string;
+  isPublished?: boolean;
   onPublish?: (data: { title: string; content: string; scheduledAt?: string }) => Promise<void>;
+  onSaveDraft?: (data: { title: string; content: string }) => Promise<void>;
 }
 
 export function WritingEditor({
@@ -25,7 +27,9 @@ export function WritingEditor({
   episodeId,
   initialTitle = '',
   initialContent = '',
+  isPublished = false,
   onPublish,
+  onSaveDraft,
 }: WritingEditorProps) {
   const router = useRouter();
   const [title, setTitle] = useState(initialTitle);
@@ -123,6 +127,25 @@ export function WritingEditor({
     }, 0);
   }, [content]);
 
+  async function handleSaveDraft() {
+    if (!title.trim() || !content.trim()) return;
+    setSubmitting(true);
+    setError('');
+    try {
+      if (onSaveDraft) {
+        await onSaveDraft({ title, content });
+      } else {
+        await api.createEpisode(workId, { title, content, publish: false });
+        router.push(`/works/${workId}/edit`);
+      }
+      await deleteDraft();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : '保存に失敗しました');
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
   async function handleSubmit() {
     if (!title.trim() || !content.trim()) return;
     setSubmitting(true);
@@ -131,7 +154,7 @@ export function WritingEditor({
       if (onPublish) {
         await onPublish({ title, content });
       } else {
-        await api.createEpisode(workId, { title, content });
+        await api.createEpisode(workId, { title, content, publish: true });
         router.push(`/works/${workId}/edit`);
       }
       await deleteDraft();
@@ -203,10 +226,18 @@ export function WritingEditor({
           </Button>
           <Button
             size="sm"
+            variant="outline"
+            onClick={handleSaveDraft}
+            disabled={submitting || !title.trim() || !content.trim()}
+          >
+            {submitting ? '保存中...' : '下書き保存'}
+          </Button>
+          <Button
+            size="sm"
             onClick={handleSubmit}
             disabled={submitting || !title.trim() || !content.trim()}
           >
-            {submitting ? '投稿中...' : episodeId ? '更新' : '投稿'}
+            {submitting ? '投稿中...' : isPublished ? '更新' : '公開する'}
           </Button>
         </div>
       </div>

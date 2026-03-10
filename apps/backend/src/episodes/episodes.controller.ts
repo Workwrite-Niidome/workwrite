@@ -1,9 +1,10 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EpisodesService } from './episodes.service';
 import { CreateEpisodeDto, UpdateEpisodeDto } from './dto/episode.dto';
 import { ReorderEpisodesDto } from './dto/reorder-episodes.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Episodes')
@@ -12,15 +13,22 @@ export class EpisodesController {
   constructor(private episodesService: EpisodesService) {}
 
   @Get('works/:workId/episodes')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'List episodes of a work' })
-  findByWork(@Param('workId') workId: string) {
-    return this.episodesService.findByWork(workId);
+  @ApiQuery({ name: 'published', required: false, type: Boolean })
+  findByWork(
+    @Param('workId') workId: string,
+    @Query('published') published?: string,
+  ) {
+    const publishedOnly = published === 'true';
+    return this.episodesService.findByWork(workId, publishedOnly);
   }
 
   @Get('episodes/:id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get episode content' })
-  findOne(@Param('id') id: string) {
-    return this.episodesService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser('id') userId?: string) {
+    return this.episodesService.findOne(id, userId);
   }
 
   @Post('works/:workId/episodes')

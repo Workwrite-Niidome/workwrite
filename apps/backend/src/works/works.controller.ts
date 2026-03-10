@@ -4,6 +4,7 @@ import { WorksService } from './works.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Works')
@@ -26,9 +27,10 @@ export class WorksController {
   }
 
   @Get(':id')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get work details' })
-  findOne(@Param('id') id: string) {
-    return this.worksService.findOne(id);
+  findOne(@Param('id') id: string, @CurrentUser('id') userId?: string) {
+    return this.worksService.findOne(id, userId);
   }
 
   @Post()

@@ -159,7 +159,7 @@ export default function ReaderPage() {
       .then((res) => {
         setEpisode(res.data);
         return Promise.all([
-          api.getEpisodes(res.data.workId),
+          api.getEpisodes(res.data.workId, true),
           api.getWork(res.data.workId),
         ]);
       })

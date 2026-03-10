@@ -24,6 +24,13 @@ export class EpisodesService {
 
     const wordCount = dto.content.length;
 
+    let publishedAt: Date | null = null;
+    if (dto.scheduledAt) {
+      publishedAt = null;
+    } else if (dto.publish) {
+      publishedAt = new Date();
+    }
+
     return this.prisma.episode.create({
       data: {
         workId,
@@ -32,15 +39,18 @@ export class EpisodesService {
         content: dto.content,
         orderIndex,
         wordCount,
-        publishedAt: dto.scheduledAt ? null : new Date(),
+        publishedAt,
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
       },
     });
   }
 
-  async findByWork(workId: string) {
+  async findByWork(workId: string, publishedOnly = false) {
     return this.prisma.episode.findMany({
-      where: { workId },
+      where: {
+        workId,
+        ...(publishedOnly ? { publishedAt: { not: null } } : {}),
+      },
       orderBy: { orderIndex: 'asc' },
       select: {
         id: true,
@@ -54,7 +64,7 @@ export class EpisodesService {
     });
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const episode = await this.prisma.episode.findUnique({
       where: { id },
       include: {
@@ -62,6 +72,10 @@ export class EpisodesService {
       },
     });
     if (!episode) throw new NotFoundException('Episode not found');
+    // If episode is not published, only the author can view it
+    if (!episode.publishedAt && episode.work.authorId !== userId) {
+      throw new NotFoundException('Episode not found');
+    }
     return episode;
   }
 

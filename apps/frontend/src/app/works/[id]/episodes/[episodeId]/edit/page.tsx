@@ -10,12 +10,16 @@ export default function EditEpisodePage() {
   const router = useRouter();
   const workId = params.id as string;
   const episodeId = params.episodeId as string;
-  const [episode, setEpisode] = useState<{ title: string; content: string } | null>(null);
+  const [episode, setEpisode] = useState<{ title: string; content: string; publishedAt: string | null } | null>(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     api.getEpisode(episodeId)
-      .then((res) => setEpisode({ title: res.data.title, content: res.data.content }))
+      .then((res) => setEpisode({
+        title: res.data.title,
+        content: res.data.content,
+        publishedAt: res.data.publishedAt,
+      }))
       .catch(() => router.push(`/works/${workId}/edit`))
       .finally(() => setLoading(false));
   }, [episodeId, workId, router]);
@@ -36,7 +40,16 @@ export default function EditEpisodePage() {
       episodeId={episodeId}
       initialTitle={episode.title}
       initialContent={episode.content}
+      isPublished={!!episode.publishedAt}
       onPublish={async (data) => {
+        await api.updateEpisode(episodeId, data);
+        // If not yet published, publish it
+        if (!episode.publishedAt) {
+          await api.publishEpisode(episodeId);
+        }
+        router.push(`/works/${workId}/edit`);
+      }}
+      onSaveDraft={async (data) => {
         await api.updateEpisode(episodeId, data);
         router.push(`/works/${workId}/edit`);
       }}

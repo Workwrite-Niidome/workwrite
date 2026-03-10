@@ -3,12 +3,11 @@
 import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Star } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, type Work } from '@/lib/api';
+import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
 
 const TAG_LABELS: Record<string, string> = {
   courage: '勇気をもらいたい',
@@ -44,7 +43,7 @@ export default function EmotionDiscoverPage() {
   const label = TAG_LABELS[tagName] || tagName;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="mx-auto max-w-5xl px-4 py-8">
       <div className="mb-6">
         <Link href="/">
           <Button variant="ghost" size="sm" className="mb-2 min-h-[44px]">
@@ -58,9 +57,9 @@ export default function EmotionDiscoverPage() {
       </div>
 
       {loading ? (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          {[1, 2, 3, 4, 5, 6].map((i) => (
-            <Skeleton key={i} className="h-40" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <WorkCardSkeleton key={i} />
           ))}
         </div>
       ) : works.length === 0 ? (
@@ -68,32 +67,9 @@ export default function EmotionDiscoverPage() {
           まだこのタグの作品はありません
         </p>
       ) : (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {works.map((work) => (
-            <Link key={work.id} href={`/works/${work.id}`}>
-              <Card className="h-full hover:shadow-md transition-shadow">
-                <CardContent className="p-5 space-y-2">
-                  <h3 className="font-medium text-sm line-clamp-2">{work.title}</h3>
-                  <p className="text-xs text-muted-foreground">
-                    {work.author.displayName || work.author.name}
-                  </p>
-                  {work.synopsis && (
-                    <p className="text-xs text-muted-foreground line-clamp-3">{work.synopsis}</p>
-                  )}
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    {work.qualityScore && (
-                      <Badge variant="secondary" className="text-xs">
-                        <Star className="h-3 w-3 mr-0.5" />
-                        {Math.round(work.qualityScore.overall)}
-                      </Badge>
-                    )}
-                    {work.genre && (
-                      <Badge variant="outline" className="text-xs">{work.genre}</Badge>
-                    )}
-                  </div>
-                </CardContent>
-              </Card>
-            </Link>
+            <WorkCard key={work.id} work={work} />
           ))}
         </div>
       )}

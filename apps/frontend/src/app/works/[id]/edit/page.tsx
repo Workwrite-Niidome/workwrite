@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users, Globe, EyeOff } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -138,6 +138,26 @@ export default function EditWorkPage() {
     setDeleteEpisodeId(null);
   }
 
+  async function handleToggleEpisodePublish(ep: EpisodeItem) {
+    try {
+      if (ep.publishedAt) {
+        await api.unpublishEpisode(ep.id);
+        setEpisodes((prev) =>
+          prev.map((e) => e.id === ep.id ? { ...e, publishedAt: null } : e),
+        );
+        setMessage('エピソードを下書きに戻しました');
+      } else {
+        await api.publishEpisode(ep.id);
+        setEpisodes((prev) =>
+          prev.map((e) => e.id === ep.id ? { ...e, publishedAt: new Date().toISOString(), scheduledAt: null } : e),
+        );
+        setMessage('エピソードを公開しました');
+      }
+    } catch {
+      setMessage('操作に失敗しました');
+    }
+  }
+
   async function handleDragEnd() {
     const dragIndex = dragItemRef.current;
     const overIndex = dragOverRef.current;
@@ -262,6 +282,13 @@ export default function EditWorkPage() {
                             </Link>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={(e) => { e.preventDefault(); handleToggleEpisodePublish(ep); }}
+                              title={ep.publishedAt ? '下書きに戻す' : '公開する'}
+                              className="text-muted-foreground hover:text-foreground opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              {ep.publishedAt ? <EyeOff className="h-3 w-3" /> : <Globe className="h-3 w-3" />}
+                            </button>
                             <Badge variant={status.variant} className="text-[10px] px-1.5 py-0">
                               {status.label}
                             </Badge>

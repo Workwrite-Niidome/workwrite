@@ -62,7 +62,7 @@ export class WorksService {
     };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, userId?: string) {
     const work = await this.prisma.work.findUnique({
       where: { id },
       include: {
@@ -77,6 +77,12 @@ export class WorksService {
       },
     });
     if (!work) throw new NotFoundException('Work not found');
+
+    // If the viewer is not the author, filter out unpublished episodes
+    if (work.authorId !== userId) {
+      (work as any).episodes = work.episodes.filter((ep) => ep.publishedAt !== null);
+    }
+
     return work;
   }
 

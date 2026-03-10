@@ -290,15 +290,16 @@ class ApiClient {
   }
 
   // Episodes
-  async getEpisodes(workId: string) {
-    return this.request<{ data: Episode[] }>(`/works/${workId}/episodes`);
+  async getEpisodes(workId: string, publishedOnly = false) {
+    const params = publishedOnly ? '?published=true' : '';
+    return this.request<{ data: Episode[] }>(`/works/${workId}/episodes${params}`);
   }
 
   async getEpisode(id: string) {
     return this.request<{ data: Episode }>(`/episodes/${id}`);
   }
 
-  async createEpisode(workId: string, data: { title: string; content: string }) {
+  async createEpisode(workId: string, data: { title: string; content: string; publish?: boolean }) {
     return this.request<{ data: Episode }>(`/works/${workId}/episodes`, {
       method: 'POST',
       body: JSON.stringify(data),

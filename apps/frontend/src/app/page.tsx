@@ -10,6 +10,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime } from '@/lib/utils';
+import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
 import { api, type Work, type TopPageData, type ContinueReadingItem } from '@/lib/api';
 
 function FollowingFeedSection() {
@@ -27,11 +28,13 @@ function FollowingFeedSection() {
 
   return (
     <section>
-      <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">フォロー中の新着</h2>
-      <div>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-sm font-medium">フォロー中の新着</h2>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
         {loading
-          ? Array.from({ length: 2 }).map((_, i) => <WorkCardSkeleton key={i} />)
-          : feed.slice(0, 5).map((work) => <WorkCard key={work.id} work={work} />)}
+          ? Array.from({ length: 3 }).map((_, i) => <WorkCardSkeleton key={i} />)
+          : feed.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
       </div>
     </section>
   );
@@ -45,44 +48,6 @@ const MOOD_CARDS = [
   { mood: 'worldview', label: '世界観を広げたい' },
   { mood: 'laughter', label: '笑いたい' },
 ];
-
-function WorkCard({ work }: { work: Work }) {
-  return (
-    <Link href={`/works/${work.id}`} className="group block">
-      <article className="py-4 border-b border-border last:border-b-0 transition-colors group-hover:bg-secondary/30 -mx-2 px-2 rounded">
-        <h3 className="font-medium text-sm leading-snug group-hover:text-foreground/80 transition-colors">
-          {work.title}
-        </h3>
-        <p className="text-xs text-muted-foreground mt-1">
-          {work.author.displayName || work.author.name}
-        </p>
-        {work.synopsis && (
-          <p className="text-xs text-muted-foreground mt-2 line-clamp-2 leading-relaxed">{work.synopsis}</p>
-        )}
-        <div className="flex items-center gap-2 mt-2">
-          {work.genre && (
-            <span className="text-[11px] text-muted-foreground">{work.genre}</span>
-          )}
-          {work.qualityScore && (
-            <span className="text-[11px] text-muted-foreground">
-              score {Math.round(work.qualityScore.overall)}
-            </span>
-          )}
-        </div>
-      </article>
-    </Link>
-  );
-}
-
-function WorkCardSkeleton() {
-  return (
-    <div className="py-4 border-b border-border space-y-2">
-      <Skeleton className="h-4 w-3/4" />
-      <Skeleton className="h-3 w-1/3" />
-      <Skeleton className="h-3 w-full" />
-    </div>
-  );
-}
 
 export default function Home() {
   const router = useRouter();
@@ -150,9 +115,9 @@ export default function Home() {
 
   return (
     <div className="min-h-screen">
-      {/* Hero - like opening a book */}
+      {/* Hero */}
       <section className="border-b border-border">
-        <div className="mx-auto max-w-2xl px-6 py-20 sm:py-28 text-center">
+        <div className="mx-auto max-w-4xl px-6 py-20 sm:py-28 text-center">
           <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground mb-6">Novel Platform</p>
           <h1 className="text-2xl sm:text-3xl font-serif font-normal leading-relaxed tracking-wide">
             読書で、変わる。
@@ -196,11 +161,11 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-2xl px-6 py-12 space-y-16">
+      <div className="mx-auto max-w-5xl px-6 py-12 space-y-16">
         {/* Continue Reading */}
         {isAuthenticated && continueReading.length > 0 && (
           <section>
-            <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">続きを読む</h2>
+            <h2 className="text-sm font-medium mb-4">続きを読む</h2>
             <div className="space-y-1">
               {continueReading.map((item) => (
                 <Link
@@ -241,10 +206,10 @@ export default function Home() {
         {/* Following feed */}
         {isAuthenticated && <FollowingFeedSection />}
 
-        {/* Mood Discovery - minimal, text-based */}
+        {/* Mood Discovery */}
         <section>
-          <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-6">今の気分で探す</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+          <h2 className="text-sm font-medium mb-6">今の気分で探す</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
             {MOOD_CARDS.map((card) => (
               <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
                 <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
@@ -257,13 +222,18 @@ export default function Home() {
 
         {/* Popular */}
         <section>
-          <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">人気作品</h2>
-          <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-medium">人気作品</h2>
+            <Link href="/search?q=&sort=score" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              すべて見る →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading
-              ? Array.from({ length: 3 }).map((_, i) => <WorkCardSkeleton key={i} />)
-              : data?.popular.slice(0, 5).map((work) => <WorkCard key={work.id} work={work} />)}
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : data?.popular.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
             {!loading && data?.popular.length === 0 && (
-              <p className="text-center text-muted-foreground py-12 text-sm">
+              <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
                 まだ作品が投稿されていません
               </p>
             )}
@@ -272,13 +242,18 @@ export default function Home() {
 
         {/* Hidden Gems */}
         <section>
-          <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">埋もれた名作</h2>
-          <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-medium">埋もれた名作</h2>
+            <Link href="/search?q=" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              すべて見る →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading
-              ? Array.from({ length: 3 }).map((_, i) => <WorkCardSkeleton key={i} />)
-              : data?.hiddenGems.slice(0, 5).map((work) => <WorkCard key={work.id} work={work} />)}
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : data?.hiddenGems.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
             {!loading && data?.hiddenGems.length === 0 && (
-              <p className="text-center text-muted-foreground py-12 text-sm">
+              <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
                 まだデータがありません
               </p>
             )}
@@ -287,24 +262,29 @@ export default function Home() {
 
         {/* Recent */}
         <section>
-          <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">新着</h2>
-          <div>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-medium">新着</h2>
+            <Link href="/search?q=&sort=newest" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              すべて見る →
+            </Link>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading
-              ? Array.from({ length: 3 }).map((_, i) => <WorkCardSkeleton key={i} />)
-              : data?.recent.slice(0, 5).map((work) => <WorkCard key={work.id} work={work} />)}
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : data?.recent.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
           </div>
         </section>
 
         {/* Tags */}
         {data?.trendingTags && data.trendingTags.length > 0 && (
           <section>
-            <h2 className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-4">感情タグ</h2>
+            <h2 className="text-sm font-medium mb-4">感情タグ</h2>
             <div className="flex flex-wrap gap-2">
               {data.trendingTags.map((tag) => (
                 <Link key={tag.id} href={`/discover/emotion/${tag.name}`}>
-                  <span className="text-sm text-muted-foreground hover:text-foreground transition-colors cursor-pointer border-b border-transparent hover:border-foreground">
+                  <Badge variant="outline" className="cursor-pointer hover:bg-secondary transition-colors">
                     {tag.nameJa} ({tag.count})
-                  </span>
+                  </Badge>
                 </Link>
               ))}
             </div>

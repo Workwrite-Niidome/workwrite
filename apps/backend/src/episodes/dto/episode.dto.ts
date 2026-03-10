@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsInt, Min, MaxLength, IsDateString } from 'class-validator';
+import { IsString, IsOptional, IsInt, IsBoolean, Min, MaxLength, IsDateString } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class CreateEpisodeDto {
@@ -21,6 +21,11 @@ export class CreateEpisodeDto {
   @IsOptional()
   @IsDateString()
   scheduledAt?: string;
+
+  @ApiPropertyOptional({ description: 'Publish immediately (default false = draft)', default: false })
+  @IsOptional()
+  @IsBoolean()
+  publish?: boolean;
 }
 
 export class UpdateEpisodeDto {

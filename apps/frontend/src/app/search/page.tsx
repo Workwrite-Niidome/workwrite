@@ -6,25 +6,11 @@ import Link from 'next/link';
 import { Search, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ScoreBadge } from '@/components/scoring/score-badge';
 import { useAuth } from '@/lib/auth-context';
 import { api, type Work } from '@/lib/api';
-
-const GENRE_LABELS: Record<string, string> = {
-  fantasy: 'ファンタジー',
-  sf: 'SF',
-  mystery: 'ミステリー',
-  romance: '恋愛',
-  horror: 'ホラー',
-  literary: '純文学',
-  adventure: '冒険',
-  comedy: 'コメディ',
-  drama: 'ドラマ',
-  historical: '歴史',
-  other: 'その他',
-};
+import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
+import { GENRE_LABELS } from '@/lib/constants';
 
 const GENRES = Object.keys(GENRE_LABELS);
 const SORT_OPTIONS = [
@@ -38,21 +24,21 @@ const PAGE_SIZE = 20;
 function SearchContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
+  const initialSort = searchParams.get('sort') || 'relevance';
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState(initialQuery);
   const [genre, setGenre] = useState('');
-  const [sortBy, setSortBy] = useState('relevance');
+  const [sortBy, setSortBy] = useState(initialSort);
   const [results, setResults] = useState<Work[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (initialQuery) doSearch(initialQuery, 0);
+    if (initialQuery !== undefined) doSearch(initialQuery, 0);
   }, [initialQuery]);
 
   async function doSearch(q: string, pageNum: number) {
-    if (!q.trim()) return;
     setLoading(true);
     try {
       const res = await api.searchWorks(q, {
@@ -78,18 +64,18 @@ function SearchContent() {
 
   function handleSortChange(value: string) {
     setSortBy(value);
-    if (query) doSearch(query, 0);
+    doSearch(query, 0);
   }
 
   function handleGenreChange(value: string) {
     setGenre(value);
-    if (query) doSearch(query, 0);
+    doSearch(query, 0);
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="mx-auto max-w-5xl px-6 py-8">
       <form onSubmit={handleSubmit} className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -126,7 +112,7 @@ function SearchContent() {
         </select>
         {(genre || sortBy !== 'relevance') && (
           <button
-            onClick={() => { setGenre(''); setSortBy('relevance'); if (query) doSearch(query, 0); }}
+            onClick={() => { setGenre(''); setSortBy('relevance'); doSearch(query, 0); }}
             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             フィルターをクリア
@@ -135,52 +121,19 @@ function SearchContent() {
       </div>
 
       {loading ? (
-        <div className="space-y-3">
-          {Array.from({ length: 3 }).map((_, i) => (
-            <div key={i} className="py-4 border-b border-border space-y-2">
-              <Skeleton className="h-4 w-3/4" />
-              <Skeleton className="h-3 w-1/3" />
-              <Skeleton className="h-3 w-full" />
-            </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <WorkCardSkeleton key={i} />
           ))}
         </div>
       ) : results.length > 0 ? (
         <div>
           <p className="text-xs text-muted-foreground mb-4">{total}件の結果</p>
-          {results.map((work) => (
-            <Link key={work.id} href={`/works/${work.id}`} className="group block">
-              <article className="py-4 border-b border-border last:border-b-0 transition-colors group-hover:bg-secondary/30 -mx-2 px-2 rounded">
-                <div className="flex items-start justify-between gap-3">
-                  <div className="flex-1 min-w-0">
-                    <h3 className="font-medium text-sm leading-snug group-hover:text-foreground/80 transition-colors">
-                      {work.title}
-                    </h3>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      {work.author?.displayName || work.author?.name}
-                    </p>
-                    {work.synopsis && (
-                      <p className="text-xs text-muted-foreground mt-2 line-clamp-2 leading-relaxed">{work.synopsis}</p>
-                    )}
-                    <div className="flex items-center gap-2 mt-2 flex-wrap">
-                      {work.genre && (
-                        <span className="text-[11px] text-muted-foreground">
-                          {GENRE_LABELS[work.genre] || work.genre}
-                        </span>
-                      )}
-                      {work.tags?.slice(0, 3).map((t) => (
-                        <span key={t.id} className="text-[11px] text-muted-foreground">#{t.tag}</span>
-                      ))}
-                    </div>
-                  </div>
-                  <div className="flex flex-col items-end gap-1 flex-shrink-0">
-                    {work.qualityScore && (
-                      <ScoreBadge score={work.qualityScore.overall} />
-                    )}
-                  </div>
-                </div>
-              </article>
-            </Link>
-          ))}
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {results.map((work) => (
+              <WorkCard key={work.id} work={work} />
+            ))}
+          </div>
 
           {/* Pagination */}
           {totalPages > 1 && (
@@ -226,10 +179,13 @@ function SearchContent() {
 export default function SearchPage() {
   return (
     <Suspense fallback={
-      <div className="mx-auto max-w-2xl px-6 py-8 space-y-3">
-        <Skeleton className="h-10 w-full" />
-        <Skeleton className="h-24 w-full" />
-        <Skeleton className="h-24 w-full" />
+      <div className="mx-auto max-w-5xl px-6 py-8">
+        <Skeleton className="h-10 w-full mb-4" />
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+          {Array.from({ length: 6 }).map((_, i) => (
+            <WorkCardSkeleton key={i} />
+          ))}
+        </div>
       </div>
     }>
       <SearchContent />
