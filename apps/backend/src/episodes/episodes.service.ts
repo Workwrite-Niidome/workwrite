@@ -92,7 +92,28 @@ export class EpisodesService {
     });
     if (!episode) throw new NotFoundException('Episode not found');
     if (episode.work.authorId !== userId) throw new ForbiddenException();
+
+    const workId = episode.workId;
+    const deletedOrder = episode.orderIndex;
+
     await this.prisma.episode.delete({ where: { id } });
+
+    // Reindex remaining episodes to fill the gap
+    const remaining = await this.prisma.episode.findMany({
+      where: { workId },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, orderIndex: true },
+    });
+
+    await this.prisma.$transaction(
+      remaining.map((ep, i) =>
+        this.prisma.episode.update({
+          where: { id: ep.id },
+          data: { orderIndex: i },
+        }),
+      ),
+    );
+
     return { deleted: true };
   }
 

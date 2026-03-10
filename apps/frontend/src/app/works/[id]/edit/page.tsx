@@ -125,7 +125,12 @@ export default function EditWorkPage() {
     if (!deleteEpisodeId) return;
     try {
       await api.deleteEpisode(deleteEpisodeId);
-      setEpisodes((prev) => prev.filter((ep) => ep.id !== deleteEpisodeId));
+      setEpisodes((prev) =>
+        prev
+          .filter((ep) => ep.id !== deleteEpisodeId)
+          .sort((a, b) => a.orderIndex - b.orderIndex)
+          .map((ep, i) => ({ ...ep, orderIndex: i })),
+      );
       setMessage('エピソードを削除しました');
     } catch {
       setMessage('削除に失敗しました');
