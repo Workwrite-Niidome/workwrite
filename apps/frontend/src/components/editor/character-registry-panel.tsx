@@ -291,6 +291,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
 
   // Extract from text state
   const [extracting, setExtracting] = useState(false);
+  const [extractError, setExtractError] = useState('');
   const [extractedChars, setExtractedChars] = useState<AiSuggestedChar[]>([]);
 
   // Bottom action menu
@@ -430,10 +431,14 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
   async function handleExtractFromText() {
     setExtracting(true);
     setExtractedChars([]);
+    setExtractError('');
     try {
-      // getWork doesn't return episode content, so fetch episode list then load content
       const epRes = await api.getEpisodes(workId);
-      const episodeList = (epRes as any).data || epRes || [];
+      const episodeList = Array.isArray(epRes) ? epRes : (epRes as any).data || [];
+      if (episodeList.length === 0) {
+        setExtractError('エピソードが見つかりません。先にエピソードを作成してください。');
+        return;
+      }
       let text = '';
       for (const ep of episodeList) {
         try {
@@ -443,18 +448,27 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
             text += content.slice(0, 10000) + '\n\n';
             if (text.length > 30000) break;
           }
-        } catch { /* skip episode */ }
+        } catch {
+          // skip individual episode fetch errors
+        }
       }
       if (!text.trim()) {
-        setExtracting(false);
+        setExtractError('エピソードの本文が空です。テキストを入力してから再度お試しください。');
         return;
       }
       const existing = characters.map((c) => ({ name: c.name, role: c.role }));
       const res = await api.extractCharacters(text, existing);
       const chars = (res as any).data?.characters || (res as any).characters || [];
+      if (chars.length === 0) {
+        setExtractError('新しいキャラクターは検出されませんでした。');
+      }
       setExtractedChars(chars);
-    } catch { /* ignore */ }
-    finally { setExtracting(false); }
+    } catch (e) {
+      console.error('Character extraction failed:', e);
+      setExtractError('キャラクター検出に失敗しました。しばらく待ってから再度お試しください。');
+    } finally {
+      setExtracting(false);
+    }
   }
 
   async function handleAdoptExtracted(ex: AiSuggestedChar) {
@@ -669,6 +683,13 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
                 )}
               </div>
             )}
+          </div>
+        )}
+
+        {/* ─── Extract error ──────────────────────────── */}
+        {extractError && (
+          <div className="mx-2 mb-2 px-3 py-2 text-xs text-destructive bg-destructive/10 rounded-md border border-destructive/20">
+            {extractError}
           </div>
         )}
 
