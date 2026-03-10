@@ -25,6 +25,7 @@ export default function WorkDetailPage() {
   const [followLoading, setFollowLoading] = useState(false);
   const [publicCharacters, setPublicCharacters] = useState<StoryCharacter[]>([]);
   const [expandedCharId, setExpandedCharId] = useState<string | null>(null);
+  const [showPrologue, setShowPrologue] = useState(false);
 
   useEffect(() => {
     api.getWork(workId)
@@ -174,17 +175,6 @@ export default function WorkDetailPage() {
           </Card>
         )}
 
-        {work.prologue && (
-          <Card>
-            <CardContent className="pt-6">
-              <h2 className="text-sm font-medium mb-3">序章</h2>
-              <div className="text-sm whitespace-pre-wrap leading-relaxed border-l-2 border-primary/20 pl-4">
-                {work.prologue}
-              </div>
-            </CardContent>
-          </Card>
-        )}
-
         {publicCharacters.length > 0 && (
           <Card>
             <CardContent className="pt-6">
@@ -251,12 +241,32 @@ export default function WorkDetailPage() {
           </Link>
         </div>
 
-        {work.episodes && work.episodes.length > 0 && (
+        {(work.prologue || (work.episodes && work.episodes.length > 0)) && (
           <div className="space-y-3">
             <h2 className="text-lg font-semibold">目次</h2>
             <ul className="divide-y divide-border rounded-lg border">
+              {work.prologue && (
+                <li>
+                  <button
+                    onClick={() => setShowPrologue(!showPrologue)}
+                    className="w-full flex items-center justify-between px-4 py-3 hover:bg-muted/50 transition-colors min-h-[44px] text-left"
+                  >
+                    <span className="text-sm">
+                      <span className="text-muted-foreground mr-2">序章</span>
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {showPrologue ? '閉じる' : '読む'}
+                    </span>
+                  </button>
+                  {showPrologue && (
+                    <div className="px-4 pb-4 text-sm whitespace-pre-wrap leading-relaxed border-t border-border/50 pt-3 text-muted-foreground">
+                      {work.prologue}
+                    </div>
+                  )}
+                </li>
+              )}
               {work.episodes
-                .sort((a, b) => a.orderIndex - b.orderIndex)
+                ?.sort((a, b) => a.orderIndex - b.orderIndex)
                 .map((ep) => (
                   <li key={ep.id}>
                     <Link

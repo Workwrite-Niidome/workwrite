@@ -38,7 +38,7 @@ export default function EditWorkPage() {
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
   const [title, setTitle] = useState('');
   const [synopsis, setSynopsis] = useState('');
-  const [prologue, setPrologue] = useState('');
+  const [hasPrologue, setHasPrologue] = useState(false);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [scoreDetail, setScoreDetail] = useState<QualityScoreDetail | null>(null);
@@ -62,7 +62,7 @@ export default function EditWorkPage() {
         setWork(res.data);
         setTitle(res.data.title);
         setSynopsis(res.data.synopsis || '');
-        setPrologue(res.data.prologue || '');
+        setHasPrologue(!!res.data.prologue);
         if (res.data.episodes) {
           setEpisodes(res.data.episodes as EpisodeItem[]);
         }
@@ -82,7 +82,7 @@ export default function EditWorkPage() {
     setSaving(true);
     setMessage('');
     try {
-      const res = await api.updateWork(workId, { title, synopsis, prologue } as Partial<Work>);
+      const res = await api.updateWork(workId, { title, synopsis } as Partial<Work>);
       setWork(res.data);
       setMessage('保存しました');
     } catch {
@@ -196,16 +196,6 @@ export default function EditWorkPage() {
               rows={5}
             />
           </div>
-          <div className="space-y-2">
-            <label className="text-sm font-medium">序章</label>
-            <p className="text-xs text-muted-foreground">読者が作品ページで最初に読む導入文です。設定すると目次の前に表示されます。</p>
-            <Textarea
-              value={prologue}
-              onChange={(e) => setPrologue(e.target.value)}
-              rows={8}
-              placeholder="物語の世界観や雰囲気を伝える序章を書いてみましょう..."
-            />
-          </div>
           <Button onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '保存'}
           </Button>
@@ -220,9 +210,31 @@ export default function EditWorkPage() {
               </Link>
             </CardHeader>
             <CardContent>
-              {episodes.length > 0 ? (
-                <ul className="space-y-1">
-                  {episodes.map((ep, index) => {
+              <ul className="space-y-1">
+                {/* Prologue entry */}
+                <li>
+                  <div className="flex items-center justify-between rounded-md px-2 py-2 -mx-2 hover:bg-muted transition-colors group">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <span className="text-xs text-muted-foreground w-4 shrink-0">序</span>
+                      <Link
+                        href={`/works/${workId}/prologue/edit`}
+                        className="text-sm truncate hover:underline"
+                      >
+                        序章
+                      </Link>
+                    </div>
+                    <div className="flex items-center gap-1.5 shrink-0">
+                      <Badge variant={hasPrologue ? 'secondary' : 'outline'} className="text-[10px] px-1.5 py-0">
+                        {hasPrologue ? '設定済み' : '未設定'}
+                      </Badge>
+                      <Link href={`/works/${workId}/prologue/edit`}>
+                        <Pencil className="h-3 w-3 text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
+                      </Link>
+                    </div>
+                  </div>
+                </li>
+
+                {episodes.map((ep, index) => {
                     const status = getEpisodeStatus(ep);
                     return (
                       <li
@@ -263,10 +275,7 @@ export default function EditWorkPage() {
                       </li>
                     );
                   })}
-                </ul>
-              ) : (
-                <p className="text-sm text-muted-foreground">エピソードがありません</p>
-              )}
+              </ul>
             </CardContent>
           </Card>
 
