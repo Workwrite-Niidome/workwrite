@@ -97,7 +97,7 @@ export default function UserProfilePage() {
 
   if (loading) {
     return (
-      <main className="mx-auto md:max-w-2xl min-h-screen">
+      <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
         <div className="px-4 py-8 space-y-4">
           <div className="flex items-center gap-4">
             <div className="w-16 h-16 rounded-full bg-muted animate-pulse" />
@@ -113,7 +113,7 @@ export default function UserProfilePage() {
 
   if (!profile) {
     return (
-      <main className="mx-auto md:max-w-2xl min-h-screen">
+      <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
         <div className="text-center py-12 text-muted-foreground text-sm">
           ユーザーが見つかりません
         </div>
@@ -124,7 +124,7 @@ export default function UserProfilePage() {
   const displayName = profile.displayName || profile.name;
 
   return (
-    <main className="mx-auto md:max-w-2xl min-h-screen">
+    <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
       {/* Profile header */}
       <div className="px-4 pt-6 pb-4 border-b border-border">
         <div className="flex items-start gap-4">

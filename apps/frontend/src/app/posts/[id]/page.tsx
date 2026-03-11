@@ -75,7 +75,7 @@ export default function PostDetailPage() {
 
   if (loading) {
     return (
-      <main className="mx-auto md:max-w-2xl min-h-screen">
+      <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
         <div className="flex items-center gap-4 px-4 py-3 border-b border-border">
           <button onClick={() => router.back()}>
             <ArrowLeft className="h-5 w-5" />
@@ -89,7 +89,7 @@ export default function PostDetailPage() {
 
   if (!post) {
     return (
-      <main className="mx-auto md:max-w-2xl min-h-screen">
+      <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
         <div className="flex items-center gap-4 px-4 py-3 border-b border-border">
           <button onClick={() => router.back()}>
             <ArrowLeft className="h-5 w-5" />
@@ -106,7 +106,7 @@ export default function PostDetailPage() {
   const authorName = post.author.displayName || post.author.name;
 
   return (
-    <main className="mx-auto md:max-w-2xl min-h-screen">
+    <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
       {/* Header */}
       <div className="flex items-center gap-4 px-4 py-3 border-b border-border sticky top-12 z-40 bg-background">
         <button onClick={() => router.back()}>

@@ -32,7 +32,7 @@ export function LayoutShell({ children }: { children: React.ReactNode }) {
       <Header />
       <div className={showSidebar ? 'mx-auto md:max-w-6xl md:px-4 md:flex md:gap-6' : ''}>
         {showSidebar && <Sidebar />}
-        <main className="flex-1 min-w-0">{children}</main>
+        <main className="w-full md:flex-1 md:min-w-0">{children}</main>
       </div>
       <Footer />
       <BottomNav />
