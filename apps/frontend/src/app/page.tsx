@@ -117,7 +117,7 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Hero */}
       <section className="border-b border-border">
-        <div className="mx-auto max-w-4xl px-6 py-20 sm:py-28 text-center">
+        <div className="mx-auto max-w-4xl px-4 md:px-6 py-16 sm:py-28 text-center">
           <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground mb-6">Novel Platform</p>
           <h1 className="text-2xl sm:text-3xl font-serif font-normal leading-relaxed tracking-wide">
             読書で、変わる。
@@ -161,7 +161,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="px-6 py-12 space-y-16">
+      <div className="px-4 md:px-6 py-12 space-y-16">
         {/* Continue Reading */}
         {isAuthenticated && continueReading.length > 0 && (
           <section>

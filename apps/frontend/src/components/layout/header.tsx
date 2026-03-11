@@ -26,7 +26,7 @@ export function Header() {
 
   return (
     <header className="sticky top-0 z-50 w-full border-b border-border bg-background" style={{ transform: 'translateZ(0)' }}>
-      <div className="mx-auto flex h-12 max-w-5xl items-center px-6">
+      <div className="mx-auto flex h-12 md:max-w-5xl items-center px-4 md:px-6">
         <Link href="/" className="mr-8">
           <span className="text-sm font-semibold tracking-wide">Workwrite</span>
         </Link>
