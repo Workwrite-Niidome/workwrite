@@ -66,34 +66,27 @@ export default function ComposePage() {
 
       {/* Composer */}
       <div className="px-4 py-4">
-        <div className="flex gap-3">
-          <div className="w-10 h-10 rounded-full bg-muted flex items-center justify-center text-sm font-medium text-muted-foreground shrink-0">
-            {displayName[0] || 'U'}
-          </div>
-          <div className="flex-1 min-w-0">
-            <textarea
-              ref={textareaRef}
-              value={content}
-              onChange={handleInput}
-              placeholder="いまどうしてる？"
-              maxLength={MAX_LENGTH}
-              rows={4}
-              autoFocus
-              className="w-full resize-none bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none min-h-[6rem]"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
-                  handlePost();
-                }
-              }}
-            />
-            <div className="flex items-center justify-end mt-2">
-              {content.length > 0 && (
-                <span className={`text-xs ${remaining < 50 ? 'text-destructive' : 'text-muted-foreground'}`}>
-                  {remaining}
-                </span>
-              )}
-            </div>
-          </div>
+        <textarea
+          ref={textareaRef}
+          value={content}
+          onChange={handleInput}
+          placeholder="いまどうしてる？"
+          maxLength={MAX_LENGTH}
+          rows={6}
+          autoFocus
+          className="w-full resize-none bg-transparent text-sm placeholder:text-muted-foreground focus:outline-none min-h-[8rem]"
+          onKeyDown={(e) => {
+            if (e.key === 'Enter' && (e.metaKey || e.ctrlKey)) {
+              handlePost();
+            }
+          }}
+        />
+        <div className="flex items-center justify-end mt-2">
+          {content.length > 0 && (
+            <span className={`text-xs ${remaining < 50 ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {remaining}
+            </span>
+          )}
         </div>
       </div>
     </div>

@@ -68,39 +68,34 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="px-4 py-8 space-y-6">
+    <div className="py-4 md:px-4 md:py-8 space-y-0 md:space-y-6">
       {/* Mobile-only menu links (sidebar handles this on PC) */}
-      <div className="md:hidden">
-        <Card>
-          <CardContent className="p-0">
-            {mobileMenuItems.map((item, i) => (
-              <Link
-                key={item.href}
-                href={item.href}
-                className={`flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted transition-colors ${i < mobileMenuItems.length - 1 ? 'border-b border-border' : ''}`}
-              >
-                <item.icon className="h-4 w-4 text-muted-foreground" />
-                <span className="flex-1">{item.label}</span>
-                <ChevronRight className="h-4 w-4 text-muted-foreground" />
-              </Link>
-            ))}
-          </CardContent>
-        </Card>
+      <div className="md:hidden border-b border-border">
+        {mobileMenuItems.map((item, i) => (
+          <Link
+            key={item.href}
+            href={item.href}
+            className={`flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted transition-colors ${i < mobileMenuItems.length - 1 ? 'border-b border-border' : ''}`}
+          >
+            <item.icon className="h-4 w-4 text-muted-foreground" />
+            <span className="flex-1">{item.label}</span>
+            <ChevronRight className="h-4 w-4 text-muted-foreground" />
+          </Link>
+        ))}
       </div>
 
-      <Card>
-        <CardHeader>
+      {/* Profile form — flat on mobile, Card on PC */}
+      <div className="md:hidden">
+        <div className="px-4 py-4 space-y-4">
           <div className="flex items-center justify-between">
-            <CardTitle>Profile</CardTitle>
+            <h2 className="text-lg font-semibold">プロフィール</h2>
             <Link href="/settings">
               <Button variant="ghost" size="sm" className="text-xs h-8 gap-1">
                 <Settings className="h-3.5 w-3.5" />
-                Settings
+                設定
               </Button>
             </Link>
           </div>
-        </CardHeader>
-        <CardContent>
           <form onSubmit={handleSave} className="space-y-4">
             {message && (
               <div className="p-3 text-sm rounded-md bg-muted">{message}</div>
@@ -123,12 +118,56 @@ export default function ProfilePage() {
                 placeholder="自己紹介を書いてみましょう"
               />
             </div>
-            <Button type="submit" disabled={saving}>
+            <Button type="submit" disabled={saving} className="w-full">
               {saving ? '保存中...' : '保存'}
             </Button>
           </form>
-        </CardContent>
-      </Card>
+        </div>
+      </div>
+
+      <div className="hidden md:block">
+        <Card>
+          <CardHeader>
+            <div className="flex items-center justify-between">
+              <CardTitle>Profile</CardTitle>
+              <Link href="/settings">
+                <Button variant="ghost" size="sm" className="text-xs h-8 gap-1">
+                  <Settings className="h-3.5 w-3.5" />
+                  Settings
+                </Button>
+              </Link>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSave} className="space-y-4">
+              {message && (
+                <div className="p-3 text-sm rounded-md bg-muted">{message}</div>
+              )}
+              <div className="space-y-2">
+                <label className="text-sm font-medium">ニックネーム</label>
+                <Input value={name} onChange={(e) => setName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">表示名</label>
+                <Input value={displayName} onChange={(e) => setDisplayName(e.target.value)} />
+              </div>
+              <div className="space-y-2">
+                <label className="text-sm font-medium">自己紹介</label>
+                <Textarea
+                  value={bio}
+                  onChange={(e) => setBio(e.target.value)}
+                  rows={4}
+                  maxLength={500}
+                  placeholder="自己紹介を書いてみましょう"
+                />
+              </div>
+              <Button type="submit" disabled={saving}>
+                {saving ? '保存中...' : '保存'}
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
     </div>
   );
 }
