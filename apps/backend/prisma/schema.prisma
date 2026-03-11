@@ -144,6 +144,12 @@ model Work {
   storyCharacters StoryCharacter[]
   storyArc        StoryArc?
 
+  // AI Structural Analysis
+  episodeAnalyses   EpisodeAnalysis[]
+  foreshadowings    Foreshadowing[]
+  worldSettings     WorldSetting[]
+  dialogueSamples   CharacterDialogueSample[]
+
   // Denormalized stats
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
@@ -177,11 +183,14 @@ model Episode {
   work   Work @relation(fields: [workId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id])
 
+  contentVersion  Int      @default(0)
+
   readingProgress ReadingProgress[]
   highlights      Highlight[]
   comments        Comment[]
   letters         Letter[]
   scenes          StoryScene[]
+  aiAnalysis      EpisodeAnalysis?
 
   @@unique([workId, orderIndex])
   @@index([workId])
@@ -752,9 +761,12 @@ model StoryCharacter {
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
 
+  currentState  String?   @db.Text  // AI分析による現在の状態
+
   work          Work @relation(fields: [workId], references: [id], onDelete: Cascade)
   relationsFrom StoryCharacterRelation[] @relation("FromCharacter")
   relationsTo   StoryCharacterRelation[] @relation("ToCharacter")
+  dialogueSamples CharacterDialogueSample[]
 
   @@index([workId])
 }
@@ -817,6 +829,87 @@ model StoryScene {
 
   @@index([actId])
   @@index([episodeId])
+}
+
+// ============================================================
+// AI Structural Analysis (Episode-level context for AI assist)
+// ============================================================
+
+model EpisodeAnalysis {
+  id              String   @id @default(cuid())
+  episodeId       String   @unique
+  workId          String
+  version         Int      @default(1)      // contentVersion at analysis time
+  summary         String   @db.Text         // 200-300字の要約
+  endState        String?  @db.Text         // エピソード終了時の状況
+  narrativePOV    String?                   // 視点（一人称/三人称等）
+  emotionalArc    String?                   // 感情の流れ（緊張→緩和等）
+  timelineStart   String?                   // 時間軸の開始点
+  timelineEnd     String?                   // 時間軸の終了点
+  locations       Json?                     // [{ name, description }]
+  characters      Json?                     // [{ name, role, action }]
+  foreshadowings  Json?                     // [{ description, type }]
+  dialogueSamples Json?                     // [{ character, line, context }]
+  newWorldRules   Json?                     // [{ category, name, description }]
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  work    Work    @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId])
+}
+
+model Foreshadowing {
+  id           String   @id @default(cuid())
+  workId       String
+  description  String   @db.Text          // 伏線の内容
+  plantedIn    Int                         // 設置されたエピソード番号(orderIndex)
+  resolvedIn   Int?                        // 回収されたエピソード番号
+  status       String   @default("open")   // open/resolved/abandoned
+  importance   String   @default("normal") // critical/normal/minor
+  conditions   String?  @db.Text          // 回収条件
+  relatedChars String[]                    // 関連キャラクター名
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId])
+  @@index([status])
+}
+
+model WorldSetting {
+  id           String   @id @default(cuid())
+  workId       String
+  category     String                     // geography/magic/social/technology/culture
+  name         String                     // 設定名
+  description  String   @db.Text          // 設定の詳細
+  firstEpisode Int?                       // 初出エピソード番号
+  lastEpisode  Int?                       // 最終登場エピソード番号
+  isActive     Boolean  @default(true)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([workId, category, name])
+  @@index([workId])
+}
+
+model CharacterDialogueSample {
+  id           String @id @default(cuid())
+  workId       String
+  characterId  String?                    // StoryCharacter.id (nullable for unlinked)
+  characterName String                    // キャラクター名（直接保存）
+  episodeOrder Int                        // エピソード番号
+  line         String @db.Text            // セリフ
+  context      String?                    // 発言状況
+  emotion      String?                    // 感情（怒り/喜び/悲しみ等）
+
+  work      Work            @relation(fields: [workId], references: [id], onDelete: Cascade)
+  character StoryCharacter? @relation(fields: [characterId], references: [id], onDelete: SetNull)
+
+  @@index([workId])
+  @@index([characterId])
 }
 
 // ============================================================

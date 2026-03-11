@@ -1,0 +1,366 @@
+import { Injectable, Logger } from '@nestjs/common';
+import { PrismaService } from '../common/prisma/prisma.service';
+import { AiSettingsService } from '../ai-settings/ai-settings.service';
+
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const ANTHROPIC_VERSION = '2023-06-01';
+
+interface AnalysisResult {
+  summary: string;
+  endState: string;
+  narrativePOV: string;
+  emotionalArc: string;
+  timelineStart: string;
+  timelineEnd: string;
+  locations: { name: string; description: string }[];
+  characters: { name: string; role: string; action: string; currentState: string }[];
+  foreshadowings: { description: string; type: 'plant' | 'develop' | 'resolve' }[];
+  dialogueSamples: { character: string; line: string; context: string; emotion: string }[];
+  newWorldRules: { category: string; name: string; description: string }[];
+}
+
+@Injectable()
+export class EpisodeAnalysisService {
+  private readonly logger = new Logger(EpisodeAnalysisService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private aiSettings: AiSettingsService,
+  ) {}
+
+  async analyzeEpisode(workId: string, episodeId: string): Promise<void> {
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      include: { aiAnalysis: true },
+    });
+
+    if (!episode) {
+      this.logger.warn(`Episode not found: ${episodeId}`);
+      return;
+    }
+
+    // Skip if analysis is up to date
+    if (
+      episode.aiAnalysis &&
+      episode.aiAnalysis.version === episode.contentVersion
+    ) {
+      this.logger.debug(
+        `Episode ${episodeId} analysis is up to date (v${episode.contentVersion})`,
+      );
+      return;
+    }
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) {
+      this.logger.error('API key is not configured, skipping analysis');
+      return;
+    }
+
+    // Get previous episode analysis for continuity context
+    let previousContext = '';
+    if (episode.orderIndex > 0) {
+      const prevEpisode = await this.prisma.episode.findFirst({
+        where: {
+          workId,
+          orderIndex: episode.orderIndex - 1,
+        },
+        include: { aiAnalysis: true },
+      });
+      if (prevEpisode?.aiAnalysis) {
+        previousContext = `
+【前回のエピソードの要約】
+${prevEpisode.aiAnalysis.summary}
+
+【前回の終了時の状況】
+${prevEpisode.aiAnalysis.endState || '（なし）'}
+`;
+      }
+    }
+
+    const prompt = `あなたは小説分析の専門家です。以下のエピソードを分析し、構造データをJSON形式で抽出してください。
+${previousContext}
+【エピソードタイトル】${episode.title}
+
+【本文】
+${episode.content}
+
+【指示】
+- テキストに書かれている事実のみを抽出してください。推測や補完はしないでください。
+- summaryは200〜300文字で簡潔にまとめてください。
+- dialogueSamplesは各キャラクターにつき最大3つ、最も代表的なセリフを選んでください。
+- foreshadowingsのtypeは以下の通り分類してください:
+  - "plant": 新しく設置された伏線
+  - "develop": 進展した伏線
+  - "resolve": 回収された伏線
+
+以下のJSON形式で出力してください。JSONのみを出力してください。
+
+{
+  "summary": "200-300字の要約",
+  "endState": "エピソード終了時の状況描写",
+  "narrativePOV": "視点（一人称主人公/三人称限定/三人称神視点等）",
+  "emotionalArc": "感情の流れ（例: 期待→不安→決意）",
+  "timelineStart": "時間軸開始（例: 翌朝/3日後）",
+  "timelineEnd": "時間軸終了",
+  "locations": [{ "name": "場所名", "description": "簡潔な描写" }],
+  "characters": [{ "name": "キャラ名", "role": "この話での役割", "action": "主な行動", "currentState": "終了時の状態" }],
+  "foreshadowings": [{ "description": "伏線の内容", "type": "plant/develop/resolve" }],
+  "dialogueSamples": [{ "character": "キャラ名", "line": "代表的なセリフ", "context": "状況", "emotion": "感情" }],
+  "newWorldRules": [{ "category": "geography/magic/social/technology/culture", "name": "設定名", "description": "詳細" }]
+}`;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model: HAIKU_MODEL,
+          max_tokens: 4000,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        const errorText = await response.text().catch(() => '');
+        this.logger.error(
+          `Claude API error ${response.status}: ${errorText}`,
+        );
+        return;
+      }
+
+      const data = (await response.json()) as {
+        content: { type: string; text?: string }[];
+      };
+      const text = data.content?.[0]?.text || '';
+
+      const analysis = this.parseAnalysisJson(text);
+      if (!analysis) {
+        this.logger.error(
+          `Failed to parse analysis JSON for episode ${episodeId}`,
+        );
+        return;
+      }
+
+      // Upsert EpisodeAnalysis
+      await this.prisma.episodeAnalysis.upsert({
+        where: { episodeId },
+        update: {
+          version: episode.contentVersion,
+          summary: analysis.summary,
+          endState: analysis.endState || null,
+          narrativePOV: analysis.narrativePOV || null,
+          emotionalArc: analysis.emotionalArc || null,
+          timelineStart: analysis.timelineStart || null,
+          timelineEnd: analysis.timelineEnd || null,
+          locations: analysis.locations || [],
+          characters: analysis.characters || [],
+          foreshadowings: analysis.foreshadowings || [],
+          dialogueSamples: analysis.dialogueSamples || [],
+          newWorldRules: analysis.newWorldRules || [],
+        },
+        create: {
+          episodeId,
+          workId,
+          version: episode.contentVersion,
+          summary: analysis.summary,
+          endState: analysis.endState || null,
+          narrativePOV: analysis.narrativePOV || null,
+          emotionalArc: analysis.emotionalArc || null,
+          timelineStart: analysis.timelineStart || null,
+          timelineEnd: analysis.timelineEnd || null,
+          locations: analysis.locations || [],
+          characters: analysis.characters || [],
+          foreshadowings: analysis.foreshadowings || [],
+          dialogueSamples: analysis.dialogueSamples || [],
+          newWorldRules: analysis.newWorldRules || [],
+        },
+      });
+
+      // Save Foreshadowing entries
+      if (analysis.foreshadowings?.length) {
+        for (const f of analysis.foreshadowings) {
+          if (f.type === 'plant') {
+            // Check if similar foreshadowing already exists
+            const existing = await this.prisma.foreshadowing.findFirst({
+              where: { workId, description: f.description },
+            });
+            if (!existing) {
+              await this.prisma.foreshadowing.create({
+                data: {
+                  workId,
+                  description: f.description,
+                  plantedIn: episode.orderIndex,
+                  status: 'open',
+                },
+              });
+            }
+          } else if (f.type === 'resolve') {
+            // Try to find and resolve matching foreshadowing
+            const existing = await this.prisma.foreshadowing.findFirst({
+              where: {
+                workId,
+                status: 'open',
+                description: { contains: f.description.slice(0, 20) },
+              },
+            });
+            if (existing) {
+              await this.prisma.foreshadowing.update({
+                where: { id: existing.id },
+                data: {
+                  resolvedIn: episode.orderIndex,
+                  status: 'resolved',
+                },
+              });
+            }
+          }
+        }
+      }
+
+      // Save WorldSetting entries
+      if (analysis.newWorldRules?.length) {
+        for (const rule of analysis.newWorldRules) {
+          await this.prisma.worldSetting.upsert({
+            where: {
+              workId_category_name: {
+                workId,
+                category: rule.category,
+                name: rule.name,
+              },
+            },
+            update: {
+              description: rule.description,
+              lastEpisode: episode.orderIndex,
+            },
+            create: {
+              workId,
+              category: rule.category,
+              name: rule.name,
+              description: rule.description,
+              firstEpisode: episode.orderIndex,
+              lastEpisode: episode.orderIndex,
+            },
+          });
+        }
+      }
+
+      // Save CharacterDialogueSample entries
+      if (analysis.dialogueSamples?.length) {
+        // Delete existing samples for this episode to avoid duplicates
+        await this.prisma.characterDialogueSample.deleteMany({
+          where: { workId, episodeOrder: episode.orderIndex },
+        });
+
+        for (const sample of analysis.dialogueSamples) {
+          // Try to find matching StoryCharacter
+          const character = await this.prisma.storyCharacter.findFirst({
+            where: { workId, name: sample.character },
+          });
+
+          await this.prisma.characterDialogueSample.create({
+            data: {
+              workId,
+              characterId: character?.id || null,
+              characterName: sample.character,
+              episodeOrder: episode.orderIndex,
+              line: sample.line,
+              context: sample.context || null,
+              emotion: sample.emotion || null,
+            },
+          });
+        }
+      }
+
+      // Update StoryCharacter.currentState from analysis
+      if (analysis.characters?.length) {
+        for (const char of analysis.characters) {
+          if (!char.currentState) continue;
+          const storyChar = await this.prisma.storyCharacter.findFirst({
+            where: { workId, name: char.name },
+          });
+          if (storyChar) {
+            await this.prisma.storyCharacter.update({
+              where: { id: storyChar.id },
+              data: { currentState: char.currentState },
+            });
+          }
+        }
+      }
+
+      this.logger.log(
+        `Analyzed episode "${episode.title}" (${episodeId}) v${episode.contentVersion}`,
+      );
+    } catch (error) {
+      this.logger.error(
+        `Failed to analyze episode ${episodeId}: ${error instanceof Error ? error.message : error}`,
+      );
+    }
+  }
+
+  async analyzeAllEpisodes(
+    workId: string,
+  ): Promise<{ analyzed: number; skipped: number }> {
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true },
+    });
+
+    let analyzed = 0;
+    let skipped = 0;
+
+    for (const ep of episodes) {
+      const needs = await this.needsAnalysis(ep.id);
+      if (!needs) {
+        skipped++;
+        continue;
+      }
+      await this.analyzeEpisode(workId, ep.id);
+      analyzed++;
+    }
+
+    this.logger.log(
+      `analyzeAllEpisodes for work ${workId}: analyzed=${analyzed}, skipped=${skipped}`,
+    );
+    return { analyzed, skipped };
+  }
+
+  async getAnalysisForWork(workId: string) {
+    return this.prisma.episodeAnalysis.findMany({
+      where: { workId },
+      orderBy: { episode: { orderIndex: 'asc' } },
+    });
+  }
+
+  async needsAnalysis(episodeId: string): Promise<boolean> {
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      include: { aiAnalysis: true },
+    });
+    if (!episode) return false;
+    if (!episode.aiAnalysis) return true;
+    return episode.aiAnalysis.version !== episode.contentVersion;
+  }
+
+  private parseAnalysisJson(text: string): AnalysisResult | null {
+    const cleaned = text
+      .replace(/```json\s*/g, '')
+      .replace(/```\s*/g, '')
+      .trim();
+    const start = cleaned.indexOf('{');
+    const end = cleaned.lastIndexOf('}');
+    if (start === -1 || end <= start) return null;
+
+    try {
+      return JSON.parse(cleaned.slice(start, end + 1)) as AnalysisResult;
+    } catch (e) {
+      this.logger.error(
+        `JSON parse error: ${e instanceof Error ? e.message : e}`,
+      );
+      return null;
+    }
+  }
+}

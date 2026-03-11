@@ -136,6 +136,8 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
 
   function buildContextVars(): Record<string, string> {
     const vars: Record<string, string> = { content: selectedText || currentContent };
+    // Pass workId so backend can auto-inject structural context
+    if (workId) vars.workId = workId;
     const contextParts: string[] = [];
 
     // Current chapter info

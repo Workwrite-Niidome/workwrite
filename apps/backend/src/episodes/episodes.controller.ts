@@ -7,6 +7,7 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreationWizardService } from '../creation-wizard/creation-wizard.service';
+import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 
 @ApiTags('Episodes')
 @Controller()
@@ -16,6 +17,7 @@ export class EpisodesController {
   constructor(
     private episodesService: EpisodesService,
     private creationWizardService: CreationWizardService,
+    private episodeAnalysis: EpisodeAnalysisService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -47,9 +49,10 @@ export class EpisodesController {
     @Body() dto: CreateEpisodeDto,
   ) {
     const result = await this.episodesService.create(workId, userId, dto);
-    // Auto-update story summary in background (non-blocking)
+    // Auto-update in background (non-blocking)
     if (dto.content && dto.content.length > 100) {
       this.triggerSummaryUpdate(workId, userId);
+      this.triggerEpisodeAnalysis(workId, result.id);
     }
     return result;
   }
@@ -64,10 +67,11 @@ export class EpisodesController {
     @Body() dto: UpdateEpisodeDto,
   ) {
     const result = await this.episodesService.update(id, userId, dto);
-    // Auto-update story summary when content changes
+    // Auto-update when content changes
     if (dto.content && dto.content.length > 100) {
       const episode = await this.episodesService.findOne(id, userId);
       this.triggerSummaryUpdate(episode.workId, userId);
+      this.triggerEpisodeAnalysis(episode.workId, id);
     }
     return result;
   }
@@ -164,6 +168,13 @@ export class EpisodesController {
   private triggerSummaryUpdate(workId: string, userId: string) {
     this.creationWizardService.updateStorySummary(workId, userId).catch((e) => {
       this.logger.warn(`Failed to auto-update story summary for work ${workId}: ${e.message}`);
+    });
+  }
+
+  /** Fire-and-forget episode analysis (non-blocking) */
+  private triggerEpisodeAnalysis(workId: string, episodeId: string) {
+    this.episodeAnalysis.analyzeEpisode(workId, episodeId).catch((e) => {
+      this.logger.warn(`Failed to auto-analyze episode ${episodeId}: ${e.message}`);
     });
   }
 }

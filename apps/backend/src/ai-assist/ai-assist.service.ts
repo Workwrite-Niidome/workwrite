@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
+import { AiContextBuilderService } from './ai-context-builder.service';
 
 const MAX_CONTENT_LENGTH = 15000;
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -22,6 +23,7 @@ export class AiAssistService {
     private aiSettings: AiSettingsService,
     private aiTier: AiTierService,
     private templates: PromptTemplatesService,
+    private contextBuilder: AiContextBuilderService,
   ) {}
 
   async checkStatus(userId?: string): Promise<{
@@ -73,6 +75,25 @@ export class AiAssistService {
 
     // Check AI tier and get model config (pass slug for model routing)
     const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug);
+
+    // Auto-inject structural context if workId is provided
+    if (variables.workId && !variables.structural_context) {
+      try {
+        const episodeOrder = variables.episodeOrder
+          ? parseInt(variables.episodeOrder, 10)
+          : 999;
+        const ctx = await this.contextBuilder.buildContext(
+          variables.workId,
+          episodeOrder,
+        );
+        const formatted = this.contextBuilder.formatForPrompt(ctx);
+        if (formatted) {
+          variables.structural_context = formatted;
+        }
+      } catch (e) {
+        this.logger.warn(`Failed to build structural context: ${e}`);
+      }
+    }
 
     // Build prompt from template
     let prompt = template.prompt;

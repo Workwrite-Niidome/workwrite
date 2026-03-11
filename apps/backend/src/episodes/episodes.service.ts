@@ -92,6 +92,7 @@ export class EpisodesService {
     if (dto.content !== undefined) {
       data.content = dto.content;
       data.wordCount = dto.content.length;
+      data.contentVersion = { increment: 1 };
     }
     if (dto.orderIndex !== undefined) data.orderIndex = dto.orderIndex;
     if (dto.scheduledAt !== undefined) data.scheduledAt = new Date(dto.scheduledAt);

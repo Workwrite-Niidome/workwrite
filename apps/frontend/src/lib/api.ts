@@ -773,6 +773,24 @@ class ApiClient {
     return this.request<string | null>(`/works/${workId}/story-context`);
   }
 
+  // AI Structural Analysis
+  async analyzeEpisode(episodeId: string) {
+    return this.request<{ success: boolean }>(`/ai/analyze/episode/${episodeId}`, { method: 'POST' });
+  }
+
+  async analyzeWork(workId: string) {
+    return this.request<{ analyzed: number; skipped: number }>(`/ai/analyze/work/${workId}`, { method: 'POST' });
+  }
+
+  async getAiContext(workId: string, episodeOrder?: number) {
+    const params = episodeOrder !== undefined ? `?episodeOrder=${episodeOrder}` : '';
+    return this.request<{ context: unknown; formatted: string }>(`/ai/context/${workId}${params}`);
+  }
+
+  async getEpisodeAnalyses(workId: string) {
+    return this.request<unknown[]>(`/ai/analysis/${workId}`);
+  }
+
   // Invite codes
   async getInviteCodes() {
     return this.request<{ data: InviteCode[] }>('/admin/invite-codes');

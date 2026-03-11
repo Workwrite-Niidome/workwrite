@@ -1,7 +1,9 @@
-import { Controller, Get, Post, Put, Delete, Body, Param, Query, Res, UseGuards, UseInterceptors } from '@nestjs/common';
+import { Controller, Get, Post, Put, Delete, Body, Param, Query, Res, UseGuards, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { AiAssistService } from './ai-assist.service';
+import { EpisodeAnalysisService } from './episode-analysis.service';
+import { AiContextBuilderService } from './ai-context-builder.service';
 import { AiAssistDto, ExtractCharactersDto, SaveDraftDto } from './dto/ai-assist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
@@ -10,8 +12,12 @@ import { PrismaService } from '../common/prisma/prisma.service';
 @ApiTags('AI Assist')
 @Controller()
 export class AiAssistController {
+  private readonly logger = new Logger(AiAssistController.name);
+
   constructor(
     private aiAssist: AiAssistService,
+    private episodeAnalysis: EpisodeAnalysisService,
+    private contextBuilder: AiContextBuilderService,
     private prisma: PrismaService,
   ) {}
 
@@ -61,6 +67,68 @@ export class AiAssistController {
       dto.generatedText,
       dto.existingCharacters || [],
     );
+  }
+
+  // === Structural Analysis endpoints ===
+
+  @Post('ai/analyze/episode/:episodeId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Analyze a single episode for structural data' })
+  async analyzeEpisode(
+    @Param('episodeId') episodeId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      select: { workId: true, authorId: true },
+    });
+    if (!episode || episode.authorId !== userId) {
+      return { error: 'Episode not found' };
+    }
+    await this.episodeAnalysis.analyzeEpisode(episode.workId, episodeId);
+    return { success: true };
+  }
+
+  @Post('ai/analyze/work/:workId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Analyze all episodes of a work' })
+  async analyzeWork(
+    @Param('workId') workId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { authorId: true },
+    });
+    if (!work || work.authorId !== userId) {
+      return { error: 'Work not found' };
+    }
+    const result = await this.episodeAnalysis.analyzeAllEpisodes(workId);
+    return result;
+  }
+
+  @Get('ai/context/:workId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get AI writing context for a work' })
+  async getContext(
+    @Param('workId') workId: string,
+    @Query('episodeOrder') episodeOrder?: string,
+  ) {
+    const order = episodeOrder ? parseInt(episodeOrder, 10) : 999;
+    const ctx = await this.contextBuilder.buildContext(workId, order);
+    const formatted = this.contextBuilder.formatForPrompt(ctx);
+    return { context: ctx, formatted };
+  }
+
+  @Get('ai/analysis/:workId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all episode analyses for a work' })
+  async getAnalyses(@Param('workId') workId: string) {
+    return this.episodeAnalysis.getAnalysisForWork(workId);
   }
 
   // === Draft endpoints ===
