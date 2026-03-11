@@ -791,6 +791,97 @@ class ApiClient {
     return this.request<unknown[]>(`/ai/analysis/${workId}`);
   }
 
+  // === SNS (Posts / Timeline) ===
+
+  async createPost(data: { content: string; workId?: string; episodeId?: string; highlightId?: string; replyToId?: string; quoteOfId?: string }) {
+    return this.request<{ data: SnsPost }>('/posts', { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async getPost(id: string) {
+    return this.request<{ data: SnsPost }>(`/posts/${id}`);
+  }
+
+  async deletePost(id: string) {
+    return this.request<void>(`/posts/${id}`, { method: 'DELETE' });
+  }
+
+  async getPostReplies(postId: string, cursor?: string, limit?: number) {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: TimelineResult }>(`/posts/${postId}/replies?${qs.toString()}`);
+  }
+
+  async applaudPost(postId: string) {
+    return this.request<void>(`/posts/${postId}/applause`, { method: 'POST' });
+  }
+
+  async removeApplause(postId: string) {
+    return this.request<void>(`/posts/${postId}/applause`, { method: 'DELETE' });
+  }
+
+  async repostPost(postId: string) {
+    return this.request<{ data: SnsPost }>(`/posts/${postId}/repost`, { method: 'POST' });
+  }
+
+  async removeRepost(postId: string) {
+    return this.request<void>(`/posts/${postId}/repost`, { method: 'DELETE' });
+  }
+
+  async bookmarkPost(postId: string) {
+    return this.request<void>(`/posts/${postId}/bookmark`, { method: 'POST' });
+  }
+
+  async removePostBookmark(postId: string) {
+    return this.request<void>(`/posts/${postId}/bookmark`, { method: 'DELETE' });
+  }
+
+  async getPostBookmarks(cursor?: string, limit?: number) {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: TimelineResult }>(`/posts/bookmarks/list?${qs.toString()}`);
+  }
+
+  async getUserPosts(userId: string, cursor?: string, limit?: number) {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: TimelineResult }>(`/posts/user/${userId}?${qs.toString()}`);
+  }
+
+  async getUserApplaudedPosts(userId: string, cursor?: string, limit?: number) {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: TimelineResult }>(`/posts/user/${userId}/applause?${qs.toString()}`);
+  }
+
+  async getFollowingTimeline(cursor?: string, limit?: number) {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: TimelineResult }>(`/timeline?${qs.toString()}`);
+  }
+
+  async getGlobalTimeline(cursor?: string, limit?: number) {
+    const qs = new URLSearchParams();
+    if (cursor) qs.set('cursor', cursor);
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: TimelineResult }>(`/timeline/global?${qs.toString()}`);
+  }
+
+  async getTrendingPosts() {
+    return this.request<{ data: SnsPost[] }>('/timeline/trending');
+  }
+
+  async shareHighlight(highlightId: string, comment?: string) {
+    return this.request<{ data: SnsPost }>(`/reading/highlights/${highlightId}/share`, {
+      method: 'POST',
+      body: JSON.stringify({ comment }),
+    });
+  }
+
   // Invite codes
   async getInviteCodes() {
     return this.request<{ data: InviteCode[] }>('/admin/invite-codes');
@@ -964,6 +1055,30 @@ class ApiClient {
   // Reading Stats
   async getReadingStats() {
     return this.request<{ data: ReadingStats }>('/reading/stats');
+  }
+
+  // Author's published works
+  async getAuthorWorks(userId: string) {
+    return this.request<{ data: Work[] }>(`/works/author/${userId}`);
+  }
+
+  // Public profile
+  async getPublicProfile(userId: string) {
+    const res = await this.request<{ id: string; name: string; displayName: string | null; bio: string | null; avatarUrl: string | null; role: string; createdAt: string; _count: { readingProgress: number; reviews: number; followers: number; following: number } }>(`/users/${userId}`);
+    return { data: res as any };
+  }
+
+  async getFollowers(userId: string) {
+    const res = await this.request<{ follower: { id: string; name: string; displayName: string | null; avatarUrl: string | null } }[]>(`/users/${userId}/followers`);
+    // Map Follow[] to UserItem[]
+    const data = (res as any[]).map((f: any) => f.follower);
+    return { data };
+  }
+
+  async getFollowingList(userId: string) {
+    const res = await this.request<{ following: { id: string; name: string; displayName: string | null; avatarUrl: string | null } }[]>(`/users/${userId}/following`);
+    const data = (res as any[]).map((f: any) => f.following);
+    return { data };
   }
 
   // Follow
@@ -1422,6 +1537,61 @@ export interface StoryArc {
   centralConflict?: string | null;
   themes: string[];
   acts: StoryAct[];
+}
+
+// SNS Types
+export interface PostAuthor {
+  id: string;
+  name: string;
+  displayName: string | null;
+  avatarUrl: string | null;
+  role: string;
+}
+
+export interface PostWork {
+  id: string;
+  title: string;
+  genre: string | null;
+  synopsis?: string | null;
+  authorId?: string;
+  author?: { id: string; name: string; displayName: string | null };
+  _count?: { episodes: number };
+}
+
+export interface PostEpisode {
+  id: string;
+  title: string;
+  orderIndex: number;
+  workId: string;
+}
+
+export interface SnsPost {
+  id: string;
+  authorId: string;
+  content: string;
+  postType: 'ORIGINAL' | 'REPOST' | 'QUOTE' | 'REPLY' | 'AUTO_WORK' | 'AUTO_EPISODE' | 'AUTO_REVIEW' | 'AUTO_READING';
+  work: PostWork | null;
+  episode: PostEpisode | null;
+  repostOf: SnsPost | null;
+  quoteOf: SnsPost | null;
+  replyToId: string | null;
+  threadRootId: string | null;
+  replyCount: number;
+  repostCount: number;
+  applauseCount: number;
+  bookmarkCount: number;
+  author: PostAuthor;
+  hasApplauded?: boolean;
+  hasBookmarked?: boolean;
+  hasReposted?: boolean;
+  isDeleted: boolean;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface TimelineResult {
+  posts: SnsPost[];
+  nextCursor: string | null;
 }
 
 export const api = new ApiClient();

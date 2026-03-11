@@ -1,20 +1,45 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PostsService } from '../posts/posts.service';
+import { PostType } from '@prisma/client';
 
 @Injectable()
 export class ReviewsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(ReviewsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private postsService: PostsService,
+  ) {}
 
   async create(userId: string, data: { workId: string; content: string }) {
-    return this.prisma.review.upsert({
+    // Check if this is a new review (not an update)
+    const existing = await this.prisma.review.findUnique({
+      where: { userId_workId: { userId, workId: data.workId } },
+    });
+
+    const review = await this.prisma.review.upsert({
       where: { userId_workId: { userId, workId: data.workId } },
       update: { content: data.content },
       create: { userId, workId: data.workId, content: data.content },
       include: {
         user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+        work: { select: { id: true, title: true } },
         _count: { select: { helpfuls: true } },
       },
     });
+
+    // Auto-post only for new reviews (not updates)
+    if (!existing) {
+      const title = review.work?.title || '';
+      const excerpt = data.content.slice(0, 100);
+      this.postsService.createAutoPost(userId, PostType.AUTO_REVIEW, {
+        content: `『${title}』にレビューを投稿しました\n\n${excerpt}${data.content.length > 100 ? '...' : ''}`,
+        workId: data.workId,
+      }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
+    }
+
+    return review;
   }
 
   async findByWork(workId: string) {

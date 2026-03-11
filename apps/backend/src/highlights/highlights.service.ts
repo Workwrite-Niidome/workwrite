@@ -57,6 +57,25 @@ export class HighlightsService {
     return { deleted: true };
   }
 
+  async getHighlightWithContext(highlightId: string, userId: string) {
+    const highlight = await this.prisma.highlight.findUnique({
+      where: { id: highlightId },
+      include: {
+        episode: {
+          select: { id: true, title: true, content: true, workId: true },
+        },
+      },
+    });
+    if (!highlight || highlight.userId !== userId) throw new NotFoundException();
+
+    const text = highlight.episode.content.slice(highlight.startPos, highlight.endPos);
+    return {
+      text,
+      episodeId: highlight.episodeId,
+      workId: highlight.episode.workId,
+    };
+  }
+
   async explainHighlight(highlightId: string, userId: string) {
     const highlight = await this.prisma.highlight.findUnique({
       where: { id: highlightId },

@@ -26,6 +26,13 @@ export class WorksController {
     return this.worksService.findByAuthor(userId);
   }
 
+  @Get('author/:userId')
+  @ApiOperation({ summary: 'Get published works by author' })
+  async findByAuthorPublic(@Param('userId') userId: string) {
+    const works = await this.worksService.findPublishedByAuthor(userId);
+    return { data: works };
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get work details' })

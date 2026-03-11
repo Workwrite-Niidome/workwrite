@@ -1,11 +1,18 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PostsService } from '../posts/posts.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
+import { PostType } from '@prisma/client';
 
 @Injectable()
 export class WorksService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(WorksService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private postsService: PostsService,
+  ) {}
 
   async create(authorId: string, dto: CreateWorkDto) {
     const work = await this.prisma.work.create({
@@ -98,6 +105,18 @@ export class WorksService {
     });
   }
 
+  async findPublishedByAuthor(authorId: string) {
+    return this.prisma.work.findMany({
+      where: { authorId, status: 'PUBLISHED' },
+      orderBy: { publishedAt: 'desc' },
+      include: {
+        tags: true,
+        qualityScore: { select: { overall: true } },
+        _count: { select: { episodes: { where: { publishedAt: { not: null } } }, reviews: true } },
+      },
+    });
+  }
+
   async update(id: string, userId: string, dto: UpdateWorkDto) {
     const work = await this.prisma.work.findUnique({ where: { id } });
     if (!work) throw new NotFoundException('Work not found');
@@ -113,6 +132,11 @@ export class WorksService {
       updateData.status = dto.status;
       if (dto.status === 'PUBLISHED' && !work.publishedAt) {
         updateData.publishedAt = new Date();
+        // Auto-post to SNS
+        this.postsService.createAutoPost(userId, PostType.AUTO_WORK, {
+          content: `新作『${dto.title || work.title}』を公開しました`,
+          workId: id,
+        }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
       }
     }
 

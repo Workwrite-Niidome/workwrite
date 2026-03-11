@@ -91,10 +91,10 @@ export default function WorkDetailPage() {
           <div className="space-y-2">
             <h1 className="text-2xl sm:text-3xl font-bold break-words">{work.title}</h1>
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
-              <span className="flex items-center gap-1 shrink-0">
+              <Link href={`/users/${work.author.id}`} className="flex items-center gap-1 shrink-0 hover:text-foreground transition-colors">
                 <User className="h-4 w-4" />
                 {work.author.displayName || work.author.name}
-              </span>
+              </Link>
               {isAuthenticated && (
                 <Button
                   variant={isFollowing ? 'default' : 'outline'}

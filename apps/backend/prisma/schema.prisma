@@ -46,6 +46,11 @@ model User {
   following  Follow[] @relation("follower")
   followers  Follow[] @relation("following")
 
+  // SNS
+  posts         Post[]         @relation("PostAuthor")
+  applause      Applause[]
+  postBookmarks PostBookmark[]
+
   // Letters
   lettersSent     Letter[] @relation("lettersSent")
   lettersReceived Letter[] @relation("lettersReceived")
@@ -150,6 +155,9 @@ model Work {
   worldSettings     WorldSetting[]
   dialogueSamples   CharacterDialogueSample[]
 
+  // SNS
+  posts Post[]
+
   // Denormalized stats
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
@@ -191,6 +199,7 @@ model Episode {
   letters         Letter[]
   scenes          StoryScene[]
   aiAnalysis      EpisodeAnalysis?
+  posts           Post[]
 
   @@unique([workId, orderIndex])
   @@index([workId])
@@ -295,6 +304,7 @@ model Highlight {
 
   user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
   episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  posts   Post[]
 
   @@index([userId, episodeId])
 }
@@ -943,4 +953,102 @@ model InviteCodeUsage {
 
   @@unique([inviteCodeId, userId])
   @@index([userId])
+}
+
+// ============================================================
+// SNS (Posts / Timeline)
+// ============================================================
+
+model Post {
+  id          String    @id @default(cuid())
+  authorId    String
+  content     String    @db.Text
+  postType    PostType  @default(ORIGINAL)
+
+  // Embedded content
+  workId      String?
+  episodeId   String?
+  highlightId String?
+
+  // Repost / Quote
+  repostOfId  String?
+  quoteOfId   String?
+
+  // Reply / Thread
+  replyToId    String?
+  threadRootId String?
+
+  // Denormalized counters
+  replyCount    Int     @default(0)
+  repostCount   Int     @default(0)
+  applauseCount Int     @default(0)
+  bookmarkCount Int     @default(0)
+
+  isDeleted   Boolean   @default(false)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  // Relations
+  author    User       @relation("PostAuthor", fields: [authorId], references: [id], onDelete: Cascade)
+  work      Work?      @relation(fields: [workId], references: [id], onDelete: SetNull)
+  episode   Episode?   @relation(fields: [episodeId], references: [id], onDelete: SetNull)
+  highlight Highlight? @relation(fields: [highlightId], references: [id], onDelete: SetNull)
+  repostOf  Post?      @relation("Repost", fields: [repostOfId], references: [id], onDelete: SetNull)
+  quoteOf   Post?      @relation("Quote", fields: [quoteOfId], references: [id], onDelete: SetNull)
+  replyTo   Post?      @relation("Reply", fields: [replyToId], references: [id], onDelete: SetNull)
+  threadRoot Post?     @relation("Thread", fields: [threadRootId], references: [id], onDelete: SetNull)
+
+  reposts    Post[]         @relation("Repost")
+  quotes     Post[]         @relation("Quote")
+  replies    Post[]         @relation("Reply")
+  threadPosts Post[]        @relation("Thread")
+
+  applause   Applause[]
+  bookmarks  PostBookmark[]
+
+  @@index([authorId, createdAt])
+  @@index([replyToId])
+  @@index([threadRootId])
+  @@index([repostOfId])
+  @@index([createdAt])
+  @@index([workId])
+}
+
+enum PostType {
+  ORIGINAL
+  REPOST
+  QUOTE
+  REPLY
+  AUTO_WORK
+  AUTO_EPISODE
+  AUTO_REVIEW
+  AUTO_READING
+}
+
+model Applause {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([postId])
+  @@index([userId])
+}
+
+model PostBookmark {
+  id        String   @id @default(cuid())
+  userId    String
+  postId    String
+  createdAt DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  post Post @relation(fields: [postId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, postId])
+  @@index([userId, createdAt])
+  @@index([postId])
 }

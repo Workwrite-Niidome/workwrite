@@ -1,10 +1,16 @@
-import { Injectable } from '@nestjs/common';
-import { BookshelfStatus } from '@prisma/client';
+import { Injectable, Logger } from '@nestjs/common';
+import { BookshelfStatus, PostType } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PostsService } from '../posts/posts.service';
 
 @Injectable()
 export class BookshelfService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(BookshelfService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private postsService: PostsService,
+  ) {}
 
   async getBookshelf(userId: string, status?: BookshelfStatus) {
     const entries = await this.prisma.bookshelfEntry.findMany({
@@ -63,11 +69,32 @@ export class BookshelfService {
   }
 
   async updateStatus(userId: string, workId: string, status: BookshelfStatus) {
-    return this.prisma.bookshelfEntry.upsert({
+    // Check previous status
+    const prev = await this.prisma.bookshelfEntry.findUnique({
+      where: { userId_workId: { userId, workId } },
+    });
+
+    const entry = await this.prisma.bookshelfEntry.upsert({
       where: { userId_workId: { userId, workId } },
       update: { status },
       create: { userId, workId, status },
     });
+
+    // Auto-post on reading completion
+    if (status === 'COMPLETED' && prev?.status !== 'COMPLETED') {
+      const work = await this.prisma.work.findUnique({
+        where: { id: workId },
+        select: { title: true },
+      });
+      if (work) {
+        this.postsService.createAutoPost(userId, PostType.AUTO_READING, {
+          content: `『${work.title}』を読了しました`,
+          workId,
+        }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
+      }
+    }
+
+    return entry;
   }
 
   async removeFromBookshelf(userId: string, workId: string) {

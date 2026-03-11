@@ -8,6 +8,8 @@ import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreationWizardService } from '../creation-wizard/creation-wizard.service';
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
+import { PostsService } from '../posts/posts.service';
+import { PostType } from '@prisma/client';
 
 @ApiTags('Episodes')
 @Controller()
@@ -18,6 +20,7 @@ export class EpisodesController {
     private episodesService: EpisodesService,
     private creationWizardService: CreationWizardService,
     private episodeAnalysis: EpisodeAnalysisService,
+    private postsService: PostsService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -105,6 +108,10 @@ export class EpisodesController {
     // Update summary on publish
     const episode = await this.episodesService.findOne(id, userId);
     this.triggerSummaryUpdate(episode.workId, userId);
+    // Auto-post to SNS
+    this.createAutoEpisodePost(userId, episode).catch((e) =>
+      this.logger.warn(`Auto-post failed: ${e}`),
+    );
     return result;
   }
 
@@ -175,6 +182,20 @@ export class EpisodesController {
   private triggerEpisodeAnalysis(workId: string, episodeId: string) {
     this.episodeAnalysis.analyzeEpisode(workId, episodeId).catch((e) => {
       this.logger.warn(`Failed to auto-analyze episode ${episodeId}: ${e.message}`);
+    });
+  }
+
+  /** Create auto-post when episode is published */
+  private async createAutoEpisodePost(userId: string, episode: any) {
+    const work = episode.work || {};
+    const title = work.title || '';
+    const epTitle = episode.title || '';
+    const order = episode.orderIndex ?? 0;
+    const content = `『${title}』第${order}話「${epTitle}」を公開しました`;
+    await this.postsService.createAutoPost(userId, PostType.AUTO_EPISODE, {
+      content,
+      workId: work.id || episode.workId,
+      episodeId: episode.id,
     });
   }
 }

@@ -35,6 +35,12 @@ export class FollowsController {
     return this.followsService.getFollowers(userId);
   }
 
+  @Get(':userId/following')
+  @ApiOperation({ summary: 'Get users a user follows' })
+  getFollowingByUser(@Param('userId') userId: string) {
+    return this.followsService.getFollowing(userId);
+  }
+
   @Get('me/following')
   @ApiOperation({ summary: 'Get users I follow' })
   getFollowing(@CurrentUser('id') userId: string) {

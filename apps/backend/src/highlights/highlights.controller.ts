@@ -1,7 +1,8 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, UseGuards, Logger } from '@nestjs/common';
 
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { HighlightsService } from './highlights.service';
+import { PostsService } from '../posts/posts.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -10,7 +11,12 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class HighlightsController {
-  constructor(private highlightsService: HighlightsService) {}
+  private readonly logger = new Logger(HighlightsController.name);
+
+  constructor(
+    private highlightsService: HighlightsService,
+    private postsService: PostsService,
+  ) {}
 
   @Post()
   @ApiOperation({ summary: 'Create highlight' })
@@ -62,5 +68,28 @@ export class HighlightsController {
     @CurrentUser('id') userId: string,
   ) {
     return this.highlightsService.explainHighlight(id, userId);
+  }
+
+  @Post(':id/share')
+  @ApiOperation({ summary: 'Share highlight as a post' })
+  async shareHighlight(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { comment?: string },
+  ) {
+    const highlight = await this.highlightsService.getHighlightWithContext(id, userId);
+    const quote = highlight.text.slice(0, 200);
+    const content = body.comment
+      ? `${body.comment}\n\n「${quote}${highlight.text.length > 200 ? '...' : ''}」`
+      : `「${quote}${highlight.text.length > 200 ? '...' : ''}」`;
+
+    const post = await this.postsService.create(userId, {
+      content,
+      workId: highlight.workId,
+      episodeId: highlight.episodeId,
+      highlightId: id,
+    });
+
+    return { data: post };
   }
 }

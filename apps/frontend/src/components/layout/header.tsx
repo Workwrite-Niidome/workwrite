@@ -36,13 +36,13 @@ export function Header() {
           <Link href="/search" className="text-muted-foreground hover:text-foreground transition-colors">
             検索
           </Link>
+          <Link href="/timeline" className="text-muted-foreground hover:text-foreground transition-colors">
+            タイムライン
+          </Link>
           {isAuthenticated && (
             <>
               <Link href="/bookshelf" className="text-muted-foreground hover:text-foreground transition-colors">
                 本棚
-              </Link>
-              <Link href="/timeline" className="text-muted-foreground hover:text-foreground transition-colors">
-                タイムライン
               </Link>
               <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
                 執筆

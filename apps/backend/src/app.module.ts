@@ -32,6 +32,8 @@ import { FollowsModule } from './follows/follows.module';
 import { LettersModule } from './letters/letters.module';
 import { CreationWizardModule } from './creation-wizard/creation-wizard.module';
 import { StoryStructureModule } from './story-structure/story-structure.module';
+import { PostsModule } from './posts/posts.module';
+import { TimelineModule } from './timeline/timeline.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -72,6 +74,8 @@ import { HealthController } from './health.controller';
     LettersModule,
     CreationWizardModule,
     StoryStructureModule,
+    PostsModule,
+    TimelineModule,
   ],
   controllers: [HealthController],
 })

@@ -1,10 +1,12 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BookshelfService } from './bookshelf.service';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { PostsService } from '../posts/posts.service';
 
 const mockPrismaService = () => ({
   bookshelfEntry: {
     findMany: jest.fn(),
+    findUnique: jest.fn(),
     upsert: jest.fn(),
     deleteMany: jest.fn(),
   },
@@ -12,6 +14,13 @@ const mockPrismaService = () => ({
     count: jest.fn(),
     findFirst: jest.fn(),
   },
+  work: {
+    findUnique: jest.fn(),
+  },
+});
+
+const mockPostsService = () => ({
+  createAutoPost: jest.fn().mockResolvedValue({}),
 });
 
 describe('BookshelfService', () => {
@@ -24,6 +33,7 @@ describe('BookshelfService', () => {
       providers: [
         BookshelfService,
         { provide: PrismaService, useValue: prisma },
+        { provide: PostsService, useValue: mockPostsService() },
       ],
     }).compile();
 
@@ -106,6 +116,11 @@ describe('BookshelfService', () => {
 
   describe('updateStatus', () => {
     it('should update bookshelf status', async () => {
+      prisma.bookshelfEntry.findUnique.mockResolvedValue({
+        userId: 'user-1',
+        workId: 'work-1',
+        status: 'WANT_TO_READ',
+      });
       prisma.bookshelfEntry.upsert.mockResolvedValue({
         userId: 'user-1',
         workId: 'work-1',
