@@ -87,12 +87,21 @@ export function WritingEditor({
     return () => window.removeEventListener('beforeunload', handleBeforeUnload);
   }, [saveStatus]);
 
-  // Track text selection
+  // Track text selection — preserve selection when clicking away to AI panel
   const handleSelect = useCallback(() => {
     const textarea = textareaRef.current;
     if (!textarea) return;
-    const selected = content.slice(textarea.selectionStart, textarea.selectionEnd);
-    setSelectedText(selected);
+    // Only update selection state when the textarea is actually focused
+    // This prevents clearing selectedText when user clicks AI panel buttons
+    if (document.activeElement !== textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    if (start !== end) {
+      setSelectedText(content.slice(start, end));
+    } else {
+      // User clicked within textarea without selecting — clear selection
+      setSelectedText('');
+    }
   }, [content]);
 
   const handleInsertAi = useCallback((text: string) => {

@@ -328,6 +328,16 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           </div>
         )}
 
+        {/* Selected text indicator */}
+        {selectedText && (
+          <div className="p-2 bg-primary/5 rounded-md border border-primary/20">
+            <p className="text-xs font-medium text-primary flex items-center gap-1.5">
+              <Replace className="h-3.5 w-3.5" /> 選択テキスト ({selectedText.length}文字)
+            </p>
+            <p className="text-[11px] text-muted-foreground mt-1 line-clamp-2">{selectedText.slice(0, 100)}{selectedText.length > 100 ? '...' : ''}</p>
+          </div>
+        )}
+
         {/* Quick actions */}
         <div className="space-y-1.5">
           <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
