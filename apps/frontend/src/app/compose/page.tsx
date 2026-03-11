@@ -45,7 +45,7 @@ export default function ComposePage() {
   const displayName = user?.displayName || user?.name || '';
 
   return (
-    <div className="mx-auto max-w-2xl min-h-screen">
+    <div className="mx-auto md:max-w-2xl min-h-screen">
       {/* Header */}
       <div className="sticky top-12 z-40 bg-background border-b border-border flex items-center justify-between px-4 py-2">
         <button

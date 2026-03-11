@@ -29,7 +29,7 @@ export default function FollowersPage() {
   }, [userId]);
 
   return (
-    <main className="mx-auto max-w-2xl min-h-screen">
+    <main className="mx-auto md:max-w-2xl min-h-screen">
       <div className="flex items-center gap-4 px-4 py-3 border-b border-border sticky top-12 z-40 bg-background">
         <button onClick={() => router.back()}>
           <ArrowLeft className="h-5 w-5" />

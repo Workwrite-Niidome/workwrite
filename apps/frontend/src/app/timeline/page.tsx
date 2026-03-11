@@ -25,7 +25,7 @@ export default function TimelinePage() {
   );
 
   return (
-    <main className="mx-auto max-w-2xl min-h-screen">
+    <main className="mx-auto md:max-w-2xl min-h-screen">
       {/* Tabs */}
       <div className="sticky top-12 z-40 bg-background border-b border-border">
         <div className="flex">
