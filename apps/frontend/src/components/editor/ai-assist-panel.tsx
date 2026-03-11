@@ -197,27 +197,38 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     // Use cached story summary if available (token-efficient)
     if (storySummary) {
       const parts: string[] = [];
-      if (storySummary.overallSummary) parts.push(`全体要約: ${storySummary.overallSummary}`);
+      if (storySummary.overallSummary) parts.push(`【物語の流れ】\n${storySummary.overallSummary}`);
       if (storySummary.episodes?.length > 0) {
-        const isPremium = tier?.plan === 'premium';
-        const eps = isPremium ? storySummary.episodes : storySummary.episodes.slice(-3);
-        const epText = eps.map((ep: any) =>
-          `「${ep.title}」: ${ep.summary}${ep.keyEvents?.length ? ` [${ep.keyEvents.join(', ')}]` : ''}`
-        ).join('\n');
-        parts.push(`各話要約:\n${epText}`);
+        // Always include all episode summaries for consistency
+        const epText = storySummary.episodes.map((ep: any) => {
+          let line = `「${ep.title}」: ${ep.summary}`;
+          if (ep.keyEvents?.length) line += ` [${ep.keyEvents.join(', ')}]`;
+          if (ep.endState) line += ` → ${ep.endState}`;
+          return line;
+        }).join('\n');
+        parts.push(`【各話の要約】\n${epText}`);
       }
       if (storySummary.characters?.length > 0) {
-        parts.push(`キャラ現況: ${storySummary.characters.map((c: any) => `${c.name}: ${c.currentState}`).join(' / ')}`);
+        const charText = storySummary.characters.map((c: any) => {
+          let line = `${c.name}: ${c.currentState}`;
+          if (c.relationships) line += `（${c.relationships}）`;
+          return line;
+        }).join('\n');
+        parts.push(`【キャラクター現況】\n${charText}`);
       }
       if (storySummary.openThreads?.length > 0) {
-        parts.push(`伏線: ${storySummary.openThreads.join(', ')}`);
+        parts.push(`【未解決の伏線・展開】\n${storySummary.openThreads.join('\n')}`);
       }
+      if (storySummary.worldRules?.length > 0) {
+        parts.push(`【世界観・ルール】\n${storySummary.worldRules.join('\n')}`);
+      }
+      if (storySummary.timeline) parts.push(`時間経過: ${storySummary.timeline}`);
       if (storySummary.tone) parts.push(`トーン: ${storySummary.tone}`);
-      contextParts.push(parts.join('\n'));
+      contextParts.push(parts.join('\n\n'));
     } else if (episodes.length > 0) {
-      // Fallback: episode titles only (minimal tokens)
+      // Fallback: episode titles (summary not yet generated)
       const epList = episodes.map((ep, i) => `第${i + 1}話「${ep.title}」`).join('\n');
-      contextParts.push(`これまでの章:\n${epList}`);
+      contextParts.push(`【これまでの章（要約未生成 — タイトルのみ）】\n${epList}`);
     }
 
     if (contextParts.length > 0) {

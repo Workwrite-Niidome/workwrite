@@ -503,6 +503,12 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
    * Generate/update a running story summary for efficient AI context.
    * Uses Haiku for cost efficiency. Called after episode save.
    */
+  /**
+   * Incremental story summary update.
+   * - If no existing summary: full rebuild (all episodes, 2000 chars each)
+   * - If existing summary: only send previous summary + latest 2 episodes full text
+   * This keeps token cost low (~3000-6000 input tokens) regardless of total episode count.
+   */
   async updateStorySummary(workId: string, userId: string): Promise<void> {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) return;
@@ -515,28 +521,82 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
 
     if (episodes.length === 0) return;
 
-    // Build episode texts (truncated for summary generation)
-    const episodeTexts = episodes
-      .map((ep) => `第${ep.orderIndex + 1}話「${ep.title}」:\n${ep.content.slice(0, 1000)}`)
-      .join('\n\n---\n\n');
+    // Check for existing summary
+    const existingPlan = await this.prisma.workCreationPlan.findUnique({
+      where: { workId },
+      select: { storySummary: true },
+    });
+    const existingSummary = existingPlan?.storySummary as Record<string, unknown> | null;
 
-    const prompt = `以下は小説の各話の内容です。全体を通した要約を以下のJSON形式で作成してください:
+    let prompt: string;
+
+    if (existingSummary && (existingSummary as any).episodes?.length > 0) {
+      // --- Incremental update: send existing summary + latest 2 episodes ---
+      const recentEps = episodes.slice(-2);
+      const recentTexts = recentEps
+        .map((ep) => `第${ep.orderIndex + 1}話「${ep.title}」:\n${ep.content.slice(0, 3000)}`)
+        .join('\n\n---\n\n');
+
+      prompt = `あなたは小説の分析専門家です。既存の物語要約と最新のエピソードを元に、要約を更新してください。
+
+【既存の要約】
+${JSON.stringify(existingSummary, null, 0)}
+
+【最新のエピソード（直近2話分の本文）】
+${recentTexts}
+
+【指示】
+- 既存の要約の正確な部分はそのまま維持してください
+- 最新エピソードの内容を反映して、全体要約・キャラ現況・伏線を更新してください
+- 本文に書かれている事実のみを要約し、推測で補完しないでください
+- episodesリストに最新話の要約を追加/更新してください
+
+以下のJSON形式で出力してください（JSONのみ）:
+
+{
+  "overallSummary": "物語全体の要約（300字以内、時系列で）",
+  "episodes": [
+    { "title": "話タイトル", "summary": "100字以内の要約", "keyEvents": ["出来事"], "endState": "終了時点の状況" }
+  ],
+  "characters": [
+    { "name": "キャラ名", "currentState": "最新時点の状況（50字以内）", "relationships": "他キャラとの関係" }
+  ],
+  "openThreads": ["未解決の伏線"],
+  "worldRules": ["作中のルール・設定"],
+  "tone": "トーン",
+  "timeline": "時間経過の概要"
+}`;
+    } else {
+      // --- Full rebuild: all episodes, 2000 chars each ---
+      const episodeTexts = episodes
+        .map((ep) => `第${ep.orderIndex + 1}話「${ep.title}」:\n${ep.content.slice(0, 2000)}`)
+        .join('\n\n---\n\n');
+
+      prompt = `あなたは小説の分析専門家です。以下の小説の全話を読み、正確な要約を作成してください。
+
+【重要】本文に書かれている事実のみを要約してください。推測で補完しないでください。
 
 ${episodeTexts}
 
+以下のJSON形式で出力してください（JSONのみ）:
+
 {
-  "overallSummary": "物語全体の要約（200字以内）",
+  "overallSummary": "物語全体の要約（300字以内、時系列で）",
   "episodes": [
-    { "title": "話タイトル", "summary": "その話の要約（50字以内）", "keyEvents": ["重要な出来事1", "重要な出来事2"] }
+    { "title": "話タイトル", "summary": "100字以内の要約", "keyEvents": ["出来事"], "endState": "終了時点の状況" }
   ],
   "characters": [
-    { "name": "キャラ名", "currentState": "現在の状況（30字以内）" }
+    { "name": "キャラ名", "currentState": "最新時点の状況（50字以内）", "relationships": "他キャラとの関係" }
   ],
-  "openThreads": ["未解決の伏線1", "未解決の伏線2"],
-  "tone": "現在の物語のトーン（一言で）"
+  "openThreads": ["未解決の伏線"],
+  "worldRules": ["作中のルール・設定"],
+  "tone": "トーン",
+  "timeline": "時間経過の概要"
 }`;
+    }
 
     try {
+      const startTime = Date.now();
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -546,12 +606,15 @@ ${episodeTexts}
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
-          max_tokens: 2000,
+          max_tokens: 4000,
           messages: [{ role: 'user', content: prompt }],
         }),
       });
 
-      if (!response.ok) return;
+      if (!response.ok) {
+        this.logger.error(`Story summary API error: ${response.status}`);
+        return;
+      }
 
       const data = await response.json();
       const text = data.content?.[0]?.text || '';
@@ -566,9 +629,9 @@ ${episodeTexts}
         create: { workId, storySummary: summary },
       });
 
-      // Log usage
       const inputTokens = data.usage?.input_tokens || 0;
       const outputTokens = data.usage?.output_tokens || 0;
+      const durationMs = Date.now() - startTime;
       await this.prisma.aiUsageLog.create({
         data: {
           userId,
@@ -576,9 +639,11 @@ ${episodeTexts}
           inputTokens,
           outputTokens,
           model: 'claude-haiku-4-5-20251001',
-          durationMs: 0,
+          durationMs,
         },
       }).catch(() => {});
+
+      this.logger.log(`Story summary updated for work ${workId} (${existingSummary ? 'incremental' : 'full'}, ${episodes.length} episodes, ${inputTokens}+${outputTokens} tokens)`);
     } catch (e) {
       this.logger.error('Failed to update story summary', e);
     }

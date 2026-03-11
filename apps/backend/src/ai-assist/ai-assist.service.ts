@@ -4,7 +4,7 @@ import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 
-const MAX_CONTENT_LENGTH = 10000;
+const MAX_CONTENT_LENGTH = 15000;
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const ANTHROPIC_VERSION = '2023-06-01';
 

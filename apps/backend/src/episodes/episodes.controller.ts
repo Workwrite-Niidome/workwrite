@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Patch, Delete, Body, Param, Query, UseGuards, Logger } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { EpisodesService } from './episodes.service';
 import { CreateEpisodeDto, UpdateEpisodeDto } from './dto/episode.dto';
@@ -6,11 +6,17 @@ import { ReorderEpisodesDto } from './dto/reorder-episodes.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { CreationWizardService } from '../creation-wizard/creation-wizard.service';
 
 @ApiTags('Episodes')
 @Controller()
 export class EpisodesController {
-  constructor(private episodesService: EpisodesService) {}
+  private readonly logger = new Logger(EpisodesController.name);
+
+  constructor(
+    private episodesService: EpisodesService,
+    private creationWizardService: CreationWizardService,
+  ) {}
 
   @Get('works/:workId/episodes')
   @UseGuards(OptionalJwtAuthGuard)
@@ -35,24 +41,35 @@ export class EpisodesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Create episode' })
-  create(
+  async create(
     @Param('workId') workId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateEpisodeDto,
   ) {
-    return this.episodesService.create(workId, userId, dto);
+    const result = await this.episodesService.create(workId, userId, dto);
+    // Auto-update story summary in background (non-blocking)
+    if (dto.content && dto.content.length > 100) {
+      this.triggerSummaryUpdate(workId, userId);
+    }
+    return result;
   }
 
   @Patch('episodes/:id')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Update episode' })
-  update(
+  async update(
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateEpisodeDto,
   ) {
-    return this.episodesService.update(id, userId, dto);
+    const result = await this.episodesService.update(id, userId, dto);
+    // Auto-update story summary when content changes
+    if (dto.content && dto.content.length > 100) {
+      const episode = await this.episodesService.findOne(id, userId);
+      this.triggerSummaryUpdate(episode.workId, userId);
+    }
+    return result;
   }
 
   @Delete('episodes/:id')
@@ -79,8 +96,12 @@ export class EpisodesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Publish episode' })
-  publish(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.episodesService.publish(id, userId);
+  async publish(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    const result = await this.episodesService.publish(id, userId);
+    // Update summary on publish
+    const episode = await this.episodesService.findOne(id, userId);
+    this.triggerSummaryUpdate(episode.workId, userId);
+    return result;
   }
 
   @Post('episodes/:id/unpublish')
@@ -137,5 +158,12 @@ export class EpisodesController {
     @CurrentUser('id') userId: string,
   ) {
     return this.episodesService.restoreSnapshot(snapshotId, userId);
+  }
+
+  /** Fire-and-forget summary update (non-blocking) */
+  private triggerSummaryUpdate(workId: string, userId: string) {
+    this.creationWizardService.updateStorySummary(workId, userId).catch((e) => {
+      this.logger.warn(`Failed to auto-update story summary for work ${workId}: ${e.message}`);
+    });
   }
 }
