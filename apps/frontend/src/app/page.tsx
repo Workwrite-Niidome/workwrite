@@ -161,7 +161,7 @@ export default function Home() {
         </div>
       </section>
 
-      <div className="mx-auto max-w-5xl px-6 py-12 space-y-16">
+      <div className="px-6 py-12 space-y-16">
         {/* Continue Reading */}
         {isAuthenticated && continueReading.length > 0 && (
           <section>

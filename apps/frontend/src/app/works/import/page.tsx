@@ -81,7 +81,7 @@ export default function ImportPage() {
   }
 
   return (
-    <div className="mx-auto max-w-3xl px-4 py-8">
+    <div className="px-4 py-8">
       <h1 className="text-2xl font-bold mb-2">作品インポート</h1>
       <p className="text-sm text-muted-foreground mb-6">
         他サイトで書いた作品をテキストから取り込めます。

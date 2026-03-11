@@ -142,7 +142,7 @@ export default function AfterwordPage() {
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
-      <div className="mx-auto max-w-2xl px-4 py-16">
+      <div className="px-4 py-16">
         {/* Step: Afterglow */}
         {step === 'afterglow' && (
           <div className="text-center space-y-8 animate-in fade-in duration-1000">

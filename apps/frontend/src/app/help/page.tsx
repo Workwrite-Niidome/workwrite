@@ -118,7 +118,7 @@ function Accordion({ item }: { item: FAQItem }) {
 
 export default function HelpPage() {
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="px-6 py-8">
       <h1 className="text-lg font-semibold tracking-wide mb-2">Help</h1>
       <p className="text-sm text-muted-foreground mb-8">
         Frequently asked questions about Workwrite.

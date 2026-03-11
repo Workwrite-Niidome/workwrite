@@ -35,7 +35,7 @@ export function WritingEditor({
   const [title, setTitle] = useState(initialTitle);
   const [content, setContent] = useState(initialContent);
   const [focusMode, setFocusMode] = useState(false);
-  const [showAi, setShowAi] = useState(false);
+  const [showAi, setShowAi] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');

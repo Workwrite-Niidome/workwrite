@@ -86,7 +86,7 @@ export default function BookshelfPage() {
 
   if (authLoading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 space-y-4">
+      <div className="px-4 py-8 space-y-4">
         <Skeleton className="h-10 w-48" />
         <div className="grid gap-4 md:grid-cols-2">
           {[1, 2, 3, 4].map((i) => (
@@ -100,7 +100,7 @@ export default function BookshelfPage() {
   const sorted = sortEntries(entries, sortKey);
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">本棚</h1>
         <Link href="/stats">

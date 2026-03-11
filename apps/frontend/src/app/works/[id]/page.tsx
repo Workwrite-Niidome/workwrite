@@ -72,7 +72,7 @@ export default function WorkDetailPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+      <div className="px-4 py-8 space-y-6">
         <Skeleton className="h-10 w-2/3" />
         <Skeleton className="h-6 w-1/3" />
         <Skeleton className="h-40 w-full" />
@@ -85,7 +85,7 @@ export default function WorkDetailPage() {
   const totalWords = work.episodes?.reduce((sum, ep) => sum + ep.wordCount, 0) ?? 0;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="space-y-6">
         <div>
           <div className="space-y-2">

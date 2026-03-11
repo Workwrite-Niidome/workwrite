@@ -72,7 +72,7 @@ export default function NotificationsPage() {
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
-    <div className="mx-auto max-w-2xl px-6 py-8">
+    <div className="px-6 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-lg font-semibold tracking-wide">Notifications</h1>
         {unreadCount > 0 && (

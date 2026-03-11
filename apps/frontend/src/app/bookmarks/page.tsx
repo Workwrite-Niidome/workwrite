@@ -25,7 +25,7 @@ export default function BookmarksPage() {
   if (isLoading || !isAuthenticated) return null;
 
   return (
-    <main className="mx-auto max-w-xl min-h-screen">
+    <main className="mx-auto max-w-2xl min-h-screen">
       <div className="flex items-center gap-2 px-4 py-3 border-b border-border sticky top-12 z-40 bg-background">
         <Bookmark className="h-4 w-4" />
         <h1 className="text-sm font-medium">しおり</h1>

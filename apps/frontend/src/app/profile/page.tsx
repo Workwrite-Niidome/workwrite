@@ -68,7 +68,7 @@ export default function ProfilePage() {
   ];
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+    <div className="px-4 py-8 space-y-6">
       {/* Mobile-only menu links (sidebar handles this on PC) */}
       <div className="md:hidden">
         <Card>

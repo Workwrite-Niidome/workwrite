@@ -75,7 +75,7 @@ function SearchContent() {
   const totalPages = Math.ceil(total / PAGE_SIZE);
 
   return (
-    <div className="mx-auto max-w-5xl px-6 py-8">
+    <div className="px-6 py-8">
       <form onSubmit={handleSubmit} className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -179,7 +179,7 @@ function SearchContent() {
 export default function SearchPage() {
   return (
     <Suspense fallback={
-      <div className="mx-auto max-w-5xl px-6 py-8">
+      <div className="px-6 py-8">
         <Skeleton className="h-10 w-full mb-4" />
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {Array.from({ length: 6 }).map((_, i) => (

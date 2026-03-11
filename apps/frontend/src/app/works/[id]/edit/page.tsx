@@ -183,7 +183,7 @@ export default function EditWorkPage() {
   if (!work) return <Loading />;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">作品編集</h1>
         <div className="flex gap-2">

@@ -67,7 +67,7 @@ export default function WorkAnalyticsPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+      <div className="px-4 py-8 space-y-6">
         <Skeleton className="h-10 w-64" />
         <div className="grid gap-4 md:grid-cols-2">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-40" />)}
@@ -77,7 +77,7 @@ export default function WorkAnalyticsPage() {
   }
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6">
         <Link href="/dashboard">
           <Button variant="ghost" size="sm" className="mb-2">

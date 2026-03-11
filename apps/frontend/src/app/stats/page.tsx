@@ -54,7 +54,7 @@ export default function StatsPage() {
 
   if (authLoading || loading) {
     return (
-      <div className="mx-auto max-w-2xl px-4 py-8 space-y-4">
+      <div className="px-4 py-8 space-y-4">
         <Skeleton className="h-8 w-48" />
         <div className="grid gap-4 grid-cols-2">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}
@@ -69,7 +69,7 @@ export default function StatsPage() {
   const maxMonthlyCount = Math.max(...stats.monthlyActivity.map((m) => m.count), 1);
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="flex items-center gap-3 mb-8">
         <Link href="/bookshelf">
           <Button variant="ghost" size="icon" className="h-9 w-9">

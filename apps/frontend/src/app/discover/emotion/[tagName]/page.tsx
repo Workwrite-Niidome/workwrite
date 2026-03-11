@@ -43,7 +43,7 @@ export default function EmotionDiscoverPage() {
   const label = TAG_LABELS[tagName] || tagName;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="mb-6">
         <Link href="/">
           <Button variant="ghost" size="sm" className="mb-2 min-h-[44px]">

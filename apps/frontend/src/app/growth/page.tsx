@@ -51,7 +51,7 @@ export default function TimelinePage() {
 
   if (authLoading || loading) {
     return (
-      <div className="mx-auto max-w-4xl px-4 py-8 space-y-6">
+      <div className="px-4 py-8 space-y-6">
         <Skeleton className="h-10 w-64" />
         <div className="grid gap-4 md:grid-cols-3">
           {[1, 2, 3].map((i) => <Skeleton key={i} className="h-32" />)}
@@ -64,7 +64,7 @@ export default function TimelinePage() {
   if (!data) return null;
 
   return (
-    <div className="mx-auto max-w-4xl px-4 py-8">
+    <div className="px-4 py-8">
       <h1 className="text-2xl font-bold mb-6">自己変容タイムライン</h1>
 
       {/* AI Narrative */}

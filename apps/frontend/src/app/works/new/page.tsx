@@ -23,7 +23,7 @@ const GENRE_LABELS: Record<string, string> = {
 
 export default function NewWorkPage() {
   return (
-    <Suspense fallback={<div className="mx-auto max-w-2xl px-4 py-12 text-center text-muted-foreground">読み込み中...</div>}>
+    <Suspense fallback={<div className="px-4 py-12 text-center text-muted-foreground">読み込み中...</div>}>
       <NewWorkPageInner />
     </Suspense>
   );
@@ -46,7 +46,7 @@ function NewWorkPageInner() {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-12">
+    <div className="px-4 py-12">
       <h1 className="text-2xl font-bold text-center mb-2">新規作品を作成</h1>
       <p className="text-sm text-muted-foreground text-center mb-8">
         あなたの物語を始めましょう
@@ -134,7 +134,7 @@ function QuickCreate({ onBack }: { onBack: () => void }) {
   }
 
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="px-4 py-8">
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

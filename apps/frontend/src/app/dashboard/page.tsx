@@ -63,7 +63,7 @@ export default function DashboardPage() {
 
   if (loading) {
     return (
-      <div className="mx-auto max-w-5xl px-4 py-8 space-y-6">
+      <div className="px-4 py-8 space-y-6">
         <Skeleton className="h-10 w-48" />
         <div className="grid gap-4 md:grid-cols-4">
           {[1, 2, 3, 4].map((i) => <Skeleton key={i} className="h-24" />)}
@@ -75,7 +75,7 @@ export default function DashboardPage() {
   if (!overview) return null;
 
   return (
-    <div className="mx-auto max-w-5xl px-4 py-8">
+    <div className="px-4 py-8">
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold">作家ダッシュボード</h1>
         <div className="flex gap-2">
