@@ -29,6 +29,18 @@ export default function TimelinePage() {
       {/* Tabs */}
       <div className="sticky top-12 z-40 bg-background border-b border-border">
         <div className="flex">
+          <button
+            onClick={() => setTab('global')}
+            className={cn(
+              'flex-1 py-3 text-sm font-medium text-center relative transition-colors',
+              tab === 'global' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
+            )}
+          >
+            おすすめ
+            {tab === 'global' && (
+              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 rounded-full bg-primary" />
+            )}
+          </button>
           {isAuthenticated && (
             <button
               onClick={() => setTab('following')}
@@ -43,24 +55,14 @@ export default function TimelinePage() {
               )}
             </button>
           )}
-          <button
-            onClick={() => setTab('global')}
-            className={cn(
-              'flex-1 py-3 text-sm font-medium text-center relative transition-colors',
-              tab === 'global' ? 'text-foreground' : 'text-muted-foreground hover:text-foreground',
-            )}
-          >
-            おすすめ
-            {tab === 'global' && (
-              <span className="absolute bottom-0 left-1/2 -translate-x-1/2 w-12 h-0.5 rounded-full bg-primary" />
-            )}
-          </button>
         </div>
       </div>
 
-      {/* Composer */}
+      {/* Inline composer — visible on PC only */}
       {isAuthenticated && (
-        <PostComposer onPost={refresh} />
+        <div className="hidden md:block">
+          <PostComposer onPost={refresh} compact />
+        </div>
       )}
 
       {/* Feed */}

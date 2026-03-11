@@ -1,6 +1,7 @@
 import { Controller, Get, Query, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth, ApiOperation } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { TimelineService } from './timeline.service';
 import { PostQueryDto } from '../posts/dto/post-query.dto';
@@ -27,7 +28,8 @@ export class TimelineController {
   }
 
   @Get('global')
-  @ApiOperation({ summary: 'グローバルタイムライン' })
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'おすすめタイムライン（ログイン時はパーソナライズ）' })
   async getGlobalTimeline(
     @Query() query: PostQueryDto,
     @CurrentUser('id') userId?: string,

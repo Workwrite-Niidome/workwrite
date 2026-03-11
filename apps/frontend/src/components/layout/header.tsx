@@ -31,25 +31,7 @@ export function Header() {
           <span className="text-sm font-semibold tracking-wide">Workwrite</span>
         </Link>
 
-        {/* Desktop Nav */}
-        <nav className="hidden md:flex items-center gap-6 text-sm">
-          <Link href="/search" className="text-muted-foreground hover:text-foreground transition-colors">
-            検索
-          </Link>
-          <Link href="/timeline" className="text-muted-foreground hover:text-foreground transition-colors">
-            タイムライン
-          </Link>
-          {isAuthenticated && (
-            <>
-              <Link href="/bookshelf" className="text-muted-foreground hover:text-foreground transition-colors">
-                本棚
-              </Link>
-              <Link href="/dashboard" className="text-muted-foreground hover:text-foreground transition-colors">
-                執筆
-              </Link>
-            </>
-          )}
-        </nav>
+        {/* Desktop nav is handled by Sidebar — keep header clean */}
 
         <div className="ml-auto flex items-center gap-1">
           <ThemeToggle />

@@ -25,8 +25,7 @@ export function BottomNav() {
   const handleCompose = (e: React.MouseEvent) => {
     e.preventDefault();
     if (isAuthenticated) {
-      router.push('/timeline');
-      // Focus composer on timeline page — handled by the page itself
+      router.push('/compose');
     } else {
       router.push('/login');
     }

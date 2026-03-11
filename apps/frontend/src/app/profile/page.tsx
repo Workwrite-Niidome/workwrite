@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { Loading } from '@/components/layout/loading';
-import { Settings } from 'lucide-react';
+import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -58,8 +58,36 @@ export default function ProfilePage() {
     );
   }
 
+  const mobileMenuItems = [
+    { href: '/bookshelf', label: '本棚', icon: BookOpen },
+    { href: '/bookmarks', label: 'しおり', icon: Bookmark },
+    { href: '/notifications', label: '通知', icon: Bell },
+    { href: '/stats', label: '統計', icon: BarChart3 },
+    { href: '/dashboard', label: '執筆ダッシュボード', icon: Feather },
+    { href: '/settings', label: '設定', icon: Settings },
+  ];
+
   return (
-    <div className="mx-auto max-w-2xl px-4 py-8">
+    <div className="mx-auto max-w-2xl px-4 py-8 space-y-6">
+      {/* Mobile-only menu links (sidebar handles this on PC) */}
+      <div className="md:hidden">
+        <Card>
+          <CardContent className="p-0">
+            {mobileMenuItems.map((item, i) => (
+              <Link
+                key={item.href}
+                href={item.href}
+                className={`flex items-center gap-3 px-4 py-3 text-sm hover:bg-muted transition-colors ${i < mobileMenuItems.length - 1 ? 'border-b border-border' : ''}`}
+              >
+                <item.icon className="h-4 w-4 text-muted-foreground" />
+                <span className="flex-1">{item.label}</span>
+                <ChevronRight className="h-4 w-4 text-muted-foreground" />
+              </Link>
+            ))}
+          </CardContent>
+        </Card>
+      </div>
+
       <Card>
         <CardHeader>
           <div className="flex items-center justify-between">

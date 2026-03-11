@@ -1,5 +1,6 @@
 'use client';
 
+import { useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { Repeat2, Trash2 } from 'lucide-react';
@@ -8,6 +9,33 @@ import { SnsPost } from '@/lib/api';
 import { PostActions } from './post-actions';
 import { WorkEmbed } from './work-embed';
 import { useAuth } from '@/lib/auth-context';
+
+const CONTENT_PREVIEW_LENGTH = 140;
+
+function PostContent({ content }: { content: string }) {
+  const [expanded, setExpanded] = useState(false);
+  const needsTruncation = content.length > CONTENT_PREVIEW_LENGTH;
+  const displayText = needsTruncation && !expanded
+    ? content.slice(0, CONTENT_PREVIEW_LENGTH)
+    : content;
+
+  return (
+    <div className="mt-1">
+      <p className="text-sm whitespace-pre-wrap break-words">
+        {displayText}
+        {needsTruncation && !expanded && '...'}
+      </p>
+      {needsTruncation && !expanded && (
+        <button
+          onClick={(e) => { e.stopPropagation(); setExpanded(true); }}
+          className="text-xs text-primary hover:underline mt-0.5"
+        >
+          続きを読む
+        </button>
+      )}
+    </div>
+  );
+}
 
 interface PostCardProps {
   post: SnsPost;
@@ -125,9 +153,7 @@ export function PostCard({ post, onDelete, showReplyContext }: PostCardProps) {
 
           {/* Post content */}
           {post.content && (
-            <p className="text-sm mt-1 whitespace-pre-wrap break-words">
-              {post.content}
-            </p>
+            <PostContent content={post.content} />
           )}
 
           {/* Quote embed */}
