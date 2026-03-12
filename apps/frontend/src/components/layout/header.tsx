@@ -93,6 +93,9 @@ export function Header() {
               <Link href="/settings" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
                 設定
               </Link>
+              <Link href="/pricing" className="text-sm text-primary hover:text-primary/80 py-2" onClick={() => setMobileOpen(false)}>
+                料金プラン
+              </Link>
               <button onClick={handleLogout} className="text-sm text-muted-foreground hover:text-foreground py-2 text-left">
                 ログアウト
               </button>

@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Loading } from '@/components/layout/loading';
-import { Copy, Check } from 'lucide-react';
+import { Copy, Check, Crown } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -110,6 +110,30 @@ export default function SettingsPage() {
           </Link>
         </p>
       </div>
+
+      {/* Plan */}
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="text-sm flex items-center gap-2">
+            <Crown className="h-4 w-4 text-primary" />
+            ご利用プラン
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div>
+              <p className="text-sm font-medium">Freeプラン</p>
+              <p className="text-xs text-muted-foreground mt-0.5">毎月30クレジット・基本機能が利用可能</p>
+            </div>
+            <Link href="/pricing">
+              <Button size="sm" className="gap-1.5">
+                <Crown className="h-3.5 w-3.5" />
+                プラン変更
+              </Button>
+            </Link>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Invite Codes */}
       <Card>

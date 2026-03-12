@@ -9,7 +9,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { Loading } from '@/components/layout/loading';
-import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight } from 'lucide-react';
+import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight, Crown } from 'lucide-react';
 
 export default function ProfilePage() {
   const { user, isLoading: authLoading } = useAuth();
@@ -64,6 +64,7 @@ export default function ProfilePage() {
     { href: '/notifications', label: '通知', icon: Bell },
     { href: '/stats', label: '統計', icon: BarChart3 },
     { href: '/dashboard', label: '執筆ダッシュボード', icon: Feather },
+    { href: '/pricing', label: '料金プラン', icon: Crown },
     { href: '/settings', label: '設定', icon: Settings },
   ];
 

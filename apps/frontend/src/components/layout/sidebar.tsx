@@ -14,6 +14,7 @@ import {
   User,
   Settings,
   Feather,
+  Crown,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
@@ -77,14 +78,24 @@ export function Sidebar() {
       </nav>
 
       {isAuthenticated && (
-        <Button
-          onClick={() => router.push('/timeline')}
-          className="mt-4 w-full gap-2"
-          size="sm"
-        >
-          <PenSquare className="h-4 w-4" />
-          投稿する
-        </Button>
+        <>
+          <Button
+            onClick={() => router.push('/timeline')}
+            className="mt-4 w-full gap-2"
+            size="sm"
+          >
+            <PenSquare className="h-4 w-4" />
+            投稿する
+          </Button>
+
+          <Link
+            href="/pricing"
+            className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs text-primary hover:bg-primary/10 transition-colors"
+          >
+            <Crown className="h-3.5 w-3.5" />
+            <span>プランをアップグレード</span>
+          </Link>
+        </>
       )}
     </aside>
   );
