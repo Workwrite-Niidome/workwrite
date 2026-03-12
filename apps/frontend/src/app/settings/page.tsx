@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
+import { api, type BillingStatus } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
@@ -32,12 +32,18 @@ export default function SettingsPage() {
   const [inviteLoading, setInviteLoading] = useState(true);
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
+  // Billing
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+
   useEffect(() => {
     if (!user) return;
     api.getMyInviteCodes()
       .then((res) => setInviteCodes(Array.isArray(res) ? res : []))
       .catch(() => {})
       .finally(() => setInviteLoading(false));
+    api.getBillingStatus()
+      .then(setBilling)
+      .catch(() => {});
   }, [user]);
 
   function copyCode(code: string) {
@@ -122,10 +128,17 @@ export default function SettingsPage() {
         <CardContent>
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-sm font-medium">Freeプラン</p>
-              <p className="text-xs text-muted-foreground mt-0.5">毎月30クレジット・基本機能が利用可能</p>
+              <p className="text-sm font-medium">
+                {billing ? `${(billing.plan || 'free').charAt(0).toUpperCase() + (billing.plan || 'free').slice(1)}プラン` : 'Freeプラン'}
+              </p>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                {billing
+                  ? `残高: ${billing.credits.total}cr（月間: ${billing.credits.monthly}cr / 購入: ${billing.credits.purchased}cr）`
+                  : '毎月30クレジット・基本機能が利用可能'
+                }
+              </p>
             </div>
-            <Link href="/pricing">
+            <Link href="/settings/billing">
               <Button size="sm" className="gap-1.5">
                 <Crown className="h-3.5 w-3.5" />
                 プラン変更

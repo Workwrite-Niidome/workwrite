@@ -261,7 +261,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
         <div className="flex-1 flex items-center justify-center p-4">
           <p className="text-sm text-muted-foreground text-center">
             {isQuotaExhausted ? (
-              <>今週のAI使用回数の上限に達しました。<br />プランをアップグレードすると無制限にご利用いただけます。</>
+              <>クレジットが不足しています。<br /><a href="/settings/billing" className="underline">プランをアップグレード</a>するか、クレジットを追加購入してください。</>
             ) : (
               <>AI機能は現在利用できません。<br />管理者がAPIキーを設定するとご利用いただけます。</>
             )}
@@ -281,29 +281,49 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-8 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
-        {/* Tier info */}
+        {/* Tier info + Credit balance */}
         {tier && (
-          <div className="flex items-center justify-between text-xs">
-            <span className="text-muted-foreground">
-              {tier.plan === 'premium' && <><Crown className="inline h-3 w-3 text-amber-500 mr-1" />プレミアム</>}
-              {tier.plan === 'standard' && <><Crown className="inline h-3 w-3 text-purple-500 mr-1" />スタンダード</>}
-              {tier.plan === 'starter' && <><Sparkles className="inline h-3 w-3 text-blue-500 mr-1" />スターター</>}
-              {tier.plan === 'free' && <>無料プラン（残り {tier.remainingFreeUses} 回/週）</>}
-            </span>
-            {tier.canUseThinking && (
-              <button
-                onClick={() => setPremiumMode(!premiumMode)}
-                className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
-                  premiumMode
-                    ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
-                    : 'border-border text-muted-foreground hover:border-amber-500/30'
-                }`}
-              >
-                <Crown className="h-2.5 w-2.5" />
+          <div className="space-y-1.5">
+            <div className="flex items-center justify-between text-xs">
+              <span className="text-muted-foreground">
+                {tier.plan === 'pro' && <><Crown className="inline h-3 w-3 text-amber-500 mr-1" />Pro</>}
+                {tier.plan === 'standard' && <><Crown className="inline h-3 w-3 text-purple-500 mr-1" />Standard</>}
+                {tier.plan === 'free' && <>Free</>}
+              </span>
+              <span className="font-medium">
+                {(tier as any).credits?.total ?? tier.remainingFreeUses ?? '?'}
+                <span className="text-muted-foreground font-normal ml-0.5">cr</span>
+              </span>
+            </div>
+            <div className="flex items-center justify-between">
+              {tier.canUseThinking && (
+                <button
+                  onClick={() => setPremiumMode(!premiumMode)}
+                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
+                    premiumMode
+                      ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+                      : 'border-border text-muted-foreground hover:border-amber-500/30'
+                  }`}
+                >
+                  <Crown className="h-2.5 w-2.5" />
+                  {premiumMode
+                    ? (tier.canUseOpus ? '高精度モード ON' : 'じっくりモード ON')
+                    : (tier.canUseOpus ? '高精度モード' : 'じっくりモード')}
+                </button>
+              )}
+              <span className="text-[10px] text-muted-foreground">
                 {premiumMode
-                  ? (tier.canUseOpus ? '高精度モード ON' : 'じっくりモード ON')
-                  : (tier.canUseOpus ? '高精度モード' : 'じっくりモード')}
-              </button>
+                  ? (tier.canUseOpus ? '5cr/回' : '2cr/回')
+                  : '1cr/回'}
+              </span>
+            </div>
+            {(tier as any).credits?.total === 0 && (
+              <div className="p-2 bg-amber-500/10 rounded-md border border-amber-500/20">
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  クレジットが不足しています。
+                  <a href="/settings/billing" className="underline ml-1">プランを確認</a>
+                </p>
+              </div>
             )}
           </div>
         )}

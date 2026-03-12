@@ -2,6 +2,7 @@ import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common'
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
+import { CreditService } from '../billing/credit.service';
 import {
   GenerateCharactersDto,
   GeneratePlotDto,
@@ -19,6 +20,7 @@ export class CreationWizardService {
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
     private aiTier: AiTierService,
+    private creditService: CreditService,
   ) {}
 
   // ─── Streaming helpers ───────────────────────────────────────
@@ -49,80 +51,118 @@ export class CreationWizardService {
     let inputTokens = 0;
     let outputTokens = 0;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model,
-        max_tokens: 8000,
-        stream: true,
-        system: systemPrompt,
-        messages: [{ role: 'user', content: userPrompt }],
-      }),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Claude API error: ${response.status} ${errorText}`);
-      throw new ServiceUnavailableException('AI service error');
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new ServiceUnavailableException('No response stream');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
+    // Credit consumption: 1cr for creation wizard features
+    const creditCost = this.aiTier.getCreditCost(feature, false, false);
+    let transactionId: string | null = null;
+    let contentDelivered = false;
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      if (creditCost > 0) {
+        const result = await this.creditService.consumeCredits(
+          userId, creditCost, feature, model,
+        );
+        transactionId = result.transactionId;
+      }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8000,
+          stream: true,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') break;
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Claude API error: ${response.status} ${errorText}`);
+        if (transactionId) {
+          await this.creditService.refundTransaction(transactionId);
+          transactionId = null;
+        }
+        throw new ServiceUnavailableException('AI service error');
+      }
 
-          try {
-            const event = JSON.parse(data);
-            if (event.type === 'content_block_delta' && event.delta?.text) {
-              yield event.delta.text;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        if (transactionId) {
+          await this.creditService.refundTransaction(transactionId);
+          transactionId = null;
+        }
+        throw new ServiceUnavailableException('No response stream');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') break;
+
+            try {
+              const event = JSON.parse(data);
+              if (event.type === 'content_block_delta' && event.delta?.text) {
+                contentDelivered = true;
+                yield event.delta.text;
+              }
+              if (event.type === 'message_start' && event.message?.usage) {
+                inputTokens = event.message.usage.input_tokens || 0;
+              }
+              if (event.type === 'message_delta' && event.usage) {
+                outputTokens = event.usage.output_tokens || 0;
+              }
+            } catch {
+              // Skip malformed JSON
             }
-            if (event.type === 'message_start' && event.message?.usage) {
-              inputTokens = event.message.usage.input_tokens || 0;
-            }
-            if (event.type === 'message_delta' && event.usage) {
-              outputTokens = event.usage.output_tokens || 0;
-            }
-          } catch {
-            // Skip malformed JSON
           }
         }
-      }
-    } finally {
-      reader.releaseLock();
+      } finally {
+        reader.releaseLock();
 
-      const durationMs = Date.now() - startTime;
-      await this.prisma.aiUsageLog
-        .create({
-          data: {
-            userId,
-            feature,
-            inputTokens,
-            outputTokens,
-            model,
-            durationMs,
-          },
-        })
-        .catch((e) => this.logger.error('Failed to log AI usage', e));
+        const durationMs = Date.now() - startTime;
+        await this.prisma.aiUsageLog
+          .create({
+            data: {
+              userId,
+              feature,
+              inputTokens,
+              outputTokens,
+              model,
+              durationMs,
+            },
+          })
+          .catch((e) => this.logger.error('Failed to log AI usage', e));
+
+        // Confirm transaction on successful delivery
+        if (transactionId && contentDelivered) {
+          await this.creditService.confirmTransaction(transactionId).catch(() => {});
+          transactionId = null; // prevent double-confirm in catch
+        }
+      }
+    } catch (error) {
+      if (transactionId && !contentDelivered) {
+        await this.creditService.refundTransaction(transactionId).catch(() => {});
+      } else if (transactionId && contentDelivered) {
+        await this.creditService.confirmTransaction(transactionId).catch(() => {});
+      }
+      throw error;
     }
   }
 

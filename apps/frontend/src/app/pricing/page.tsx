@@ -5,6 +5,7 @@ import { Check, ArrowRight, Sparkles, Zap, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { useState } from 'react';
 
 const PLANS = [
@@ -78,6 +79,7 @@ const CREDIT_TABLE = [
   { action: 'AI執筆アシスト（通常）', credits: '1cr', note: '素早い応答' },
   { action: 'AI執筆アシスト（じっくり）', credits: '2cr', note: 'より深い思考で回答' },
   { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答' },
+  { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
   { action: 'AIスコアリング', credits: '0cr', note: 'プラットフォーム負担' },
   { action: '構造解析・キャラクター抽出', credits: '0cr', note: 'プラットフォーム負担' },
   { action: 'あらすじ自動更新', credits: '0cr', note: 'プラットフォーム負担' },
@@ -141,6 +143,23 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 
 export default function PricingPage() {
   const { isAuthenticated } = useAuth();
+  const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+
+  async function handleCheckout(plan: string) {
+    if (!isAuthenticated || plan === 'Free') return;
+    const planId = plan.toLowerCase();
+    setCheckoutLoading(planId);
+    try {
+      const res = await api.createCheckout(planId);
+      const url = (res as any)?.url ?? (res as any)?.data?.url;
+      if (url) window.location.href = url;
+    } catch {
+      // Fall back to billing page
+      window.location.href = '/settings/billing';
+    } finally {
+      setCheckoutLoading(null);
+    }
+  }
 
   return (
     <div className="min-h-screen bg-background text-foreground">
@@ -226,15 +245,29 @@ export default function PricingPage() {
                   <p className="text-[11px] text-muted-foreground">{plan.creditsNote}</p>
                 </div>
 
-                <Link href={isAuthenticated ? '/settings/billing' : plan.ctaHref} className="mb-6">
-                  <Button
-                    className={`w-full ${plan.highlight ? '' : 'variant-outline'}`}
-                    variant={plan.highlight ? 'default' : 'outline'}
-                  >
-                    {isAuthenticated ? 'プランを管理' : plan.cta}
-                    <ArrowRight className="h-3 w-3 ml-1" />
-                  </Button>
-                </Link>
+                <div className="mb-6">
+                  {isAuthenticated && plan.name !== 'Free' ? (
+                    <Button
+                      className={`w-full ${plan.highlight ? '' : ''}`}
+                      variant={plan.highlight ? 'default' : 'outline'}
+                      onClick={() => handleCheckout(plan.name)}
+                      disabled={checkoutLoading === plan.name.toLowerCase()}
+                    >
+                      {checkoutLoading === plan.name.toLowerCase() ? '処理中...' : `${plan.name} を始める`}
+                      <ArrowRight className="h-3 w-3 ml-1" />
+                    </Button>
+                  ) : (
+                    <Link href={isAuthenticated ? '/settings/billing' : plan.ctaHref}>
+                      <Button
+                        className={`w-full ${plan.highlight ? '' : ''}`}
+                        variant={plan.highlight ? 'default' : 'outline'}
+                      >
+                        {isAuthenticated ? 'プランを管理' : plan.cta}
+                        <ArrowRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    </Link>
+                  )}
+                </div>
 
                 <div className="space-y-2.5 flex-1">
                   {plan.features.map((f) => (

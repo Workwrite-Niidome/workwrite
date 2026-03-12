@@ -60,6 +60,11 @@ model User {
   stripeAccountId   String?
   subscription      Subscription?
 
+  // Credits
+  creditBalance       CreditBalance?
+  creditTransactions  CreditTransaction[]
+  creditPurchases     CreditPurchase[]
+
   @@index([email])
   @@index([role])
 }
@@ -502,15 +507,18 @@ enum PointTxType {
 }
 
 model Subscription {
-  id                String    @id @default(cuid())
-  userId            String    @unique
-  stripeSubId       String?   @unique // null when admin-granted
-  plan              String    // "standard" or "premium"
-  status            String    // active, canceled, past_due
-  currentPeriodEnd  DateTime?
-  grantedBy         String?   // admin userId who granted (null = Stripe)
-  createdAt         DateTime  @default(now())
-  updatedAt         DateTime  @updatedAt
+  id                  String    @id @default(cuid())
+  userId              String    @unique
+  stripeSubId         String?   @unique // null when admin-granted
+  plan                String    // "standard" or "pro"
+  status              String    // active, canceled, past_due
+  currentPeriodEnd    DateTime?
+  currentPeriodStart  DateTime?
+  cancelAtPeriodEnd   Boolean   @default(false)
+  trialEnd            DateTime?
+  grantedBy           String?   // admin userId who granted (null = Stripe)
+  createdAt           DateTime  @default(now())
+  updatedAt           DateTime  @updatedAt
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 }
@@ -1052,4 +1060,65 @@ model PostBookmark {
   @@unique([userId, postId])
   @@index([userId, createdAt])
   @@index([postId])
+}
+
+// ============================================================
+// Credits & Billing
+// ============================================================
+
+model CreditBalance {
+  id               String    @id @default(cuid())
+  userId           String    @unique
+  balance          Int       @default(0)       // 合計残高（monthlyBalance + purchasedBalance）
+  monthlyBalance   Int       @default(0)       // 月間付与分（期限あり）
+  purchasedBalance Int       @default(0)       // 購入分（無期限）
+  monthlyGranted   Int       @default(0)       // 今月の付与量
+  lastGrantedAt    DateTime?
+  updatedAt        DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}
+
+model CreditTransaction {
+  id              String       @id @default(cuid())
+  userId          String
+  amount          Int          // +付与/購入, -消費/失効
+  type            CreditTxType
+  status          String       @default("confirmed") // pending | confirmed | refunded
+  balance         Int          // トランザクション後の残高スナップショット
+  relatedFeature  String?      // "writing_assist" | "creation_wizard" 等
+  relatedModel    String?      // "claude-sonnet-4" | "claude-opus-4" 等
+  aiUsageLogId    String?      // AiUsageLogへのリンク
+  stripePaymentId String?
+  description     String?
+  createdAt       DateTime     @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, createdAt])
+}
+
+enum CreditTxType {
+  MONTHLY_GRANT
+  PURCHASE
+  CONSUME
+  EXPIRE
+  ADMIN_GRANT
+  ADMIN_REVOKE
+  REFUND
+  PLAN_CHANGE_ADJUST
+}
+
+model CreditPurchase {
+  id                    String   @id @default(cuid())
+  userId                String
+  amount                Int      // 購入クレジット数
+  priceJpy              Int      // 支払額（円）
+  stripePaymentIntentId String   @unique
+  status                String   @default("completed")
+  createdAt             DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
 }

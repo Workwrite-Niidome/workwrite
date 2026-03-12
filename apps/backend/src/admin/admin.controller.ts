@@ -140,7 +140,7 @@ export class AdminController {
   async grantPlan(
     @CurrentUser('id') adminId: string,
     @Param('id') userId: string,
-    @Body() body: { plan: 'standard' | 'premium' },
+    @Body() body: { plan: 'standard' | 'pro' },
   ) {
     await this.aiTier.grantPlan(adminId, userId, body.plan);
     return { granted: true, userId, plan: body.plan };

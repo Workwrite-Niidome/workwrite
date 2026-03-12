@@ -1,8 +1,9 @@
 import { Injectable, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from './ai-settings.service';
+import { CreditService } from '../billing/credit.service';
 
-export type PlanType = 'free' | 'starter' | 'standard' | 'premium';
+export type PlanType = 'free' | 'standard' | 'pro';
 
 export interface AiTier {
   plan: PlanType;
@@ -10,15 +11,13 @@ export interface AiTier {
   canUseThinking: boolean;
   canUseOpus: boolean;
   remainingFreeUses: number | null; // null = unlimited
+  credits: { total: number; monthly: number; purchased: number };
 }
-
-// ─── Plan Limits ─────────────────────────────────────────
-const FREE_WEEKLY_LIMIT = 5;
 
 // ─── Model Routing ───────────────────────────────────────
 // Light tasks: use Haiku (校正, スコアリング, あらすじ, ハイライト説明, オンボーディング)
 // Creative tasks: use Sonnet (執筆アシスト, キャラクター, プロット, 章立て, コンパニオン)
-// Premium tasks: use Opus (じっくりモード)
+// Premium tasks: use Opus (高精度モード)
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const OPUS_MODEL = 'claude-opus-4-6';
 
@@ -27,12 +26,46 @@ const LIGHT_FEATURES = new Set([
   'highlight_explain', 'onboarding_profile', 'embedding_generation',
 ]);
 
+// Free tier weekly limit for AI reading companion
+const FREE_WEEKLY_COMPANION_LIMIT = 5;
+
 @Injectable()
 export class AiTierService {
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private creditService: CreditService,
   ) {}
+
+  /**
+   * Get credit cost for a feature.
+   * LIGHT_FEATURES (Haiku): 0cr
+   * Sonnet normal: 1cr
+   * Sonnet + Thinking: 2cr
+   * Opus: 5cr
+   * companion: 0cr
+   * creation_wizard: 1cr
+   */
+  getCreditCost(
+    feature: string,
+    premiumMode: boolean = false,
+    isOpus: boolean = false,
+  ): number {
+    // Companion is always free
+    if (feature === 'companion') return 0;
+
+    // Light features are always free
+    if (LIGHT_FEATURES.has(feature)) return 0;
+
+    // Opus mode
+    if (premiumMode && isOpus) return 5;
+
+    // Thinking mode (Sonnet with extended thinking)
+    if (premiumMode) return 2;
+
+    // Normal Sonnet (including creation_wizard)
+    return 1;
+  }
 
   /** Get the user's current AI tier and remaining usage */
   async getUserTier(userId: string): Promise<AiTier> {
@@ -41,40 +74,41 @@ export class AiTierService {
     });
 
     const rawPlan = sub?.status === 'active' ? sub.plan : 'free';
-    // Map legacy 'standard' plan name to 'starter' for backward compatibility
-    const plan: PlanType = rawPlan === 'standard' ? 'starter' : (rawPlan as PlanType);
+    const plan: PlanType = rawPlan as PlanType;
 
-    if (plan === 'premium') {
-      return { plan, canUseAi: true, canUseThinking: true, canUseOpus: true, remainingFreeUses: null };
+    const credits = await this.creditService.getBalance(userId);
+
+    if (plan === 'pro') {
+      return {
+        plan,
+        canUseAi: true,
+        canUseThinking: true,
+        canUseOpus: true,
+        remainingFreeUses: null,
+        credits,
+      };
     }
 
     if (plan === 'standard') {
-      return { plan, canUseAi: true, canUseThinking: true, canUseOpus: false, remainingFreeUses: null };
+      return {
+        plan,
+        canUseAi: true,
+        canUseThinking: true,
+        canUseOpus: false,
+        remainingFreeUses: null,
+        credits,
+      };
     }
 
-    if (plan === 'starter') {
-      return { plan, canUseAi: true, canUseThinking: false, canUseOpus: false, remainingFreeUses: null };
-    }
-
-    // Free tier: count weekly usage
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
-
-    const weeklyUsage = await this.prisma.aiUsageLog.count({
-      where: {
-        userId,
-        createdAt: { gte: weekAgo },
-      },
-    });
-
-    const remaining = Math.max(0, FREE_WEEKLY_LIMIT - weeklyUsage);
-
+    // Free tier: check credit balance (not weekly count)
+    // canUseAi is true if they have any credits left
     return {
       plan,
-      canUseAi: remaining > 0,
+      canUseAi: credits.total > 0,
       canUseThinking: false,
       canUseOpus: false,
-      remainingFreeUses: remaining,
+      remainingFreeUses: credits.total,
+      credits,
     };
   }
 
@@ -83,9 +117,36 @@ export class AiTierService {
     const tier = await this.getUserTier(userId);
     if (!tier.canUseAi) {
       throw new ForbiddenException(
-        '無料プランの週間AI使用回数の上限に達しました。プランをアップグレードすると無制限にご利用いただけます。',
+        'クレジットが不足しています。プランをアップグレードするか、クレジットを追加購入してください。',
       );
     }
+    return tier;
+  }
+
+  /** Check if free user can use companion (weekly limit) */
+  async assertCanUseCompanion(userId: string): Promise<AiTier> {
+    const tier = await this.getUserTier(userId);
+
+    if (tier.plan !== 'free') return tier;
+
+    // Free tier: check weekly companion usage
+    const weekAgo = new Date();
+    weekAgo.setDate(weekAgo.getDate() - 7);
+
+    const weeklyUsage = await this.prisma.aiUsageLog.count({
+      where: {
+        userId,
+        feature: 'companion',
+        createdAt: { gte: weekAgo },
+      },
+    });
+
+    if (weeklyUsage >= FREE_WEEKLY_COMPANION_LIMIT) {
+      throw new ForbiddenException(
+        '無料プランのAI読書コンパニオンの週間使用回数の上限（5回）に達しました。プランをアップグレードすると無制限にご利用いただけます。',
+      );
+    }
+
     return tier;
   }
 
@@ -102,7 +163,7 @@ export class AiTierService {
     const tier = await this.assertCanUseAi(userId);
     const baseSonnet = await this.aiSettings.getModel();
 
-    // Premium mode with Opus (premium plan only)
+    // Premium mode with Opus (pro plan only)
     if (premiumMode && tier.canUseOpus) {
       return {
         model: OPUS_MODEL,
@@ -111,7 +172,7 @@ export class AiTierService {
       };
     }
 
-    // Standard thinking mode (standard + premium)
+    // Standard thinking mode (standard + pro)
     if (premiumMode && tier.canUseThinking) {
       return {
         model: baseSonnet,
@@ -138,7 +199,7 @@ export class AiTierService {
   }
 
   /** Admin: grant a plan to a user */
-  async grantPlan(adminId: string, targetUserId: string, plan: 'starter' | 'standard' | 'premium'): Promise<void> {
+  async grantPlan(adminId: string, targetUserId: string, plan: 'standard' | 'pro'): Promise<void> {
     await this.prisma.subscription.upsert({
       where: { userId: targetUserId },
       update: {
@@ -156,6 +217,10 @@ export class AiTierService {
         currentPeriodEnd: null,
       },
     });
+
+    // Grant credits for the plan
+    const credits = plan === 'pro' ? 600 : 200;
+    await this.creditService.grantMonthlyCredits(targetUserId, credits, plan);
   }
 
   /** Admin: revoke a user's plan */
@@ -163,5 +228,8 @@ export class AiTierService {
     await this.prisma.subscription.deleteMany({
       where: { userId: targetUserId },
     });
+
+    // Reset to free credits
+    await this.creditService.grantMonthlyCredits(targetUserId, 30, 'free');
   }
 }

@@ -1,5 +1,6 @@
 import { Module } from '@nestjs/common';
 import { ConfigModule } from '@nestjs/config';
+import { ScheduleModule } from '@nestjs/schedule';
 import { PrismaModule } from './common/prisma/prisma.module';
 import { AuthModule } from './auth/auth.module';
 import { UsersModule } from './users/users.module';
@@ -34,6 +35,7 @@ import { CreationWizardModule } from './creation-wizard/creation-wizard.module';
 import { StoryStructureModule } from './story-structure/story-structure.module';
 import { PostsModule } from './posts/posts.module';
 import { TimelineModule } from './timeline/timeline.module';
+import { BillingModule } from './billing/billing.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -42,7 +44,9 @@ import { HealthController } from './health.controller';
       isGlobal: true,
       envFilePath: ['.env.local', '.env'],
     }),
+    ScheduleModule.forRoot(),
     PrismaModule,
+    BillingModule,
     SearchModule,
     AuthModule,
     UsersModule,

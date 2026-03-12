@@ -4,6 +4,7 @@ import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 import { AiContextBuilderService } from './ai-context-builder.service';
+import { CreditService } from '../billing/credit.service';
 
 const MAX_CONTENT_LENGTH = 15000;
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
@@ -24,12 +25,13 @@ export class AiAssistService {
     private aiTier: AiTierService,
     private templates: PromptTemplatesService,
     private contextBuilder: AiContextBuilderService,
+    private creditService: CreditService,
   ) {}
 
   async checkStatus(userId?: string): Promise<{
     available: boolean;
     model: string;
-    tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus: boolean; remainingFreeUses: number | null };
+    tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus: boolean; remainingFreeUses: number | null; credits?: { total: number; monthly: number; purchased: number } };
   }> {
     const enabled = await this.aiSettings.isAiEnabled();
     const model = await this.aiSettings.getModel();
@@ -75,6 +77,13 @@ export class AiAssistService {
 
     // Check AI tier and get model config (pass slug for model routing)
     const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug);
+
+    // Calculate credit cost
+    const creditCost = this.aiTier.getCreditCost(
+      templateSlug,
+      premiumMode,
+      modelConfig.model.includes('opus'),
+    );
 
     // Auto-inject structural context if workId is provided
     if (variables.workId && !variables.structural_context) {
@@ -146,74 +155,116 @@ export class AiAssistService {
       };
     }
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': ANTHROPIC_VERSION,
-      },
-      body: JSON.stringify(requestBody),
-    });
-
-    if (!response.ok) {
-      const errorText = await response.text();
-      this.logger.error(`Claude API error: ${response.status} ${errorText}`);
-      throw new ServiceUnavailableException(`AI service error (${response.status})`);
-    }
-
-    const reader = response.body?.getReader();
-    if (!reader) throw new ServiceUnavailableException('No response stream');
-
-    const decoder = new TextDecoder();
-    let buffer = '';
+    // Credit consumption: PENDING phase
+    let transactionId: string | null = null;
+    let contentDelivered = false;
 
     try {
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
+      if (creditCost > 0) {
+        const result = await this.creditService.consumeCredits(
+          userId,
+          creditCost,
+          modelConfig.thinking ? 'writing_assist_premium' : 'writing_assist',
+          modelConfig.model,
+        );
+        transactionId = result.transactionId;
+      }
 
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify(requestBody),
+      });
 
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') break;
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Claude API error: ${response.status} ${errorText}`);
+        // Refund on API error (no content delivered)
+        if (transactionId) {
+          await this.creditService.refundTransaction(transactionId);
+          transactionId = null; // Prevent double refund in catch
+        }
+        throw new ServiceUnavailableException(`AI service error (${response.status})`);
+      }
 
-          try {
-            const event = JSON.parse(data);
-            if (event.type === 'content_block_delta' && event.delta?.text) {
-              yield event.delta.text;
+      const reader = response.body?.getReader();
+      if (!reader) {
+        if (transactionId) {
+          await this.creditService.refundTransaction(transactionId);
+          transactionId = null;
+        }
+        throw new ServiceUnavailableException('No response stream');
+      }
+
+      const decoder = new TextDecoder();
+      let buffer = '';
+
+      try {
+        while (true) {
+          const { done, value } = await reader.read();
+          if (done) break;
+
+          buffer += decoder.decode(value, { stream: true });
+          const lines = buffer.split('\n');
+          buffer = lines.pop() || '';
+
+          for (const line of lines) {
+            if (!line.startsWith('data: ')) continue;
+            const data = line.slice(6).trim();
+            if (data === '[DONE]') break;
+
+            try {
+              const event = JSON.parse(data);
+              if (event.type === 'content_block_delta' && event.delta?.text) {
+                contentDelivered = true;
+                yield event.delta.text;
+              }
+              if (event.type === 'message_start' && event.message?.usage) {
+                inputTokens = event.message.usage.input_tokens || 0;
+              }
+              if (event.type === 'message_delta' && event.usage) {
+                outputTokens = event.usage.output_tokens || 0;
+              }
+            } catch {
+              // Skip malformed JSON
             }
-            if (event.type === 'message_start' && event.message?.usage) {
-              inputTokens = event.message.usage.input_tokens || 0;
-            }
-            if (event.type === 'message_delta' && event.usage) {
-              outputTokens = event.usage.output_tokens || 0;
-            }
-          } catch {
-            // Skip malformed JSON
           }
         }
-      }
-    } finally {
-      reader.releaseLock();
+      } finally {
+        reader.releaseLock();
 
-      // Log usage
-      const durationMs = Date.now() - startTime;
-      await this.prisma.aiUsageLog.create({
-        data: {
-          userId,
-          templateId: template.id,
-          feature: modelConfig.thinking ? 'writing_assist_premium' : 'writing_assist',
-          inputTokens,
-          outputTokens,
-          model: modelConfig.model,
-          durationMs,
-        },
-      }).catch((e) => this.logger.error('Failed to log AI usage', e));
+        // Log usage
+        const durationMs = Date.now() - startTime;
+        await this.prisma.aiUsageLog.create({
+          data: {
+            userId,
+            templateId: template.id,
+            feature: modelConfig.thinking ? 'writing_assist_premium' : 'writing_assist',
+            inputTokens,
+            outputTokens,
+            model: modelConfig.model,
+            durationMs,
+          },
+        }).catch((e) => this.logger.error('Failed to log AI usage', e));
+
+        // Confirm transaction on successful delivery
+        if (transactionId && contentDelivered) {
+          await this.creditService.confirmTransaction(transactionId).catch(() => {});
+          transactionId = null; // prevent double-confirm in catch
+        }
+      }
+    } catch (error) {
+      // Refund if no content was delivered
+      if (transactionId && !contentDelivered) {
+        await this.creditService.refundTransaction(transactionId).catch(() => {});
+      } else if (transactionId && contentDelivered) {
+        await this.creditService.confirmTransaction(transactionId).catch(() => {});
+      }
+      throw error;
     }
   }
 

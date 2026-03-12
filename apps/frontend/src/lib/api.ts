@@ -645,6 +645,37 @@ class ApiClient {
     return this.request<{ code: string; label: string; maxUses: number; usedCount: number; isActive: boolean; createdAt: string; usages: { userId: string; usedAt: string }[] }[]>('/auth/my-invite-codes');
   }
 
+  // Billing
+  async getBillingStatus() {
+    return this.request<BillingStatus>('/billing/status');
+  }
+
+  async createCheckout(plan: string) {
+    return this.request<{ url: string }>('/billing/checkout', {
+      method: 'POST',
+      body: JSON.stringify({ plan }),
+    });
+  }
+
+  async cancelSubscription() {
+    return this.request<{ success: boolean }>('/billing/cancel', { method: 'POST' });
+  }
+
+  async purchaseCredits() {
+    return this.request<{ url: string }>('/billing/credits/purchase', { method: 'POST' });
+  }
+
+  async getTransactions(page?: number, limit?: number) {
+    const qs = new URLSearchParams();
+    if (page) qs.set('page', String(page));
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: CreditTransaction[]; total: number }>(`/billing/transactions?${qs.toString()}`);
+  }
+
+  async createPortalSession() {
+    return this.request<{ url: string }>('/billing/portal', { method: 'POST' });
+  }
+
   // Admin
   async getAdminStats() {
     return this.request<{ data: AdminStats }>('/admin/stats');
@@ -1601,6 +1632,32 @@ export interface SnsPost {
 export interface TimelineResult {
   posts: SnsPost[];
   nextCursor: string | null;
+}
+
+// Billing types
+export interface BillingStatus {
+  plan: string;
+  credits: { total: number; monthly: number; purchased: number };
+  subscription: {
+    status: string;
+    currentPeriodEnd: string | null;
+    currentPeriodStart: string | null;
+    cancelAtPeriodEnd: boolean;
+    trialEnd: string | null;
+  } | null;
+}
+
+export interface CreditTransaction {
+  id: string;
+  userId: string;
+  amount: number;
+  type: string;
+  status: string;
+  balance: number;
+  relatedFeature: string | null;
+  relatedModel: string | null;
+  description: string | null;
+  createdAt: string;
 }
 
 export const api = new ApiClient();

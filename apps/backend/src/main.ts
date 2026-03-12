@@ -11,6 +11,16 @@ import { LoggingInterceptor } from './common/interceptors/logging.interceptor';
 async function bootstrap() {
   const app = await NestFactory.create(AppModule);
 
+  // Raw body for Stripe webhook signature verification
+  app.use(
+    '/api/v1/billing/webhook',
+    express.raw({ type: 'application/json' }),
+    (req: any, _res: any, next: any) => {
+      req.rawBody = req.body;
+      next();
+    },
+  );
+
   // Increase body size limit for large text payloads (character extraction etc.)
   app.use(express.json({ limit: '1mb' }));
 
