@@ -1579,6 +1579,7 @@ export interface SnsPost {
   repostOf: SnsPost | null;
   quoteOf: SnsPost | null;
   replyToId: string | null;
+  replyTo?: { id: string; author: { id: string; name: string; displayName: string | null } } | null;
   threadRootId: string | null;
   replyCount: number;
   repostCount: number;

@@ -41,6 +41,7 @@ interface PostCardProps {
   post: SnsPost;
   onDelete?: (postId: string) => void;
   showReplyContext?: boolean;
+  onReplyClick?: () => void;
 }
 
 function formatRelativeTime(dateStr: string) {
@@ -66,7 +67,7 @@ function getAutoPostLabel(postType: string): string | null {
   }
 }
 
-export function PostCard({ post, onDelete, showReplyContext }: PostCardProps) {
+export function PostCard({ post, onDelete, showReplyContext, onReplyClick }: PostCardProps) {
   const router = useRouter();
   const { user } = useAuth();
 
@@ -78,7 +79,7 @@ export function PostCard({ post, onDelete, showReplyContext }: PostCardProps) {
           <Repeat2 className="h-3.5 w-3.5" />
           <span>{post.author.displayName || post.author.name}さんがおすすめ</span>
         </div>
-        <PostCard post={{ ...post.repostOf, hasApplauded: post.hasApplauded, hasBookmarked: post.hasBookmarked, hasReposted: true } as SnsPost} />
+        <PostCard post={{ ...post.repostOf, hasApplauded: post.repostOf.hasApplauded ?? post.hasApplauded, hasBookmarked: post.repostOf.hasBookmarked ?? post.hasBookmarked, hasReposted: post.repostOf.hasReposted ?? true } as SnsPost} />
       </div>
     );
   }
@@ -179,7 +180,7 @@ export function PostCard({ post, onDelete, showReplyContext }: PostCardProps) {
           {/* Actions */}
           <PostActions
             post={post}
-            onReplyClick={() => router.push(`/posts/${post.id}`)}
+            onReplyClick={onReplyClick || (() => router.push(`/posts/${post.id}`))}
           />
         </div>
       </div>

@@ -30,6 +30,9 @@ const VARIABLE_LABELS: Record<string, string> = {
 // Variables that are automatically filled by the system (not shown to users)
 const AUTO_VARIABLES = new Set(['content', 'context', 'char_count', 'custom_instruction', 'user_prompt']);
 
+// Templates where content (本文) is optional — they use {{#content}} conditional blocks
+const CONTENT_OPTIONAL_SLUGS = new Set(['chapter-opening', 'free-prompt']);
+
 interface TemplateSelectorProps {
   templates: PromptTemplate[];
   onGenerate: (slug: string, variables: Record<string, string>) => void;
@@ -108,7 +111,7 @@ export function TemplateSelector({ templates, onGenerate, isStreaming, currentCo
             onClick={handleGenerate}
             disabled={
               isStreaming ||
-              !currentContent.trim() ||
+              (!CONTENT_OPTIONAL_SLUGS.has(selected.slug) && !currentContent.trim()) ||
               selected.variables
                 .filter((v) => !AUTO_VARIABLES.has(v))
                 .some((v) => !variableValues[v]?.trim())

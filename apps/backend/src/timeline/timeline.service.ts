@@ -381,17 +381,23 @@ export class TimelineService {
 
     const postIds = posts.map((p) => p.id);
 
+    // Also collect repostOf IDs so we can add meta to original posts inside reposts
+    const repostOfIds = posts
+      .filter((p) => p.repostOfId && p.repostOf)
+      .map((p) => p.repostOfId as string);
+    const allIds = [...new Set([...postIds, ...repostOfIds])];
+
     const [applauseList, bookmarkList, repostList] = await Promise.all([
       this.prisma.applause.findMany({
-        where: { userId: viewerId, postId: { in: postIds } },
+        where: { userId: viewerId, postId: { in: allIds } },
         select: { postId: true },
       }),
       this.prisma.postBookmark.findMany({
-        where: { userId: viewerId, postId: { in: postIds } },
+        where: { userId: viewerId, postId: { in: allIds } },
         select: { postId: true },
       }),
       this.prisma.post.findMany({
-        where: { authorId: viewerId, repostOfId: { in: postIds }, isDeleted: false },
+        where: { authorId: viewerId, repostOfId: { in: allIds }, isDeleted: false },
         select: { repostOfId: true },
       }),
     ]);
@@ -400,11 +406,23 @@ export class TimelineService {
     const bookmarkedSet = new Set(bookmarkList.map((b) => b.postId));
     const repostedSet = new Set(repostList.map((r) => r.repostOfId));
 
-    return posts.map((post) => ({
-      ...post,
-      hasApplauded: applaudedSet.has(post.id),
-      hasBookmarked: bookmarkedSet.has(post.id),
-      hasReposted: repostedSet.has(post.id),
-    }));
+    return posts.map((post) => {
+      const enriched: any = {
+        ...post,
+        hasApplauded: applaudedSet.has(post.id),
+        hasBookmarked: bookmarkedSet.has(post.id),
+        hasReposted: repostedSet.has(post.id),
+      };
+      // Enrich repostOf with its own meta data
+      if (enriched.repostOf && enriched.repostOfId) {
+        enriched.repostOf = {
+          ...enriched.repostOf,
+          hasApplauded: applaudedSet.has(enriched.repostOfId),
+          hasBookmarked: bookmarkedSet.has(enriched.repostOfId),
+          hasReposted: repostedSet.has(enriched.repostOfId),
+        };
+      }
+      return enriched;
+    });
   }
 }

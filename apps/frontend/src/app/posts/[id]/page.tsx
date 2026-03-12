@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useParams, useRouter } from 'next/navigation';
-import { ArrowLeft } from 'lucide-react';
+import { ArrowLeft, CornerDownRight } from 'lucide-react';
 import { api, SnsPost } from '@/lib/api';
 import { useAuth } from '@/lib/auth-context';
 import { PostCard, PostCardSkeleton } from '@/components/posts/post-card';
@@ -10,6 +10,7 @@ import { PostComposer } from '@/components/posts/post-composer';
 import { PostActions } from '@/components/posts/post-actions';
 import { WorkEmbed } from '@/components/posts/work-embed';
 import Link from 'next/link';
+import { cn } from '@/lib/utils';
 
 function formatFullDate(dateStr: string) {
   const d = new Date(dateStr);
@@ -22,6 +23,92 @@ function formatFullDate(dateStr: string) {
   });
 }
 
+interface ReplyNode {
+  post: SnsPost;
+  children: ReplyNode[];
+  depth: number;
+}
+
+function buildReplyTree(rootPostId: string, replies: SnsPost[]): ReplyNode[] {
+  const childrenMap = new Map<string, SnsPost[]>();
+
+  for (const reply of replies) {
+    const parentId = reply.replyToId || rootPostId;
+    if (!childrenMap.has(parentId)) childrenMap.set(parentId, []);
+    childrenMap.get(parentId)!.push(reply);
+  }
+
+  function buildNodes(parentId: string, depth: number): ReplyNode[] {
+    const children = childrenMap.get(parentId) || [];
+    return children.map((post) => ({
+      post,
+      children: buildNodes(post.id, depth + 1),
+      depth,
+    }));
+  }
+
+  return buildNodes(rootPostId, 0);
+}
+
+const MAX_VISUAL_DEPTH = 3;
+
+function ReplyTreeNode({
+  node,
+  onDelete,
+  onReply,
+  replyingTo,
+  onPost,
+}: {
+  node: ReplyNode;
+  onDelete: (id: string) => void;
+  onReply: (postId: string) => void;
+  replyingTo: string | null;
+  onPost: () => void;
+}) {
+  const visualDepth = Math.min(node.depth, MAX_VISUAL_DEPTH);
+  const indent = visualDepth > 0;
+  const replyToName = node.post.replyTo?.author?.displayName || node.post.replyTo?.author?.name;
+
+  return (
+    <div>
+      <div className={cn(indent && 'ml-4 md:ml-8 border-l-2 border-muted')}>
+        {/* Show reply target if nested reply */}
+        {node.depth > 0 && replyToName && node.post.replyToId !== node.post.threadRootId && (
+          <div className="flex items-center gap-1 px-4 pt-1.5 text-xs text-muted-foreground">
+            <CornerDownRight className="h-3 w-3" />
+            <span>{replyToName} への返信</span>
+          </div>
+        )}
+        <PostCard
+          post={node.post}
+          onDelete={onDelete}
+          onReplyClick={() => onReply(node.post.id)}
+        />
+        {replyingTo === node.post.id && (
+          <div className="border-b border-border">
+            <PostComposer
+              replyToId={node.post.id}
+              compact
+              onPost={onPost}
+              placeholder={`${node.post.author.displayName || node.post.author.name} に返信...`}
+            />
+          </div>
+        )}
+      </div>
+      {node.children.map((child) => (
+        <ReplyTreeNode
+          key={child.post.id}
+          node={child}
+          onDelete={onDelete}
+          onReply={onReply}
+          replyingTo={replyingTo}
+          onPost={onPost}
+        />
+      ))}
+    </div>
+  );
+}
+
 export default function PostDetailPage() {
   const params = useParams();
   const router = useRouter();
@@ -30,6 +117,7 @@ export default function PostDetailPage() {
   const [replies, setReplies] = useState<SnsPost[]>([]);
   const [loading, setLoading] = useState(true);
   const [replyCursor, setReplyCursor] = useState<string | null>(null);
+  const [replyingTo, setReplyingTo] = useState<string | null>(null);
 
   const postId = params.id as string;
 
@@ -42,6 +130,7 @@ export default function PostDetailPage() {
       setPost(postRes.data);
       setReplies(repliesRes.data.posts);
       setReplyCursor(repliesRes.data.nextCursor);
+      setReplyingTo(null);
     } catch {
       // Post not found
     } finally {
@@ -72,6 +161,15 @@ export default function PostDetailPage() {
       alert('削除に失敗しました');
     }
   };
+
+  const handleReply = (targetPostId: string) => {
+    setReplyingTo(replyingTo === targetPostId ? null : targetPostId);
+  };
+
+  const replyTree = useMemo(
+    () => buildReplyTree(postId, replies),
+    [postId, replies],
+  );
 
   if (loading) {
     return (
@@ -178,7 +276,7 @@ export default function PostDetailPage() {
         </div>
       </div>
 
-      {/* Reply composer */}
+      {/* Reply composer for root post */}
       {isAuthenticated && (
         <PostComposer
           replyToId={postId}
@@ -187,9 +285,16 @@ export default function PostDetailPage() {
         />
       )}
 
-      {/* Replies */}
-      {replies.map((reply) => (
-        <PostCard key={reply.id} post={reply} onDelete={handleDelete} />
+      {/* Replies - tree view */}
+      {replyTree.map((node) => (
+        <ReplyTreeNode
+          key={node.post.id}
+          node={node}
+          onDelete={handleDelete}
+          onReply={handleReply}
+          replyingTo={replyingTo}
+          onPost={loadPost}
+        />
       ))}
 
       {replyCursor && (

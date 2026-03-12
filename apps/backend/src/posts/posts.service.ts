@@ -401,13 +401,28 @@ export class PostsService {
 
   // === Replies ===
 
-  async getReplies(postId: string, cursor?: string, limit = 20, viewerId?: string) {
+  async getReplies(postId: string, cursor?: string, limit = 50, viewerId?: string) {
+    // Fetch all replies in the thread (direct + nested) using threadRootId or replyToId
     const replies = await this.prisma.post.findMany({
-      where: { replyToId: postId, isDeleted: false },
+      where: {
+        isDeleted: false,
+        OR: [
+          { replyToId: postId },
+          { threadRootId: postId },
+        ],
+      },
       orderBy: { createdAt: 'asc' },
       take: limit + 1,
       ...(cursor ? { cursor: { id: cursor }, skip: 1 } : {}),
-      include: POST_INCLUDE,
+      include: {
+        ...POST_INCLUDE,
+        replyTo: {
+          select: {
+            id: true,
+            author: { select: { id: true, name: true, displayName: true } },
+          },
+        },
+      },
     });
 
     const hasMore = replies.length > limit;
