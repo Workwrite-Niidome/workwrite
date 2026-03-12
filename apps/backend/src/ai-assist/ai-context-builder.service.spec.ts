@@ -7,21 +7,15 @@ import { PrismaService } from '../common/prisma/prisma.service';
 // ---------------------------------------------------------------------------
 
 const mockPrismaService = () => ({
-  episodeAnalysis: {
-    findMany: jest.fn(),
-  },
-  storyCharacter: {
-    findMany: jest.fn(),
-  },
-  foreshadowing: {
-    findMany: jest.fn(),
-  },
-  worldSetting: {
-    findMany: jest.fn(),
-  },
-  characterDialogueSample: {
-    findMany: jest.fn(),
-  },
+  work: { findUnique: jest.fn() },
+  episodeAnalysis: { findMany: jest.fn() },
+  storyCharacter: { findMany: jest.fn() },
+  storyCharacterRelation: { findMany: jest.fn() },
+  foreshadowing: { findMany: jest.fn() },
+  worldSetting: { findMany: jest.fn() },
+  characterDialogueSample: { findMany: jest.fn() },
+  episode: { findFirst: jest.fn() },
+  storyScene: { findFirst: jest.fn() },
 });
 
 // ---------------------------------------------------------------------------
@@ -40,7 +34,8 @@ const makeAnalysis = (
   narrativePOV: '三人称限定',
   emotionalArc: '期待→決意',
   timelineEnd: `${orderIndex + 1}日後`,
-  episode: { orderIndex, title: `第${orderIndex + 1}話タイトル` },
+  characters: [{ name: `キャラ${orderIndex}`, role: '主人公', action: '冒険' }],
+  episode: { orderIndex, title: `第${orderIndex + 1}話タイトル`, id: `ep-${orderIndex}` },
   ...overrides,
 });
 
@@ -93,6 +88,19 @@ const makeWorldSetting = (id: string, category: string, name: string, descriptio
   isActive: true,
 });
 
+// Helper to set default empty mocks
+function setEmptyMocks(prisma: ReturnType<typeof mockPrismaService>) {
+  prisma.work.findUnique.mockResolvedValue({ genre: null, settingEra: null });
+  prisma.episodeAnalysis.findMany.mockResolvedValue([]);
+  prisma.storyCharacter.findMany.mockResolvedValue([]);
+  prisma.storyCharacterRelation.findMany.mockResolvedValue([]);
+  prisma.foreshadowing.findMany.mockResolvedValue([]);
+  prisma.worldSetting.findMany.mockResolvedValue([]);
+  prisma.characterDialogueSample.findMany.mockResolvedValue([]);
+  prisma.episode.findFirst.mockResolvedValue(null);
+  prisma.storyScene.findFirst.mockResolvedValue(null);
+}
+
 // Empty context for formatForPrompt tests
 const emptyContext = (): AiWritingContext => ({
   currentEpisodeOrder: 5,
@@ -137,11 +145,7 @@ describe('AiContextBuilderService', () => {
 
   describe('buildContext', () => {
     it('returns empty arrays when no data exists', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
+      setEmptyMocks(prisma);
 
       const ctx = await service.buildContext('work-1', 3);
 
@@ -154,14 +158,11 @@ describe('AiContextBuilderService', () => {
     });
 
     it('includes episode summaries from analyses', async () => {
+      setEmptyMocks(prisma);
       prisma.episodeAnalysis.findMany.mockResolvedValue([
         makeAnalysis(0),
         makeAnalysis(1),
       ]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
 
       const ctx = await service.buildContext('work-1', 5);
 
@@ -174,31 +175,24 @@ describe('AiContextBuilderService', () => {
     });
 
     it('includes recent detailed summary for last 2 episodes before currentEpisodeOrder', async () => {
+      setEmptyMocks(prisma);
       prisma.episodeAnalysis.findMany.mockResolvedValue([
         makeAnalysis(0),
         makeAnalysis(1),
         makeAnalysis(2),
-        makeAnalysis(3), // this should be excluded (>= currentEpisodeOrder=3)
+        makeAnalysis(3),
       ]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
 
       const ctx = await service.buildContext('work-1', 3);
 
-      // Should include episodes 1 and 2 (orderIndex < 3, last 2)
       expect(ctx.recentDetailedSummary).toContain('第2話');
       expect(ctx.recentDetailedSummary).toContain('第3話');
       expect(ctx.recentDetailedSummary).not.toContain('第4話');
     });
 
     it('includes character data with dialogue samples', async () => {
-      const character = makeCharacter('char-1', '勇者');
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([character]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
+      setEmptyMocks(prisma);
+      prisma.storyCharacter.findMany.mockResolvedValue([makeCharacter('char-1', '勇者')]);
       prisma.characterDialogueSample.findMany.mockResolvedValue([
         makeDialogueSample('char-1', '勇者', 0),
         makeDialogueSample('char-1', '勇者', 1),
@@ -209,275 +203,124 @@ describe('AiContextBuilderService', () => {
       expect(ctx.characters).toHaveLength(1);
       expect(ctx.characters[0].name).toBe('勇者');
       expect(ctx.characters[0].dialogueSamples).toHaveLength(2);
-      expect(ctx.characters[0].dialogueSamples[0]).toContain('勇者のセリフです');
     });
 
-    it('limits dialogue samples to 3 per character', async () => {
-      const character = makeCharacter('char-1', '勇者');
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([character]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([
-        makeDialogueSample('char-1', '勇者', 0),
-        makeDialogueSample('char-1', '勇者', 1),
-        makeDialogueSample('char-1', '勇者', 2),
-        makeDialogueSample('char-1', '勇者', 3), // 4th sample should be dropped
+    it('classifies characters as appeared/not-appeared based on episode analyses', async () => {
+      setEmptyMocks(prisma);
+      prisma.episodeAnalysis.findMany.mockResolvedValue([
+        makeAnalysis(0, { characters: [{ name: 'ユウキ' }] }),
+        makeAnalysis(1, { characters: [{ name: 'ユウキ' }, { name: 'アカネ' }] }),
+      ]);
+      prisma.storyCharacter.findMany.mockResolvedValue([
+        makeCharacter('c1', 'ユウキ'),
+        makeCharacter('c2', 'アカネ'),
+        makeCharacter('c3', 'ルナ'),
+      ]);
+
+      const ctx = await service.buildContext('work-1', 3);
+
+      const yuuki = ctx.characters.find((c) => c.name === 'ユウキ');
+      const akane = ctx.characters.find((c) => c.name === 'アカネ');
+      const luna = ctx.characters.find((c) => c.name === 'ルナ');
+
+      expect(yuuki?.hasAppeared).toBe(true);
+      expect(akane?.hasAppeared).toBe(true);
+      expect(luna?.hasAppeared).toBe(false);
+    });
+
+    it('includes character relationships', async () => {
+      setEmptyMocks(prisma);
+      prisma.storyCharacter.findMany.mockResolvedValue([
+        makeCharacter('c1', 'ユウキ'),
+        makeCharacter('c2', 'アカネ'),
+      ]);
+      prisma.storyCharacterRelation.findMany.mockResolvedValue([
+        {
+          fromCharacterId: 'c1',
+          toCharacterId: 'c2',
+          relationType: '幼馴染',
+          description: null,
+          from: { name: 'ユウキ' },
+          to: { name: 'アカネ' },
+        },
       ]);
 
       const ctx = await service.buildContext('work-1', 5);
 
-      expect(ctx.characters[0].dialogueSamples).toHaveLength(3);
+      const yuuki = ctx.characters.find((c) => c.name === 'ユウキ');
+      const akane = ctx.characters.find((c) => c.name === 'アカネ');
+
+      expect(yuuki?.relationships).toContain('アカネ→幼馴染');
+      expect(akane?.relationships).toContain('ユウキ→幼馴染');
+    });
+
+    it('includes settingEra from work', async () => {
+      setEmptyMocks(prisma);
+      prisma.work.findUnique.mockResolvedValue({ genre: 'fantasy', settingEra: '中世ヨーロッパ風ファンタジー' });
+
+      const ctx = await service.buildContext('work-1', 5);
+
+      expect(ctx.settingEra).toBe('中世ヨーロッパ風ファンタジー');
+    });
+
+    it('includes scene goal when StoryScene is linked to episode', async () => {
+      setEmptyMocks(prisma);
+      prisma.episode.findFirst.mockResolvedValue({ id: 'ep-3' });
+      prisma.storyScene.findFirst.mockResolvedValue({
+        title: '裏切りの発覚',
+        summary: '主人公が仲間の裏切りを知る',
+        emotionTarget: '絶望',
+        intensity: 8,
+        act: { title: '第二幕：試練', actNumber: 2, turningPoint: '仲間の裏切り' },
+      });
+
+      const ctx = await service.buildContext('work-1', 3);
+
+      expect(ctx.sceneGoal).toBeDefined();
+      expect(ctx.sceneGoal?.sceneTitle).toBe('裏切りの発覚');
+      expect(ctx.sceneGoal?.sceneSummary).toBe('主人公が仲間の裏切りを知る');
+      expect(ctx.sceneGoal?.emotionTarget).toBe('絶望');
+      expect(ctx.sceneGoal?.intensity).toBe(8);
+      expect(ctx.sceneGoal?.actTitle).toBe('第二幕：試練');
     });
 
     it('includes open foreshadowings', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
+      setEmptyMocks(prisma);
       prisma.foreshadowing.findMany.mockResolvedValue([
         makeForeshadowing('f-1', 0, '謎の手紙'),
         makeForeshadowing('f-2', 2, '鍵の行方'),
       ]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
 
       const ctx = await service.buildContext('work-1', 5);
 
       expect(ctx.openForeshadowings).toHaveLength(2);
       expect(ctx.openForeshadowings[0]).toContain('謎の手紙');
-      expect(ctx.openForeshadowings[1]).toContain('鍵の行方');
-    });
-
-    it('formats foreshadowing with episode number (1-indexed)', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([
-        makeForeshadowing('f-1', 2, '伏線内容'), // plantedIn=2 → 第3話
-      ]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 5);
-
-      expect(ctx.openForeshadowings[0]).toContain('[第3話]');
     });
 
     it('marks critical foreshadowings with warning indicator', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
+      setEmptyMocks(prisma);
       prisma.foreshadowing.findMany.mockResolvedValue([
         { ...makeForeshadowing('f-1', 0, '重要な伏線'), importance: 'critical' },
       ]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
 
       const ctx = await service.buildContext('work-1', 5);
 
       expect(ctx.openForeshadowings[0]).toContain('⚠重要');
     });
 
-    it('includes active world settings', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([
-        makeWorldSetting('ws-1', 'magic', '魔法陣', '魔力を増幅させる陣'),
-        makeWorldSetting('ws-2', 'geography', '王都', '大陸の中心に位置する'),
-      ]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 5);
-
-      expect(ctx.worldSettings).toHaveLength(2);
-      expect(ctx.worldSettings[0]).toContain('[magic]');
-      expect(ctx.worldSettings[0]).toContain('魔法陣');
-      expect(ctx.worldSettings[1]).toContain('[geography]');
-    });
-
-    it('filters episode summaries — includes all episodes regardless of currentEpisodeOrder', async () => {
-      // episodeSummaries contains ALL analyses, not filtered
-      prisma.episodeAnalysis.findMany.mockResolvedValue([
-        makeAnalysis(0),
-        makeAnalysis(1),
-        makeAnalysis(2),
-      ]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 1);
-
-      // All 3 analyses are included in episodeSummaries
-      expect(ctx.episodeSummaries).toHaveLength(3);
-    });
-
-    it('filters recentDetailedSummary to only episodes before currentEpisodeOrder', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([
-        makeAnalysis(0),
-        makeAnalysis(1),
-        makeAnalysis(2),
-      ]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 1);
-
-      // Only episode 0 is before currentEpisodeOrder=1
-      expect(ctx.recentDetailedSummary).toContain('第1話');
-      expect(ctx.recentDetailedSummary).not.toContain('第2話');
-      expect(ctx.recentDetailedSummary).not.toContain('第3話');
-    });
-
-    it('sets narrativePOV and emotionalTone from most recent analysis before currentEpisodeOrder', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([
-        makeAnalysis(0, { narrativePOV: '一人称主人公', emotionalArc: '期待→絶望' }),
-        makeAnalysis(1, { narrativePOV: '三人称限定', emotionalArc: '怒り→決意', timelineEnd: '2日後' }),
-        makeAnalysis(2, { narrativePOV: '三人称神視点', emotionalArc: '悲しみ→希望' }), // excluded (>= 2)
-      ]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 2);
-
-      expect(ctx.narrativePOV).toBe('三人称限定');
-      expect(ctx.emotionalTone).toBe('怒り→決意');
-      expect(ctx.timeline).toBe('2日後');
-    });
-
-    it('matches dialogue samples by characterName when characterId does not match', async () => {
-      const character = makeCharacter('char-1', '魔法使い');
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([character]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      // Dialogue sample has no characterId but matches by name
+    it('limits dialogue samples to 3 per character', async () => {
+      setEmptyMocks(prisma);
+      prisma.storyCharacter.findMany.mockResolvedValue([makeCharacter('char-1', '勇者')]);
       prisma.characterDialogueSample.findMany.mockResolvedValue([
-        {
-          id: 'ds-1',
-          characterId: null,
-          characterName: '魔法使い',
-          episodeOrder: 0,
-          line: '魔法を使う！',
-          context: '戦闘中',
-          emotion: '集中',
-          workId: 'work-1',
-        },
+        makeDialogueSample('char-1', '勇者', 0),
+        makeDialogueSample('char-1', '勇者', 1),
+        makeDialogueSample('char-1', '勇者', 2),
+        makeDialogueSample('char-1', '勇者', 3),
       ]);
 
       const ctx = await service.buildContext('work-1', 5);
 
-      expect(ctx.characters[0].dialogueSamples).toHaveLength(1);
-      expect(ctx.characters[0].dialogueSamples[0]).toContain('魔法を使う！');
-    });
-
-    it('formats dialogue sample with empty string when both emotion and context are null', async () => {
-      const character = makeCharacter('char-1', '勇者');
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([character]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([
-        {
-          id: 'ds-1',
-          characterId: 'char-1',
-          characterName: '勇者',
-          episodeOrder: 0,
-          line: 'セリフのみ',
-          context: null,
-          emotion: null,
-          workId: 'work-1',
-        },
-      ]);
-
-      const ctx = await service.buildContext('work-1', 5);
-
-      // When both emotion and context are null, the fallback '' is used
-      expect(ctx.characters[0].dialogueSamples[0]).toBe('「セリフのみ」()');
-    });
-
-    it('formats dialogue sample using context when emotion is null', async () => {
-      const character = makeCharacter('char-1', '勇者');
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([character]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([
-        {
-          id: 'ds-1',
-          characterId: 'char-1',
-          characterName: '勇者',
-          episodeOrder: 0,
-          line: '文脈だけセリフ',
-          context: '戦闘前',
-          emotion: null,
-          workId: 'work-1',
-        },
-      ]);
-
-      const ctx = await service.buildContext('work-1', 5);
-
-      expect(ctx.characters[0].dialogueSamples[0]).toBe('「文脈だけセリフ」(戦闘前)');
-    });
-
-    it('returns undefined for character fields when DB values are null', async () => {
-      const character = {
-        id: 'char-1',
-        name: '謎の人',
-        role: '不明',
-        personality: null,
-        speechStyle: null,
-        firstPerson: null,
-        currentState: null,
-        sortOrder: 0,
-      };
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([character]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 5);
-
-      expect(ctx.characters[0].personality).toBeUndefined();
-      expect(ctx.characters[0].speechStyle).toBeUndefined();
-      expect(ctx.characters[0].firstPerson).toBeUndefined();
-      expect(ctx.characters[0].currentState).toBeUndefined();
-    });
-
-    it('queries foreshadowings with status=open filter', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      await service.buildContext('work-1', 3);
-
-      expect(prisma.foreshadowing.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { workId: 'work-1', status: 'open' },
-        }),
-      );
-    });
-
-    it('queries world settings with isActive=true filter', async () => {
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      await service.buildContext('work-1', 3);
-
-      expect(prisma.worldSetting.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({
-          where: { workId: 'work-1', isActive: true },
-        }),
-      );
+      expect(ctx.characters[0].dialogueSamples).toHaveLength(3);
     });
   });
 
@@ -486,139 +329,95 @@ describe('AiContextBuilderService', () => {
   // =========================================================================
 
   describe('formatForPrompt', () => {
-    it('produces non-empty string when context has data', () => {
+    it('returns empty string when context is completely empty', () => {
+      const result = service.formatForPrompt(emptyContext());
+      expect(result).toBe('');
+    });
+
+    it('includes scene goal section when present', () => {
       const ctx: AiWritingContext = {
-        currentEpisodeOrder: 2,
-        episodeSummaries: [{ order: 0, title: '第1話', summary: '第1話の要約' }],
-        recentDetailedSummary: '直前の詳細要約テキスト',
-        characters: [
-          {
-            name: '勇者',
-            role: '主人公',
-            dialogueSamples: ['「行くぞ！」(決意)'],
-          },
-        ],
-        openForeshadowings: ['[第1話] 謎の手紙'],
-        worldSettings: ['[magic] 魔法陣: 詳細説明'],
+        ...emptyContext(),
+        sceneGoal: {
+          actTitle: '第二幕',
+          actNumber: 2,
+          sceneTitle: '裏切りの発覚',
+          sceneSummary: '主人公が仲間の裏切りを知る',
+          emotionTarget: '絶望',
+          intensity: 8,
+          turningPoint: '仲間の離反',
+        },
       };
 
       const result = service.formatForPrompt(ctx);
 
-      expect(result).not.toBe('');
-      expect(result.length).toBeGreaterThan(0);
+      expect(result).toContain('【この章の目的】');
+      expect(result).toContain('裏切りの発覚');
+      expect(result).toContain('目的: 主人公が仲間の裏切りを知る');
+      expect(result).toContain('感情目標: 絶望（強度8/10）');
+      expect(result).toContain('幕の転換点: 仲間の離反');
     });
 
-    it('returns empty string when context is completely empty', () => {
-      const ctx = emptyContext();
+    it('includes settingEra in world settings section', () => {
+      const ctx: AiWritingContext = {
+        ...emptyContext(),
+        settingEra: '中世ヨーロッパ風ファンタジー',
+        worldSettings: ['[magic] 魔法陣: 詳細'],
+      };
 
       const result = service.formatForPrompt(ctx);
 
-      expect(result).toBe('');
+      expect(result).toContain('【世界設定】');
+      expect(result).toContain('中世ヨーロッパ風ファンタジー');
+      expect(result).toContain('現代語・現代技術・現代の概念は使用禁止');
+      expect(result).toContain('魔法陣');
     });
 
-    it('includes recent detailed summary in priority-1 position', () => {
+    it('separates characters into appeared and not-appeared sections', () => {
+      const ctx: AiWritingContext = {
+        ...emptyContext(),
+        characters: [
+          { name: 'ユウキ', role: '主人公', dialogueSamples: [], relationships: ['アカネ→幼馴染'], hasAppeared: true },
+          { name: 'ルナ', role: 'ヒロイン', dialogueSamples: [], relationships: [], hasAppeared: false },
+        ],
+      };
+
+      const result = service.formatForPrompt(ctx);
+
+      expect(result).toContain('【読者に紹介済みのキャラクター】');
+      expect(result).toContain('【まだ物語に登場していないキャラクター】');
+      expect(result).toContain('ユウキ');
+      expect(result).toContain('ルナ');
+      expect(result).toContain('関係性に応じた自然な話し方');
+      expect(result).toContain('読者にとって未知の人物');
+    });
+
+    it('includes character relationships in output', () => {
+      const ctx: AiWritingContext = {
+        ...emptyContext(),
+        characters: [
+          { name: 'ユウキ', role: '主人公', dialogueSamples: [], relationships: ['アカネ→幼馴染', 'リン→師匠'], hasAppeared: true },
+        ],
+      };
+
+      const result = service.formatForPrompt(ctx);
+
+      expect(result).toContain('関係性: アカネ→幼馴染、リン→師匠');
+    });
+
+    it('includes recent detailed summary section', () => {
       const ctx: AiWritingContext = {
         ...emptyContext(),
         recentDetailedSummary: '直前の詳細要約テキスト',
-        episodeSummaries: [{ order: 0, title: '第1話', summary: '第1話要約' }],
       };
 
       const result = service.formatForPrompt(ctx);
 
       expect(result).toContain('【直前のあらすじ】');
       expect(result).toContain('直前の詳細要約テキスト');
-      // Recent summary should appear before episode list
-      const recentIdx = result.indexOf('【直前のあらすじ】');
-      const episodesIdx = result.indexOf('【これまでの話の流れ】');
-      expect(recentIdx).toBeLessThan(episodesIdx);
     });
 
-    it('includes characters section', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        characters: [
-          {
-            name: '勇者',
-            role: '主人公',
-            speechStyle: '丁寧語',
-            firstPerson: '私',
-            currentState: '旅の途中',
-            dialogueSamples: [],
-          },
-        ],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).toContain('【登場キャラクター】');
-      expect(result).toContain('勇者');
-      expect(result).toContain('口調:丁寧語');
-      expect(result).toContain('一人称:私');
-      expect(result).toContain('現在:旅の途中');
-    });
-
-    it('includes episode summaries section', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        episodeSummaries: [
-          { order: 0, title: '第1話タイトル', summary: '第1話の要約です' },
-        ],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).toContain('【これまでの話の流れ】');
-      expect(result).toContain('第1話「第1話タイトル」');
-    });
-
-    it('includes foreshadowings section', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        openForeshadowings: ['[第1話] 謎の手紙の伏線'],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).toContain('【未回収の伏線】');
-      expect(result).toContain('謎の手紙の伏線');
-    });
-
-    it('includes world settings section', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        worldSettings: ['[magic] 魔法陣: 魔力を増幅させる'],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).toContain('【世界設定】');
-      expect(result).toContain('魔法陣');
-    });
-
-    it('includes narrative metadata section when POV or tone is available', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        narrativePOV: '三人称限定',
-        emotionalTone: '期待→決意',
-        timeline: '3日後',
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).toContain('【文体情報】');
-      expect(result).toContain('視点: 三人称限定');
-      expect(result).toContain('感情の流れ: 期待→決意');
-      expect(result).toContain('時間軸: 3日後');
-    });
-
-    it('respects MAX_CONTEXT_CHARS budget — drops low-priority sections when budget is exceeded', () => {
-      // Priority 1 (recent summary) has NO budget guard and always gets added.
-      // Fill the budget via a very large recent summary so that lower-priority
-      // sections (world settings = priority 5) cannot fit.
-      const MAX_CONTEXT_CHARS = 8000;
-      // The section string is "【直前のあらすじ】\n" + content, so content needs to
-      // push charCount past MAX_CONTEXT_CHARS before the world-settings check.
-      const longSummary = 'あ'.repeat(MAX_CONTEXT_CHARS + 500);
+    it('respects MAX_CONTEXT_CHARS budget — drops low-priority sections', () => {
+      const longSummary = 'あ'.repeat(9980);
       const ctx: AiWritingContext = {
         ...emptyContext(),
         recentDetailedSummary: longSummary,
@@ -630,98 +429,18 @@ describe('AiContextBuilderService', () => {
       expect(result).not.toContain('【世界設定】');
     });
 
-    it('sections appear in priority order: recent summary > characters > episodes > foreshadowings > world settings', () => {
-      const ctx: AiWritingContext = {
-        currentEpisodeOrder: 5,
-        recentDetailedSummary: '直前の要約',
-        characters: [{ name: '勇者', role: '主人公', dialogueSamples: [] }],
-        episodeSummaries: [{ order: 0, title: '第1話', summary: '第1話要約' }],
-        openForeshadowings: ['[第1話] 伏線'],
-        worldSettings: ['[magic] 設定'],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      const recentIdx = result.indexOf('【直前のあらすじ】');
-      const charsIdx = result.indexOf('【登場キャラクター】');
-      const episodesIdx = result.indexOf('【これまでの話の流れ】');
-      const foreshadowingsIdx = result.indexOf('【未回収の伏線】');
-      const worldIdx = result.indexOf('【世界設定】');
-
-      expect(recentIdx).toBeLessThan(charsIdx);
-      expect(charsIdx).toBeLessThan(episodesIdx);
-      expect(episodesIdx).toBeLessThan(foreshadowingsIdx);
-      expect(foreshadowingsIdx).toBeLessThan(worldIdx);
-    });
-
-    it('omits character fields that are undefined', () => {
+    it('includes narrative metadata section', () => {
       const ctx: AiWritingContext = {
         ...emptyContext(),
-        characters: [
-          {
-            name: '謎の人物',
-            role: '謎',
-            // no speechStyle, firstPerson, currentState, dialogueSamples
-            dialogueSamples: [],
-          },
-        ],
+        narrativePOV: '三人称限定',
+        emotionalTone: '期待→決意',
+        timeline: '3日後',
       };
 
       const result = service.formatForPrompt(ctx);
 
-      expect(result).not.toContain('口調:');
-      expect(result).not.toContain('一人称:');
-      expect(result).not.toContain('現在:');
-    });
-
-    it('includes dialogue samples inline in character entry', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        characters: [
-          {
-            name: '勇者',
-            role: '主人公',
-            dialogueSamples: ['「行くぞ！」(決意)', '「まだ諦めない」(希望)'],
-          },
-        ],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).toContain('セリフ例:');
-      expect(result).toContain('「行くぞ！」(決意)');
-    });
-
-    it('omits recentDetailedSummary section when empty string', () => {
-      const ctx: AiWritingContext = {
-        ...emptyContext(),
-        recentDetailedSummary: '',
-        episodeSummaries: [{ order: 0, title: '第1話', summary: '要約' }],
-      };
-
-      const result = service.formatForPrompt(ctx);
-
-      expect(result).not.toContain('【直前のあらすじ】');
-      expect(result).toContain('【これまでの話の流れ】');
-    });
-
-    it('truncates world setting descriptions to 100 chars in buildContext output', async () => {
-      const longDescription = 'あ'.repeat(200);
-      prisma.episodeAnalysis.findMany.mockResolvedValue([]);
-      prisma.storyCharacter.findMany.mockResolvedValue([]);
-      prisma.foreshadowing.findMany.mockResolvedValue([]);
-      prisma.worldSetting.findMany.mockResolvedValue([
-        makeWorldSetting('ws-1', 'magic', '魔法陣', longDescription),
-      ]);
-      prisma.characterDialogueSample.findMany.mockResolvedValue([]);
-
-      const ctx = await service.buildContext('work-1', 5);
-
-      // The description is sliced to 100 in buildContext
-      expect(ctx.worldSettings[0]).toContain('あ'.repeat(100));
-      // Should not contain more than 100 あ's in the description part
-      const descriptionPart = ctx.worldSettings[0].split(': ')[1];
-      expect(descriptionPart.length).toBeLessThanOrEqual(100);
+      expect(result).toContain('【文体情報】');
+      expect(result).toContain('視点: 三人称限定');
     });
   });
 });

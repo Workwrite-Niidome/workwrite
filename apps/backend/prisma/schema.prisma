@@ -122,6 +122,7 @@ model Work {
   coverUrl    String?
   status      WorkStatus @default(DRAFT)
   genre       String?
+  settingEra  String?    // 時代・世界観設定（例: 中世ヨーロッパ風ファンタジー、現代日本、近未来SF）
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   publishedAt DateTime?
