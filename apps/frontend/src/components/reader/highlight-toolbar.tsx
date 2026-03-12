@@ -1,6 +1,6 @@
 'use client';
-import { useState } from 'react';
-import { Sparkles, Save } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Sparkles, Save, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 
 const COLORS = [
@@ -22,9 +22,28 @@ export function HighlightToolbar({ position, onSave, onAiExplain, onClose }: Hig
   const [color, setColor] = useState('yellow');
   const [memo, setMemo] = useState('');
   const [showMemo, setShowMemo] = useState(false);
+  const ref = useRef<HTMLDivElement>(null);
+
+  // Close on outside click
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) {
+        onClose();
+      }
+    }
+    // Delay to avoid the same mouseup that opened the toolbar
+    const timer = setTimeout(() => {
+      document.addEventListener('mousedown', handleClickOutside);
+    }, 200);
+    return () => {
+      clearTimeout(timer);
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [onClose]);
 
   return (
     <div
+      ref={ref}
       className="fixed z-50 bg-card border border-border rounded-lg shadow-lg p-2"
       style={{ top: position.top - 8, left: position.left, transform: 'translate(-50%, -100%)' }}
     >
@@ -43,6 +62,10 @@ export function HighlightToolbar({ position, onSave, onAiExplain, onClose }: Hig
         <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[32px] min-w-[32px]" onClick={onAiExplain} title="AI解説">
           <Sparkles className="h-3.5 w-3.5" />
         </Button>
+        <div className="w-px h-5 bg-border mx-1" />
+        <Button variant="ghost" size="icon" className="h-8 w-8 min-h-[32px] min-w-[32px] text-muted-foreground" onClick={onClose} title="閉じる">
+          <X className="h-3.5 w-3.5" />
+        </Button>
       </div>
       {showMemo && (
         <div className="mt-2 flex gap-1">
@@ -50,6 +73,12 @@ export function HighlightToolbar({ position, onSave, onAiExplain, onClose }: Hig
             type="text"
             value={memo}
             onChange={(e) => setMemo(e.target.value)}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter' && !e.nativeEvent.isComposing) {
+                onSave(color, memo);
+                onClose();
+              }
+            }}
             placeholder="メモ..."
             className="flex-1 text-xs border border-border rounded px-2 py-1 bg-background"
             autoFocus
