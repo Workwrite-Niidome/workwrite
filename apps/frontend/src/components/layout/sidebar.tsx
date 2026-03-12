@@ -90,7 +90,7 @@ export function Sidebar() {
 
           <Link
             href="/pricing"
-            className="mt-3 flex items-center gap-2 px-3 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs text-primary hover:bg-primary/10 transition-colors"
+            className="mt-3 flex items-center justify-center gap-2 px-3 py-2.5 rounded-lg border border-primary/20 bg-primary/5 text-xs text-primary hover:bg-primary/10 transition-colors"
           >
             <Crown className="h-3.5 w-3.5" />
             <span>プランをアップグレード</span>
