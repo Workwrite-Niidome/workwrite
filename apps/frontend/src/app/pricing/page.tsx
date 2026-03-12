@@ -13,14 +13,14 @@ const PLANS = [
     price: '¥0',
     period: '',
     credits: '30cr / 月',
-    creditsNote: 'Sonnet 30回相当',
+    creditsNote: '通常アシスト 30回相当',
     icon: Sparkles,
     highlight: false,
     cta: '無料で始める',
     ctaHref: '/register',
     features: [
       '作品の執筆・公開・閲覧',
-      'AI執筆アシスト（Sonnet）',
+      'AI執筆アシスト（通常）',
       'AIスコアリング・感情タグ',
       '読書進捗・統計',
       'レター（月3通まで無料）',
@@ -35,15 +35,15 @@ const PLANS = [
     price: '¥2,980',
     period: '/ 月',
     credits: '200cr / 月',
-    creditsNote: 'Sonnet 200回 or Opus 40回相当',
+    creditsNote: '通常アシスト 200回 or 高精度 40回相当',
     icon: Zap,
     highlight: true,
     cta: 'Standard を始める',
     ctaHref: '/register',
     features: [
       'Freeプランの全機能',
-      'AI執筆アシスト（Sonnet + じっくりモード）',
-      'AI執筆アシスト（Opus）',
+      'AI執筆アシスト（じっくりモード）',
+      'AI執筆アシスト（高精度モード）',
       'クレジット追加購入（100cr = ¥980）',
       '7日間の無料トライアル',
     ],
@@ -54,7 +54,7 @@ const PLANS = [
     price: '¥7,980',
     period: '/ 月',
     credits: '600cr / 月',
-    creditsNote: 'Sonnet 600回 or Opus 120回相当',
+    creditsNote: '通常アシスト 600回 or 高精度 120回相当',
     icon: Crown,
     highlight: false,
     cta: 'Pro を始める',
@@ -70,9 +70,9 @@ const PLANS = [
 ];
 
 const CREDIT_TABLE = [
-  { action: 'AI執筆アシスト（Sonnet）', credits: '1cr', note: '通常の執筆アシスト' },
-  { action: 'AI執筆アシスト（Sonnet じっくり）', credits: '2cr', note: 'Extended Thinking' },
-  { action: 'AI執筆アシスト（Opus）', credits: '5cr', note: '最高品質モデル' },
+  { action: 'AI執筆アシスト（通常）', credits: '1cr', note: '素早い応答' },
+  { action: 'AI執筆アシスト（じっくり）', credits: '2cr', note: 'より深い思考で回答' },
+  { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答' },
   { action: 'AIスコアリング', credits: '0cr', note: 'プラットフォーム負担' },
   { action: '構造解析・キャラクター抽出', credits: '0cr', note: 'プラットフォーム負担' },
   { action: 'あらすじ自動更新', credits: '0cr', note: 'プラットフォーム負担' },
@@ -83,7 +83,7 @@ const CREDIT_TABLE = [
 const FAQS = [
   {
     q: 'クレジットとは何ですか？',
-    a: 'クレジットはAI執筆アシストの利用に消費されるプラットフォーム内の単位です。使用するAIモデルによって消費量が異なります（Sonnet: 1cr、Sonnet じっくり: 2cr、Opus: 5cr）。スコアリングや構造解析などのバックグラウンド処理はクレジットを消費しません。',
+    a: 'クレジットはAI執筆アシストの利用に消費されるプラットフォーム内の単位です。AIの回答モードによって消費量が異なります（通常: 1cr、じっくり: 2cr、高精度: 5cr）。スコアリングや構造解析などのバックグラウンド処理はクレジットを消費しません。',
   },
   {
     q: 'クレジットは翌月に繰り越せますか？',

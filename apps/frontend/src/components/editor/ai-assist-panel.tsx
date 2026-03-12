@@ -301,8 +301,8 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
               >
                 <Crown className="h-2.5 w-2.5" />
                 {premiumMode
-                  ? (tier.canUseOpus ? 'Opusモード ON' : 'じっくりモード ON')
-                  : (tier.canUseOpus ? 'Opusモード' : 'じっくりモード')}
+                  ? (tier.canUseOpus ? '高精度モード ON' : 'じっくりモード ON')
+                  : (tier.canUseOpus ? '高精度モード' : 'じっくりモード')}
               </button>
             )}
           </div>
