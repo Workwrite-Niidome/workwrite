@@ -1,6 +1,9 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostsService } from '../posts/posts.service';
+import { ScoringService } from '../scoring/scoring.service';
+import { SearchService } from '../search/search.service';
+import { EmotionsService } from '../emotions/emotions.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PostType } from '@prisma/client';
@@ -12,6 +15,9 @@ export class WorksService {
   constructor(
     private prisma: PrismaService,
     private postsService: PostsService,
+    private scoringService: ScoringService,
+    private searchService: SearchService,
+    private emotionsService: EmotionsService,
   ) {}
 
   async create(authorId: string, dto: CreateWorkDto) {
@@ -137,6 +143,8 @@ export class WorksService {
           content: `新作『${dto.title || work.title}』を公開しました`,
           workId: id,
         }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
+        // Auto-scoring, search indexing, emotion tag generation
+        this.autoProcessWork(id).catch((e) => this.logger.warn(`Auto-process failed: ${e}`));
       }
     }
 
@@ -161,5 +169,55 @@ export class WorksService {
     if (work.authorId !== userId) throw new ForbiddenException();
     await this.prisma.work.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  /** Auto-score, generate emotion tags, and index to search after publishing */
+  async autoProcessWork(workId: string) {
+    // 1. Score the work
+    const score = await this.scoringService.scoreWork(workId);
+    this.logger.log(`Auto-scored work ${workId}: overall=${score?.overall}`);
+
+    // 2. Generate emotion tags from scoring result
+    if (score && (score as any).emotionTags?.length) {
+      const allTags = await this.prisma.emotionTagMaster.findMany();
+      const tagMap = new Map(allTags.map((t) => [t.name, t.id]));
+      const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } });
+      if (work) {
+        const tagsToAdd = ((score as any).emotionTags as string[])
+          .filter((name) => tagMap.has(name))
+          .map((name) => ({ tagId: tagMap.get(name)! }));
+        if (tagsToAdd.length > 0) {
+          await this.emotionsService.addMultipleEmotionTags(work.authorId, workId, tagsToAdd);
+          this.logger.log(`Auto-generated ${tagsToAdd.length} emotion tags for work ${workId}`);
+        }
+      }
+    }
+
+    // 3. Index to Meilisearch
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      include: {
+        author: { select: { displayName: true, name: true } },
+        tags: true,
+        qualityScore: { select: { overall: true } },
+      },
+    });
+    if (work) {
+      const emotionTags = await this.emotionsService.getAggregatedEmotionTags(workId);
+      await this.searchService.indexWork({
+        id: work.id,
+        title: work.title,
+        synopsis: work.synopsis || '',
+        genre: work.genre || '',
+        authorName: work.author.displayName || work.author.name,
+        tags: work.tags.map((t) => t.tag),
+        emotionTags: emotionTags.map((et) => et.tag?.name || '').filter(Boolean),
+        qualityScore: work.qualityScore?.overall || 0,
+        totalViews: work.totalViews,
+        totalReads: work.totalReads,
+        publishedAt: work.publishedAt?.getTime() || 0,
+      });
+      this.logger.log(`Indexed work ${workId} to search`);
+    }
   }
 }

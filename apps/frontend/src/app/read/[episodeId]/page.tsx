@@ -144,6 +144,7 @@ export default function ReaderPage() {
   const contentRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const readStartRef = useRef(Date.now());
 
   // Load settings
   useEffect(() => {
@@ -182,17 +183,22 @@ export default function ReaderPage() {
 
   const saveProgress = useCallback(
     (pct: number, scrollPos: number) => {
-      if (!isAuthenticated) return;
+      if (!isAuthenticated || !episode) return;
+      const now = Date.now();
+      const elapsed = now - readStartRef.current;
+      readStartRef.current = now;
+
       if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
       progressTimerRef.current = setTimeout(() => {
-        api.updateReadingProgress({
+        api.updateReadingProgress(episode.workId, {
           episodeId,
           progressPct: pct,
-          scrollPosition: scrollPos,
+          lastPosition: scrollPos,
+          readTimeMs: elapsed,
         }).catch(() => {});
       }, PROGRESS_DEBOUNCE);
     },
-    [episodeId, isAuthenticated],
+    [episodeId, isAuthenticated, episode],
   );
 
   useEffect(() => {
@@ -630,6 +636,24 @@ export default function ReaderPage() {
         <EpisodeCompleteBanner
           nextEpisodeId={nextEp?.id}
           workId={episode.workId}
+          onReaction={(value) => {
+            const tagMapping: Record<string, string> = {
+              moved: 'tears',
+              warm: 'healing',
+              surprised: 'excitement',
+              fired_up: 'courage',
+              thoughtful: 'worldview',
+            };
+            const tagName = tagMapping[value];
+            if (tagName) {
+              api.getEmotionTags().then((res) => {
+                const tag = res.data.find((t: { name: string }) => t.name === tagName);
+                if (tag) {
+                  api.addEmotionTags(episode.workId, [{ tagId: tag.id }]).catch(() => {});
+                }
+              }).catch(() => {});
+            }
+          }}
         />
       )}
 

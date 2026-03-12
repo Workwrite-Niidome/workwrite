@@ -90,18 +90,19 @@ export class ReadingService {
       select: { updatedAt: true },
       take: 365,
     });
-    const uniqueDays = new Set(recentProgress.map(p => p.updatedAt.toISOString().split('T')[0]));
-    const sortedDays = [...uniqueDays].sort().reverse();
+    const daySet = new Set(recentProgress.map(p => p.updatedAt.toISOString().split('T')[0]));
     let currentStreak = 0;
     let maxStreak = 0;
-    const today = new Date().toISOString().split('T')[0];
-    let checkDate = new Date(today);
-    for (let i = 0; i < sortedDays.length; i++) {
+    const checkDate = new Date();
+    checkDate.setHours(0, 0, 0, 0);
+    for (let i = 0; i < 365; i++) {
       const dayStr = checkDate.toISOString().split('T')[0];
-      if (sortedDays.includes(dayStr)) {
+      if (daySet.has(dayStr)) {
         currentStreak++;
         if (currentStreak > maxStreak) maxStreak = currentStreak;
       } else {
+        if (currentStreak > 0) break;
+        // Allow skipping today (count from yesterday)
         if (i > 0) break;
       }
       checkDate.setDate(checkDate.getDate() - 1);

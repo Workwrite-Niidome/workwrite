@@ -388,10 +388,10 @@ class ApiClient {
   }
 
   // Reading Progress
-  async updateReadingProgress(data: { episodeId: string; progressPct: number; scrollPosition: number }) {
+  async updateReadingProgress(workId: string, data: { episodeId: string; progressPct: number; lastPosition: number; readTimeMs: number }) {
     return this.request<{ data: ReadingProgress }>('/reading/progress', {
       method: 'POST',
-      body: JSON.stringify({ items: [data] }),
+      body: JSON.stringify({ workId, entries: [data] }),
     });
   }
 

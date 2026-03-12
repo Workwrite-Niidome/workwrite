@@ -9,6 +9,7 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreationWizardService } from '../creation-wizard/creation-wizard.service';
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 import { PostsService } from '../posts/posts.service';
+import { WorksService } from '../works/works.service';
 import { PostType } from '@prisma/client';
 
 @ApiTags('Episodes')
@@ -21,6 +22,7 @@ export class EpisodesController {
     private creationWizardService: CreationWizardService,
     private episodeAnalysis: EpisodeAnalysisService,
     private postsService: PostsService,
+    private worksService: WorksService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -111,6 +113,10 @@ export class EpisodesController {
     // Auto-post to SNS
     this.createAutoEpisodePost(userId, episode).catch((e) =>
       this.logger.warn(`Auto-post failed: ${e}`),
+    );
+    // Auto-score and index to search
+    this.worksService.autoProcessWork(episode.workId).catch((e) =>
+      this.logger.warn(`Auto-process on episode publish failed: ${e}`),
     );
     return result;
   }

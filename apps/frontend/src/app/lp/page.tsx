@@ -4,32 +4,47 @@ import Link from 'next/link';
 import { ArrowRight, PenTool, Shield, Sparkles, BookOpen, Users, BarChart3, Heart, Eye, Lightbulb, ChevronDown } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useState } from 'react';
+import { useAuth } from '@/lib/auth-context';
 
 // ─── LP Header ───
 function LpHeader() {
+  const { isAuthenticated } = useAuth();
+
   return (
     <header className="fixed top-0 z-50 w-full border-b border-border/50 bg-background/80 backdrop-blur-md">
       <div className="mx-auto flex h-14 max-w-5xl items-center px-4 md:px-6">
-        <Link href="/lp" className="mr-auto">
+        <Link href={isAuthenticated ? '/' : '/lp'} className="mr-auto">
           <span className="text-sm font-semibold tracking-wide">Workwrite</span>
         </Link>
         <nav className="hidden md:flex items-center gap-8 mr-8">
           <a href="#features" className="text-xs text-muted-foreground hover:text-foreground transition-colors">機能</a>
           <a href="#for-writers" className="text-xs text-muted-foreground hover:text-foreground transition-colors">作家の方へ</a>
           <a href="#ai-stance" className="text-xs text-muted-foreground hover:text-foreground transition-colors">AIとの向き合い方</a>
+          <Link href="/pricing" className="text-xs text-muted-foreground hover:text-foreground transition-colors">料金プラン</Link>
           <a href="#faq" className="text-xs text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
         </nav>
         <div className="flex items-center gap-2">
           <ThemeToggle />
-          <Link href="/login" className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5">
-            ログイン
-          </Link>
-          <Link
-            href="/register"
-            className="text-xs bg-foreground text-background px-4 py-1.5 rounded-full hover:opacity-90 transition-opacity"
-          >
-            無料で始める
-          </Link>
+          {isAuthenticated ? (
+            <Link
+              href="/"
+              className="text-xs bg-foreground text-background px-4 py-1.5 rounded-full hover:opacity-90 transition-opacity"
+            >
+              ホームへ
+            </Link>
+          ) : (
+            <>
+              <Link href="/login" className="text-xs text-muted-foreground hover:text-foreground transition-colors px-3 py-1.5">
+                ログイン
+              </Link>
+              <Link
+                href="/register"
+                className="text-xs bg-foreground text-background px-4 py-1.5 rounded-full hover:opacity-90 transition-opacity"
+              >
+                無料で始める
+              </Link>
+            </>
+          )}
         </div>
       </div>
     </header>
@@ -70,8 +85,8 @@ function Hero() {
         </div>
         <div className="mt-16 flex items-center justify-center gap-8 text-muted-foreground">
           <div className="text-center">
-            <p className="text-2xl font-serif font-medium text-foreground">100%</p>
-            <p className="text-xs mt-1">無料で利用可能</p>
+            <p className="text-2xl font-serif font-medium text-foreground">¥0</p>
+            <p className="text-xs mt-1">基本機能は無料</p>
           </div>
           <div className="w-px h-10 bg-border" />
           <div className="text-center">
@@ -401,7 +416,7 @@ function FaqSection() {
   const faqs = [
     {
       q: '利用料金はかかりますか？',
-      a: 'いいえ。作品の執筆・公開・閲覧はすべて無料です。AI執筆アシストも無料でご利用いただけます。',
+      a: '作品の執筆・公開・閲覧は無料です。AI執筆アシストは月30回まで無料でご利用いただけます。より多くのAI機能を使いたい方には、Standard（¥2,980/月）とPro（¥7,980/月）の有料プランをご用意しています。詳しくは料金プランをご覧ください。',
     },
     {
       q: 'AI執筆アシストを使った作品は「自分の作品」と言えますか？',
@@ -506,6 +521,7 @@ function LpFooter() {
           <div className="flex items-center gap-6 text-xs text-muted-foreground">
             <Link href="/" className="hover:text-foreground transition-colors">ホーム</Link>
             <Link href="/search" className="hover:text-foreground transition-colors">作品を探す</Link>
+            <Link href="/pricing" className="hover:text-foreground transition-colors">料金プラン</Link>
             <Link href="/register" className="hover:text-foreground transition-colors">新規登録</Link>
             <Link href="/login" className="hover:text-foreground transition-colors">ログイン</Link>
           </div>

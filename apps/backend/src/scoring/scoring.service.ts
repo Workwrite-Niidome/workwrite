@@ -15,6 +15,7 @@ export interface ScoringResult {
     worldBuilding: string;
   };
   improvementTips: string[];
+  emotionTags: string[];
 }
 
 @Injectable()
@@ -98,8 +99,11 @@ ${text}
     "virality": "<分析コメント>",
     "worldBuilding": "<分析コメント>"
   },
-  "improvementTips": ["<提案1>", "<提案2>", "<提案3>"]
-}`;
+  "improvementTips": ["<提案1>", "<提案2>", "<提案3>"],
+  "emotionTags": ["<感情タグ3〜5個>"]
+}
+
+emotionTagsは以下から3〜5個選んでください: courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe, nostalgia, suspense, mystery, hope, beauty, growth`;
 
     // Use Haiku for scoring (cost-efficient, structured output)
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -132,7 +136,7 @@ ${text}
       (parsed.immersion + parsed.transformation + parsed.virality + parsed.worldBuilding) / 4,
     );
 
-    return { ...parsed, overall };
+    return { ...parsed, overall, emotionTags: parsed.emotionTags || [] };
   }
 
   private generateMockScores(): ScoringResult {
@@ -157,6 +161,7 @@ ${text}
         '本番環境ではClaude APIを使った詳細な分析が提供されます',
         '作品を公開後、自動的にスコアリングが実行されます',
       ],
+      emotionTags: ['courage', 'excitement', 'healing'],
     };
   }
 
