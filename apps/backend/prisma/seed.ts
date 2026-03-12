@@ -96,6 +96,59 @@ async function main() {
   }
   console.log(`Seeded ${TEMPLATES.length} prompt templates.`);
 
+  // Seed CreditBalance for all users that don't have one
+  console.log('Seeding credit balances...');
+  const usersWithoutBalance = await prisma.user.findMany({
+    where: { creditBalance: null },
+    select: { id: true },
+  });
+
+  let creditCount = 0;
+  for (const user of usersWithoutBalance) {
+    // Check if user has active subscription
+    const sub = await prisma.subscription.findUnique({
+      where: { userId: user.id },
+    });
+
+    const plan = sub?.status === 'active' ? sub.plan : 'free';
+    const monthlyCredits = plan === 'pro' ? 600 : plan === 'standard' ? 200 : 30;
+
+    await prisma.creditBalance.create({
+      data: {
+        userId: user.id,
+        balance: monthlyCredits,
+        monthlyBalance: monthlyCredits,
+        purchasedBalance: 0,
+        monthlyGranted: monthlyCredits,
+        lastGrantedAt: new Date(),
+      },
+    });
+
+    // Create initial grant transaction
+    await prisma.creditTransaction.create({
+      data: {
+        userId: user.id,
+        amount: monthlyCredits,
+        type: 'MONTHLY_GRANT',
+        status: 'confirmed',
+        balance: monthlyCredits,
+        description: `Initial credit grant (${plan}: ${monthlyCredits}cr)`,
+      },
+    });
+
+    creditCount++;
+  }
+  console.log(`Seeded credit balances for ${creditCount} users.`);
+
+  // Migrate legacy 'premium' subscriptions to 'pro'
+  const premiumMigrated = await prisma.subscription.updateMany({
+    where: { plan: 'premium' },
+    data: { plan: 'pro' },
+  });
+  if (premiumMigrated.count > 0) {
+    console.log(`Migrated ${premiumMigrated.count} 'premium' subscriptions to 'pro'.`);
+  }
+
   // Admin user setup
   const adminEmail = 'niidome@workwrite.co.jp';
   const existingAdmin = await prisma.user.findUnique({ where: { email: adminEmail } });

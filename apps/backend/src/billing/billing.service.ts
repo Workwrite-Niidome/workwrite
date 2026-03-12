@@ -99,14 +99,15 @@ export class BillingService {
           ? session.payment_intent
           : session.payment_intent?.id;
       if (paymentIntentId) {
-        // Determine price based on user's plan
-        const sub = await this.prisma.subscription.findUnique({
-          where: { userId },
-        });
-        const priceJpy = sub?.plan === 'pro' ? 880 : 980;
+        const creditAmount = session.metadata?.creditAmount
+          ? parseInt(session.metadata.creditAmount, 10)
+          : CREDIT_PURCHASE_AMOUNT;
+        const priceJpy = session.metadata?.priceJpy
+          ? parseInt(session.metadata.priceJpy, 10)
+          : 980;
         await this.creditService.addPurchasedCredits(
           userId,
-          CREDIT_PURCHASE_AMOUNT,
+          creditAmount,
           paymentIntentId,
           priceJpy,
         );

@@ -1,19 +1,33 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
 import Stripe from 'stripe';
 
-const PLAN_PRICES: Record<string, { priceId: string; credits: number }> = {
-  standard: { priceId: '', credits: 200 },
-  pro: { priceId: '', credits: 600 },
-};
+interface PlanConfig {
+  priceId: string;
+  credits: number;
+}
 
-const CREDIT_PURCHASE_PRICE_ID = ''; // Set via env
+interface CreditPurchaseConfig {
+  priceId: string;
+  amount: number;
+  priceJpy: number;
+}
 
 @Injectable()
 export class StripeService {
   private stripe: Stripe | null = null;
   private readonly logger = new Logger(StripeService.name);
+
+  private planPrices: Record<string, PlanConfig> = {
+    standard: { priceId: '', credits: 200 },
+    pro: { priceId: '', credits: 600 },
+  };
+
+  private creditPurchasePrices: Record<string, CreditPurchaseConfig> = {
+    standard: { priceId: '', amount: 100, priceJpy: 980 },
+    pro: { priceId: '', amount: 100, priceJpy: 880 },
+  };
 
   constructor(
     private config: ConfigService,
@@ -26,20 +40,21 @@ export class StripeService {
       // Load price IDs from env
       const stdPrice = this.config.get<string>('STRIPE_STANDARD_PRICE_ID');
       const proPrice = this.config.get<string>('STRIPE_PRO_PRICE_ID');
-      const creditPrice = this.config.get<string>('STRIPE_CREDIT_PURCHASE_PRICE_ID');
-      if (stdPrice) PLAN_PRICES.standard.priceId = stdPrice;
-      if (proPrice) PLAN_PRICES.pro.priceId = proPrice;
-      if (creditPrice) {
-        // Update module-level const via Object reference is not ideal but safe here
-        (this as any).creditPurchasePriceId = creditPrice;
-      }
+      if (stdPrice) this.planPrices.standard.priceId = stdPrice;
+      if (proPrice) this.planPrices.pro.priceId = proPrice;
+
+      // Credit purchase prices (per plan)
+      const creditStd = this.config.get<string>('STRIPE_CREDIT_PURCHASE_STANDARD_PRICE_ID');
+      const creditPro = this.config.get<string>('STRIPE_CREDIT_PURCHASE_PRO_PRICE_ID');
+      if (creditStd) this.creditPurchasePrices.standard.priceId = creditStd;
+      if (creditPro) this.creditPurchasePrices.pro.priceId = creditPro;
     } else {
       this.logger.warn('STRIPE_SECRET_KEY not set — Stripe features disabled');
     }
   }
 
   private ensureStripe(): Stripe {
-    if (!this.stripe) throw new Error('Stripe is not configured');
+    if (!this.stripe) throw new BadRequestException('Stripe決済は現在利用できません');
     return this.stripe;
   }
 
@@ -72,8 +87,10 @@ export class StripeService {
   ): Promise<{ url: string }> {
     const stripe = this.ensureStripe();
     const customerId = await this.getOrCreateCustomer(userId, email);
-    const planConfig = PLAN_PRICES[plan];
-    if (!planConfig?.priceId) throw new Error(`Price not configured for plan: ${plan}`);
+    const planConfig = this.planPrices[plan];
+    if (!planConfig?.priceId) {
+      throw new BadRequestException(`${plan}プランの価格が設定されていません。管理者にお問い合わせください。`);
+    }
 
     const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
@@ -99,18 +116,32 @@ export class StripeService {
   ): Promise<{ url: string }> {
     const stripe = this.ensureStripe();
     const customerId = await this.getOrCreateCustomer(userId, email);
-    const priceId = (this as any).creditPurchasePriceId || this.config.get<string>('STRIPE_CREDIT_PURCHASE_PRICE_ID');
-    if (!priceId) throw new Error('Credit purchase price not configured');
+
+    // Determine price based on user's current plan
+    const sub = await this.prisma.subscription.findUnique({
+      where: { userId },
+    });
+    const userPlan = sub?.status === 'active' ? sub.plan : 'standard';
+    const purchaseConfig = this.creditPurchasePrices[userPlan] || this.creditPurchasePrices.standard;
+
+    if (!purchaseConfig.priceId) {
+      throw new BadRequestException('クレジット追加購入の価格が設定されていません。管理者にお問い合わせください。');
+    }
 
     const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
-      line_items: [{ price: priceId, quantity: 1 }],
+      line_items: [{ price: purchaseConfig.priceId, quantity: 1 }],
       success_url: `${baseUrl}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}&type=credits`,
       cancel_url: `${baseUrl}/settings/billing/cancel`,
-      metadata: { userId, type: 'credit_purchase' },
+      metadata: {
+        userId,
+        type: 'credit_purchase',
+        creditAmount: String(purchaseConfig.amount),
+        priceJpy: String(purchaseConfig.priceJpy),
+      },
     });
 
     return { url: session.url! };
@@ -123,7 +154,9 @@ export class StripeService {
       select: { stripeCustomerId: true },
     });
 
-    if (!user?.stripeCustomerId) throw new Error('No Stripe customer found');
+    if (!user?.stripeCustomerId) {
+      throw new BadRequestException('Stripeカスタマー情報が見つかりません');
+    }
 
     const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
     const session = await stripe.billingPortal.sessions.create({
