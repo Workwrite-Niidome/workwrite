@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Loading } from '@/components/layout/loading';
+import { Copy, Check } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -25,6 +26,25 @@ export default function SettingsPage() {
   // Delete
   const [deleteConfirm, setDeleteConfirm] = useState('');
   const [deleting, setDeleting] = useState(false);
+
+  // Invite codes
+  const [inviteCodes, setInviteCodes] = useState<{ code: string; maxUses: number; usedCount: number; isActive: boolean; usages: { userId: string; usedAt: string }[] }[]>([]);
+  const [inviteLoading, setInviteLoading] = useState(true);
+  const [copiedCode, setCopiedCode] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (!user) return;
+    api.getMyInviteCodes()
+      .then((res) => setInviteCodes(Array.isArray(res) ? res : []))
+      .catch(() => {})
+      .finally(() => setInviteLoading(false));
+  }, [user]);
+
+  function copyCode(code: string) {
+    navigator.clipboard.writeText(code);
+    setCopiedCode(code);
+    setTimeout(() => setCopiedCode(null), 2000);
+  }
 
   if (authLoading) return <Loading />;
 
@@ -90,6 +110,43 @@ export default function SettingsPage() {
           </Link>
         </p>
       </div>
+
+      {/* Invite Codes */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="text-sm">招待コード</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <p className="text-xs text-muted-foreground mb-4">
+            友人や仲間を招待できます。各コードは1回のみ使用可能です。
+          </p>
+          {inviteLoading ? (
+            <p className="text-sm text-muted-foreground">読み込み中...</p>
+          ) : inviteCodes.length === 0 ? (
+            <p className="text-sm text-muted-foreground">招待コードがありません</p>
+          ) : (
+            <div className="space-y-2">
+              {inviteCodes.map((ic) => (
+                <div key={ic.code} className="flex items-center justify-between border border-border rounded-md px-3 py-2">
+                  <div className="flex items-center gap-2">
+                    <code className={`text-sm font-mono ${ic.usedCount >= ic.maxUses ? 'text-muted-foreground line-through' : ''}`}>
+                      {ic.code}
+                    </code>
+                    {ic.usedCount >= ic.maxUses && (
+                      <span className="text-xs text-muted-foreground">使用済み</span>
+                    )}
+                  </div>
+                  {ic.usedCount < ic.maxUses && (
+                    <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => copyCode(ic.code)}>
+                      {copiedCode === ic.code ? <Check className="h-3.5 w-3.5 text-green-500" /> : <Copy className="h-3.5 w-3.5" />}
+                    </Button>
+                  )}
+                </div>
+              ))}
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Password Change */}
       <Card>

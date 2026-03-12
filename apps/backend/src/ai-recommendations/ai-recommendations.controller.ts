@@ -20,6 +20,8 @@ export class AiRecommendationsController {
   }
 
   @Get('recommendations/because-you-read/:workId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get similar work recommendations' })
   getBecauseYouRead(@Param('workId') workId: string) {
     return this.aiRecommendationsService.getBecauseYouRead(workId);

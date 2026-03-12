@@ -10,6 +10,8 @@ export class AiInsightsController {
   constructor(private aiInsightsService: AiInsightsService) {}
 
   @Get(':workId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get generic AI insights for a work' })
   getGenericInsights(@Param('workId') workId: string) {
     return this.aiInsightsService.getGenericInsights(workId);

@@ -641,6 +641,10 @@ class ApiClient {
     return this.request<{ data: { deleted: boolean } }>('/users/me', { method: 'DELETE' });
   }
 
+  async getMyInviteCodes() {
+    return this.request<{ code: string; label: string; maxUses: number; usedCount: number; isActive: boolean; createdAt: string; usages: { userId: string; usedAt: string }[] }[]>('/auth/my-invite-codes');
+  }
+
   // Admin
   async getAdminStats() {
     return this.request<{ data: AdminStats }>('/admin/stats');

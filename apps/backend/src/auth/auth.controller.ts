@@ -1,7 +1,9 @@
-import { Controller, Post, Body, HttpCode, HttpStatus } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
+import { Controller, Post, Body, Get, HttpCode, HttpStatus, UseGuards } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiResponse, ApiBearerAuth } from '@nestjs/swagger';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/register.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
 
 @ApiTags('Auth')
 @Controller('auth')
@@ -32,5 +34,13 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  @Get('my-invite-codes')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get current user invite codes' })
+  getMyInviteCodes(@CurrentUser('id') userId: string) {
+    return this.authService.getUserInviteCodes(userId);
   }
 }
