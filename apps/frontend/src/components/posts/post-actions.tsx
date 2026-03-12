@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { MessageCircle, Repeat2, Heart, Bookmark } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { api, SnsPost } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 interface PostActionsProps {
   post: SnsPost;
@@ -11,6 +12,8 @@ interface PostActionsProps {
 }
 
 export function PostActions({ post, onReplyClick }: PostActionsProps) {
+  const { user } = useAuth();
+  const isOwnPost = user?.id === post.authorId;
   const [applauded, setApplauded] = useState(post.hasApplauded ?? false);
   const [applauseCount, setApplauseCount] = useState(post.applauseCount);
   const [reposted, setReposted] = useState(post.hasReposted ?? false);
@@ -95,9 +98,12 @@ export function PostActions({ post, onReplyClick }: PostActionsProps) {
       {/* Repost */}
       <button
         onClick={handleRepost}
+        disabled={isOwnPost}
         className={cn(
           'flex items-center gap-1.5 transition-colors group',
-          reposted ? 'text-green-600' : 'text-muted-foreground hover:text-green-600',
+          isOwnPost
+            ? 'text-muted-foreground/40 cursor-not-allowed'
+            : reposted ? 'text-green-600' : 'text-muted-foreground hover:text-green-600',
         )}
       >
         <Repeat2 className="h-4 w-4 group-hover:scale-110 transition-transform" />

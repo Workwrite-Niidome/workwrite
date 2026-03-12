@@ -217,11 +217,15 @@ export class PostsService {
       throw new NotFoundException('投稿が見つかりません');
     }
 
+    // Idempotency: skip if already applauded
+    const existing = await this.prisma.applause.findUnique({
+      where: { userId_postId: { userId, postId } },
+    });
+    if (existing) return;
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.applause.upsert({
-        where: { userId_postId: { userId, postId } },
-        create: { userId, postId },
-        update: {},
+      await tx.applause.create({
+        data: { userId, postId },
       });
       await tx.post.update({
         where: { id: postId },
@@ -345,11 +349,15 @@ export class PostsService {
       throw new NotFoundException('投稿が見つかりません');
     }
 
+    // Idempotency: skip if already bookmarked
+    const existing = await this.prisma.postBookmark.findUnique({
+      where: { userId_postId: { userId, postId } },
+    });
+    if (existing) return;
+
     await this.prisma.$transaction(async (tx) => {
-      await tx.postBookmark.upsert({
-        where: { userId_postId: { userId, postId } },
-        create: { userId, postId },
-        update: {},
+      await tx.postBookmark.create({
+        data: { userId, postId },
       });
       await tx.post.update({
         where: { id: postId },
