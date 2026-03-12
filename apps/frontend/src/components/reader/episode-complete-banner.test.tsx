@@ -14,6 +14,15 @@ vi.mock('@/components/ui/button', () => ({
   ),
 }));
 
+// Mock lucide-react icons
+vi.mock('lucide-react', () => ({
+  Droplets: (props: any) => <svg data-testid="icon-droplets" {...props} />,
+  Heart: (props: any) => <svg data-testid="icon-heart" {...props} />,
+  Zap: (props: any) => <svg data-testid="icon-zap" {...props} />,
+  Flame: (props: any) => <svg data-testid="icon-flame" {...props} />,
+  Brain: (props: any) => <svg data-testid="icon-brain" {...props} />,
+}));
+
 describe('EpisodeCompleteBanner', () => {
   it('should render the completion message', () => {
     render(<EpisodeCompleteBanner workId="w-1" />);
@@ -49,23 +58,23 @@ describe('EpisodeCompleteBanner', () => {
     expect(afterwordLink?.getAttribute('href')).toBe('/works/w-1/afterword');
   });
 
-  it('should render 5 reaction emoji buttons', () => {
+  it('should render 5 reaction icon buttons', () => {
     render(<EpisodeCompleteBanner workId="w-1" />);
 
-    expect(screen.getByText('😢')).toBeInTheDocument();
-    expect(screen.getByText('😊')).toBeInTheDocument();
-    expect(screen.getByText('😲')).toBeInTheDocument();
-    expect(screen.getByText('🔥')).toBeInTheDocument();
-    expect(screen.getByText('🤔')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-droplets')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-heart')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-zap')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-flame')).toBeInTheDocument();
+    expect(screen.getByTestId('icon-brain')).toBeInTheDocument();
   });
 
-  it('should call onReaction when emoji button is clicked', () => {
+  it('should call onReaction with value when reaction button is clicked', () => {
     const onReaction = vi.fn();
     render(<EpisodeCompleteBanner workId="w-1" onReaction={onReaction} />);
 
-    fireEvent.click(screen.getByText('😢'));
+    fireEvent.click(screen.getByText('泣いた'));
 
-    expect(onReaction).toHaveBeenCalledWith('😢');
+    expect(onReaction).toHaveBeenCalledWith('moved');
   });
 
   it('should show reaction labels', () => {
