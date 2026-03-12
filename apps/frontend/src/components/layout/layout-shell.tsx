@@ -12,6 +12,11 @@ function isWritingPage(pathname: string): boolean {
     /^\/works\/[^/]+\/episodes\/new/.test(pathname);
 }
 
+/** Paths with their own standalone layout (e.g. landing pages) */
+function isStandalonePage(pathname: string): boolean {
+  return pathname.startsWith('/lp');
+}
+
 /** Paths where sidebar is hidden (reader, compose-only views) */
 function isReaderPage(pathname: string): boolean {
   return pathname.startsWith('/read/');
@@ -20,9 +25,10 @@ function isReaderPage(pathname: string): boolean {
 export function LayoutShell({ children }: { children: React.ReactNode }) {
   const pathname = usePathname();
   const hideChrome = isWritingPage(pathname);
+  const standalone = isStandalonePage(pathname);
 
-  if (hideChrome) {
-    return <main className="h-screen">{children}</main>;
+  if (hideChrome || standalone) {
+    return <main className={standalone ? '' : 'h-screen'}>{children}</main>;
   }
 
   const showSidebar = !isReaderPage(pathname);
