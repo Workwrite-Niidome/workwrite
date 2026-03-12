@@ -1,6 +1,7 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
 import { randomBytes } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CreditService } from '../billing/credit.service';
 
 interface PaginationParams {
   page: number;
@@ -12,7 +13,10 @@ interface PaginationParams {
 
 @Injectable()
 export class AdminService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private creditService: CreditService,
+  ) {}
 
   async getStats() {
     const today = new Date();
@@ -205,5 +209,96 @@ export class AdminService {
 
   async deleteInviteCode(id: string) {
     return this.prisma.inviteCode.delete({ where: { id } });
+  }
+
+  // ─── User Invite Code & Credit Grant ────────────────────
+
+  /** Grant invite codes to a specific user (admin-created, user-owned) */
+  async grantInviteCodesToUser(
+    adminId: string,
+    userId: string,
+    count: number = 5,
+    label?: string,
+    maxUses?: number,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (count < 1 || count > 50) throw new BadRequestException('count must be 1-50');
+
+    const codes = [];
+    for (let i = 0; i < count; i++) {
+      const code = await this.prisma.inviteCode.create({
+        data: {
+          code: this.generateCode(),
+          label: label || `${user.name}用（管理者付与）`,
+          maxUses: maxUses || 1,
+          createdBy: userId, // ユーザー名義で作成
+        },
+      });
+      codes.push(code);
+    }
+
+    return { granted: codes.length, userId, codes };
+  }
+
+  /** Grant free credits to a user (ADMIN_GRANT type) */
+  async grantCreditsToUser(
+    adminId: string,
+    userId: string,
+    amount: number,
+    description?: string,
+  ) {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { id: true, name: true },
+    });
+    if (!user) throw new NotFoundException('User not found');
+    if (amount < 1 || amount > 10000) throw new BadRequestException('amount must be 1-10000');
+
+    // Ensure CreditBalance exists
+    await this.creditService.ensureCreditBalance(userId);
+
+    const bal = await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe(
+        'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE',
+        userId,
+      );
+
+      const current = await tx.creditBalance.findUnique({ where: { userId } });
+      if (!current) throw new NotFoundException('CreditBalance not found');
+
+      const newBalance = current.balance + amount;
+      await tx.creditBalance.update({
+        where: { userId },
+        data: {
+          balance: { increment: amount },
+          purchasedBalance: { increment: amount }, // 管理者付与は購入分扱い（無期限）
+        },
+      });
+
+      await tx.creditTransaction.create({
+        data: {
+          userId,
+          amount,
+          type: 'ADMIN_GRANT',
+          status: 'confirmed',
+          balance: newBalance,
+          description: description || `管理者付与 (by ${adminId}): ${amount}cr`,
+        },
+      });
+
+      return { balance: newBalance, purchasedBalance: current.purchasedBalance + amount };
+    });
+
+    return {
+      granted: amount,
+      userId,
+      userName: user.name,
+      newBalance: bal.balance,
+      newPurchasedBalance: bal.purchasedBalance,
+    };
   }
 }

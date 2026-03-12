@@ -5,6 +5,7 @@ import {
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
+import { CreditService } from '../billing/credit.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { BanUserDto } from './dto/ban-user.dto';
 import { UpdateWorkStatusDto } from './dto/update-work-status.dto';
@@ -22,6 +23,7 @@ export class AdminController {
   constructor(
     private adminService: AdminService,
     private aiTier: AiTierService,
+    private creditService: CreditService,
   ) {}
 
   @Get('stats')
@@ -157,5 +159,33 @@ export class AdminController {
   @ApiOperation({ summary: 'Get user AI tier info' })
   async getUserTier(@Param('id') userId: string) {
     return this.aiTier.getUserTier(userId);
+  }
+
+  // ─── User Invite Code & Credit Grant ────────────────────
+
+  @Post('users/:id/invite-codes')
+  @ApiOperation({ summary: 'Grant invite codes to a specific user (for testing)' })
+  async grantUserInviteCodes(
+    @CurrentUser('id') adminId: string,
+    @Param('id') userId: string,
+    @Body() body: { count?: number; label?: string; maxUses?: number },
+  ) {
+    return this.adminService.grantInviteCodesToUser(
+      adminId,
+      userId,
+      body.count || 5,
+      body.label,
+      body.maxUses,
+    );
+  }
+
+  @Post('users/:id/credits')
+  @ApiOperation({ summary: 'Grant free credits to a specific user (for testing)' })
+  async grantCredits(
+    @CurrentUser('id') adminId: string,
+    @Param('id') userId: string,
+    @Body() body: { amount: number; description?: string },
+  ) {
+    return this.adminService.grantCreditsToUser(adminId, userId, body.amount, body.description);
   }
 }
