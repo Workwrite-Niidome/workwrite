@@ -93,7 +93,8 @@ export class HighlightsService {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    const model = await this.aiSettings.getModel();
+    // Use Haiku for highlight explanations (cost-efficient, sufficient quality)
+    const model = 'claude-haiku-4-5-20251001';
 
     // Extract highlighted text and surrounding context
     const episodeContent = highlight.episode.content;

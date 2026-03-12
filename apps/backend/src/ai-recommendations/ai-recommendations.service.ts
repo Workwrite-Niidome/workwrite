@@ -3,10 +3,14 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 
 const MAX_WORK_TEXT_LENGTH = 15000;
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+// Cache TTL: 1 hour
+const CACHE_TTL_MS = 60 * 60 * 1000;
 
 @Injectable()
 export class AiRecommendationsService {
   private readonly logger = new Logger(AiRecommendationsService.name);
+  private cache = new Map<string, { data: unknown; expiresAt: number }>();
 
   constructor(
     private prisma: PrismaService,
@@ -14,6 +18,11 @@ export class AiRecommendationsService {
   ) {}
 
   async getPersonalRecommendations(userId: string) {
+    // Check cache
+    const cacheKey = `personal:${userId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+
     // Get user's read works with emotion tags
     const readWorks = await this.prisma.readingProgress.findMany({
       where: { userId, completed: true },
@@ -58,10 +67,16 @@ ${candidateList}
 JSON形式で回答: { "recommendations": [{ "workId": "...", "reason": "推薦理由(50字以内)" }] }`;
 
     const result = await this.callClaude(prompt, 'recommendations', userId);
-    return this.parseJsonResponse(result);
+    const parsed = this.parseJsonResponse(result);
+    this.cache.set(cacheKey, { data: parsed, expiresAt: Date.now() + CACHE_TTL_MS });
+    return parsed;
   }
 
   async getBecauseYouRead(workId: string) {
+    // Check cache
+    const cacheKey = `because:${workId}`;
+    const cached = this.cache.get(cacheKey);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
     const sourceEmbedding = await this.prisma.workEmbedding.findUnique({
       where: { workId },
       include: { work: { select: { title: true } } },
@@ -96,7 +111,9 @@ ${candidateList}
 JSON形式で回答: { "recommendations": [{ "workId": "...", "reason": "推薦理由(50字以内)" }] }`;
 
     const result = await this.callClaude(prompt, 'because_you_read');
-    return this.parseJsonResponse(result);
+    const parsed = this.parseJsonResponse(result);
+    this.cache.set(cacheKey, { data: parsed, expiresAt: Date.now() + CACHE_TTL_MS });
+    return parsed;
   }
 
   async generateEmbedding(workId: string) {
@@ -161,7 +178,8 @@ ${workText}`;
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    const model = await this.aiSettings.getModel();
+    // Use Haiku for recommendations (cost-efficient, structured output)
+    const model = HAIKU_MODEL;
     const startTime = Date.now();
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -173,7 +191,7 @@ ${workText}`;
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4000,
+        max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });

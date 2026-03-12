@@ -15,7 +15,7 @@ import { InsightCard } from '@/components/ai/insight-card';
 import { RecommendationCard } from '@/components/ai/recommendation-card';
 import { api, type Work, type EmotionTag, type AiInsightData, type AiRecommendation } from '@/lib/api';
 
-type Step = 'afterglow' | 'emotions' | 'stateChange' | 'insights' | 'personalInsights' | 'nextBook' | 'review';
+type Step = 'afterglow' | 'emotions' | 'stateChange' | 'insights' | 'nextBook' | 'review';
 
 const STATE_AXES = [
   { axis: 'confidence', label: '自信' },
@@ -49,8 +49,6 @@ export default function AfterwordPage() {
   const [loading, setLoading] = useState(true);
   const [insights, setInsights] = useState<AiInsightData | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
-  const [personalInsights, setPersonalInsights] = useState<{ resonance: string; personalMeaning: string; growthPoints: string[] } | null>(null);
-  const [personalInsightsLoading, setPersonalInsightsLoading] = useState(false);
   const [tagIntensities, setTagIntensities] = useState<Record<string, number>>({});
 
   useEffect(() => {
@@ -101,21 +99,10 @@ export default function AfterwordPage() {
   }
 
   async function handleInsightsNext() {
-    // Load personal insights
-    setPersonalInsightsLoading(true);
-    api.getPersonalAiInsights(workId)
-      .then((res) => setPersonalInsights(res.data))
-      .catch(() => {})
-      .finally(() => setPersonalInsightsLoading(false));
-    setStep('personalInsights');
-  }
-
-  async function handlePersonalInsightsNext() {
-    // Try AI recommendations first, fall back to getNextForMe
+    // Load AI recommendations, fall back to getNextForMe
     api.getAiRecommendationsBecauseYouRead(workId)
       .then((res) => setAiRecommendations(res.data))
       .catch(() => {
-        // Fallback to standard recommendations
         api.getNextForMe(workId)
           .then((res) => setNextBooks(res.data))
           .catch(() => {});
@@ -352,63 +339,6 @@ export default function AfterwordPage() {
           </div>
         )}
 
-        {/* Step: Personal AI Insights */}
-        {step === 'personalInsights' && (
-          <div className="space-y-6 animate-in fade-in duration-500">
-            <div className="text-center">
-              <Sparkles className="h-8 w-8 mx-auto text-primary/60 mb-2" />
-              <h2 className="text-xl font-bold mb-2">あなたへのインサイト</h2>
-              <p className="text-sm text-muted-foreground">この作品があなたにとって持つ意味</p>
-            </div>
-            {personalInsightsLoading ? (
-              <div className="space-y-3">
-                <Skeleton className="h-16 w-full" />
-                <Skeleton className="h-16 w-full" />
-              </div>
-            ) : personalInsights ? (
-              <div className="space-y-4">
-                {personalInsights.resonance && (
-                  <Card>
-                    <CardContent className="p-4">
-                      <h3 className="text-sm font-medium mb-2">共鳴ポイント</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{personalInsights.resonance}</p>
-                    </CardContent>
-                  </Card>
-                )}
-                {personalInsights.personalMeaning && (
-                  <Card>
-                    <CardContent className="p-4">
-                      <h3 className="text-sm font-medium mb-2">個人的意味</h3>
-                      <p className="text-sm text-muted-foreground leading-relaxed">{personalInsights.personalMeaning}</p>
-                    </CardContent>
-                  </Card>
-                )}
-                {personalInsights.growthPoints?.length > 0 && (
-                  <Card>
-                    <CardContent className="p-4">
-                      <h3 className="text-sm font-medium mb-2">成長のヒント</h3>
-                      <ul className="space-y-1 list-disc list-inside text-sm text-muted-foreground">
-                        {personalInsights.growthPoints.map((p, i) => (
-                          <li key={i}>{p}</li>
-                        ))}
-                      </ul>
-                    </CardContent>
-                  </Card>
-                )}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">
-                パーソナルインサイトを取得できませんでした
-              </p>
-            )}
-            <div className="flex justify-center pt-4">
-              <Button onClick={handlePersonalInsightsNext} size="lg" className="min-h-[48px]">
-                次へ <ChevronRight className="h-4 w-4 ml-1" />
-              </Button>
-            </div>
-          </div>
-        )}
-
         {/* Step: Next Book */}
         {step === 'nextBook' && (
           <div className="space-y-6 animate-in fade-in duration-500">
@@ -509,7 +439,7 @@ export default function AfterwordPage() {
 
         {/* Progress indicator */}
         <div className="flex justify-center gap-2 mt-12">
-          {(['afterglow', 'emotions', 'stateChange', 'insights', 'personalInsights', 'nextBook', 'review'] as Step[]).map((s) => (
+          {(['afterglow', 'emotions', 'stateChange', 'insights', 'nextBook', 'review'] as Step[]).map((s) => (
             <div
               key={s}
               className={cn(

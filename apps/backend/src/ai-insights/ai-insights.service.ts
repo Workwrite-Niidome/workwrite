@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 
 const MAX_WORK_TEXT_LENGTH = 15000;
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 
 @Injectable()
 export class AiInsightsService {
@@ -50,44 +51,13 @@ ${workText}`;
     return content;
   }
 
-  async getPersonalInsights(workId: string, userId: string) {
-    // Check cache first
-    const cached = await this.prisma.aiInsight.findUnique({
-      where: { workId_userId_type: { workId, userId, type: 'personal' } },
-    });
-    if (cached) return cached.content;
-
-    // Gather user's emotion tags and state changes for this work
-    const [emotionTags, stateChanges] = await Promise.all([
-      this.prisma.userEmotionTag.findMany({
-        where: { userId, workId },
-        include: { tag: true },
-      }),
-      this.prisma.stateChange.findMany({
-        where: { userId, workId },
-      }),
-    ]);
-
-    const emotions = emotionTags.map((et) => `${et.tag.name}(強度:${et.intensity})`).join(', ') || 'なし';
-    const changes = stateChanges.map((sc) => `${sc.axis}: ${sc.before}→${sc.after}`).join(', ') || 'なし';
-
-    const prompt = `読者は以下の感情を報告しました: ${emotions}
-読む前後の変化: ${changes}
-この読者にとってこの作品がどのような意味を持ったか、個人的な共鳴ポイントを分析してください。300-500文字のJSONで: { "resonance": "...", "personalMeaning": "...", "growthPoints": ["..."] }`;
-
-    const result = await this.callClaude(prompt, 'personal_insights', userId);
-    const content = this.parseJsonResponse(result);
-
-    await this.prisma.aiInsight.create({
-      data: {
-        workId,
-        userId,
-        type: 'personal',
-        content: content as any,
-      },
-    });
-
-    return content;
+  /**
+   * @deprecated Personal insights have been removed to reduce AI costs.
+   * Use getGenericInsights() instead (cached per work, Haiku model).
+   */
+  async getPersonalInsights(workId: string, _userId: string) {
+    // Return generic insights instead of generating per-user insights
+    return this.getGenericInsights(workId);
   }
 
   private async getWorkText(workId: string): Promise<string> {
@@ -126,7 +96,8 @@ ${workText}`;
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    const model = await this.aiSettings.getModel();
+    // Use Haiku for insights (cost-efficient, cached per work)
+    const model = HAIKU_MODEL;
     const startTime = Date.now();
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -138,7 +109,7 @@ ${workText}`;
       },
       body: JSON.stringify({
         model,
-        max_tokens: 4000,
+        max_tokens: 2000,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
