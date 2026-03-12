@@ -16,7 +16,7 @@ function LpHeader() {
         <nav className="hidden md:flex items-center gap-8 mr-8">
           <a href="#features" className="text-xs text-muted-foreground hover:text-foreground transition-colors">機能</a>
           <a href="#for-writers" className="text-xs text-muted-foreground hover:text-foreground transition-colors">作家の方へ</a>
-          <a href="#ai-stance" className="text-xs text-muted-foreground hover:text-foreground transition-colors">AIへの考え方</a>
+          <a href="#ai-stance" className="text-xs text-muted-foreground hover:text-foreground transition-colors">AIとの向き合い方</a>
           <a href="#faq" className="text-xs text-muted-foreground hover:text-foreground transition-colors">FAQ</a>
         </nav>
         <div className="flex items-center gap-2">
@@ -257,14 +257,16 @@ function AiStanceSection() {
       <div className="mx-auto max-w-3xl px-4 md:px-6 py-20 sm:py-28">
         <p className="text-xs tracking-[0.2em] uppercase text-muted-foreground text-center mb-3">Our Stance on AI</p>
         <h2 className="text-xl sm:text-2xl font-serif text-center mb-12">
-          AIは、あなたの「ペン」です
+          物語を作るのは「あなた」。
+          <br />
+          AIはツールです。
         </h2>
 
         <div className="space-y-6 text-sm leading-relaxed text-muted-foreground">
           <p>
-            AIはあくまで「道具」です。
+            AIはあくまで道具にすぎません。
             <br />
-            ペンがあなたの代わりに小説を書かないように、AIもあなたの意図なしには何も生み出しません。
+            あなたの意図なしには、AIは何も生み出しません。
           </p>
           <p>
             どれだけAIを使うかは、<span className="text-foreground font-medium">あなた自身が決めること</span>です。
