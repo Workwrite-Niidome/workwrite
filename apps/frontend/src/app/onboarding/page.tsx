@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '@/components/ui/card';
@@ -71,8 +71,9 @@ export default function OnboardingPage() {
   const [answers, setAnswers] = useState<Record<string, string>>({});
   const [submitting, setSubmitting] = useState(false);
   const [showProfile, setShowProfile] = useState(false);
-  const [aiProfile, setAiProfile] = useState<{ personality: string; recommendedGenres: string[]; recommendedThemes: string[] } | null>(null);
+  const [aiProfile, setAiProfile] = useState<{ personalityType?: string; personality?: string; description?: string; recommendedGenres?: string[]; recommendedThemes?: string[]; readingStyle?: string; strengths?: string[] } | null>(null);
   const [profileLoading, setProfileLoading] = useState(false);
+  const [submitError, setSubmitError] = useState('');
   const router = useRouter();
 
   const currentQuestion = QUESTIONS[step];
@@ -94,8 +95,11 @@ export default function OnboardingPage() {
       attempts++;
       try {
         const res = await api.getAiProfile();
-        if (res.data) {
-          setAiProfile(res.data);
+        // Handle TransformInterceptor wrapping: { data: { aiProfile: {...} } }
+        const unwrapped = (res as any)?.data ?? res;
+        const profile = unwrapped?.aiProfile ?? unwrapped;
+        if (profile && typeof profile === 'object' && Object.keys(profile).length > 0) {
+          setAiProfile(profile);
           setProfileLoading(false);
           clearInterval(interval);
           return;
@@ -113,6 +117,7 @@ export default function OnboardingPage() {
 
   async function handleSubmit() {
     setSubmitting(true);
+    setSubmitError('');
     try {
       const formattedAnswers = QUESTIONS.map((q) => ({
         questionId: q.id,
@@ -122,8 +127,14 @@ export default function OnboardingPage() {
       await api.submitOnboarding(formattedAnswers);
       setShowProfile(true);
       pollAiProfile();
-    } catch {
-      router.push('/');
+    } catch (err: any) {
+      // 409 Conflict = already completed → show profile instead
+      if (err?.status === 409) {
+        setShowProfile(true);
+        pollAiProfile();
+        return;
+      }
+      setSubmitError(err?.message || '送信に失敗しました。もう一度お試しください。');
     } finally {
       setSubmitting(false);
     }
@@ -151,13 +162,27 @@ export default function OnboardingPage() {
               </div>
             ) : aiProfile ? (
               <div className="space-y-6">
-                <div>
-                  <h3 className="text-sm font-medium mb-2">パーソナリティ</h3>
-                  <p className="text-sm text-muted-foreground leading-relaxed">
-                    {aiProfile.personality}
-                  </p>
-                </div>
-                {aiProfile.recommendedGenres.length > 0 && (
+                {(aiProfile.personalityType || aiProfile.description || aiProfile.personality) && (
+                  <div>
+                    {aiProfile.personalityType && (
+                      <h3 className="text-base font-medium mb-2">{aiProfile.personalityType}</h3>
+                    )}
+                    <p className="text-sm text-muted-foreground leading-relaxed">
+                      {aiProfile.description || aiProfile.personality || ''}
+                    </p>
+                  </div>
+                )}
+                {aiProfile.strengths && aiProfile.strengths.length > 0 && (
+                  <div>
+                    <h3 className="text-sm font-medium mb-2">あなたの強み</h3>
+                    <div className="flex flex-wrap gap-1.5">
+                      {aiProfile.strengths.map((s) => (
+                        <Badge key={s} variant="outline">{s}</Badge>
+                      ))}
+                    </div>
+                  </div>
+                )}
+                {aiProfile.recommendedGenres && aiProfile.recommendedGenres.length > 0 && (
                   <div>
                     <h3 className="text-sm font-medium mb-2">おすすめジャンル</h3>
                     <div className="flex flex-wrap gap-1.5">
@@ -167,14 +192,10 @@ export default function OnboardingPage() {
                     </div>
                   </div>
                 )}
-                {aiProfile.recommendedThemes.length > 0 && (
+                {aiProfile.readingStyle && (
                   <div>
-                    <h3 className="text-sm font-medium mb-2">おすすめテーマ</h3>
-                    <div className="flex flex-wrap gap-1.5">
-                      {aiProfile.recommendedThemes.map((theme) => (
-                        <Badge key={theme} variant="outline">{theme}</Badge>
-                      ))}
-                    </div>
+                    <h3 className="text-sm font-medium mb-2">読書スタイル</h3>
+                    <p className="text-sm text-muted-foreground">{aiProfile.readingStyle}</p>
                   </div>
                 )}
                 <div className="flex justify-center pt-4">
@@ -234,6 +255,11 @@ export default function OnboardingPage() {
             ))}
           </div>
 
+          {submitError && (
+            <div className="mt-4 p-3 text-sm rounded-md bg-destructive/10 text-destructive">
+              {submitError}
+            </div>
+          )}
           <div className="flex justify-between mt-6">
             <Button
               variant="ghost"
