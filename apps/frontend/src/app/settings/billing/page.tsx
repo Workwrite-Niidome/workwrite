@@ -15,7 +15,7 @@ const PLANS = [
     id: 'free',
     name: 'Free',
     price: '\u00A50',
-    credits: '30cr / \u6708',
+    credits: '20cr / \u6708',
     icon: Sparkles,
   },
   {

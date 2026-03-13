@@ -330,7 +330,7 @@ Stripe Webhook署名検証にはリクエストのraw bodyが必要。
 
 ### 自動処理
 
-- 毎月1日 00:00: Freeユーザーへの30cr自動付与（CreditGrantScheduler）
+- 毎月1日 00:00: Freeユーザーへの20cr自動付与（CreditGrantScheduler）
 - 有料ユーザー: invoice.paid Webhookで月次クレジット付与
 
 ### 手動運用（必要時）

@@ -194,7 +194,7 @@ describe('BillingService', () => {
       );
     });
 
-    it('grants 30cr for free plan', async () => {
+    it('grants 20cr for free plan', async () => {
       prisma.creditTransaction.findFirst.mockResolvedValue(null);
       prisma.user.findFirst.mockResolvedValue({ id: 'user-1' });
       prisma.subscription.findUnique.mockResolvedValue({ status: 'active', plan: 'free' });
@@ -204,7 +204,7 @@ describe('BillingService', () => {
 
       expect(creditService.grantMonthlyCredits).toHaveBeenCalledWith(
         'user-1',
-        30,
+        20,
         'free',
         'inv_test123',
       );
@@ -336,7 +336,7 @@ describe('BillingService', () => {
 
     it('uses 880 price for pro plan credit purchase', async () => {
       const session = makeSession({
-        metadata: { userId: 'user-1', type: 'credit_purchase' },
+        metadata: { userId: 'user-1', type: 'credit_purchase', priceJpy: '880' },
         payment_intent: 'pi_pro456',
       });
       prisma.subscription.findUnique.mockResolvedValue({ plan: 'pro' });
@@ -491,7 +491,7 @@ describe('BillingService', () => {
           data: { status: 'canceled' },
         }),
       );
-      expect(creditService.grantMonthlyCredits).toHaveBeenCalledWith('user-1', 30, 'free');
+      expect(creditService.grantMonthlyCredits).toHaveBeenCalledWith('user-1', 20, 'free');
     });
 
     it('does nothing when userId is missing from metadata', async () => {

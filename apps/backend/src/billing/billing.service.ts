@@ -4,7 +4,7 @@ import { CreditService } from './credit.service';
 import Stripe from 'stripe';
 
 const PLAN_MONTHLY_CREDITS: Record<string, number> = {
-  free: 30,
+  free: 20,
   standard: 200,
   pro: 600,
 };

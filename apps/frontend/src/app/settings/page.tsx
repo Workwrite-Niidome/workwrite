@@ -134,7 +134,7 @@ export default function SettingsPage() {
               <p className="text-xs text-muted-foreground mt-0.5">
                 {billing
                   ? `残高: ${billing.credits.total}cr（月間: ${billing.credits.monthly}cr / 購入: ${billing.credits.purchased}cr）`
-                  : '毎月30クレジット・基本機能が利用可能'
+                  : '毎月20クレジット・基本機能が利用可能'
                 }
               </p>
             </div>

@@ -37,10 +37,10 @@ function makeBalance(overrides: Partial<{
 }> = {}) {
   return {
     userId: 'user-1',
-    balance: 30,
-    monthlyBalance: 30,
+    balance: 20,
+    monthlyBalance: 20,
     purchasedBalance: 0,
-    monthlyGranted: 30,
+    monthlyGranted: 20,
     lastGrantedAt: new Date(),
     ...overrides,
   };
@@ -83,7 +83,7 @@ describe('CreditService', () => {
   // ─── ensureCreditBalance ────────────────────────────────────────────────────
 
   describe('ensureCreditBalance', () => {
-    it('creates balance with defaults (30cr) when user has no record', async () => {
+    it('creates balance with defaults (20cr) when user has no record', async () => {
       const expected = makeBalance();
       prisma.creditBalance.upsert.mockResolvedValue(expected);
 
@@ -94,10 +94,10 @@ describe('CreditService', () => {
         update: {},
         create: expect.objectContaining({
           userId: 'user-1',
-          balance: 30,
-          monthlyBalance: 30,
+          balance: 20,
+          monthlyBalance: 20,
           purchasedBalance: 0,
-          monthlyGranted: 30,
+          monthlyGranted: 20,
         }),
       });
       expect(result).toEqual(expected);

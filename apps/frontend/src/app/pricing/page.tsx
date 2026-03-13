@@ -13,8 +13,8 @@ const PLANS = [
     name: 'Free',
     price: '¥0',
     period: '',
-    credits: '30cr / 月',
-    creditsNote: '通常アシスト 30回相当',
+    credits: '20cr / 月',
+    creditsNote: '通常アシスト 20回相当',
     icon: Sparkles,
     highlight: false,
     cta: '無料で始める',
@@ -377,7 +377,7 @@ export default function PricingPage() {
             まずは無料で始めてみませんか
           </h2>
           <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
-            Free プランでAI執筆アシスト月30回、AI読書コンパニオン週5回が利用できます。
+            Free プランでAI執筆アシスト月20回、AI読書コンパニオン週5回が利用できます。
             <br />
             もっと使いたくなったら、いつでもアップグレード。
           </p>

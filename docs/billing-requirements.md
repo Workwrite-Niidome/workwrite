@@ -30,7 +30,7 @@ Workwriteは小説執筆プラットフォームであり、現在AIアシスト
 
 | 項目 | 現行 | 新システム |
 |---|---|---|
-| 無料プラン制限 | 週5回 | 月30cr（Sonnet 30回相当） |
+| 無料プラン制限 | 週5回 | 月20cr（Sonnet 20回相当） |
 | 有料プラン制限 | 無制限 | 月間クレジット付与（追加購入可） |
 | Opus利用 | premiumプラン限定 | 全有料プランで利用可（5cr/回） |
 | コスト管理 | なし | クレジットで自動制御 |
@@ -44,7 +44,7 @@ Workwriteは小説執筆プラットフォームであり、現在AIアシスト
 
 | プラン | 月額料金 | 月間付与クレジット | 追加購入 | 備考 |
 |---|---|---|---|---|
-| Free | ¥0 | 30cr/月 | 不可 | Sonnet 30回 or Opus 6回相当 |
+| Free | ¥0 | 20cr/月 | 不可 | Sonnet 20回 or Opus 4回相当 |
 | Standard | ¥2,980 | 200cr/月 | 100cr = ¥980 | Sonnet 200回 or Opus 40回相当 |
 | Pro | ¥7,980 | 600cr/月 | 100cr = ¥880 | Sonnet 600回 or Opus 120回相当 |
 
@@ -222,7 +222,7 @@ model User {
 5. `CreditTransaction`に`MONTHLY_GRANT`レコードを作成
 6. `CreditBalance.monthlyGranted`と`lastGrantedAt`を更新
 
-**Freeプランの付与**: 毎月1日 00:00 JSTにバッチ処理で30crを付与。Stripeサブスクリプションは存在しないため、Cronジョブで実行する。
+**Freeプランの付与**: 毎月1日 00:00 JSTにバッチ処理で20crを付与。Stripeサブスクリプションは存在しないため、Cronジョブで実行する。
 
 ### 4.2 クレジット失効ポリシー
 

@@ -25,10 +25,10 @@ export class CreditService {
       update: {},
       create: {
         userId,
-        balance: 30,
-        monthlyBalance: 30,
+        balance: 20,
+        monthlyBalance: 20,
         purchasedBalance: 0,
-        monthlyGranted: 30,
+        monthlyGranted: 20,
         lastGrantedAt: new Date(),
       },
     });

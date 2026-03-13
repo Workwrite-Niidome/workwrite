@@ -111,7 +111,7 @@ async function main() {
     });
 
     const plan = sub?.status === 'active' ? sub.plan : 'free';
-    const monthlyCredits = plan === 'pro' ? 600 : plan === 'standard' ? 200 : 30;
+    const monthlyCredits = plan === 'pro' ? 600 : plan === 'standard' ? 200 : 20;
 
     await prisma.creditBalance.create({
       data: {

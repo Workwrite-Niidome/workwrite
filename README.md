@@ -106,7 +106,7 @@ See [Stripe Setup Guide](docs/stripe-setup.md) for payment system configuration.
 
 | Plan | Monthly Credits | Price |
 |------|----------------|-------|
-| Free | 30cr | 無料 |
+| Free | 20cr | 無料 |
 | Standard | 200cr | 月額 2,980円 |
 | Pro | 600cr | 月額 7,980円 |
 
