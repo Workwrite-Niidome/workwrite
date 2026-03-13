@@ -191,6 +191,7 @@ JSON形式で回答: { "narrative": "成長の物語...", "keyMoments": ["転機
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model,

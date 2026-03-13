@@ -80,19 +80,20 @@ export class ScoringService {
       return this.generateMockScores();
     }
 
-    const prompt = `あなたは小説の品質を評価する専門家です。以下の小説を4つの軸で0-100点で採点し、改善提案を3つ出してください。
+    // prompt is now split: system prompt (cacheable) + user prompt (variable)
+    // See scoringSystemPrompt below in the API call
 
-タイトル: ${title}
+    // Use Haiku for scoring (cost-efficient, structured output)
+    const scoringSystemPrompt = `あなたは小説の品質を評価する専門家です。4つの軸（没入力・変容力・拡散力・世界構築力）で0-100点で採点し、改善提案を3つ出してください。
 
-本文（抜粋）:
-${text}
+emotionTagsは以下から3〜5個選んでください: courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe, nostalgia, suspense, mystery, hope, beauty, growth
 
 以下のJSON形式で回答してください:
 {
-  "immersion": <0-100 没入力>,
-  "transformation": <0-100 変容力>,
-  "virality": <0-100 拡散力>,
-  "worldBuilding": <0-100 世界構築力>,
+  "immersion": <0-100>,
+  "transformation": <0-100>,
+  "virality": <0-100>,
+  "worldBuilding": <0-100>,
   "analysis": {
     "immersion": "<分析コメント>",
     "transformation": "<分析コメント>",
@@ -101,22 +102,29 @@ ${text}
   },
   "improvementTips": ["<提案1>", "<提案2>", "<提案3>"],
   "emotionTags": ["<感情タグ3〜5個>"]
-}
+}`;
 
-emotionTagsは以下から3〜5個選んでください: courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe, nostalgia, suspense, mystery, hope, beauty, growth`;
+    const userPrompt = `タイトル: ${title}\n\n本文（抜粋）:\n${text}`;
 
-    // Use Haiku for scoring (cost-efficient, structured output)
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
         max_tokens: 2000,
-        messages: [{ role: 'user', content: prompt }],
+        system: [
+          {
+            type: 'text',
+            text: scoringSystemPrompt,
+            cache_control: { type: 'ephemeral' },
+          },
+        ],
+        messages: [{ role: 'user', content: userPrompt }],
       }),
     });
 

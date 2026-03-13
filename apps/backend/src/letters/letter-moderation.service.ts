@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-const MODERATION_PROMPT = `あなたはファンレターの内容審査AIです。
-以下のファンレターが送信可能か判定してください。
+const MODERATION_SYSTEM_PROMPT = `あなたはファンレターの内容審査AIです。
+ファンレターが送信可能か判定してください。
 
 【拒否基準】
 - 攻撃的・侮辱的な表現、誹謗中傷
@@ -15,17 +15,7 @@ const MODERATION_PROMPT = `あなたはファンレターの内容審査AIです
 - 作品への感想（ネタバレ含む）
 - 作者への応援・励まし
 - 建設的な意見・感想
-- 絵文字や感嘆表現
-
-レター内容:
-"""
-{content}
-"""
-
-JSON形式で回答してください（他の文字は含めないでください）:
-{"approved": true}
-または
-{"approved": false, "reason": "拒否理由"}`;
+- 絵文字や感嘆表現`;
 
 export interface ModerationResult {
   approved: boolean;
@@ -52,12 +42,20 @@ export class LetterModerationService {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': '2023-06-01',
+          'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify({
           model: 'claude-haiku-4-5-20251001',
           max_tokens: 100,
+          system: [
+            {
+              type: 'text',
+              text: MODERATION_SYSTEM_PROMPT,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
           messages: [
-            { role: 'user', content: MODERATION_PROMPT.replace('{content}', content) },
+            { role: 'user', content: `レター内容:\n"""\n${content}\n"""\n\nJSON形式で回答してください（他の文字は含めないでください）:\n{"approved": true}\nまたは\n{"approved": false, "reason": "拒否理由"}` },
           ],
         }),
       });

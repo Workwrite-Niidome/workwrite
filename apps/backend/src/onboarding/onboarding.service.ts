@@ -140,6 +140,7 @@ JSON形式で回答: { "personalityType": "タイプ名(4-8文字)", "descriptio
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model,

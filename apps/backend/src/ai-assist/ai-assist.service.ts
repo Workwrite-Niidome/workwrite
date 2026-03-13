@@ -140,11 +140,22 @@ export class AiAssistService {
     const requestedChars = variables.char_count ? parseInt(variables.char_count, 10) : 1000;
     const baseMaxTokens = Math.max(4000, Math.min(12000, requestedChars * 3));
 
+    // Separate structural context as a cacheable system prompt
+    const systemParts: { type: string; text: string; cache_control?: { type: string } }[] = [];
+    if (variables.structural_context) {
+      systemParts.push({
+        type: 'text',
+        text: variables.structural_context,
+        cache_control: { type: 'ephemeral' },
+      });
+    }
+
     // Build request body with optional extended thinking
     const requestBody: Record<string, unknown> = {
       model: modelConfig.model,
       max_tokens: modelConfig.thinking ? modelConfig.budgetTokens + 8000 : baseMaxTokens,
       stream: true,
+      ...(systemParts.length > 0 ? { system: systemParts } : {}),
       messages: [{ role: 'user', content: prompt }],
     };
 
@@ -176,6 +187,7 @@ export class AiAssistService {
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': ANTHROPIC_VERSION,
+          'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify(requestBody),
       });
@@ -303,6 +315,7 @@ JSONのみを出力してください。`;
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': ANTHROPIC_VERSION,
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model: HAIKU_MODEL,

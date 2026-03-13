@@ -77,12 +77,7 @@ ${prevEpisode.aiAnalysis.endState || '（なし）'}
       }
     }
 
-    const prompt = `あなたは小説分析の専門家です。以下のエピソードを分析し、構造データをJSON形式で抽出してください。
-${previousContext}
-【エピソードタイトル】${episode.title}
-
-【本文】
-${episode.content}
+    const analysisSystemPrompt = `あなたは小説分析の専門家です。エピソードを分析し、構造データをJSON形式で抽出してください。
 
 【指示】
 - テキストに書かれている事実のみを抽出してください。推測や補完はしないでください。
@@ -109,6 +104,12 @@ ${episode.content}
   "newWorldRules": [{ "category": "geography/magic/social/technology/culture", "name": "設定名", "description": "詳細" }]
 }`;
 
+    const userPrompt = `${previousContext}
+【エピソードタイトル】${episode.title}
+
+【本文】
+${episode.content}`;
+
     try {
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -116,11 +117,19 @@ ${episode.content}
           'Content-Type': 'application/json',
           'x-api-key': apiKey,
           'anthropic-version': ANTHROPIC_VERSION,
+          'anthropic-beta': 'prompt-caching-2024-07-31',
         },
         body: JSON.stringify({
           model: HAIKU_MODEL,
           max_tokens: 4000,
-          messages: [{ role: 'user', content: prompt }],
+          system: [
+            {
+              type: 'text',
+              text: analysisSystemPrompt,
+              cache_control: { type: 'ephemeral' },
+            },
+          ],
+          messages: [{ role: 'user', content: userPrompt }],
         }),
       });
 

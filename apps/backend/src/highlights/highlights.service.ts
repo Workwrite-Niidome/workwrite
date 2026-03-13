@@ -122,6 +122,7 @@ JSON形式で回答: { "explanation": "...", "literaryDevices": ["技法1", "技
         'Content-Type': 'application/json',
         'x-api-key': apiKey,
         'anthropic-version': '2023-06-01',
+        'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
         model,

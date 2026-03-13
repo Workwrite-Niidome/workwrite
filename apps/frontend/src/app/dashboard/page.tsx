@@ -76,7 +76,7 @@ export default function DashboardPage() {
 
   return (
     <div className="px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-6">
         <h1 className="text-2xl font-bold">作家ダッシュボード</h1>
         <div className="flex gap-2">
           <Link href="/works/import">
