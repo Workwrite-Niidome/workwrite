@@ -42,7 +42,11 @@ export default function SettingsPage() {
       .catch(() => {})
       .finally(() => setInviteLoading(false));
     api.getBillingStatus()
-      .then(setBilling)
+      .then((res) => {
+        // Handle both { plan, credits } and { data: { plan, credits } } shapes
+        const data = (res as any)?.data ?? res;
+        setBilling(data);
+      })
       .catch(() => {});
   }, [user]);
 
@@ -132,7 +136,7 @@ export default function SettingsPage() {
                 {billing ? `${(billing.plan || 'free').charAt(0).toUpperCase() + (billing.plan || 'free').slice(1)}プラン` : 'Freeプラン'}
               </p>
               <p className="text-xs text-muted-foreground mt-0.5">
-                {billing
+                {billing?.credits
                   ? `残高: ${billing.credits.total}cr（月間: ${billing.credits.monthly}cr / 購入: ${billing.credits.purchased}cr）`
                   : '毎月20クレジット・基本機能が利用可能'
                 }

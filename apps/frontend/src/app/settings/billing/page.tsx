@@ -59,7 +59,10 @@ export default function BillingPage() {
   useEffect(() => {
     if (!user) return;
     Promise.all([
-      api.getBillingStatus().then(setBilling).catch(() => {}),
+      api.getBillingStatus().then((res) => {
+        const data = (res as any)?.data ?? res;
+        setBilling(data);
+      }).catch(() => {}),
       api.getTransactions(1, 10).then((res) => {
         // Handle both { data, total } and raw response shapes
         const data = (res as any)?.data ?? res;
@@ -102,8 +105,8 @@ export default function BillingPage() {
     setCancelLoading(true);
     try {
       await api.cancelSubscription();
-      const updated = await api.getBillingStatus();
-      setBilling(updated);
+      const res = await api.getBillingStatus();
+      setBilling((res as any)?.data ?? res);
     } catch { /* ignore */ }
     setCancelLoading(false);
   }

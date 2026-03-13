@@ -5,8 +5,8 @@ import { Check, ArrowRight, Sparkles, Zap, Crown } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useAuth } from '@/lib/auth-context';
-import { api } from '@/lib/api';
-import { useState } from 'react';
+import { api, type BillingStatus } from '@/lib/api';
+import { useState, useEffect } from 'react';
 
 const PLANS = [
   {
@@ -144,6 +144,16 @@ function FaqItem({ question, answer }: { question: string; answer: string }) {
 export default function PricingPage() {
   const { isAuthenticated } = useAuth();
   const [checkoutLoading, setCheckoutLoading] = useState<string | null>(null);
+  const [billing, setBilling] = useState<BillingStatus | null>(null);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.getBillingStatus()
+      .then((res) => setBilling((res as any)?.data ?? res))
+      .catch(() => {});
+  }, [isAuthenticated]);
+
+  const currentPlan = billing?.plan || 'free';
 
   async function handleCheckout(plan: string) {
     if (!isAuthenticated || plan === 'Free') return;
@@ -245,10 +255,29 @@ export default function PricingPage() {
                   <p className="text-[11px] text-muted-foreground">{plan.creditsNote}</p>
                 </div>
 
+                {/* Current plan badge */}
+                {isAuthenticated && currentPlan === plan.name.toLowerCase() && (
+                  <div className="mb-3">
+                    <span className="inline-block text-[10px] font-medium bg-primary/10 text-primary px-2.5 py-1 rounded-full">
+                      現在のプラン
+                    </span>
+                  </div>
+                )}
+
                 <div className="mb-6">
-                  {isAuthenticated && plan.name !== 'Free' ? (
+                  {isAuthenticated && currentPlan === plan.name.toLowerCase() ? (
+                    <Link href="/settings/billing">
+                      <Button
+                        className="w-full"
+                        variant="outline"
+                      >
+                        プランを管理
+                        <ArrowRight className="h-3 w-3 ml-1" />
+                      </Button>
+                    </Link>
+                  ) : isAuthenticated && plan.name !== 'Free' ? (
                     <Button
-                      className={`w-full ${plan.highlight ? '' : ''}`}
+                      className={`w-full`}
                       variant={plan.highlight ? 'default' : 'outline'}
                       onClick={() => handleCheckout(plan.name)}
                       disabled={checkoutLoading === plan.name.toLowerCase()}
@@ -259,7 +288,7 @@ export default function PricingPage() {
                   ) : (
                     <Link href={isAuthenticated ? '/settings/billing' : plan.ctaHref}>
                       <Button
-                        className={`w-full ${plan.highlight ? '' : ''}`}
+                        className={`w-full`}
                         variant={plan.highlight ? 'default' : 'outline'}
                       >
                         {isAuthenticated ? 'プランを管理' : plan.cta}
@@ -369,6 +398,42 @@ export default function PricingPage() {
           </div>
         </div>
       </section>
+
+      {/* Credit Purchase (logged in, paid plan) */}
+      {isAuthenticated && currentPlan !== 'free' && (
+        <section className="border-t border-border">
+          <div className="mx-auto max-w-3xl px-4 md:px-6 py-16 text-center">
+            <p className="text-xs tracking-[0.2em] uppercase text-muted-foreground mb-3">Add Credits</p>
+            <h2 className="text-xl sm:text-2xl font-serif mb-4">
+              クレジット追加購入
+            </h2>
+            <p className="text-sm text-muted-foreground mb-6 max-w-md mx-auto">
+              月間クレジットが足りなくなったら、いつでも追加購入できます。
+              <br />
+              購入クレジットは無期限でご利用いただけます。
+            </p>
+            <div className="inline-flex items-center gap-6 border border-border rounded-xl px-8 py-6">
+              <div className="text-left">
+                <p className="text-lg font-serif font-medium">100cr</p>
+                <p className="text-xs text-muted-foreground">
+                  {currentPlan === 'pro' ? '¥880' : '¥980'}
+                </p>
+              </div>
+              <Button
+                onClick={async () => {
+                  try {
+                    const res = await api.purchaseCredits();
+                    const url = (res as any)?.url ?? (res as any)?.data?.url;
+                    if (url) window.location.href = url;
+                  } catch { /* ignore */ }
+                }}
+              >
+                購入する
+              </Button>
+            </div>
+          </div>
+        </section>
+      )}
 
       {/* CTA */}
       <section className="border-t border-border">
