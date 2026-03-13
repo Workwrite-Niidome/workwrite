@@ -11,52 +11,58 @@ export class EmotionsController {
 
   @Get('tags')
   @ApiOperation({ summary: 'Get all emotion tag masters' })
-  getAllTags() {
-    return this.emotionsService.getAllTags();
+  async getAllTags() {
+    const data = await this.emotionsService.getAllTags();
+    return { data };
   }
 
   @Post('tag')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add emotion tag to a work' })
-  addTag(
+  async addTag(
     @CurrentUser('id') userId: string,
     @Body() body: { workId: string; tagId: string; intensity?: number },
   ) {
-    return this.emotionsService.addEmotionTag(userId, body);
+    const data = await this.emotionsService.addEmotionTag(userId, body);
+    return { data };
   }
 
   @Post('tags/batch')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Add multiple emotion tags to a work' })
-  addMultipleTags(
+  async addMultipleTags(
     @CurrentUser('id') userId: string,
     @Body() body: { workId: string; tags: { tagId: string; intensity?: number }[] },
   ) {
-    return this.emotionsService.addMultipleEmotionTags(userId, body.workId, body.tags);
+    const data = await this.emotionsService.addMultipleEmotionTags(userId, body.workId, body.tags);
+    return { data };
   }
 
   @Get('work/:workId/aggregate')
   @ApiOperation({ summary: 'Get aggregated emotion tags for a work (for author dashboard)' })
-  getAggregated(@Param('workId') workId: string) {
-    return this.emotionsService.getAggregatedEmotionTags(workId);
+  async getAggregated(@Param('workId') workId: string) {
+    const data = await this.emotionsService.getAggregatedEmotionTags(workId);
+    return { data };
   }
 
   @Get('work/:workId')
   @ApiOperation({ summary: 'Get all emotion tags for a work' })
-  getForWork(@Param('workId') workId: string) {
-    return this.emotionsService.getEmotionTagsForWork(workId);
+  async getForWork(@Param('workId') workId: string) {
+    const data = await this.emotionsService.getEmotionTagsForWork(workId);
+    return { data };
   }
 
   @Get('work/:workId/mine')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get my emotion tags for a work' })
-  getMyTags(
+  async getMyTags(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
   ) {
-    return this.emotionsService.getUserEmotionTagsForWork(userId, workId);
+    const data = await this.emotionsService.getUserEmotionTagsForWork(userId, workId);
+    return { data };
   }
 }

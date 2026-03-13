@@ -14,34 +14,38 @@ export class ReadingController {
 
   @Post('progress')
   @ApiOperation({ summary: 'Batch update reading progress' })
-  updateProgress(
+  async updateProgress(
     @CurrentUser('id') userId: string,
     @Body() dto: BatchProgressDto,
   ) {
-    return this.readingService.batchUpdateProgress(userId, dto);
+    const data = await this.readingService.batchUpdateProgress(userId, dto);
+    return { data };
   }
 
   @Get('stats')
   @ApiOperation({ summary: 'Get reading statistics' })
-  getStats(@CurrentUser('id') userId: string) {
-    return this.readingService.getStats(userId);
+  async getStats(@CurrentUser('id') userId: string) {
+    const data = await this.readingService.getStats(userId);
+    return { data };
   }
 
   @Get('progress/:workId')
   @ApiOperation({ summary: 'Get reading progress for a work' })
-  getProgress(
+  async getProgress(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
   ) {
-    return this.readingService.getProgress(userId, workId);
+    const data = await this.readingService.getProgress(userId, workId);
+    return { data };
   }
 
   @Get('resume/:workId')
   @ApiOperation({ summary: 'Get resume position for a work' })
-  getResume(
+  async getResume(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
   ) {
-    return this.readingService.getResumePosition(userId, workId);
+    const data = await this.readingService.getResumePosition(userId, workId);
+    return { data };
   }
 }

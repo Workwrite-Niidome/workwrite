@@ -145,6 +145,7 @@ export default function ReaderPage() {
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const readStartRef = useRef(Date.now());
+  const accumulatedReadTimeRef = useRef(0);
 
   // Load settings
   useEffect(() => {
@@ -187,14 +188,17 @@ export default function ReaderPage() {
       const now = Date.now();
       const elapsed = now - readStartRef.current;
       readStartRef.current = now;
+      accumulatedReadTimeRef.current += elapsed;
 
       if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
       progressTimerRef.current = setTimeout(() => {
+        const readTime = accumulatedReadTimeRef.current;
+        accumulatedReadTimeRef.current = 0;
         api.updateReadingProgress(episode.workId, {
           episodeId,
           progressPct: pct,
           lastPosition: scrollPos,
-          readTimeMs: elapsed,
+          readTimeMs: readTime,
         }).catch(() => {});
       }, PROGRESS_DEBOUNCE);
     },
