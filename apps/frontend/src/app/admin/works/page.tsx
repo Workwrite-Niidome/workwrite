@@ -61,15 +61,15 @@ export default function AdminWorksPage() {
 
       <div className="border border-border rounded-lg overflow-hidden">
         <div className="overflow-x-auto">
-          <table className="w-full text-sm">
+          <table className="w-full text-sm table-auto">
             <thead>
               <tr className="border-b border-border bg-secondary/30">
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Title</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Author</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Status</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Score</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Episodes</th>
-                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Actions</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider min-w-[240px] w-[40%]">Title</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Author</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Episodes</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Actions</th>
               </tr>
             </thead>
             <tbody>
@@ -88,10 +88,10 @@ export default function AdminWorksPage() {
               ) : (
                 works.map((work) => (
                   <tr key={work.id} className="border-b border-border last:border-b-0 hover:bg-secondary/20 transition-colors">
-                    <td className="px-4 py-3">
+                    <td className="px-4 py-3 min-w-[240px]">
                       <Link href={`/works/${work.id}`} className="hover:underline font-medium flex items-center gap-1">
-                        {work.title}
-                        <ExternalLink className="h-3 w-3 text-muted-foreground" />
+                        <span className="line-clamp-2">{work.title}</span>
+                        <ExternalLink className="h-3 w-3 text-muted-foreground flex-shrink-0" />
                       </Link>
                       <p className="text-xs text-muted-foreground">{new Date(work.createdAt).toLocaleDateString('ja-JP')}</p>
                     </td>
