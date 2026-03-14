@@ -64,9 +64,18 @@ export class StripeService {
       select: { stripeCustomerId: true },
     });
 
-    if (user?.stripeCustomerId) return user.stripeCustomerId;
-
     const stripe = this.ensureStripe();
+
+    // Validate existing customer still exists in Stripe (handles test→live migration)
+    if (user?.stripeCustomerId) {
+      try {
+        await stripe.customers.retrieve(user.stripeCustomerId);
+        return user.stripeCustomerId;
+      } catch {
+        this.logger.warn(`Stripe customer ${user.stripeCustomerId} not found, creating new one for user ${userId}`);
+      }
+    }
+
     const customer = await stripe.customers.create({
       email,
       metadata: { userId },
