@@ -33,6 +33,17 @@ export class WorksController {
     return { data: works };
   }
 
+  @Get(':id/reader-stats')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get detailed reader statistics (author only)' })
+  getReaderStats(
+    @Param('id') id: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.worksService.getWorkReaderStats(id, userId);
+  }
+
   @Get(':id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get work details' })

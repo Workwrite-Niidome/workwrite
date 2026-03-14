@@ -10,6 +10,21 @@ export class ReadingService {
   async batchUpdateProgress(userId: string, dto: BatchProgressDto) {
     const results = [];
 
+    // Auto-transition: ensure bookshelf entry exists as READING
+    const existingBookshelf = await this.prisma.bookshelfEntry.findUnique({
+      where: { userId_workId: { userId, workId: dto.workId } },
+    });
+    if (!existingBookshelf) {
+      await this.prisma.bookshelfEntry.create({
+        data: { userId, workId: dto.workId, status: 'READING' },
+      });
+    } else if (existingBookshelf.status === 'WANT_TO_READ') {
+      await this.prisma.bookshelfEntry.update({
+        where: { userId_workId: { userId, workId: dto.workId } },
+        data: { status: 'READING' },
+      });
+    }
+
     for (const entry of dto.entries) {
       const completed = entry.progressPct >= COMPLETION_THRESHOLD;
 
@@ -119,20 +134,31 @@ export class ReadingService {
     }
     const topTags = Object.values(tagCounts).sort((a, b) => b.count - a.count).slice(0, 10);
 
-    // Monthly activity (last 12 months)
-    const monthlyActivity: { month: string; count: number }[] = [];
+    // Monthly activity (last 12 months) - single query instead of N+1
     const now = new Date();
+    const twelveMonthsAgo = new Date(now.getFullYear(), now.getMonth() - 11, 1);
+    const monthlyRaw = await this.prisma.readingProgress.findMany({
+      where: {
+        userId,
+        updatedAt: { gte: twelveMonthsAgo },
+      },
+      select: { updatedAt: true },
+    });
+
+    // Build month counts
+    const monthCounts: Record<string, number> = {};
+    for (const r of monthlyRaw) {
+      const d = r.updatedAt;
+      const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+      monthCounts[key] = (monthCounts[key] || 0) + 1;
+    }
+
+    // Build ordered array for last 12 months
+    const monthlyActivity: { month: string; count: number }[] = [];
     for (let i = 11; i >= 0; i--) {
       const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const nextMonth = new Date(now.getFullYear(), now.getMonth() - i + 1, 1);
       const monthStr = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
-      const count = await this.prisma.readingProgress.count({
-        where: {
-          userId,
-          updatedAt: { gte: d, lt: nextMonth },
-        },
-      });
-      monthlyActivity.push({ month: monthStr, count });
+      monthlyActivity.push({ month: monthStr, count: monthCounts[monthStr] || 0 });
     }
 
     return {

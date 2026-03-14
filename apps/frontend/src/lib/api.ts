@@ -269,6 +269,10 @@ class ApiClient {
     return this.request<{ data: { deleted: boolean } }>(`/works/${id}`, { method: 'DELETE' });
   }
 
+  async getWorkReaderStats(id: string) {
+    return this.request<{ data: WorkReaderStats }>(`/works/${id}/reader-stats`);
+  }
+
   // Creation Wizard
   async saveCreationPlan(workId: string, plan: {
     characters?: any[];
@@ -1228,8 +1232,29 @@ export interface Work {
   qualityScore?: { overall: number } | null;
   episodes?: { id: string; title: string; orderIndex: number; wordCount: number }[];
   _count?: { reviews: number; episodes: number };
+  readerCounts?: Record<string, number>;
   createdAt: string;
   updatedAt: string;
+}
+
+export interface WorkReaderStats {
+  totalViews: number;
+  totalReads: number;
+  totalUniqueReaders: number;
+  recentReaders7d: number;
+  completionRate: number;
+  avgReadTimePerReader: number;
+  statusBreakdown: Record<string, number>;
+  episodeAnalytics: {
+    episodeId: string;
+    title: string;
+    orderIndex: number;
+    readers: number;
+    avgProgress: number;
+    totalReadTimeMs: number;
+    dropOffPct: number;
+  }[];
+  dailyNewReaders: { date: string; count: number }[];
 }
 
 export interface Episode {

@@ -193,12 +193,14 @@ export default function ReaderPage() {
       if (progressTimerRef.current) clearTimeout(progressTimerRef.current);
       progressTimerRef.current = setTimeout(() => {
         const readTime = accumulatedReadTimeRef.current;
-        accumulatedReadTimeRef.current = 0;
         api.updateReadingProgress(episode.workId, {
           episodeId,
           progressPct: pct,
           lastPosition: scrollPos,
           readTimeMs: readTime,
+        }).then(() => {
+          // Only reset on success - failed time will be included in next send
+          accumulatedReadTimeRef.current -= readTime;
         }).catch(() => {});
       }, PROGRESS_DEBOUNCE);
     },

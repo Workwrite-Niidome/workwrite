@@ -96,6 +96,18 @@ export class WorksService {
       (work as any).episodes = work.episodes.filter((ep) => ep.publishedAt !== null);
     }
 
+    // Add reader counts (bookshelf status breakdown)
+    const readerCounts = await this.prisma.bookshelfEntry.groupBy({
+      by: ['status'],
+      where: { workId: id },
+      _count: true,
+    });
+    const readers: Record<string, number> = {};
+    for (const r of readerCounts) {
+      readers[r.status] = r._count;
+    }
+    (work as any).readerCounts = readers;
+
     return work;
   }
 
@@ -169,6 +181,119 @@ export class WorksService {
     if (work.authorId !== userId) throw new ForbiddenException();
     await this.prisma.work.delete({ where: { id } });
     return { deleted: true };
+  }
+
+  async getWorkReaderStats(workId: string, authorId: string) {
+    const work = await this.prisma.work.findUnique({ where: { id: workId } });
+    if (!work) throw new NotFoundException('Work not found');
+    if (work.authorId !== authorId) throw new ForbiddenException('Not your work');
+
+    const [
+      statusCounts,
+      totalReaders,
+      recentReaders7d,
+      episodeStats,
+      completionRate,
+      avgReadTime,
+      dailyReaders,
+    ] = await Promise.all([
+      // Reader count by status
+      this.prisma.bookshelfEntry.groupBy({
+        by: ['status'],
+        where: { workId },
+        _count: true,
+      }),
+      // Total unique readers
+      this.prisma.readingProgress.findMany({
+        where: { workId },
+        distinct: ['userId'],
+        select: { userId: true },
+      }),
+      // New readers in last 7 days
+      this.prisma.bookshelfEntry.count({
+        where: { workId, addedAt: { gte: new Date(Date.now() - 7 * 86400000) } },
+      }),
+      // Per-episode reader stats
+      this.prisma.readingProgress.groupBy({
+        by: ['episodeId'],
+        where: { workId },
+        _count: true,
+        _avg: { progressPct: true },
+        _sum: { readTimeMs: true },
+      }),
+      // Completion rate (completed readers / total readers)
+      this.prisma.bookshelfEntry.count({
+        where: { workId, status: 'COMPLETED' },
+      }),
+      // Average total read time per reader
+      this.prisma.readingProgress.aggregate({
+        where: { workId },
+        _sum: { readTimeMs: true },
+      }),
+      // Daily new readers (last 30 days)
+      this.prisma.bookshelfEntry.findMany({
+        where: { workId, addedAt: { gte: new Date(Date.now() - 30 * 86400000) } },
+        select: { addedAt: true },
+      }),
+    ]);
+
+    // Build status breakdown
+    const statusBreakdown: Record<string, number> = {};
+    for (const s of statusCounts) {
+      statusBreakdown[s.status] = s._count;
+    }
+
+    // Build episode stats with titles
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, title: true, orderIndex: true },
+    });
+    const episodeMap = new Map(episodes.map(e => [e.id, e]));
+    const episodeAnalytics = episodeStats.map(es => ({
+      episodeId: es.episodeId,
+      title: episodeMap.get(es.episodeId)?.title || '',
+      orderIndex: episodeMap.get(es.episodeId)?.orderIndex ?? 0,
+      readers: es._count,
+      avgProgress: Math.round((es._avg.progressPct || 0) * 100),
+      totalReadTimeMs: es._sum.readTimeMs || 0,
+    })).sort((a, b) => a.orderIndex - b.orderIndex);
+
+    // Build daily reader chart (last 30 days)
+    const dailyMap: Record<string, number> = {};
+    for (const r of dailyReaders) {
+      const day = r.addedAt.toISOString().split('T')[0];
+      dailyMap[day] = (dailyMap[day] || 0) + 1;
+    }
+    const dailyChart: { date: string; count: number }[] = [];
+    for (let i = 29; i >= 0; i--) {
+      const d = new Date(Date.now() - i * 86400000);
+      const dayStr = d.toISOString().split('T')[0];
+      dailyChart.push({ date: dayStr, count: dailyMap[dayStr] || 0 });
+    }
+
+    // Calculate drop-off rate between episodes
+    const dropOff = episodeAnalytics.map((ep, i) => ({
+      ...ep,
+      dropOffPct: i === 0 ? 0 : (episodeAnalytics[0].readers > 0
+        ? Math.round((1 - ep.readers / episodeAnalytics[0].readers) * 100)
+        : 0),
+    }));
+
+    const totalUniqueReaders = totalReaders.length;
+    const totalReadTimeMs = avgReadTime._sum.readTimeMs || 0;
+
+    return {
+      totalViews: work.totalViews,
+      totalReads: work.totalReads,
+      totalUniqueReaders,
+      recentReaders7d,
+      completionRate: totalUniqueReaders > 0 ? Math.round((completionRate / totalUniqueReaders) * 100) : 0,
+      avgReadTimePerReader: totalUniqueReaders > 0 ? Math.round(totalReadTimeMs / totalUniqueReaders) : 0,
+      statusBreakdown,
+      episodeAnalytics: dropOff,
+      dailyNewReaders: dailyChart,
+    };
   }
 
   /** Auto-score, generate emotion tags, and index to search after publishing */
