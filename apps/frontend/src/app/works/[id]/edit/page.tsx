@@ -184,22 +184,22 @@ export default function EditWorkPage() {
 
   return (
     <div className="px-4 py-8">
-      <div className="flex items-center justify-between mb-6">
-        <h1 className="text-2xl font-bold">作品編集</h1>
-        <div className="flex gap-2">
+      <div className="mb-6">
+        <h1 className="text-2xl font-bold mb-3">作品編集</h1>
+        <div className="flex flex-wrap gap-2">
           <Link href={`/works/${workId}/preview`}>
             <Button variant="outline" size="sm"><Eye className="h-3.5 w-3.5 mr-1" /> プレビュー</Button>
           </Link>
           {work.status === 'DRAFT' && (
-            <Button onClick={() => setConfirmPublish(true)} variant="default">公開する</Button>
+            <Button onClick={() => setConfirmPublish(true)} size="sm" variant="default">公開する</Button>
           )}
           {work.status === 'PUBLISHED' && (
-            <Button onClick={() => setConfirmUnpublish(true)} variant="outline">非公開にする</Button>
+            <Button onClick={() => setConfirmUnpublish(true)} size="sm" variant="outline">非公開にする</Button>
           )}
           {work.status === 'UNPUBLISHED' && (
-            <Button onClick={() => setConfirmPublish(true)} variant="default">再公開する</Button>
+            <Button onClick={() => setConfirmPublish(true)} size="sm" variant="default">再公開する</Button>
           )}
-          <Button onClick={() => setConfirmDelete(true)} variant="destructive" size="icon" className="min-h-[44px] min-w-[44px]">
+          <Button onClick={() => setConfirmDelete(true)} variant="destructive" size="sm" className="px-2">
             <Trash2 className="h-4 w-4" />
           </Button>
         </div>
