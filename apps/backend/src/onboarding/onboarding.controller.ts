@@ -1,4 +1,4 @@
-import { Controller, Get, Post, Body, UseGuards } from '@nestjs/common';
+import { Controller, Get, Post, Put, Body, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { OnboardingService } from './onboarding.service';
 import { SubmitOnboardingDto } from './dto/onboarding.dto';
@@ -25,6 +25,17 @@ export class OnboardingController {
     @Body() dto: SubmitOnboardingDto,
   ) {
     return this.onboardingService.submitOnboarding(userId, dto);
+  }
+
+  @Put()
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Retake onboarding diagnosis (costs 1 credit)' })
+  retake(
+    @CurrentUser('id') userId: string,
+    @Body() dto: SubmitOnboardingDto,
+  ) {
+    return this.onboardingService.retakeOnboarding(userId, dto);
   }
 
   @Get('status')

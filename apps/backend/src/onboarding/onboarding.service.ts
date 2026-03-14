@@ -1,6 +1,8 @@
 import { Injectable, Logger, ConflictException, NotFoundException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { CreditService } from '../billing/credit.service';
 import { SubmitOnboardingDto, ONBOARDING_QUESTIONS } from './dto/onboarding.dto';
 
 @Injectable()
@@ -10,6 +12,7 @@ export class OnboardingService {
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private creditService: CreditService,
   ) {}
 
   getQuestions() {
@@ -47,6 +50,49 @@ export class OnboardingService {
       where: { userId },
     });
     return { completed: !!result, completedAt: result?.completedAt };
+  }
+
+  /** Re-take onboarding diagnosis (1cr) */
+  async retakeOnboarding(userId: string, dto: SubmitOnboardingDto) {
+    const existing = await this.prisma.onboardingResult.findUnique({
+      where: { userId },
+    });
+    if (!existing) {
+      throw new NotFoundException('初回のオンボーディングがまだ完了していません');
+    }
+
+    // Consume 1 credit
+    const { transactionId } = await this.creditService.consumeCredits(
+      userId, 1, 'onboarding_retake',
+    );
+
+    try {
+      const emotionVector = this.calculateEmotionVector(dto.answers);
+
+      const result = await this.prisma.onboardingResult.update({
+        where: { userId },
+        data: {
+          answers: dto.answers as any,
+          emotionVector: emotionVector as any,
+          aiProfile: Prisma.DbNull, // Clear old profile, will be regenerated
+          completedAt: new Date(),
+        },
+      });
+
+      // Confirm credit consumption
+      await this.creditService.confirmTransaction(transactionId);
+
+      // Generate new AI profile asynchronously
+      this.generateAiProfile(userId, dto.answers, emotionVector).catch((e) =>
+        this.logger.error('Failed to generate AI profile on retake', e),
+      );
+
+      return { result, emotionVector };
+    } catch (error) {
+      // Refund on failure
+      await this.creditService.refundTransaction(transactionId);
+      throw error;
+    }
   }
 
   private calculateEmotionVector(answers: SubmitOnboardingDto['answers']) {

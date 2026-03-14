@@ -209,6 +209,13 @@ class ApiClient {
     );
   }
 
+  async retakeOnboarding(answers: OnboardingAnswer[]) {
+    return this.request<{ data: { emotionVector: Record<string, number> } }>(
+      '/users/me/onboarding',
+      { method: 'PUT', body: JSON.stringify({ answers }) },
+    );
+  }
+
   async getOnboardingStatus() {
     return this.request<{ data: { completed: boolean } }>('/users/me/onboarding/status');
   }
