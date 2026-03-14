@@ -36,6 +36,7 @@ export function Footer() {
           <div>
             <h3 className="text-xs tracking-[0.15em] uppercase text-muted-foreground mb-3">Support</h3>
             <ul className="space-y-2 text-muted-foreground">
+              <li><Link href="/guide/writers" className="hover:text-foreground transition-colors">Writers Guide</Link></li>
               <li><Link href="/help" className="hover:text-foreground transition-colors">Help</Link></li>
               <li><Link href="/guidelines" className="hover:text-foreground transition-colors">Guidelines</Link></li>
             </ul>

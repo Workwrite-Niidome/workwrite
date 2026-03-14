@@ -196,7 +196,7 @@ export default function DashboardPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground mb-4">まだ作品がありません</p>
-            <div className="flex items-center justify-center gap-3">
+            <div className="flex items-center justify-center gap-3 flex-wrap">
               <Link href="/works/new">
                 <Button>最初の作品を作成する</Button>
               </Link>
@@ -204,6 +204,9 @@ export default function DashboardPage() {
                 <Button variant="outline"><Upload className="h-4 w-4 mr-1.5" /> 他サイトから取り込む</Button>
               </Link>
             </div>
+            <p className="text-xs text-muted-foreground mt-4">
+              初めての方は<Link href="/guide/writers" className="text-primary hover:underline ml-1">執筆者ガイド</Link>もご覧ください。
+            </p>
           </CardContent>
         </Card>
       ) : (
