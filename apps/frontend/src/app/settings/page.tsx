@@ -9,7 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Loading } from '@/components/layout/loading';
-import { Copy, Check, Crown, RefreshCw } from 'lucide-react';
+import { Copy, Check, Crown } from 'lucide-react';
 
 export default function SettingsPage() {
   const { user, isLoading: authLoading, logout } = useAuth();
@@ -186,32 +186,6 @@ export default function SettingsPage() {
               ))}
             </div>
           )}
-        </CardContent>
-      </Card>
-
-      {/* Reading Profile */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-sm flex items-center gap-2">
-            <RefreshCw className="h-4 w-4" />
-            読書傾向
-          </CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-center justify-between">
-            <div>
-              <p className="text-sm font-medium">読書タイプ診断</p>
-              <p className="text-xs text-muted-foreground mt-0.5">
-                気分や好みの変化に合わせて再診断できます（1cr）
-              </p>
-            </div>
-            <Link href="/settings/reading-profile">
-              <Button variant="outline" size="sm" className="gap-1.5">
-                <RefreshCw className="h-3.5 w-3.5" />
-                再診断する
-              </Button>
-            </Link>
-          </div>
         </CardContent>
       </Card>
 
