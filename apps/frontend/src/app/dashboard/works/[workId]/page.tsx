@@ -3,11 +3,12 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Zap, Users, BarChart } from 'lucide-react';
+import { ArrowLeft, Users, BarChart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ScoreCard } from '@/components/scoring/score-card';
 import { api, type QualityScoreDetail } from '@/lib/api';
 
 interface HeatmapEntry {
@@ -24,13 +25,6 @@ interface EmotionCloudEntry {
   avgIntensity: number;
 }
 
-const SCORE_LABELS: Record<string, string> = {
-  immersion: '没入力',
-  transformation: '変容力',
-  virality: '拡散力',
-  worldBuilding: '世界構築力',
-};
-
 export default function WorkAnalyticsPage() {
   const params = useParams();
   const workId = params.workId as string;
@@ -39,7 +33,6 @@ export default function WorkAnalyticsPage() {
   const [score, setScore] = useState<QualityScoreDetail | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapEntry[]>([]);
   const [emotionCloud, setEmotionCloud] = useState<EmotionCloudEntry[]>([]);
-  const [scoring, setScoring] = useState(false);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -53,17 +46,6 @@ export default function WorkAnalyticsPage() {
       setEmotionCloud(emotionRes.data);
     }).finally(() => setLoading(false));
   }, [workId]);
-
-  async function handleScore() {
-    setScoring(true);
-    try {
-      const res = await api.triggerScoring(workId);
-      if (res.data) {
-        setScore(res.data);
-      }
-    } catch {}
-    setScoring(false);
-  }
 
   if (loading) {
     return (
@@ -88,60 +70,10 @@ export default function WorkAnalyticsPage() {
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
-        {/* Quality Score */}
-        <Card className="md:col-span-2">
-          <CardHeader className="flex flex-row items-center justify-between">
-            <CardTitle className="text-base flex items-center gap-2">
-              <Zap className="h-4 w-4" /> AI品質スコア
-            </CardTitle>
-            <Button
-              variant="outline"
-              size="sm"
-              onClick={handleScore}
-              disabled={scoring}
-            >
-              {scoring ? 'スコアリング中...' : score ? '再スコアリング' : 'スコアリング実行'}
-            </Button>
-          </CardHeader>
-          <CardContent>
-            {score ? (
-              <div className="space-y-4">
-                <div className="text-center mb-4">
-                  <span className="text-4xl font-bold text-primary">{Math.round(score.overall)}</span>
-                  <span className="text-muted-foreground text-sm ml-1">/ 100</span>
-                </div>
-                <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
-                  {(['immersion', 'transformation', 'virality', 'worldBuilding'] as const).map((key) => (
-                    <div key={key} className="text-center p-4 rounded-lg bg-muted/50">
-                      <p className="text-xs text-muted-foreground">{SCORE_LABELS[key]}</p>
-                      <p className="text-xl font-bold">{Math.round(score[key])}</p>
-                      {score.analysis?.[key] && (
-                        <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{score.analysis[key]}</p>
-                      )}
-                    </div>
-                  ))}
-                </div>
-                {score.tips.length > 0 && (
-                  <div className="mt-4">
-                    <h3 className="text-sm font-medium mb-2">改善提案</h3>
-                    <ul className="space-y-1">
-                      {score.tips.map((tip, i) => (
-                        <li key={i} className="text-sm text-muted-foreground flex items-start gap-2">
-                          <span className="text-primary font-bold">{i + 1}.</span>
-                          {tip}
-                        </li>
-                      ))}
-                    </ul>
-                  </div>
-                )}
-              </div>
-            ) : (
-              <p className="text-center text-muted-foreground py-8">
-                まだスコアリングされていません
-              </p>
-            )}
-          </CardContent>
-        </Card>
+        {/* Quality Score - unified component */}
+        <div className="md:col-span-2">
+          <ScoreCard score={score} workId={workId} onScoreUpdate={setScore} />
+        </div>
 
         {/* Reading Heatmap */}
         <Card>

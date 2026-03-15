@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { CreditService } from '../billing/credit.service';
 
 export interface ScoringResult {
   immersion: number;
@@ -26,12 +27,15 @@ export interface ScoringResult {
 export class ScoringService {
   private readonly logger = new Logger(ScoringService.name);
 
+  private static readonly SCORING_CREDIT_COST = 1;
+
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private creditService: CreditService,
   ) {}
 
-  async scoreWork(workId: string): Promise<ScoringResult | null> {
+  async scoreWork(workId: string, userId?: string): Promise<ScoringResult | null> {
     const [work, characters, storyArc] = await Promise.all([
       this.prisma.work.findUnique({
         where: { id: workId },
@@ -55,6 +59,23 @@ export class ScoringService {
 
     const fullText = work.episodes.map((ep) => ep.content).join('\n\n---\n\n');
     const truncatedText = fullText.slice(0, 15000); // Limit for API
+
+    // Credit consumption
+    let transactionId: string | null = null;
+    if (userId && ScoringService.SCORING_CREDIT_COST > 0) {
+      try {
+        const result = await this.creditService.consumeCredits(
+          userId,
+          ScoringService.SCORING_CREDIT_COST,
+          'scoring',
+          'claude-haiku-4-5-20251001',
+        );
+        transactionId = result.transactionId;
+      } catch (e) {
+        this.logger.warn(`Credit consumption failed for scoring: ${e}`);
+        throw e;
+      }
+    }
 
     try {
       const result = await this.callLlmForScoring(work.title, truncatedText, characters, storyArc);
@@ -88,8 +109,21 @@ export class ScoringService {
         },
       });
 
+      // Confirm credit transaction
+      if (transactionId) {
+        await this.creditService.confirmTransaction(transactionId).catch((e) =>
+          this.logger.error(`Credit confirm failed: ${transactionId}`, e),
+        );
+      }
+
       return result;
     } catch (e) {
+      // Refund on failure
+      if (transactionId) {
+        await this.creditService.refundTransaction(transactionId).catch((err) =>
+          this.logger.error(`Credit refund failed: ${transactionId}`, err),
+        );
+      }
       this.logger.error('Scoring failed', e);
       return null;
     }
@@ -243,11 +277,20 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
 
   async getScoreWithAnalysis(workId: string) {
     const score = await this.prisma.qualityScore.findUnique({ where: { workId } });
-    if (!score) return null;
+    if (!score) return { data: null };
     return {
-      ...score,
-      analysis: score.analysisJson as Record<string, string> | null,
-      tips: (score.improvementTips as string[]) || [],
+      data: {
+        immersion: score.immersion,
+        transformation: score.transformation,
+        virality: score.virality,
+        worldBuilding: score.worldBuilding,
+        characterDepth: score.characterDepth ?? undefined,
+        structuralScore: score.structuralScore ?? undefined,
+        overall: score.overall,
+        analysis: score.analysisJson as Record<string, string> | null,
+        tips: (score.improvementTips as string[]) || [],
+        scoredAt: score.scoredAt.toISOString(),
+      },
     };
   }
 

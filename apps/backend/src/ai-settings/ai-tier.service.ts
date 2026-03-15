@@ -22,7 +22,7 @@ const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
 const OPUS_MODEL = 'claude-opus-4-6';
 
 const LIGHT_FEATURES = new Set([
-  'proofread', 'scoring', 'episode_scoring', 'synopsis-gen',
+  'proofread', 'episode_scoring', 'synopsis-gen',
   'highlight_explain', 'onboarding_profile', 'embedding_generation',
 ]);
 

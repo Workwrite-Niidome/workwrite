@@ -1237,9 +1237,12 @@ export interface QualityScoreDetail {
   transformation: number;
   virality: number;
   worldBuilding: number;
+  characterDepth?: number;
+  structuralScore?: number;
   overall: number;
   analysis: Record<string, string> | null;
   tips: string[];
+  emotionTags?: string[];
   scoredAt: string;
 }
 
