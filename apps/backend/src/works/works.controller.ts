@@ -78,4 +78,16 @@ export class WorksController {
   delete(@Param('id') id: string, @CurrentUser('id') userId: string) {
     return this.worksService.delete(id, userId);
   }
+
+  @Get(':id/emotion-profile')
+  @ApiOperation({ summary: 'Get author + reader emotion profile for a work' })
+  getEmotionProfile(@Param('id') workId: string) {
+    return this.worksService.getEmotionProfile(workId);
+  }
+
+  @Get(':id/emotion-arc')
+  @ApiOperation({ summary: 'Get emotion arc visualization data' })
+  getEmotionArc(@Param('id') workId: string) {
+    return this.worksService.getEmotionArc(workId);
+  }
 }

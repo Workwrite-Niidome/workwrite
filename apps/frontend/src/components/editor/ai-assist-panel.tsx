@@ -205,12 +205,35 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       contextParts.push(`【章立て】\n${chapterSummary}`);
     }
 
+    // World building (from creation plan)
+    if (creationPlan?.worldBuildingData) {
+      const wb = creationPlan.worldBuildingData;
+      const wbParts: string[] = [];
+      if (wb.basics?.era) wbParts.push(`時代: ${wb.basics.era}`);
+      if (wb.basics?.setting) wbParts.push(`舞台: ${wb.basics.setting}`);
+      if (wb.basics?.civilizationLevel) wbParts.push(`文明レベル: ${wb.basics.civilizationLevel}`);
+      for (const rule of wb.rules || []) {
+        if (rule.name) wbParts.push(`ルール「${rule.name}」: ${rule.description}${rule.constraints ? `（制約: ${rule.constraints}）` : ''}`);
+      }
+      for (const term of wb.terminology || []) {
+        if (term.term) wbParts.push(`${term.term}${term.reading ? `（${term.reading}）` : ''}: ${term.definition}`);
+      }
+      if (wb.infoAsymmetry?.commonKnowledge) wbParts.push(`一般常識: ${wb.infoAsymmetry.commonKnowledge}`);
+      if (wb.infoAsymmetry?.hiddenTruths) wbParts.push(`隠された真実: ${wb.infoAsymmetry.hiddenTruths}`);
+      for (const item of wb.items || []) {
+        if (item.name) wbParts.push(`アイテム「${item.name}」: ${[item.ability, item.constraints].filter(Boolean).join('、')}`);
+      }
+      if (wbParts.length > 0) contextParts.push(`【世界観設定（厳守）】\n${wbParts.join('\n')}`);
+    }
+
     // Emotion blueprint (always from creation plan)
     if (creationPlan?.emotionBlueprint) {
       const eb = creationPlan.emotionBlueprint;
       if (eb.coreMessage) contextParts.push(`テーマ: ${eb.coreMessage}`);
       if (eb.targetEmotions) contextParts.push(`読者に届けたい感情: ${eb.targetEmotions}`);
       if (eb.readerJourney) contextParts.push(`読者の旅路: ${eb.readerJourney}`);
+      if (eb.inspiration) contextParts.push(`インスピレーション: ${eb.inspiration}`);
+      if (eb.readerOneLiner) contextParts.push(`読者に一言: ${eb.readerOneLiner}`);
     }
 
     // Use cached story summary if available (token-efficient)

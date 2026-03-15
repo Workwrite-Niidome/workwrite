@@ -14,13 +14,15 @@ export class DiscoverService {
   }
 
   async getTopPage() {
-    const [popular, recent, hiddenGems, trendingTags] = await Promise.all([
+    const [popular, recent, hiddenGems, trendingTags, highImmersion, greatWorlds] = await Promise.all([
       this.getPopularWorks(6),
       this.getRecentWorks(6),
       this.getHiddenGems(6),
       this.getTrendingEmotionTags(),
+      this.getHighImmersionWorks(6),
+      this.getGreatWorldBuilding(6),
     ]);
-    return { popular, recent, hiddenGems, trendingTags };
+    return { popular, recent, hiddenGems, trendingTags, highImmersion, greatWorlds };
   }
 
   async getPopularWorks(limit = 10) {
@@ -206,6 +208,40 @@ export class DiscoverService {
       },
     });
     return works;
+  }
+
+  async getHighImmersionWorks(limit = 10) {
+    return this.prisma.work.findMany({
+      where: {
+        status: 'PUBLISHED',
+        qualityScore: { immersion: { gte: 70 } },
+      },
+      orderBy: { qualityScore: { immersion: 'desc' } },
+      take: limit,
+      include: {
+        author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+        tags: true,
+        qualityScore: { select: { overall: true, immersion: true } },
+        _count: { select: { reviews: true, episodes: true } },
+      },
+    });
+  }
+
+  async getGreatWorldBuilding(limit = 10) {
+    return this.prisma.work.findMany({
+      where: {
+        status: 'PUBLISHED',
+        qualityScore: { worldBuilding: { gte: 70 } },
+      },
+      orderBy: { qualityScore: { worldBuilding: 'desc' } },
+      take: limit,
+      include: {
+        author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+        tags: true,
+        qualityScore: { select: { overall: true, worldBuilding: true } },
+        _count: { select: { reviews: true, episodes: true } },
+      },
+    });
   }
 
   async getWorksByGenre(genre: string, limit = 20, cursor?: string) {

@@ -137,6 +137,23 @@ export class StoryStructureController {
     return this.service.migrateArc(workId);
   }
 
+  // ─── Public World Data (no auth required) ──────────
+
+  @Get('works/:workId/world')
+  @ApiOperation({ summary: 'Get public world data for readers' })
+  getPublicWorldData(@Param('workId') workId: string) {
+    return this.service.getPublicWorldData(workId);
+  }
+
+  @Put('works/:workId/public-flags')
+  @ApiOperation({ summary: 'Update reader visibility flags for world/emotion data' })
+  updatePublicFlags(
+    @Param('workId') workId: string,
+    @Body() body: { isWorldPublic?: boolean; isEmotionPublic?: boolean },
+  ) {
+    return this.service.updatePublicFlags(workId, body);
+  }
+
   // ─── AI Context ────────────────────────────────────
 
   @Get('works/:workId/story-context')

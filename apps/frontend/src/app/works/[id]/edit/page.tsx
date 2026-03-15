@@ -335,6 +335,9 @@ export default function EditWorkPage() {
           </Card>
 
           {scoreDetail && <ScoreCard score={scoreDetail} />}
+
+          {/* Reader Display Settings */}
+          <ReaderDisplaySettings workId={workId} creationPlan={creationPlan} />
         </div>
       </div>
 
@@ -408,9 +411,16 @@ function CreationPlanCard({
     setTargetEmotions(eb.targetEmotions || '');
     setReaderJourney(eb.readerJourney || '');
     const po = creationPlan?.plotOutline;
-    setPlotText(
-      typeof po === 'string' ? po : po?.text || ''
-    );
+    if (po?.type === 'structured' && po.actGroups?.length > 0) {
+      // Convert structured plot to readable text for editing
+      setPlotText(po.actGroups.map((g: any) => {
+        const header = `【${g.label}】${g.description ? ` ${g.description}` : ''}`;
+        const eps = (g.episodes || []).map((ep: any) => `  - ${ep.title || '（無題）'}${ep.whatHappens ? `: ${ep.whatHappens}` : ''}`).join('\n');
+        return eps ? `${header}\n${eps}` : header;
+      }).join('\n\n'));
+    } else {
+      setPlotText(typeof po === 'string' ? po : po?.text || '');
+    }
     setChapters(
       (creationPlan?.chapterOutline || []).map((ch: any) => ({
         title: ch.title || '',
@@ -447,7 +457,8 @@ function CreationPlanCard({
     creationPlan.emotionBlueprint ||
     creationPlan.characters?.length > 0 ||
     creationPlan.plotOutline ||
-    creationPlan.chapterOutline?.length > 0
+    creationPlan.chapterOutline?.length > 0 ||
+    creationPlan.worldBuildingData
   );
 
   if (!hasPlan && !editing) {
@@ -621,11 +632,28 @@ function CreationPlanCard({
               {creationPlan.plotOutline && (
                 <div>
                   <p className="text-xs font-medium text-muted-foreground mb-1">プロット</p>
-                  <p className="text-xs whitespace-pre-wrap">
-                    {typeof creationPlan.plotOutline === 'string'
-                      ? creationPlan.plotOutline
-                      : creationPlan.plotOutline.text || JSON.stringify(creationPlan.plotOutline, null, 2)}
-                  </p>
+                  {creationPlan.plotOutline.type === 'structured' && creationPlan.plotOutline.actGroups?.length > 0 ? (
+                    <div className="space-y-2">
+                      {creationPlan.plotOutline.actGroups.map((group: any) => (
+                        <div key={group.id}>
+                          <p className="text-xs font-medium">{group.label}</p>
+                          {group.description && <p className="text-[10px] text-muted-foreground">{group.description}</p>}
+                          {group.episodes?.map((ep: any) => (
+                            <div key={ep.id} className="ml-2 mt-1 pl-2 border-l-2 border-primary/20">
+                              <p className="text-[10px] font-medium">{ep.title || '（無題）'}</p>
+                              {ep.whatHappens && <p className="text-[10px] text-muted-foreground">{ep.whatHappens}</p>}
+                            </div>
+                          ))}
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <p className="text-xs whitespace-pre-wrap">
+                      {typeof creationPlan.plotOutline === 'string'
+                        ? creationPlan.plotOutline
+                        : creationPlan.plotOutline.text || ''}
+                    </p>
+                  )}
                 </div>
               )}
               {creationPlan.chapterOutline?.length > 0 && (
@@ -641,10 +669,144 @@ function CreationPlanCard({
                   </div>
                 </div>
               )}
+              {creationPlan.worldBuildingData && (
+                <div>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">世界観</p>
+                  <div className="space-y-1.5">
+                    {creationPlan.worldBuildingData.basics?.era && (
+                      <p className="text-xs"><span className="text-muted-foreground">時代:</span> {creationPlan.worldBuildingData.basics.era}</p>
+                    )}
+                    {creationPlan.worldBuildingData.basics?.setting && (
+                      <p className="text-xs"><span className="text-muted-foreground">舞台:</span> {creationPlan.worldBuildingData.basics.setting}</p>
+                    )}
+                    {creationPlan.worldBuildingData.rules?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium">ルール</p>
+                        {creationPlan.worldBuildingData.rules.map((r: any, i: number) => (
+                          <p key={i} className="text-[10px] text-muted-foreground ml-1">• {r.name}: {r.description}</p>
+                        ))}
+                      </div>
+                    )}
+                    {creationPlan.worldBuildingData.terminology?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium">用語集</p>
+                        {creationPlan.worldBuildingData.terminology.map((t: any, i: number) => (
+                          <p key={i} className="text-[10px] text-muted-foreground ml-1">
+                            <span className="font-medium text-foreground">{t.term}</span>
+                            {t.reading && `（${t.reading}）`}: {t.definition}
+                          </p>
+                        ))}
+                      </div>
+                    )}
+                    {creationPlan.worldBuildingData.items?.length > 0 && (
+                      <div>
+                        <p className="text-[10px] font-medium">アイテム</p>
+                        {creationPlan.worldBuildingData.items.map((item: any, i: number) => (
+                          <p key={i} className="text-[10px] text-muted-foreground ml-1">• {item.name}{item.ability && `: ${item.ability}`}</p>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              )}
             </>
           )}
         </CardContent>
       )}
+    </Card>
+  );
+}
+
+// ─── Reader Display Settings ─────────────────────────────────
+
+function ReaderDisplaySettings({
+  workId,
+  creationPlan,
+}: {
+  workId: string;
+  creationPlan: any;
+}) {
+  const [isWorldPublic, setIsWorldPublic] = useState(false);
+  const [isEmotionPublic, setIsEmotionPublic] = useState(false);
+  const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    if (creationPlan) {
+      setIsWorldPublic(creationPlan.isWorldPublic ?? false);
+      setIsEmotionPublic(creationPlan.isEmotionPublic ?? false);
+    }
+  }, [creationPlan]);
+
+  const hasWorldData = creationPlan?.worldBuildingData;
+  const hasEmotionData = creationPlan?.emotionBlueprint;
+
+  if (!hasWorldData && !hasEmotionData) return null;
+
+  async function handleToggle(field: 'isWorldPublic' | 'isEmotionPublic', value: boolean) {
+    setSaving(true);
+    try {
+      await api.updatePublicFlags(workId, { [field]: value });
+      if (field === 'isWorldPublic') setIsWorldPublic(value);
+      else setIsEmotionPublic(value);
+    } catch {
+      // revert
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  return (
+    <Card>
+      <CardHeader className="pb-2">
+        <CardTitle className="text-sm flex items-center gap-2">
+          <Eye className="h-4 w-4" />
+          読者表示設定
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-3">
+        {hasWorldData && (
+          <label className="flex items-center justify-between gap-2 cursor-pointer">
+            <div>
+              <p className="text-xs font-medium">世界観タブを読者に公開</p>
+              <p className="text-[10px] text-muted-foreground">用語集、ルール、アイテムなどが読者に表示されます</p>
+            </div>
+            <button
+              onClick={() => handleToggle('isWorldPublic', !isWorldPublic)}
+              disabled={saving}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                isWorldPublic ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isWorldPublic ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </label>
+        )}
+        {hasEmotionData && (
+          <label className="flex items-center justify-between gap-2 cursor-pointer">
+            <div>
+              <p className="text-xs font-medium">感情設計を読者に公開</p>
+              <p className="text-[10px] text-muted-foreground">感情アークの可視化が読者に表示されます</p>
+            </div>
+            <button
+              onClick={() => handleToggle('isEmotionPublic', !isEmotionPublic)}
+              disabled={saving}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                isEmotionPublic ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  isEmotionPublic ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </label>
+        )}
+      </CardContent>
     </Card>
   );
 }

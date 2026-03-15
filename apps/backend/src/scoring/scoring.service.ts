@@ -7,12 +7,16 @@ export interface ScoringResult {
   transformation: number;
   virality: number;
   worldBuilding: number;
+  characterDepth: number;
+  structuralScore: number;
   overall: number;
   analysis: {
     immersion: string;
     transformation: string;
     virality: string;
     worldBuilding: string;
+    characterDepth?: string;
+    structuralScore?: string;
   };
   improvementTips: string[];
   emotionTags: string[];
@@ -28,13 +32,24 @@ export class ScoringService {
   ) {}
 
   async scoreWork(workId: string): Promise<ScoringResult | null> {
-    const work = await this.prisma.work.findUnique({
-      where: { id: workId },
-      include: {
-        episodes: { orderBy: { orderIndex: 'asc' } },
-        tags: true,
-      },
-    });
+    const [work, characters, storyArc] = await Promise.all([
+      this.prisma.work.findUnique({
+        where: { id: workId },
+        include: {
+          episodes: { orderBy: { orderIndex: 'asc' } },
+          tags: true,
+        },
+      }),
+      this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: { name: true, role: true, personality: true, arc: true },
+        take: 10,
+      }),
+      this.prisma.storyArc.findUnique({
+        where: { workId },
+        select: { premise: true, centralConflict: true, themes: true },
+      }),
+    ]);
 
     if (!work || work.episodes.length === 0) return null;
 
@@ -42,12 +57,18 @@ export class ScoringService {
     const truncatedText = fullText.slice(0, 15000); // Limit for API
 
     try {
-      const result = await this.callLlmForScoring(work.title, truncatedText);
+      const result = await this.callLlmForScoring(work.title, truncatedText, characters, storyArc);
 
       await this.prisma.qualityScore.upsert({
         where: { workId },
         update: {
-          ...result,
+          immersion: result.immersion,
+          transformation: result.transformation,
+          virality: result.virality,
+          worldBuilding: result.worldBuilding,
+          characterDepth: result.characterDepth || null,
+          structuralScore: result.structuralScore || null,
+          overall: result.overall,
           analysisJson: result.analysis as object,
           improvementTips: result.improvementTips,
           scoredAt: new Date(),
@@ -59,6 +80,8 @@ export class ScoringService {
           transformation: result.transformation,
           virality: result.virality,
           worldBuilding: result.worldBuilding,
+          characterDepth: result.characterDepth || null,
+          structuralScore: result.structuralScore || null,
           overall: result.overall,
           analysisJson: result.analysis as object,
           improvementTips: result.improvementTips,
@@ -72,7 +95,12 @@ export class ScoringService {
     }
   }
 
-  private async callLlmForScoring(title: string, text: string): Promise<ScoringResult> {
+  private async callLlmForScoring(
+    title: string,
+    text: string,
+    characters?: { name: string; role: string; personality: string | null; arc: string | null }[],
+    storyArc?: { premise: string | null; centralConflict: string | null; themes: string[] } | null,
+  ): Promise<ScoringResult> {
     const apiKey = await this.aiSettings.getApiKey();
 
     if (!apiKey) {
@@ -80,11 +108,18 @@ export class ScoringService {
       return this.generateMockScores();
     }
 
-    // prompt is now split: system prompt (cacheable) + user prompt (variable)
-    // See scoringSystemPrompt below in the API call
-
     // Use Haiku for scoring (cost-efficient, structured output)
-    const scoringSystemPrompt = `あなたは小説の品質を評価する専門家です。4つの軸（没入力・変容力・拡散力・世界構築力）で0-100点で採点し、改善提案を3つ出してください。
+    const scoringSystemPrompt = `あなたは小説の品質を評価する専門家です。6つの軸で0-100点で採点し、改善提案を3つ出してください。
+
+評価軸:
+- immersion: 没入力（読者を引き込む力）
+- transformation: 変容力（読者に変化を与える力）
+- virality: 拡散力（人に薦めたくなる力）
+- worldBuilding: 世界構築力
+- characterDepth: キャラクター深度（人物の立体感、成長、一貫性）
+- structuralScore: 構造スコア（プロット構成、伏線、ペーシング）
+
+キャラクター設計データや物語構造データがある場合は、計画と実際の作品を比較して評価してください。
 
 emotionTagsは以下から3〜5個選んでください: courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe, nostalgia, suspense, mystery, hope, beauty, growth
 
@@ -94,17 +129,36 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
   "transformation": <0-100>,
   "virality": <0-100>,
   "worldBuilding": <0-100>,
+  "characterDepth": <0-100>,
+  "structuralScore": <0-100>,
   "analysis": {
     "immersion": "<分析コメント>",
     "transformation": "<分析コメント>",
     "virality": "<分析コメント>",
-    "worldBuilding": "<分析コメント>"
+    "worldBuilding": "<分析コメント>",
+    "characterDepth": "<分析コメント>",
+    "structuralScore": "<分析コメント>"
   },
   "improvementTips": ["<提案1>", "<提案2>", "<提案3>"],
   "emotionTags": ["<感情タグ3〜5個>"]
 }`;
 
-    const userPrompt = `タイトル: ${title}\n\n本文（抜粋）:\n${text}`;
+    // Build enriched user prompt with structured data
+    const structuredParts: string[] = [];
+    if (characters && characters.length > 0) {
+      structuredParts.push(`\n【キャラクター設計】\n${characters.map((c) =>
+        `- ${c.name} (${c.role}): 性格=${c.personality || '不明'}, アーク=${c.arc || '不明'}`,
+      ).join('\n')}`);
+    }
+    if (storyArc) {
+      const arcLines: string[] = [];
+      if (storyArc.premise) arcLines.push(`前提: ${storyArc.premise}`);
+      if (storyArc.centralConflict) arcLines.push(`葛藤: ${storyArc.centralConflict}`);
+      if (storyArc.themes.length > 0) arcLines.push(`テーマ: ${storyArc.themes.join(', ')}`);
+      if (arcLines.length > 0) structuredParts.push(`\n【物語構造】\n${arcLines.join('\n')}`);
+    }
+
+    const userPrompt = `タイトル: ${title}${structuredParts.join('')}\n\n本文（抜粋）:\n${text}`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -144,7 +198,13 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
       (parsed.immersion + parsed.transformation + parsed.virality + parsed.worldBuilding) / 4,
     );
 
-    return { ...parsed, overall, emotionTags: parsed.emotionTags || [] };
+    return {
+      ...parsed,
+      overall,
+      characterDepth: parsed.characterDepth || 0,
+      structuralScore: parsed.structuralScore || 0,
+      emotionTags: parsed.emotionTags || [],
+    };
   }
 
   private generateMockScores(): ScoringResult {
@@ -157,12 +217,16 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
     };
     return {
       ...scores,
+      characterDepth: rand(),
+      structuralScore: rand(),
       overall: Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / 4),
       analysis: {
         immersion: 'スコアリング用APIキーが未設定のためモックスコアです',
         transformation: 'スコアリング用APIキーが未設定のためモックスコアです',
         virality: 'スコアリング用APIキーが未設定のためモックスコアです',
         worldBuilding: 'スコアリング用APIキーが未設定のためモックスコアです',
+        characterDepth: 'スコアリング用APIキーが未設定のためモックスコアです',
+        structuralScore: 'スコアリング用APIキーが未設定のためモックスコアです',
       },
       improvementTips: [
         'CLAUDE_API_KEYを設定すると実際のAI分析が利用できます',

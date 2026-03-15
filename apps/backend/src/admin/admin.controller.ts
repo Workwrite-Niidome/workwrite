@@ -1,11 +1,13 @@
 import {
   Controller, Get, Patch, Post, Delete, Param, Body, Query, UseGuards,
-  ParseIntPipe, DefaultValuePipe,
+  ParseIntPipe, DefaultValuePipe, Logger,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { CreditService } from '../billing/credit.service';
+import { AiRecommendationsService } from '../ai-recommendations/ai-recommendations.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { UpdateRoleDto } from './dto/update-role.dto';
 import { BanUserDto } from './dto/ban-user.dto';
 import { UpdateWorkStatusDto } from './dto/update-work-status.dto';
@@ -20,10 +22,14 @@ import { CurrentUser } from '../auth/decorators/current-user.decorator';
 @Roles('ADMIN')
 @ApiBearerAuth()
 export class AdminController {
+  private readonly logger = new Logger(AdminController.name);
+
   constructor(
     private adminService: AdminService,
     private aiTier: AiTierService,
     private creditService: CreditService,
+    private aiRecommendations: AiRecommendationsService,
+    private prisma: PrismaService,
   ) {}
 
   @Get('stats')
@@ -187,5 +193,36 @@ export class AdminController {
     @Body() body: { amount: number; description?: string },
   ) {
     return this.adminService.grantCreditsToUser(adminId, userId, body.amount, body.description);
+  }
+
+  // ─── Embedding Rebuild ──────────────────────────────
+
+  @Post('rebuild-embeddings')
+  @ApiOperation({ summary: 'Rebuild all work embeddings with enriched structured data' })
+  async rebuildEmbeddings() {
+    const works = await this.prisma.work.findMany({
+      where: { status: 'PUBLISHED' },
+      select: { id: true, title: true },
+      orderBy: { publishedAt: 'desc' },
+    });
+
+    let processed = 0;
+    let failed = 0;
+
+    // Process sequentially with 2-second intervals (VPS memory safe)
+    for (const work of works) {
+      try {
+        await this.aiRecommendations.generateEmbedding(work.id);
+        processed++;
+        this.logger.log(`Rebuilt embedding for "${work.title}" (${processed}/${works.length})`);
+      } catch (e) {
+        failed++;
+        this.logger.error(`Failed to rebuild embedding for "${work.title}": ${e}`);
+      }
+      // Wait 2 seconds between works
+      await new Promise((resolve) => setTimeout(resolve, 2000));
+    }
+
+    return { total: works.length, processed, failed };
   }
 }

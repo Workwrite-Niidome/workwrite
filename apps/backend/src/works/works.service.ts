@@ -4,6 +4,7 @@ import { PostsService } from '../posts/posts.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { SearchService } from '../search/search.service';
 import { EmotionsService } from '../emotions/emotions.service';
+import { EmotionMappingService } from '../emotions/emotion-mapping.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PostType } from '@prisma/client';
@@ -18,6 +19,7 @@ export class WorksService {
     private scoringService: ScoringService,
     private searchService: SearchService,
     private emotionsService: EmotionsService,
+    private emotionMappingService: EmotionMappingService,
   ) {}
 
   async create(authorId: string, dto: CreateWorkDto) {
@@ -318,17 +320,78 @@ export class WorksService {
       }
     }
 
-    // 3. Index to Meilisearch
-    const work = await this.prisma.work.findUnique({
-      where: { id: workId },
-      include: {
-        author: { select: { displayName: true, name: true } },
-        tags: true,
-        qualityScore: { select: { overall: true } },
-      },
-    });
+    // 2.5 Apply author emotion tags from emotionBlueprint
+    try {
+      const creationPlanForEmotions = await this.prisma.workCreationPlan.findUnique({
+        where: { workId },
+        select: { emotionBlueprint: true },
+      });
+      if (creationPlanForEmotions?.emotionBlueprint) {
+        const workForAuthor = await this.prisma.work.findUnique({
+          where: { id: workId },
+          select: { authorId: true },
+        });
+        if (workForAuthor) {
+          const mapped = await this.emotionMappingService.applyAuthorEmotionTags(
+            workId,
+            workForAuthor.authorId,
+            creationPlanForEmotions.emotionBlueprint,
+          );
+          if (mapped > 0) {
+            this.logger.log(`Auto-mapped ${mapped} author emotion tags for work ${workId}`);
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to apply author emotion tags: ${e}`);
+    }
+
+    // 3. Index to Meilisearch (with structured data)
+    const [work, worldSettings, storyArc, plan] = await Promise.all([
+      this.prisma.work.findUnique({
+        where: { id: workId },
+        include: {
+          author: { select: { displayName: true, name: true } },
+          tags: true,
+          qualityScore: { select: { overall: true, immersion: true, worldBuilding: true } },
+        },
+      }),
+      this.prisma.worldSetting.findMany({
+        where: { workId, isActive: true },
+        select: { name: true, category: true },
+        take: 20,
+      }),
+      this.prisma.storyArc.findUnique({
+        where: { workId },
+        select: { premise: true },
+      }),
+      this.prisma.workCreationPlan.findUnique({
+        where: { workId },
+        select: { emotionBlueprint: true, worldBuildingData: true },
+      }),
+    ]);
     if (work) {
       const emotionTags = await this.emotionsService.getAggregatedEmotionTags(workId);
+
+      // Build world keywords from WorldSetting + worldBuildingData
+      const worldKeywords: string[] = worldSettings.map((ws) => ws.name);
+      const wb = plan?.worldBuildingData as any;
+      if (wb) {
+        if (wb.basics?.era) worldKeywords.push(wb.basics.era);
+        if (wb.basics?.setting) worldKeywords.push(wb.basics.setting);
+        for (const term of (wb.terminology || []).slice(0, 10)) {
+          if (term.term) worldKeywords.push(term.term);
+        }
+      }
+
+      // Build emotion keywords from emotionBlueprint
+      const emotionKeywords: string[] = [];
+      const eb = plan?.emotionBlueprint as any;
+      if (eb) {
+        if (eb.targetEmotions) emotionKeywords.push(eb.targetEmotions);
+        if (eb.coreMessage) emotionKeywords.push(eb.coreMessage);
+      }
+
       await this.searchService.indexWork({
         id: work.id,
         title: work.title,
@@ -337,12 +400,83 @@ export class WorksService {
         authorName: work.author.displayName || work.author.name,
         tags: work.tags.map((t) => t.tag),
         emotionTags: emotionTags.map((et) => et.tag?.name || '').filter(Boolean),
+        worldKeywords: [...new Set(worldKeywords)],
+        emotionKeywords,
+        premise: storyArc?.premise || '',
         qualityScore: work.qualityScore?.overall || 0,
+        immersionScore: work.qualityScore?.immersion || 0,
+        worldBuildingScore: work.qualityScore?.worldBuilding || 0,
         totalViews: work.totalViews,
         totalReads: work.totalReads,
         publishedAt: work.publishedAt?.getTime() || 0,
       });
       this.logger.log(`Indexed work ${workId} to search`);
     }
+  }
+
+  async getEmotionProfile(workId: string) {
+    const plan = await this.prisma.workCreationPlan.findUnique({
+      where: { workId },
+      select: { emotionBlueprint: true },
+    });
+
+    const authorTagNames = plan
+      ? this.emotionMappingService.mapBlueprintToTags(plan.emotionBlueprint)
+      : [];
+
+    const allTags = await this.prisma.emotionTagMaster.findMany();
+    const tagNameJaMap = new Map(allTags.map((t) => [t.name, t.nameJa || t.name]));
+
+    const authorEmotions = authorTagNames.map((name) => ({
+      tag: name,
+      tagJa: tagNameJaMap.get(name) || name,
+    }));
+
+    const readerEmotions = await this.emotionsService.getAggregatedEmotionTags(workId);
+
+    return {
+      authorEmotions,
+      readerEmotions: readerEmotions.map((re: any) => ({
+        tag: re.tag?.name || '',
+        tagJa: re.tag?.nameJa || re.tag?.name || '',
+        count: re.count,
+        avgIntensity: re.avgIntensity,
+      })),
+    };
+  }
+
+  async getEmotionArc(workId: string) {
+    const plan = await this.prisma.workCreationPlan.findUnique({
+      where: { workId },
+      select: { emotionBlueprint: true, isEmotionPublic: true },
+    });
+
+    let authorArc: { phase: string; emotion: string; intensity: number }[] = [];
+    if (plan?.isEmotionPublic && plan.emotionBlueprint) {
+      const eb = plan.emotionBlueprint as any;
+      if (eb.readerJourney) {
+        const lines = String(eb.readerJourney).split(/[→、,\n]/).map((s: string) => s.trim()).filter(Boolean);
+        const phases = ['序', '破', '急'];
+        authorArc = lines.slice(0, 3).map((line: string, i: number) => ({
+          phase: phases[i] || `${i + 1}`,
+          emotion: line,
+          intensity: Math.round(((i + 1) / Math.max(lines.length, 1)) * 10),
+        }));
+      }
+    }
+
+    const readerEmotions = await this.emotionsService.getAggregatedEmotionTags(workId);
+    const allTags = await this.prisma.emotionTagMaster.findMany();
+    const tagNameJaMap = new Map(allTags.map((t) => [t.name, t.nameJa || t.name]));
+
+    return {
+      authorArc,
+      readerTags: readerEmotions.map((re: any) => ({
+        tag: re.tag?.name || '',
+        tagJa: tagNameJaMap.get(re.tag?.name) || re.tag?.name || '',
+        count: re.count,
+        avgIntensity: re.avgIntensity,
+      })),
+    };
   }
 }

@@ -19,6 +19,7 @@ export class CreateCharacterDto {
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isPublic?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsInt() sortOrder?: number;
+  @ApiPropertyOptional() @IsOptional() customFields?: any;
 }
 
 export class UpdateCharacterDto {
@@ -36,6 +37,7 @@ export class UpdateCharacterDto {
   @ApiPropertyOptional() @IsOptional() @IsString() notes?: string;
   @ApiPropertyOptional() @IsOptional() @IsBoolean() isPublic?: boolean;
   @ApiPropertyOptional() @IsOptional() @IsInt() sortOrder?: number;
+  @ApiPropertyOptional() @IsOptional() customFields?: any;
 }
 
 export class SetRelationDto {

@@ -89,6 +89,18 @@ export class DiscoverController {
     return this.discoverService.getWorksByEmotionTag(tagName, limit ? parseInt(limit, 10) : undefined);
   }
 
+  @Get('immersion')
+  @ApiOperation({ summary: 'Get high immersion works' })
+  getHighImmersion(@Query('limit') limit?: string) {
+    return this.discoverService.getHighImmersionWorks(limit ? parseInt(limit, 10) : undefined);
+  }
+
+  @Get('worlds')
+  @ApiOperation({ summary: 'Get works with great world building' })
+  getGreatWorldBuilding(@Query('limit') limit?: string) {
+    return this.discoverService.getGreatWorldBuilding(limit ? parseInt(limit, 10) : undefined);
+  }
+
   @Get('genre/:genre')
   @ApiOperation({ summary: 'Get works by genre' })
   getByGenre(

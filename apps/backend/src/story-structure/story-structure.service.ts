@@ -118,7 +118,9 @@ export class StoryStructureService {
           appearance: c.appearance,
           background: c.background,
           motivation: c.motivation,
-          notes: c.description || c.uniqueTrait,
+          arc: c.arc,
+          notes: [c.description, c.uniqueTrait, c.relationships].filter(Boolean).join('\n') || null,
+          customFields: c.customFieldValues ?? null,
           sortOrder: i,
         },
       });
@@ -342,6 +344,44 @@ export class StoryStructureService {
     return { migrated: true };
   }
 
+  // ─── Public World Data (Reader View) ────────────────
+
+  async getPublicWorldData(workId: string) {
+    const plan = await this.prisma.workCreationPlan.findUnique({
+      where: { workId },
+      select: { isWorldPublic: true, worldBuildingData: true },
+    });
+
+    if (!plan?.isWorldPublic || !plan.worldBuildingData) {
+      return null;
+    }
+
+    const wb = plan.worldBuildingData as any;
+
+    // CRITICAL: Never expose infoAsymmetry.hiddenTruths (spoiler data)
+    return {
+      basics: wb.basics || null,
+      rules: wb.rules || [],
+      terminology: wb.terminology || [],
+      history: wb.history || null,
+      items: (wb.items || []).map((item: any) => ({
+        name: item.name,
+        appearance: item.appearance,
+        ability: item.ability,
+        constraints: item.constraints,
+        // Exclude narrativeMeaning (potential spoiler)
+      })),
+      // infoAsymmetry is NEVER included
+    };
+  }
+
+  async updatePublicFlags(workId: string, flags: { isWorldPublic?: boolean; isEmotionPublic?: boolean }) {
+    return this.prisma.workCreationPlan.update({
+      where: { workId },
+      data: flags,
+    });
+  }
+
   // ─── For AI Context ─────────────────────────────────
 
   /** Build a rich context string from structured character + arc data */
@@ -358,6 +398,22 @@ export class StoryStructureService {
 
     if (characters.length === 0 && !arc) return null;
 
+    // Load custom field definitions to resolve IDs → names
+    let fieldNameMap: Record<string, string> = {};
+    const hasCustomFields = characters.some((c) => c.customFields && typeof c.customFields === 'object');
+    if (hasCustomFields) {
+      try {
+        const plan = await this.prisma.workCreationPlan.findUnique({
+          where: { workId },
+          select: { customFieldDefinitions: true },
+        });
+        const defs = plan?.customFieldDefinitions as any[];
+        if (Array.isArray(defs)) {
+          fieldNameMap = Object.fromEntries(defs.map((d: any) => [d.id, d.name]));
+        }
+      } catch { /* ignore */ }
+    }
+
     const parts: string[] = [];
 
     if (characters.length > 0) {
@@ -372,6 +428,14 @@ export class StoryStructureService {
         if (c.background) lines.push(`  背景: ${c.background}`);
         if (c.motivation) lines.push(`  動機: ${c.motivation}`);
         if (c.arc) lines.push(`  成長アーク: ${c.arc}`);
+        if (c.customFields && typeof c.customFields === 'object') {
+          for (const [key, val] of Object.entries(c.customFields as Record<string, string>)) {
+            if (val) {
+              const label = fieldNameMap[key] || key;
+              lines.push(`  ${label}: ${val}`);
+            }
+          }
+        }
         if (c.relationsFrom.length > 0) {
           const rels = c.relationsFrom.map((r) => `${r.to.name}（${r.relationType}）`).join('、');
           lines.push(`  関係: ${rels}`);
@@ -398,6 +462,27 @@ export class StoryStructureService {
       }
       parts.push(`【物語構造】\n${arcLines.join('\n')}`);
     }
+
+    // Include world building data from creation plan
+    try {
+      const wbPlan = await this.prisma.workCreationPlan.findUnique({
+        where: { workId },
+        select: { worldBuildingData: true },
+      });
+      const wb = wbPlan?.worldBuildingData as any;
+      if (wb) {
+        const wbLines: string[] = [];
+        if (wb.basics?.era) wbLines.push(`時代: ${wb.basics.era}`);
+        if (wb.basics?.setting) wbLines.push(`舞台: ${wb.basics.setting}`);
+        for (const rule of wb.rules || []) {
+          if (rule.name) wbLines.push(`ルール「${rule.name}」: ${rule.description}${rule.constraints ? `（制約: ${rule.constraints}）` : ''}`);
+        }
+        for (const term of wb.terminology || []) {
+          if (term.term) wbLines.push(`${term.term}${term.reading ? `（${term.reading}）` : ''}: ${term.definition}`);
+        }
+        if (wbLines.length > 0) parts.push(`【世界観設定（厳守）】\n${wbLines.join('\n')}`);
+      }
+    } catch { /* ignore */ }
 
     return parts.join('\n\n');
   }

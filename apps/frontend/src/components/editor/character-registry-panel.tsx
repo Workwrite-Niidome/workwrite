@@ -58,16 +58,26 @@ function Field({ label, children, className }: { label: string; children: React.
 
 // ─── Character card (expanded) ──────────────────────────────────
 
+interface CustomFieldDef {
+  id: string;
+  name: string;
+  inputType: 'text' | 'textarea' | 'select';
+  options?: string[];
+  order: number;
+}
+
 function CharacterForm({
   char,
   onUpdate,
   onDelete,
   saving,
+  customFieldDefs,
 }: {
   char: StoryCharacter;
   onUpdate: (id: string, data: Partial<StoryCharacter>) => void;
   onDelete: (id: string) => void;
   saving: boolean;
+  customFieldDefs: CustomFieldDef[];
 }) {
   const [local, setLocal] = useState(char);
   const [dirty, setDirty] = useState(false);
@@ -100,6 +110,7 @@ function CharacterForm({
       arc: local.arc,
       notes: local.notes,
       isPublic: local.isPublic,
+      customFields: local.customFields,
     });
     setDirty(false);
   }
@@ -240,6 +251,47 @@ function CharacterForm({
               className="text-sm"
             />
           </Field>
+          {customFieldDefs.length > 0 && (
+            <>
+              <p className="text-[11px] font-medium text-muted-foreground pt-1">カスタムフィールド</p>
+              {customFieldDefs.map((def) => {
+                const cfValues = (local.customFields || {}) as Record<string, string>;
+                const value = cfValues[def.id] || '';
+                return (
+                  <Field key={def.id} label={def.name}>
+                    {def.inputType === 'select' && def.options ? (
+                      <select
+                        value={value}
+                        onChange={(e) => {
+                          set({ customFields: { ...cfValues, [def.id]: e.target.value } });
+                          setTimeout(save, 0);
+                        }}
+                        className="w-full h-8 text-sm rounded-md border border-border bg-background px-2"
+                      >
+                        <option value="">—</option>
+                        {def.options.map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                      </select>
+                    ) : def.inputType === 'textarea' ? (
+                      <Textarea
+                        value={value}
+                        onChange={(e) => set({ customFields: { ...cfValues, [def.id]: e.target.value } })}
+                        onBlur={save}
+                        rows={2}
+                        className="text-sm"
+                      />
+                    ) : (
+                      <Input
+                        value={value}
+                        onChange={(e) => set({ customFields: { ...cfValues, [def.id]: e.target.value } })}
+                        onBlur={save}
+                        className="h-8 text-sm"
+                      />
+                    )}
+                  </Field>
+                );
+              })}
+            </>
+          )}
         </div>
       )}
 
@@ -282,6 +334,9 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
   const [saving, setSaving] = useState<string | null>(null);
   const [migrating, setMigrating] = useState(false);
 
+  // Custom field definitions from creation plan
+  const [customFieldDefs, setCustomFieldDefs] = useState<CustomFieldDef[]>([]);
+
   // AI suggestion state
   const [showAiPanel, setShowAiPanel] = useState(false);
   const [aiVision, setAiVision] = useState('');
@@ -299,6 +354,13 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
 
   useEffect(() => {
     loadCharacters();
+    // Load custom field definitions from creation plan
+    api.getCreationPlan(workId)
+      .then((res) => {
+        const defs = (res.data as any)?.customFieldDefinitions;
+        if (Array.isArray(defs)) setCustomFieldDefs(defs);
+      })
+      .catch(() => {});
   }, [workId]);
 
   async function loadCharacters() {
@@ -598,6 +660,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
                     onUpdate={handleUpdate}
                     onDelete={handleDelete}
                     saving={saving === char.id}
+                    customFieldDefs={customFieldDefs}
                   />
                 )}
               </div>

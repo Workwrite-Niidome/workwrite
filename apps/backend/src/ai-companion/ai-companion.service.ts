@@ -3,7 +3,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 
-const MAX_WORK_TEXT_LENGTH = 30000;
+const MAX_WORK_TEXT_LENGTH = 20000;
+const MAX_STRUCTURED_CONTEXT_LENGTH = 3000;
 
 interface ChatMessage {
   role: 'user' | 'assistant';
@@ -45,8 +46,8 @@ export class AiCompanionService {
       ? (conversation.messages as unknown as ChatMessage[])
       : [];
 
-    // Get work info and reading progress
-    const [work, progress] = await Promise.all([
+    // Get work info, reading progress, and structured data in parallel
+    const [work, progress, publicCharacters, storyArc, creationPlan, episodeAnalyses] = await Promise.all([
       this.prisma.work.findUnique({
         where: { id: workId },
         include: {
@@ -59,6 +60,24 @@ export class AiCompanionService {
       this.prisma.readingProgress.findMany({
         where: { userId, workId },
         select: { episodeId: true, completed: true, progressPct: true },
+      }),
+      this.prisma.storyCharacter.findMany({
+        where: { workId, isPublic: true },
+        select: { name: true, role: true, personality: true, motivation: true, speechStyle: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.storyArc.findUnique({
+        where: { workId },
+        select: { premise: true, centralConflict: true, themes: true },
+      }),
+      this.prisma.workCreationPlan.findUnique({
+        where: { workId },
+        select: { emotionBlueprint: true, worldBuildingData: true },
+      }),
+      this.prisma.episodeAnalysis.findMany({
+        where: { workId },
+        select: { episode: { select: { orderIndex: true } }, characters: true },
+        orderBy: { episode: { orderIndex: 'asc' } },
       }),
     ]);
 
@@ -76,6 +95,51 @@ export class AiCompanionService {
       0,
     );
 
+    // Spoiler prevention: collect character names that appeared up to reader's progress
+    const appearedCharNames = new Set<string>();
+    for (const ea of episodeAnalyses) {
+      if (ea.episode.orderIndex <= currentEpisodeIndex && Array.isArray(ea.characters)) {
+        for (const c of ea.characters as any[]) {
+          if (c.name) appearedCharNames.add(c.name);
+        }
+      }
+    }
+
+    // Build structured context (spoiler-safe)
+    const structuredParts: string[] = [];
+
+    // Characters: only those that appeared in read episodes
+    const safeChars = publicCharacters.filter((c) => appearedCharNames.has(c.name));
+    if (safeChars.length > 0) {
+      const charLines = safeChars.map((c) =>
+        `- ${c.name} (${c.role}): ${[c.personality, c.motivation, c.speechStyle ? `口調:${c.speechStyle}` : ''].filter(Boolean).join('、')}`,
+      ).join('\n');
+      structuredParts.push(`【登場人物情報】\n${charLines}`);
+    }
+
+    // World setting (no spoilers in world basics)
+    const wb = creationPlan?.worldBuildingData as any;
+    if (wb) {
+      const wbLines: string[] = [];
+      if (wb.basics?.era) wbLines.push(`時代: ${wb.basics.era}`);
+      if (wb.basics?.setting) wbLines.push(`舞台: ${wb.basics.setting}`);
+      for (const term of (wb.terminology || []).slice(0, 10)) {
+        if (term.term) wbLines.push(`${term.term}: ${term.definition}`);
+      }
+      if (wbLines.length > 0) structuredParts.push(`【世界観】\n${wbLines.join('\n')}`);
+    }
+
+    // Story themes (non-spoiler)
+    if (storyArc) {
+      const themeLines: string[] = [];
+      if (storyArc.premise) themeLines.push(`前提: ${storyArc.premise}`);
+      if (storyArc.centralConflict) themeLines.push(`中心的葛藤: ${storyArc.centralConflict}`);
+      if (storyArc.themes.length > 0) themeLines.push(`テーマ: ${storyArc.themes.join('、')}`);
+      if (themeLines.length > 0) structuredParts.push(`【物語のテーマ】\n${themeLines.join('\n')}`);
+    }
+
+    const structuredContext = structuredParts.join('\n\n').slice(0, MAX_STRUCTURED_CONTEXT_LENGTH);
+
     const fullText = work.episodes.map((e) => e.content).join('\n\n');
     const workText = fullText.slice(0, MAX_WORK_TEXT_LENGTH);
 
@@ -85,8 +149,10 @@ export class AiCompanionService {
 - 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降のネタバレは絶対にしないでください。
 - 読者が読んだ範囲の内容について、深い考察や感想を共有してください。
 - 質問には親切に、しかし未読部分の内容は明かさないでください。
+- 登場人物の名前、性格、口調を以下の情報から正確に参照してください。
+- 世界観の用語や設定を正確に使用してください。
 - 日本語で回答してください。
-
+${structuredContext ? `\n${structuredContext}\n` : ''}
 作品テキスト（読者の既読範囲）:
 ${workText}`;
 

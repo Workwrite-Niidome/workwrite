@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight, BarChart3, Eye, TrendingDown } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight, BarChart3, Eye, TrendingDown, Globe, Heart } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -11,6 +11,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime, cn } from '@/lib/utils';
 import { api, type Work, type StoryCharacter, type WorkReaderStats } from '@/lib/api';
+import { WorldTab } from '@/components/work/WorldTab';
+import { EmotionArc } from '@/components/work/EmotionArc';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -28,6 +30,9 @@ export default function WorkDetailPage() {
   const [showPrologue, setShowPrologue] = useState(false);
   const [readerStats, setReaderStats] = useState<WorkReaderStats | null>(null);
   const [showStats, setShowStats] = useState(false);
+  const [activeTab, setActiveTab] = useState<'overview' | 'world' | 'characters'>('overview');
+  const [emotionProfile, setEmotionProfile] = useState<any>(null);
+  const [hasWorldData, setHasWorldData] = useState(false);
 
   useEffect(() => {
     api.getWork(workId)
@@ -53,6 +58,16 @@ export default function WorkDetailPage() {
         const chars = Array.isArray(res) ? res : (res as any).data || [];
         setPublicCharacters(chars);
       })
+      .catch(() => {});
+
+    // Fetch emotion profile
+    api.getEmotionProfile(workId)
+      .then((res) => setEmotionProfile(res))
+      .catch(() => {});
+
+    // Check if world data exists
+    api.getWorldData(workId)
+      .then((res) => { if (res) setHasWorldData(true); })
       .catch(() => {});
   }, [workId, router, isAuthenticated, user?.id]);
 
@@ -197,7 +212,152 @@ export default function WorkDetailPage() {
           </Card>
         )}
 
-        {publicCharacters.length > 0 && (
+        {/* Emotion Badges */}
+        {emotionProfile && (emotionProfile.authorEmotions?.length > 0 || emotionProfile.readerEmotions?.length > 0) && (
+          <div className="flex flex-wrap gap-2 items-center">
+            {emotionProfile.authorEmotions?.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">作者の意図:</span>
+                {emotionProfile.authorEmotions.map((e: any) => (
+                  <Badge key={e.tag} variant="outline" className="text-xs gap-1">
+                    <Heart className="h-2.5 w-2.5" />
+                    {e.tagJa}
+                  </Badge>
+                ))}
+              </div>
+            )}
+            {emotionProfile.readerEmotions?.length > 0 && (
+              <div className="flex items-center gap-1.5">
+                <span className="text-xs text-muted-foreground">読者の感想:</span>
+                {emotionProfile.readerEmotions.slice(0, 5).map((e: any) => (
+                  <Badge key={e.tag} variant="secondary" className="text-xs">
+                    {e.tagJa} ({e.avgIntensity?.toFixed(1)})
+                  </Badge>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
+        {/* Tabs: 概要 | 世界観 | キャラクター */}
+        {(hasWorldData || publicCharacters.length > 0) && (
+          <div className="border-b border-border">
+            <div className="flex gap-4">
+              <button
+                onClick={() => setActiveTab('overview')}
+                className={cn(
+                  'pb-2 text-sm font-medium border-b-2 transition-colors',
+                  activeTab === 'overview' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+                )}
+              >
+                概要
+              </button>
+              {hasWorldData && (
+                <button
+                  onClick={() => setActiveTab('world')}
+                  className={cn(
+                    'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+                    activeTab === 'world' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Globe className="h-3.5 w-3.5" /> 世界観
+                </button>
+              )}
+              {publicCharacters.length > 0 && (
+                <button
+                  onClick={() => setActiveTab('characters')}
+                  className={cn(
+                    'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+                    activeTab === 'characters' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  <Users className="h-3.5 w-3.5" /> キャラクター
+                </button>
+              )}
+            </div>
+          </div>
+        )}
+
+        {/* Tab Content */}
+        {activeTab === 'world' && hasWorldData && (
+          <WorldTab workId={workId} />
+        )}
+
+        {activeTab === 'characters' && publicCharacters.length > 0 && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-sm font-medium mb-3 flex items-center gap-1.5">
+                <Users className="h-4 w-4" /> 登場人物
+              </h2>
+              {/* Group by role */}
+              {(() => {
+                const roleOrder = ['主人公', 'ヒロイン', '準主役', '敵役', 'メンター', '脇役', '不明'];
+                const grouped = new Map<string, typeof publicCharacters>();
+                for (const char of publicCharacters) {
+                  const role = char.role || '不明';
+                  if (!grouped.has(role)) grouped.set(role, []);
+                  grouped.get(role)!.push(char);
+                }
+                const sortedGroups = [...grouped.entries()].sort(
+                  ([a], [b]) => (roleOrder.indexOf(a) === -1 ? 99 : roleOrder.indexOf(a)) - (roleOrder.indexOf(b) === -1 ? 99 : roleOrder.indexOf(b)),
+                );
+                return (
+                  <div className="space-y-3">
+                    {sortedGroups.map(([role, chars]) => (
+                      <div key={role}>
+                        <p className="text-xs font-medium text-muted-foreground mb-1.5">{role}</p>
+                        <div className="space-y-1">
+                          {chars.map((char) => {
+                            const isExpanded = expandedCharId === char.id;
+                            return (
+                              <div key={char.id} className="border border-border rounded-lg">
+                                <button
+                                  onClick={() => setExpandedCharId(isExpanded ? null : char.id)}
+                                  className="w-full flex items-center gap-2 px-3 py-2.5 text-left hover:bg-muted/30 transition-colors"
+                                >
+                                  {isExpanded ? <ChevronDown className="h-3.5 w-3.5 text-muted-foreground" /> : <ChevronRight className="h-3.5 w-3.5 text-muted-foreground" />}
+                                  <span className="text-sm font-medium">{char.name}</span>
+                                </button>
+                                {isExpanded && (
+                                  <div className="px-4 pb-3 text-xs text-muted-foreground space-y-1 border-t border-border/50 pt-2">
+                                    {(char.gender || char.age) && (
+                                      <p>{[char.gender, char.age].filter(Boolean).join(' / ')}</p>
+                                    )}
+                                    {char.personality && <p>性格: {char.personality}</p>}
+                                    {char.appearance && <p>外見: {char.appearance}</p>}
+                                    {char.background && <p>背景: {char.background}</p>}
+                                    {char.motivation && <p>動機: {char.motivation}</p>}
+                                    {char.arc && <p>成長アーク: {char.arc}</p>}
+                                    {/* Relations */}
+                                    {(char as any).relationsFrom?.filter((r: any) => r?.to?.name).length > 0 && (
+                                      <div className="mt-1">
+                                        <p className="font-medium text-foreground">関係性:</p>
+                                        {(char as any).relationsFrom
+                                          .filter((rel: any) => rel?.to?.name)
+                                          .map((rel: any) => (
+                                            <p key={rel.to.id} className="ml-2">
+                                              → {rel.to.name} ({rel.relationType || '関係'})
+                                              {rel.description && `: ${rel.description}`}
+                                            </p>
+                                          ))}
+                                      </div>
+                                    )}
+                                  </div>
+                                )}
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                );
+              })()}
+            </CardContent>
+          </Card>
+        )}
+
+        {(activeTab === 'overview' || (!hasWorldData && publicCharacters.length === 0)) && publicCharacters.length > 0 && !hasWorldData && (
           <Card>
             <CardContent className="pt-6">
               <h2 className="text-sm font-medium mb-3 flex items-center gap-1.5">
@@ -233,6 +393,9 @@ export default function WorkDetailPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Emotion Arc Visualization */}
+        <EmotionArc workId={workId} />
 
         <div className="grid grid-cols-2 sm:flex sm:flex-wrap gap-2 sm:gap-3">
           <Button onClick={handleStartReading} disabled={!work.episodes?.length} className="w-full sm:w-auto">

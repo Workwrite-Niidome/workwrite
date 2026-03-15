@@ -17,6 +17,7 @@ interface AnalysisResult {
   foreshadowings: { description: string; type: 'plant' | 'develop' | 'resolve' }[];
   dialogueSamples: { character: string; line: string; context: string; emotion: string }[];
   newWorldRules: { category: string; name: string; description: string }[];
+  characterConsistency?: { name: string; consistent: boolean; notes: string }[];
 }
 
 @Injectable()
@@ -55,6 +56,13 @@ export class EpisodeAnalysisService {
       this.logger.error('API key is not configured, skipping analysis');
       return;
     }
+
+    // Get character data for consistency checking
+    const storyCharacters = await this.prisma.storyCharacter.findMany({
+      where: { workId },
+      select: { name: true, role: true, personality: true, speechStyle: true, firstPerson: true },
+      take: 20,
+    });
 
     // Get previous episode analysis for continuity context
     let previousContext = '';
@@ -101,10 +109,23 @@ ${prevEpisode.aiAnalysis.endState || '（なし）'}
   "characters": [{ "name": "キャラ名", "role": "この話での役割", "action": "主な行動", "currentState": "終了時の状態" }],
   "foreshadowings": [{ "description": "伏線の内容", "type": "plant/develop/resolve" }],
   "dialogueSamples": [{ "character": "キャラ名", "line": "代表的なセリフ", "context": "状況", "emotion": "感情" }],
-  "newWorldRules": [{ "category": "geography/magic/social/technology/culture", "name": "設定名", "description": "詳細" }]
+  "newWorldRules": [{ "category": "geography/magic/social/technology/culture", "name": "設定名", "description": "詳細" }],
+  "characterConsistency": [{ "name": "キャラ名", "consistent": true, "notes": "一貫性に関するメモ" }]
 }`;
 
-    const userPrompt = `${previousContext}
+    // Build character reference for consistency checking
+    let characterReference = '';
+    if (storyCharacters.length > 0) {
+      characterReference = `\n【キャラクター設計（一貫性チェック用）】\n${storyCharacters.map((c) =>
+        `- ${c.name} (${c.role}): ${[
+          c.personality ? `性格=${c.personality}` : '',
+          c.speechStyle ? `口調=${c.speechStyle}` : '',
+          c.firstPerson ? `一人称=${c.firstPerson}` : '',
+        ].filter(Boolean).join(', ')}`,
+      ).join('\n')}\n`;
+    }
+
+    const userPrompt = `${previousContext}${characterReference}
 【エピソードタイトル】${episode.title}
 
 【本文】

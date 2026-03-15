@@ -1080,6 +1080,26 @@ class ApiClient {
     );
   }
 
+  // Work Structured Data (Reader View)
+  async getEmotionProfile(workId: string) {
+    return this.request<any>(`/works/${workId}/emotion-profile`);
+  }
+
+  async getEmotionArc(workId: string) {
+    return this.request<any>(`/works/${workId}/emotion-arc`);
+  }
+
+  async getWorldData(workId: string) {
+    return this.request<any>(`/works/${workId}/world`);
+  }
+
+  async updatePublicFlags(workId: string, flags: { isWorldPublic?: boolean; isEmotionPublic?: boolean }) {
+    return this.request<any>(`/works/${workId}/public-flags`, {
+      method: 'PUT',
+      body: JSON.stringify(flags),
+    });
+  }
+
   // AI Insights
   async getAiInsights(workId: string) {
     return this.request<{ data: AiInsightData }>(`/ai/insights/${workId}`);
@@ -1588,6 +1608,7 @@ export interface StoryCharacter {
   notes?: string | null;
   isPublic: boolean;
   sortOrder: number;
+  customFields?: Record<string, string> | null;
   relationsFrom?: { relationType: string; description?: string; to: { id: string; name: string } }[];
   relationsTo?: { relationType: string; description?: string; from: { id: string; name: string } }[];
 }

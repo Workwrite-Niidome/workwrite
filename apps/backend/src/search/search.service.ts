@@ -10,7 +10,12 @@ export interface WorkDocument {
   authorName: string;
   tags: string[];
   emotionTags: string[];
+  worldKeywords: string[];
+  emotionKeywords: string[];
+  premise: string;
   qualityScore: number;
+  immersionScore: number;
+  worldBuildingScore: number;
   totalViews: number;
   totalReads: number;
   publishedAt: number;
@@ -34,9 +39,9 @@ export class SearchService implements OnModuleInit {
       this.worksIndex = this.client.index('works');
       await this.client.createIndex('works', { primaryKey: 'id' });
       await this.worksIndex.updateSettings({
-        searchableAttributes: ['title', 'synopsis', 'authorName', 'tags', 'emotionTags'],
-        filterableAttributes: ['genre', 'tags', 'emotionTags', 'qualityScore', 'totalViews'],
-        sortableAttributes: ['qualityScore', 'totalViews', 'totalReads', 'publishedAt'],
+        searchableAttributes: ['title', 'synopsis', 'authorName', 'tags', 'emotionTags', 'worldKeywords', 'emotionKeywords', 'premise'],
+        filterableAttributes: ['genre', 'tags', 'emotionTags', 'qualityScore', 'totalViews', 'immersionScore', 'worldBuildingScore'],
+        sortableAttributes: ['qualityScore', 'totalViews', 'totalReads', 'publishedAt', 'immersionScore', 'worldBuildingScore'],
         rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness'],
       });
     } catch (e) {

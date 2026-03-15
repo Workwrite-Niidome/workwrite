@@ -21,17 +21,76 @@ export class AiInsightsService {
     });
     if (cached) return cached.content;
 
-    // Generate new insights
+    // Generate new insights with structured context
     const workText = await this.getWorkText(workId);
+
+    // Fetch structured data for richer analysis
+    const [characters, storyArc, creationPlan, foreshadowings] = await Promise.all([
+      this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: { name: true, role: true, personality: true, motivation: true, arc: true },
+        orderBy: { sortOrder: 'asc' },
+      }),
+      this.prisma.storyArc.findUnique({
+        where: { workId },
+        select: { premise: true, centralConflict: true, themes: true },
+      }),
+      this.prisma.workCreationPlan.findUnique({
+        where: { workId },
+        select: { emotionBlueprint: true },
+      }),
+      this.prisma.foreshadowing.findMany({
+        where: { workId, status: 'open' },
+        select: { description: true, plantedIn: true, importance: true },
+        take: 20,
+      }),
+    ]);
+
+    // Build structured reference section
+    const structuredRef: string[] = [];
+    if (characters.length > 0) {
+      const charList = characters.map((c) =>
+        `- ${c.name} (${c.role}): 性格=${c.personality || '不明'}, 動機=${c.motivation || '不明'}, アーク=${c.arc || '不明'}`,
+      ).join('\n');
+      structuredRef.push(`【キャラクター設計】\n${charList}`);
+    }
+    if (storyArc) {
+      const arcLines: string[] = [];
+      if (storyArc.premise) arcLines.push(`前提: ${storyArc.premise}`);
+      if (storyArc.centralConflict) arcLines.push(`葛藤: ${storyArc.centralConflict}`);
+      if (storyArc.themes.length > 0) arcLines.push(`テーマ: ${storyArc.themes.join('、')}`);
+      if (arcLines.length > 0) structuredRef.push(`【ストーリーアーク】\n${arcLines.join('\n')}`);
+    }
+    const eb = creationPlan?.emotionBlueprint as any;
+    if (eb) {
+      const ebLines: string[] = [];
+      if (eb.coreMessage) ebLines.push(`核メッセージ: ${eb.coreMessage}`);
+      if (eb.targetEmotions) ebLines.push(`目標感情: ${eb.targetEmotions}`);
+      if (ebLines.length > 0) structuredRef.push(`【感情設計】\n${ebLines.join('\n')}`);
+    }
+    if (foreshadowings.length > 0) {
+      const fList = foreshadowings.map((f) =>
+        `- [第${f.plantedIn + 1}話] ${f.description} (${f.importance})`,
+      ).join('\n');
+      structuredRef.push(`【未回収の伏線】\n${fList}`);
+    }
+
+    const structuredSection = structuredRef.length > 0
+      ? `\n\n以下は作者の設計データです。分析の参考にしてください:\n${structuredRef.join('\n\n')}\n`
+      : '';
+
     const prompt = `あなたは文学評論家です。以下の小説を分析し、JSON形式で回答してください。
 {
   "themes": [{ "name": "テーマ名", "explanation": "説明" }],
   "emotionalJourney": "作品の感情的な軌道の説明",
   "characterInsights": [{ "name": "人物名", "arc": "成長や変化" }],
   "symbolism": [{ "element": "象徴", "meaning": "意味" }],
-  "discussionQuestions": ["問い1", "問い2", "問い3"]
+  "discussionQuestions": ["問い1", "問い2", "問い3"],
+  "foreshadowingStatus": [{ "description": "伏線", "suggestion": "解決提案" }],
+  "characterArcProgress": [{ "name": "人物名", "planned": "計画されたアーク", "current": "現在の進捗" }],
+  "emotionAlignment": { "intended": "作者の意図した感情", "detected": "検出された感情アーク", "alignment": "一致度の説明" }
 }
-
+${structuredSection}
 作品テキスト:
 ${workText}`;
 

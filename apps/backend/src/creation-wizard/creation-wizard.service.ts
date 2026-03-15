@@ -420,6 +420,14 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
       if (c.motivation) lines.push(`  動機: ${c.motivation}`);
       if (c.relationships) lines.push(`  関係: ${c.relationships}`);
       if (c.uniqueTrait) lines.push(`  特徴: ${c.uniqueTrait}`);
+      if (c.arc) lines.push(`  成長アーク: ${c.arc}`);
+      // Custom fields (from StoryCharacter table or wizard JSON)
+      const cf = c.customFields || c.customFieldValues;
+      if (cf && typeof cf === 'object') {
+        for (const [key, val] of Object.entries(cf as Record<string, string>)) {
+          if (val) lines.push(`  ${key}: ${val}`);
+        }
+      }
       // Fallback: description field from wizard format
       if (c.description && !c.personality && !c.speechStyle) {
         lines.push(`  詳細: ${c.description}`);
@@ -558,10 +566,14 @@ ${dto.existingData ? `【既存の世界観設定】\n${JSON.stringify(dto.exist
       where: { workId },
     });
 
-    // Get characters
+    // Get characters (all fields needed for context)
     const characters = await this.prisma.storyCharacter.findMany({
       where: { workId },
-      select: { name: true, personality: true, speechStyle: true, firstPerson: true, gender: true },
+      select: {
+        name: true, role: true, personality: true, speechStyle: true,
+        firstPerson: true, gender: true, age: true, appearance: true,
+        background: true, motivation: true, arc: true, customFields: true,
+      },
     });
 
     const contextParts: string[] = [];
@@ -569,10 +581,42 @@ ${dto.existingData ? `【既存の世界観設定】\n${JSON.stringify(dto.exist
       contextParts.push(this.formatCharactersForPrompt(characters));
     }
     if (plan?.plotOutline) {
-      const plotText = typeof plan.plotOutline === 'string'
-        ? plan.plotOutline
-        : (plan.plotOutline as any)?.text || JSON.stringify(plan.plotOutline);
-      contextParts.push(`【プロット】\n${plotText}`);
+      const po = plan.plotOutline as any;
+      let plotText = '';
+      if (typeof po === 'string') {
+        plotText = po;
+      } else if (po?.type === 'structured' && po.actGroups?.length > 0) {
+        plotText = po.actGroups.map((group: any) => {
+          const header = `【${group.label}】${group.description ? ` ${group.description}` : ''}`;
+          const episodes = (group.episodes || []).map((ep: any, i: number) => {
+            const parts = [`  ${i + 1}. ${ep.title || '（無題）'}`];
+            if (ep.whatHappens) parts.push(`     何が起きるか: ${ep.whatHappens}`);
+            if (ep.whyItHappens) parts.push(`     なぜ起きるか: ${ep.whyItHappens}`);
+            if (ep.characters?.length > 0) parts.push(`     登場: ${ep.characters.join('、')}`);
+            if (ep.emotionTarget) parts.push(`     感情目標: ${ep.emotionTarget}`);
+            return parts.join('\n');
+          }).join('\n');
+          return episodes ? `${header}\n${episodes}` : header;
+        }).join('\n\n');
+      } else {
+        plotText = po?.text || '';
+      }
+      if (plotText) contextParts.push(`【プロット】\n${plotText}`);
+    }
+
+    // World building context
+    if (plan?.worldBuildingData) {
+      const wb = plan.worldBuildingData as any;
+      const wbParts: string[] = [];
+      if (wb.basics?.era) wbParts.push(`時代: ${wb.basics.era}`);
+      if (wb.basics?.setting) wbParts.push(`舞台: ${wb.basics.setting}`);
+      for (const rule of wb.rules || []) {
+        if (rule.name) wbParts.push(`ルール「${rule.name}」: ${rule.description}${rule.constraints ? `（制約: ${rule.constraints}）` : ''}`);
+      }
+      for (const term of wb.terminology || []) {
+        if (term.term) wbParts.push(`${term.term}${term.reading ? `（${term.reading}）` : ''}: ${term.definition}`);
+      }
+      if (wbParts.length > 0) contextParts.push(`【世界観設定】\n${wbParts.join('\n')}`);
     }
 
     const systemPrompt = `あなたは小説の校正・整合性チェックの専門家です。本文と設定情報を照合し、問題点を指摘してください。
@@ -641,7 +685,7 @@ ${episodeContent.slice(0, 5000)}`;
   // ─── Plan CRUD ───────────────────────────────────────────────
 
   async saveCreationPlan(workId: string, dto: SaveCreationPlanDto) {
-    return this.prisma.workCreationPlan.upsert({
+    const result = await this.prisma.workCreationPlan.upsert({
       where: { workId },
       update: {
         characters: dto.characters ?? undefined,
@@ -661,6 +705,53 @@ ${episodeContent.slice(0, 5000)}`;
         worldBuildingData: dto.worldBuildingData ?? undefined,
       },
     });
+
+    // Sync worldBuildingData to WorldSetting table
+    if (dto.worldBuildingData) {
+      await this.syncWorldSettings(workId, dto.worldBuildingData as any);
+    }
+
+    return result;
+  }
+
+  /** Sync worldBuildingData JSON to WorldSetting table entries */
+  private async syncWorldSettings(workId: string, wb: any) {
+    try {
+      const entries: { category: string; name: string; description: string }[] = [];
+
+      if (wb.basics?.era) {
+        entries.push({ category: 'culture', name: '時代', description: wb.basics.era });
+      }
+      if (wb.basics?.setting) {
+        entries.push({ category: 'geography', name: '舞台', description: wb.basics.setting });
+      }
+      if (wb.basics?.civilizationLevel) {
+        entries.push({ category: 'technology', name: '文明レベル', description: wb.basics.civilizationLevel });
+      }
+      for (const rule of wb.rules || []) {
+        if (rule.name && rule.description) {
+          entries.push({ category: 'magic', name: rule.name, description: `${rule.description}${rule.constraints ? `\n制約: ${rule.constraints}` : ''}` });
+        }
+      }
+      for (const term of wb.terminology || []) {
+        if (term.term && term.definition) {
+          entries.push({ category: 'culture', name: term.term, description: `${term.reading ? `（${term.reading}）` : ''}${term.definition}` });
+        }
+      }
+      if (wb.history) {
+        entries.push({ category: 'culture', name: '歴史', description: wb.history });
+      }
+
+      for (const entry of entries) {
+        await this.prisma.worldSetting.upsert({
+          where: { workId_category_name: { workId, category: entry.category, name: entry.name } },
+          update: { description: entry.description },
+          create: { workId, ...entry },
+        });
+      }
+    } catch {
+      // Non-critical: don't fail the save if sync fails
+    }
   }
 
   async getCreationPlan(workId: string) {

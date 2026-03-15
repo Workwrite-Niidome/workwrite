@@ -460,6 +460,8 @@ model QualityScore {
   virality        Float    // 拡散力 0-100
   worldBuilding   Float    // 世界構築力 0-100
   overall         Float    // 統合スコア 0-100
+  characterDepth  Float?   // キャラクター深度 0-100
+  structuralScore Float?   // 構造スコア 0-100
   analysisJson    Json?    // detailed LLM analysis
   improvementTips Json?    // top 3 improvement suggestions
   scoredAt        DateTime @default(now())
@@ -664,15 +666,19 @@ model AiInsight {
 }
 
 model WorkEmbedding {
-  id        String   @id @default(cuid())
-  workId    String   @unique
-  summary   String   @db.Text
-  themes    Json
-  tone      String?
-  audience  String?
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  work      Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
+  id             String   @id @default(cuid())
+  workId         String   @unique
+  summary        String   @db.Text
+  themes         Json
+  tone           String?
+  audience       String?
+  characters     Json?    // キャラクター名配列
+  worldType      String?  // "中世ファンタジー", "現代日本", "近未来SF"等
+  emotionProfile Json?    // 意図された感情配列
+  subGenre       String?  // より具体的なジャンル分類
+  createdAt      DateTime @default(now())
+  updatedAt      DateTime @updatedAt
+  work           Work     @relation(fields: [workId], references: [id], onDelete: Cascade)
 }
 
 model AiConversation {
@@ -752,6 +758,8 @@ model WorkCreationPlan {
   storySummary           Json?    // Auto-generated running summary of all episodes (cached)
   customFieldDefinitions Json?    // Custom field definitions for characters
   worldBuildingData      Json?    // World building data from wizard
+  isWorldPublic          Boolean  @default(false)
+  isEmotionPublic        Boolean  @default(false)
   createdAt              DateTime @default(now())
   updatedAt              DateTime @updatedAt
 
