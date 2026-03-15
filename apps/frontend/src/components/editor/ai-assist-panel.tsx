@@ -4,8 +4,8 @@ import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream } from '@/lib/use-ai-stream';
-import { api } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal, Send, UserPlus, Check, Loader2 } from 'lucide-react';
+import { api, type AiGenerationHistoryItem } from '@/lib/api';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal, Send, UserPlus, Check, Loader2, History, Trash2, MessageSquare, RotateCcw } from 'lucide-react';
 
 interface AiAssistPanelProps {
   workId: string;
@@ -17,11 +17,18 @@ interface AiAssistPanelProps {
   onClose: () => void;
 }
 
-interface HistoryItem {
-  slug: string;
-  result: string;
-  timestamp: Date;
-}
+const TEMPLATE_LABELS: Record<string, string> = {
+  'chapter-opening': '章の書き出し',
+  'continue-writing': '続きを書く',
+  'character-dev': 'キャラクター深掘り',
+  'scene-enhance': 'シーン描写の強化',
+  'dialogue-improve': '会話の改善',
+  'plot-ideas': 'プロット展開',
+  'style-adjust': '文体調整',
+  'proofread': '校正',
+  'synopsis-gen': 'あらすじ生成',
+  'free-prompt': '自由プロンプト',
+};
 
 export function AiAssistPanel({ workId, currentContent, currentTitle, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
@@ -34,7 +41,6 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [customPrompt, setCustomPrompt] = useState('');
   const [freePrompt, setFreePrompt] = useState('');
   const [copied, setCopied] = useState(false);
-  const [history, setHistory] = useState<HistoryItem[]>([]);
   const [creationPlan, setCreationPlan] = useState<any>(null);
   const [storySummary, setStorySummary] = useState<any>(null);
   const [episodes, setEpisodes] = useState<{ title: string; content: string }[]>([]);
@@ -42,7 +48,18 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [extracting, setExtracting] = useState(false);
   const [newChars, setNewChars] = useState<{ name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }[] | null>(null);
   const [savedChars, setSavedChars] = useState<Set<string>>(new Set());
-  const { result, isStreaming, error, generate, abort, reset } = useAiStream();
+
+  // Chat state
+  const [chatMessages, setChatMessages] = useState<{ role: string; content: string }[]>([]);
+  const [followUpInput, setFollowUpInput] = useState('');
+  const [currentSlug, setCurrentSlug] = useState<string>('');
+
+  // History state
+  const [historyItems, setHistoryItems] = useState<AiGenerationHistoryItem[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
+  const [historyTotal, setHistoryTotal] = useState(0);
+
+  const { result, isStreaming, error, conversationId, generate, generateFollowUp, abort, reset } = useAiStream();
 
   useEffect(() => {
     api.getAiStatus()
@@ -55,7 +72,6 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       .then((res) => setTemplates(res.data))
       .catch(() => {});
     if (workId) {
-      // Load creation plan for context (includes storySummary)
       api.getCreationPlan(workId)
         .then((res) => {
           if (res.data) {
@@ -64,34 +80,37 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           }
         })
         .catch(() => {});
-      // Load structured context from StoryCharacter + StoryArc tables
       api.getStoryContext(workId)
         .then((res) => { if (res) setStructuredContext(typeof res === 'string' ? res : (res as any).data || null); })
         .catch(() => {});
-      // Load episode titles as fallback (if no story summary)
       api.getEpisodes(workId)
         .then((res) => {
           if (res.data) {
             const sorted = [...res.data].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
-            setEpisodes(sorted.map((ep: any) => ({
-              title: ep.title,
-              content: '',
-            })));
+            setEpisodes(sorted.map((ep: any) => ({ title: ep.title, content: '' })));
           }
         })
         .catch(() => {});
+      loadHistory();
     }
   }, [workId]);
 
-  // Save to history when generation completes
+  // When generation completes, update chat messages
   useEffect(() => {
     if (!isStreaming && result && result.length > 0) {
-      setHistory((prev) => [
-        { slug: 'last', result, timestamp: new Date() },
-        ...prev.slice(0, 4),
-      ]);
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: result }]);
+      loadHistory();
     }
   }, [isStreaming, result]);
+
+  function loadHistory() {
+    api.getAiHistory(workId, { limit: 10 })
+      .then((res) => {
+        setHistoryItems(res.data);
+        setHistoryTotal(res.total);
+      })
+      .catch(() => {});
+  }
 
   function handleCopy() {
     navigator.clipboard.writeText(result);
@@ -118,13 +137,8 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     if (!workId || savedChars.has(char.name)) return;
     const existingChars = creationPlan?.characters || [];
     const newChar = {
-      name: char.name,
-      role: char.role,
-      description: char.description,
-      personality: char.personality,
-      speechStyle: char.speechStyle,
-      gender: char.gender,
-      aiSuggested: true,
+      name: char.name, role: char.role, description: char.description,
+      personality: char.personality, speechStyle: char.speechStyle, gender: char.gender, aiSuggested: true,
     };
     const updatedChars = [...existingChars, newChar];
     try {
@@ -136,24 +150,18 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
 
   function buildContextVars(): Record<string, string> {
     const vars: Record<string, string> = { content: selectedText || currentContent };
-    // Pass workId so backend can auto-inject structural context
     if (workId) vars.workId = workId;
     const contextParts: string[] = [];
 
-    // Current chapter info
-    if (currentTitle) {
-      contextParts.push(`現在執筆中の章: 「${currentTitle}」`);
-    }
+    if (currentTitle) contextParts.push(`現在執筆中の章: 「${currentTitle}」`);
     if (currentContent && currentContent.length > 100) {
       const summary = currentContent.slice(0, 300).replace(/\n+/g, ' ');
       contextParts.push(`現在の原稿冒頭: ${summary}...`);
     }
 
-    // Structured context from StoryCharacter + StoryArc tables (characters + arc)
     if (structuredContext) {
       contextParts.push(structuredContext);
     } else if (creationPlan?.characters?.length > 0) {
-      // Fallback: character sheets from creation plan JSON
       const charSheets = creationPlan.characters.map((c: any) => {
         const lines = [`■ ${c.name}${c.role ? `（${c.role}）` : ''}`];
         if (c.description) lines.push(`  概要: ${c.description}`);
@@ -168,16 +176,14 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       contextParts.push(`【登場キャラクター設定（厳守）】\n${charSheets}`);
     }
 
-    // Plot and chapter outline (always from creation plan, regardless of structuredContext)
     if (creationPlan?.plotOutline) {
       let plot = '';
       if (typeof creationPlan.plotOutline === 'string') {
         plot = creationPlan.plotOutline;
       } else if (creationPlan.plotOutline.type === 'structured' && creationPlan.plotOutline.actGroups?.length > 0) {
-        // New structured format: convert actGroups to readable text for AI context
         plot = creationPlan.plotOutline.actGroups.map((group: any) => {
           const header = `【${group.label}】${group.description ? ` ${group.description}` : ''}`;
-          const episodes = (group.episodes || []).map((ep: any, i: number) => {
+          const eps = (group.episodes || []).map((ep: any, i: number) => {
             const parts = [`  ${i + 1}. ${ep.title || '（無題）'}`];
             if (ep.whatHappens) parts.push(`     何が起きるか: ${ep.whatHappens}`);
             if (ep.whyItHappens) parts.push(`     なぜ起きるか: ${ep.whyItHappens}`);
@@ -185,7 +191,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
             if (ep.emotionTarget) parts.push(`     感情目標: ${ep.emotionTarget}`);
             return parts.join('\n');
           }).join('\n');
-          return episodes ? `${header}\n${episodes}` : header;
+          return eps ? `${header}\n${eps}` : header;
         }).join('\n\n');
       } else {
         plot = creationPlan.plotOutline.text || '';
@@ -205,7 +211,6 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       contextParts.push(`【章立て】\n${chapterSummary}`);
     }
 
-    // World building (from creation plan)
     if (creationPlan?.worldBuildingData) {
       const wb = creationPlan.worldBuildingData;
       const wbParts: string[] = [];
@@ -226,7 +231,6 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       if (wbParts.length > 0) contextParts.push(`【世界観設定（厳守）】\n${wbParts.join('\n')}`);
     }
 
-    // Emotion blueprint (always from creation plan)
     if (creationPlan?.emotionBlueprint) {
       const eb = creationPlan.emotionBlueprint;
       if (eb.coreMessage) contextParts.push(`テーマ: ${eb.coreMessage}`);
@@ -236,12 +240,10 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       if (eb.readerOneLiner) contextParts.push(`読者に一言: ${eb.readerOneLiner}`);
     }
 
-    // Use cached story summary if available (token-efficient)
     if (storySummary) {
       const parts: string[] = [];
       if (storySummary.overallSummary) parts.push(`【物語の流れ】\n${storySummary.overallSummary}`);
       if (storySummary.episodes?.length > 0) {
-        // Always include all episode summaries for consistency
         const epText = storySummary.episodes.map((ep: any) => {
           let line = `「${ep.title}」: ${ep.summary}`;
           if (ep.keyEvents?.length) line += ` [${ep.keyEvents.join(', ')}]`;
@@ -258,34 +260,71 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
         }).join('\n');
         parts.push(`【キャラクター現況】\n${charText}`);
       }
-      if (storySummary.openThreads?.length > 0) {
-        parts.push(`【未解決の伏線・展開】\n${storySummary.openThreads.join('\n')}`);
-      }
-      if (storySummary.worldRules?.length > 0) {
-        parts.push(`【世界観・ルール】\n${storySummary.worldRules.join('\n')}`);
-      }
+      if (storySummary.openThreads?.length > 0) parts.push(`【未解決の伏線・展開】\n${storySummary.openThreads.join('\n')}`);
+      if (storySummary.worldRules?.length > 0) parts.push(`【世界観・ルール】\n${storySummary.worldRules.join('\n')}`);
       if (storySummary.timeline) parts.push(`時間経過: ${storySummary.timeline}`);
       if (storySummary.tone) parts.push(`トーン: ${storySummary.tone}`);
       contextParts.push(parts.join('\n\n'));
     } else if (episodes.length > 0) {
-      // Fallback: episode titles (summary not yet generated)
       const epList = episodes.map((ep, i) => `第${i + 1}話「${ep.title}」`).join('\n');
       contextParts.push(`【これまでの章（要約未生成 — タイトルのみ）】\n${epList}`);
     }
 
-    if (contextParts.length > 0) {
-      vars.context = contextParts.join('\n\n');
-    }
+    if (contextParts.length > 0) vars.context = contextParts.join('\n\n');
     vars.char_count = String(charCount);
-    if (customPrompt.trim()) {
-      vars.custom_instruction = customPrompt.trim();
-    }
+    if (customPrompt.trim()) vars.custom_instruction = customPrompt.trim();
     return vars;
   }
 
   function handleQuickAction(slug: string) {
+    setChatMessages([]);
+    setCurrentSlug(slug);
+    setNewChars(null);
     reset();
     generate(slug, buildContextVars(), premiumMode);
+  }
+
+  function handleFollowUp() {
+    if (!followUpInput.trim() || !conversationId || isStreaming) return;
+    const msg = followUpInput.trim();
+    setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
+    setFollowUpInput('');
+    setNewChars(null);
+    generateFollowUp({
+      templateSlug: currentSlug || 'free-prompt',
+      variables: buildContextVars(),
+      premiumMode,
+      conversationId,
+      followUpMessage: msg,
+    });
+  }
+
+  function handleNewConversation() {
+    setChatMessages([]);
+    setNewChars(null);
+    reset();
+  }
+
+  function handleInsertFromHistory(item: AiGenerationHistoryItem) {
+    const lastAssistant = [...item.messages].reverse().find((m) => m.role === 'assistant');
+    if (lastAssistant) onInsert(lastAssistant.content);
+  }
+
+  async function handleDeleteHistory(id: string) {
+    try {
+      await api.deleteAiHistory(id);
+      setHistoryItems((prev) => prev.filter((item) => item.id !== id));
+      setHistoryTotal((prev) => prev - 1);
+    } catch { /* ignore */ }
+  }
+
+  function handleResumeConversation(item: AiGenerationHistoryItem) {
+    setChatMessages(item.messages);
+    setCurrentSlug(item.templateSlug);
+    setShowHistory(false);
+    reset();
+    // Set conversationId by triggering a dummy state — the actual conversationId
+    // will be set on next follow-up send
   }
 
   if (available === false || (tier && !tier.canUseAi)) {
@@ -294,9 +333,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
       <div className="h-full flex flex-col">
         <div className="flex items-center justify-between p-3 border-b">
           <h3 className="text-sm font-medium">AI アシスト</h3>
-          <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-            <X className="h-4 w-4" />
-          </button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
         </div>
         <div className="flex-1 flex items-center justify-center p-4">
           <p className="text-sm text-muted-foreground text-center">
@@ -311,16 +348,78 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     );
   }
 
+  const hasConversation = chatMessages.length > 0 || result;
+
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-shrink-0 flex items-center justify-between p-3 border-b">
         <h3 className="text-sm font-medium">AI アシスト</h3>
-        <button onClick={onClose} className="text-muted-foreground hover:text-foreground">
-          <X className="h-4 w-4" />
-        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={() => setShowHistory(!showHistory)}
+            className={`p-1 rounded transition-colors ${showHistory ? 'text-primary bg-primary/10' : 'text-muted-foreground hover:text-foreground'}`}
+            title="生成履歴"
+          >
+            <History className="h-4 w-4" />
+          </button>
+          <button onClick={onClose} className="text-muted-foreground hover:text-foreground"><X className="h-4 w-4" /></button>
+        </div>
       </div>
 
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-8 space-y-3" style={{ WebkitOverflowScrolling: 'touch' }}>
+        {/* History Panel */}
+        {showHistory && (
+          <div className="space-y-2">
+            <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+              <History className="h-3 w-3" /> 生成履歴 ({historyTotal}件)
+            </p>
+            {historyItems.length === 0 ? (
+              <p className="text-xs text-muted-foreground text-center py-4">まだ生成履歴がありません</p>
+            ) : (
+              <div className="space-y-1.5">
+                {historyItems.map((item) => {
+                  const lastAssistant = [...item.messages].reverse().find((m) => m.role === 'assistant');
+                  const msgCount = item.messages.filter((m) => m.role === 'user').length;
+                  return (
+                    <div key={item.id} className="p-2 bg-muted/30 rounded border border-border/50 text-xs space-y-1">
+                      <div className="flex items-center justify-between">
+                        <span className="font-medium">
+                          {TEMPLATE_LABELS[item.templateSlug] || item.templateSlug}
+                          {msgCount > 1 && <span className="text-muted-foreground ml-1">({msgCount}往復)</span>}
+                        </span>
+                        <span className="text-[10px] text-muted-foreground">{item.creditCost}cr</span>
+                      </div>
+                      {item.promptSummary && (
+                        <p className="text-muted-foreground line-clamp-1">{item.promptSummary}</p>
+                      )}
+                      {lastAssistant && (
+                        <p className="text-muted-foreground line-clamp-2">{lastAssistant.content}</p>
+                      )}
+                      <div className="flex items-center justify-between pt-1">
+                        <span className="text-[10px] text-muted-foreground">
+                          {new Date(item.updatedAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                        </span>
+                        <div className="flex gap-1">
+                          <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => handleResumeConversation(item)}>
+                            <MessageSquare className="h-2.5 w-2.5 mr-0.5" /> 会話を再開
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => handleInsertFromHistory(item)}>
+                            <ArrowDownToLine className="h-2.5 w-2.5 mr-0.5" /> 挿入
+                          </Button>
+                          <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5 text-muted-foreground hover:text-destructive" onClick={() => handleDeleteHistory(item.id)}>
+                            <Trash2 className="h-2.5 w-2.5" />
+                          </Button>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="border-b border-border my-2" />
+          </div>
+        )}
+
         {/* Tier info + Credit balance */}
         {tier && (
           <div className="space-y-1.5">
@@ -352,9 +451,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 </button>
               )}
               <span className="text-[10px] text-muted-foreground">
-                {premiumMode
-                  ? (tier.canUseOpus ? '5cr/回' : '2cr/回')
-                  : '1cr/回'}
+                {premiumMode ? (tier.canUseOpus ? '5cr/回' : '2cr/回') : '1cr/回'}
               </span>
             </div>
             {(tier as any).credits?.total === 0 && (
@@ -388,14 +485,10 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{creationPlan.chapterOutline.length}章立て</span>
               )}
               {storySummary && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
-                  要約キャッシュ
-                </span>
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">要約キャッシュ</span>
               )}
               {!storySummary && episodes.length > 0 && (
-                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">
-                  {episodes.length}話（タイトルのみ）
-                </span>
+                <span className="text-[11px] px-1.5 py-0.5 rounded bg-background border border-border text-muted-foreground">{episodes.length}話（タイトルのみ）</span>
               )}
             </div>
           </div>
@@ -411,166 +504,164 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           </div>
         )}
 
-        {/* Quick actions */}
-        <div className="space-y-1.5">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
-          <div className="flex flex-wrap gap-1.5">
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs h-7 gap-1"
-              onClick={() => handleQuickAction('chapter-opening')}
-              disabled={isStreaming}
-            >
-              <FileText className="h-3 w-3" /> 章の書き出し
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs h-7 gap-1"
-              onClick={() => handleQuickAction('proofread')}
-              disabled={isStreaming}
-            >
-              <BookCheck className="h-3 w-3" /> 校正
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs h-7 gap-1"
-              onClick={() => handleQuickAction('continue-writing')}
-              disabled={isStreaming}
-            >
-              <PenLine className="h-3 w-3" /> 続きを書く
-            </Button>
-            <Button
-              size="sm"
-              variant="outline"
-              className="text-xs h-7 gap-1"
-              onClick={() => handleQuickAction('style-adjust')}
-              disabled={isStreaming}
-            >
-              <Wand2 className="h-3 w-3" /> 文体調整
-            </Button>
-          </div>
-        </div>
-
-        {/* Character count */}
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-            <SlidersHorizontal className="h-3 w-3" /> 生成文字数: {charCount.toLocaleString()}字
-          </p>
-          <input
-            type="range"
-            min={100}
-            max={5000}
-            step={100}
-            value={charCount}
-            onChange={(e) => setCharCount(Number(e.target.value))}
-            className="w-full h-1.5 accent-foreground"
-          />
-          <div className="flex justify-between text-[10px] text-muted-foreground">
-            <span>100</span>
-            <span>5000</span>
-          </div>
-        </div>
-
-        {/* Custom instruction */}
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">追加指示（任意）</p>
-          <textarea
-            value={customPrompt}
-            onChange={(e) => setCustomPrompt(e.target.value)}
-            placeholder="例: 緊張感のある場面にして、主人公の心情を丁寧に描写して..."
-            rows={2}
-            className="w-full text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-          />
-        </div>
-
-        {/* Free-form prompt */}
-        <div className="space-y-1">
-          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-            <Send className="h-3 w-3" /> AIに直接指示
-          </p>
-          <div className="flex gap-1.5">
-            <textarea
-              value={freePrompt}
-              onChange={(e) => setFreePrompt(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming) {
-                  e.preventDefault();
-                  const vars = buildContextVars();
-                  vars.user_prompt = freePrompt.trim();
-                  reset();
-                  generate('free-prompt', vars, premiumMode);
-                  setFreePrompt('');
-                }
-              }}
-              placeholder="AIへの指示を入力... (Ctrl+Enter で送信)"
-              rows={2}
-              className="flex-1 text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-            />
-            <Button
-              size="sm"
-              variant="default"
-              className="self-end h-8 px-2"
-              disabled={!freePrompt.trim() || isStreaming}
-              onClick={() => {
-                const vars = buildContextVars();
-                vars.user_prompt = freePrompt.trim();
-                reset();
-                generate('free-prompt', vars, premiumMode);
-                setFreePrompt('');
-              }}
-            >
-              <Send className="h-3.5 w-3.5" />
-            </Button>
-          </div>
-        </div>
-
-        {/* Selected text preview */}
-        {selectedText && (
-          <div className="space-y-1">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">選択テキスト</p>
-            <div className="p-2 bg-muted/50 rounded text-xs text-muted-foreground line-clamp-3 italic">
-              {selectedText}
+        {/* Quick actions - hidden during active conversation */}
+        {!hasConversation && (
+          <>
+            <div className="space-y-1.5">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
+              <div className="flex flex-wrap gap-1.5">
+                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('chapter-opening')} disabled={isStreaming}>
+                  <FileText className="h-3 w-3" /> 章の書き出し
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('proofread')} disabled={isStreaming}>
+                  <BookCheck className="h-3 w-3" /> 校正
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('continue-writing')} disabled={isStreaming}>
+                  <PenLine className="h-3 w-3" /> 続きを書く
+                </Button>
+                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('style-adjust')} disabled={isStreaming}>
+                  <Wand2 className="h-3 w-3" /> 文体調整
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
 
-        <TemplateSelector
-          templates={templates}
-          onGenerate={(slug, vars) => {
-            reset();
-            const contextVars = buildContextVars();
-            generate(slug, { ...contextVars, ...vars }, premiumMode);
-          }}
-          isStreaming={isStreaming}
-          currentContent={selectedText || currentContent}
-        />
+            {/* Character count */}
+            <div className="space-y-1">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <SlidersHorizontal className="h-3 w-3" /> 生成文字数: {charCount.toLocaleString()}字
+              </p>
+              <input type="range" min={100} max={5000} step={100} value={charCount}
+                onChange={(e) => setCharCount(Number(e.target.value))} className="w-full h-1.5 accent-foreground" />
+              <div className="flex justify-between text-[10px] text-muted-foreground"><span>100</span><span>5000</span></div>
+            </div>
+
+            {/* Custom instruction */}
+            <div className="space-y-1">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">追加指示（任意）</p>
+              <textarea value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)}
+                placeholder="例: 緊張感のある場面にして、主人公の心情を丁寧に描写して..."
+                rows={2} className="w-full text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+            </div>
+
+            {/* Free-form prompt */}
+            <div className="space-y-1">
+              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+                <Send className="h-3 w-3" /> AIに直接指示
+              </p>
+              <div className="flex gap-1.5">
+                <textarea value={freePrompt} onChange={(e) => setFreePrompt(e.target.value)}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming) {
+                      e.preventDefault();
+                      setChatMessages([]);
+                      setCurrentSlug('free-prompt');
+                      setNewChars(null);
+                      const vars = buildContextVars();
+                      vars.user_prompt = freePrompt.trim();
+                      reset();
+                      generate('free-prompt', vars, premiumMode);
+                      setFreePrompt('');
+                    }
+                  }}
+                  placeholder="AIへの指示を入力... (Ctrl+Enter で送信)"
+                  rows={2} className="flex-1 text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+                <Button size="sm" variant="default" className="self-end h-8 px-2"
+                  disabled={!freePrompt.trim() || isStreaming}
+                  onClick={() => {
+                    setChatMessages([]);
+                    setCurrentSlug('free-prompt');
+                    setNewChars(null);
+                    const vars = buildContextVars();
+                    vars.user_prompt = freePrompt.trim();
+                    reset();
+                    generate('free-prompt', vars, premiumMode);
+                    setFreePrompt('');
+                  }}
+                >
+                  <Send className="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+
+            <TemplateSelector
+              templates={templates}
+              onGenerate={(slug, vars) => {
+                setChatMessages([]);
+                setCurrentSlug(slug);
+                setNewChars(null);
+                reset();
+                const contextVars = buildContextVars();
+                generate(slug, { ...contextVars, ...vars }, premiumMode);
+              }}
+              isStreaming={isStreaming}
+              currentContent={selectedText || currentContent}
+            />
+          </>
+        )}
 
         {error && (
-          <div className="p-2 text-xs text-destructive bg-destructive/10 rounded-md">
-            {error}
-          </div>
+          <div className="p-2 text-xs text-destructive bg-destructive/10 rounded-md">{error}</div>
         )}
 
-        {(result || isStreaming) && (
+        {/* Chat conversation view */}
+        {hasConversation && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">AI応答</p>
-              {isStreaming && (
-                <button
-                  onClick={abort}
-                  className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                >
-                  <StopCircle className="h-3 w-3" /> 停止
+              <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+                <MessageSquare className="h-3 w-3" /> AI会話
+                {chatMessages.filter((m) => m.role === 'user').length > 0 && (
+                  <span className="text-[10px]">({chatMessages.filter((m) => m.role === 'user').length}往復)</span>
+                )}
+              </p>
+              <div className="flex items-center gap-1">
+                {isStreaming && (
+                  <button onClick={abort} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1">
+                    <StopCircle className="h-3 w-3" /> 停止
+                  </button>
+                )}
+                <button onClick={handleNewConversation} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1" title="新しい会話">
+                  <RotateCcw className="h-3 w-3" />
                 </button>
-              )}
+              </div>
             </div>
-            <div className="p-3 bg-secondary/50 rounded-md text-sm leading-relaxed whitespace-pre-wrap">
-              {result}
-              {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
-            </div>
+
+            {/* Past messages in conversation */}
+            {chatMessages.map((msg, i) => (
+              <div key={i} className={`text-xs rounded-md p-2 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
+                <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                  {msg.role === 'user' ? 'あなた' : 'AI'}
+                </p>
+                <div className="whitespace-pre-wrap leading-relaxed line-clamp-6">{msg.content}</div>
+                {msg.role === 'assistant' && (
+                  <div className="flex gap-1 mt-1.5">
+                    <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => onInsert(msg.content)}>
+                      <ArrowDownToLine className="h-2.5 w-2.5 mr-0.5" /> 挿入
+                    </Button>
+                    {selectedText && onReplace && (
+                      <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => onReplace(msg.content)}>
+                        <Replace className="h-2.5 w-2.5 mr-0.5" /> 置換
+                      </Button>
+                    )}
+                    <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => { navigator.clipboard.writeText(msg.content); }}>
+                      <Copy className="h-2.5 w-2.5 mr-0.5" /> コピー
+                    </Button>
+                  </div>
+                )}
+              </div>
+            ))}
+
+            {/* Current streaming result */}
+            {(result || isStreaming) && !chatMessages.some((m) => m.content === result) && (
+              <div className="text-xs rounded-md p-2 bg-secondary/50">
+                <p className="text-[10px] font-medium text-muted-foreground mb-1">AI</p>
+                <div className="whitespace-pre-wrap leading-relaxed">
+                  {result}
+                  {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
+                </div>
+              </div>
+            )}
+
+            {/* Action buttons after generation */}
             {!isStreaming && result && (
               <div className="space-y-2">
                 <div className="flex gap-1.5">
@@ -588,13 +679,8 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 </div>
 
                 {/* Extract new characters */}
-                <Button
-                  size="sm"
-                  variant="ghost"
-                  onClick={handleExtractCharacters}
-                  disabled={extracting}
-                  className="w-full text-xs text-muted-foreground gap-1"
-                >
+                <Button size="sm" variant="ghost" onClick={handleExtractCharacters} disabled={extracting}
+                  className="w-full text-xs text-muted-foreground gap-1">
                   {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
                   {extracting ? '検出中...' : '新キャラクター・設定を検出'}
                 </Button>
@@ -602,7 +688,6 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 {newChars !== null && newChars.length === 0 && (
                   <p className="text-xs text-muted-foreground text-center">新しいキャラクターは検出されませんでした</p>
                 )}
-
                 {newChars && newChars.length > 0 && (
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-muted-foreground">検出されたキャラクター:</p>
@@ -612,13 +697,8 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                         <div key={ch.name} className="p-2 bg-muted/30 rounded border border-border/50 text-xs space-y-0.5">
                           <div className="flex items-center justify-between">
                             <span className="font-medium">{ch.name}（{ch.role}）</span>
-                            <Button
-                              size="sm"
-                              variant={isSaved ? 'ghost' : 'secondary'}
-                              className="h-6 text-[10px] gap-0.5"
-                              onClick={() => handleSaveCharacter(ch)}
-                              disabled={isSaved}
-                            >
+                            <Button size="sm" variant={isSaved ? 'ghost' : 'secondary'} className="h-6 text-[10px] gap-0.5"
+                              onClick={() => handleSaveCharacter(ch)} disabled={isSaved}>
                               {isSaved ? <><Check className="h-2.5 w-2.5" /> 保存済み</> : '設定に追加'}
                             </Button>
                           </div>
@@ -632,25 +712,34 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 )}
               </div>
             )}
-          </div>
-        )}
 
-        {/* History */}
-        {history.length > 0 && !isStreaming && !result && (
-          <div className="space-y-1.5">
-            <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">履歴</p>
-            {history.map((item, i) => (
-              <button
-                key={i}
-                onClick={() => onInsert(item.result)}
-                className="w-full text-left p-2 bg-muted/30 rounded text-xs text-muted-foreground hover:bg-muted/50 transition-colors"
-              >
-                <p className="line-clamp-2">{item.result}</p>
-                <p className="text-[10px] mt-0.5">
-                  {item.timestamp.toLocaleTimeString('ja-JP', { hour: '2-digit', minute: '2-digit' })}
-                </p>
-              </button>
-            ))}
+            {/* Follow-up input (chat-style refinement) */}
+            {!isStreaming && conversationId && (
+              <div className="space-y-1 pt-1 border-t border-border">
+                <p className="text-[10px] font-medium text-muted-foreground">打ち返し（修正指示）</p>
+                <div className="flex gap-1.5">
+                  <textarea
+                    value={followUpInput}
+                    onChange={(e) => setFollowUpInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && followUpInput.trim()) {
+                        e.preventDefault();
+                        handleFollowUp();
+                      }
+                    }}
+                    placeholder="例: もう少し暗い雰囲気にして... (Ctrl+Enter)"
+                    rows={2}
+                    className="flex-1 text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <Button size="sm" variant="default" className="self-end h-8 px-2"
+                    disabled={!followUpInput.trim() || isStreaming}
+                    onClick={handleFollowUp}>
+                    <Send className="h-3.5 w-3.5" />
+                  </Button>
+                </div>
+                <p className="text-[10px] text-muted-foreground">1cr/回 — 打ち返し回数無制限</p>
+              </div>
+            )}
           </div>
         )}
       </div>

@@ -893,6 +893,19 @@ class ApiClient {
     );
   }
 
+  // AI Generation History
+  async getAiHistory(workId: string, params?: { limit?: number; offset?: number }) {
+    const qs = new URLSearchParams();
+    if (params?.limit) qs.set('limit', String(params.limit));
+    if (params?.offset) qs.set('offset', String(params.offset));
+    const query = qs.toString() ? `?${qs.toString()}` : '';
+    return this.request<{ data: AiGenerationHistoryItem[]; total: number }>(`/ai/history/${workId}${query}`);
+  }
+
+  async deleteAiHistory(id: string) {
+    return this.request<{ deleted: boolean }>(`/ai/history/${id}`, { method: 'DELETE' });
+  }
+
   // Work Structured Data (Reader View)
   async getEmotionProfile(workId: string) {
     return this.request<any>(`/works/${workId}/emotion-profile`);
@@ -1230,6 +1243,18 @@ export interface PointTransaction {
   type: string;
   reason: string | null;
   createdAt: string;
+}
+
+export interface AiGenerationHistoryItem {
+  id: string;
+  templateSlug: string;
+  promptSummary: string | null;
+  messages: { role: string; content: string }[];
+  creditCost: number;
+  model: string | null;
+  premiumMode: boolean;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface QualityScoreDetail {

@@ -62,6 +62,9 @@ export class AiAssistService {
     templateSlug: string,
     variables: Record<string, string>,
     premiumMode: boolean = false,
+    conversationId?: string,
+    followUpMessage?: string,
+    episodeId?: string,
   ): AsyncGenerator<string> {
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
@@ -111,14 +114,11 @@ export class AiAssistService {
     for (const [key, value] of Object.entries(variables)) {
       const sectionRegex = new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{/${key}\\}\\}`, 'g');
       if (value && value.trim()) {
-        // Keep the section content (remove markers)
         prompt = prompt.replace(sectionRegex, '$1');
       } else {
-        // Remove entire section
         prompt = prompt.replace(sectionRegex, '');
       }
     }
-    // Remove any remaining conditional sections for variables not provided
     prompt = prompt.replace(/\{\{#\w+\}\}[\s\S]*?\{\{\/\w+\}\}/g, '');
 
     // Replace variable placeholders
@@ -127,14 +127,33 @@ export class AiAssistService {
       prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), truncated);
     }
 
-    // Append custom instruction if provided
     if (variables.custom_instruction) {
       prompt += `\n\n【著者からの追加指示】\n${variables.custom_instruction}`;
+    }
+
+    // Build messages array: new conversation or follow-up
+    let existingConversation: any = null;
+    let messages: { role: string; content: string }[];
+
+    if (conversationId && followUpMessage) {
+      // Follow-up: load existing conversation and append
+      existingConversation = await this.prisma.aiGenerationHistory.findUnique({
+        where: { id: conversationId },
+      });
+      if (existingConversation && existingConversation.userId === userId) {
+        messages = [...(existingConversation.messages as any[]), { role: 'user', content: followUpMessage }];
+      } else {
+        // Fallback: treat as new conversation
+        messages = [{ role: 'user', content: prompt }];
+      }
+    } else {
+      messages = [{ role: 'user', content: prompt }];
     }
 
     const startTime = Date.now();
     let inputTokens = 0;
     let outputTokens = 0;
+    let fullOutput = '';
 
     // Scale max_tokens based on requested char_count (Japanese ~2 tokens/char)
     const requestedChars = variables.char_count ? parseInt(variables.char_count, 10) : 1000;
@@ -150,13 +169,12 @@ export class AiAssistService {
       });
     }
 
-    // Build request body with optional extended thinking
     const requestBody: Record<string, unknown> = {
       model: modelConfig.model,
       max_tokens: modelConfig.thinking ? modelConfig.budgetTokens + 8000 : baseMaxTokens,
       stream: true,
       ...(systemParts.length > 0 ? { system: systemParts } : {}),
-      messages: [{ role: 'user', content: prompt }],
+      messages,
     };
 
     if (modelConfig.thinking) {
@@ -195,10 +213,9 @@ export class AiAssistService {
       if (!response.ok) {
         const errorText = await response.text();
         this.logger.error(`Claude API error: ${response.status} ${errorText}`);
-        // Refund on API error (no content delivered)
         if (transactionId) {
           await this.creditService.refundTransaction(transactionId);
-          transactionId = null; // Prevent double refund in catch
+          transactionId = null;
         }
         throw new ServiceUnavailableException(`AI service error (${response.status})`);
       }
@@ -233,6 +250,7 @@ export class AiAssistService {
               const event = JSON.parse(data);
               if (event.type === 'content_block_delta' && event.delta?.text) {
                 contentDelivered = true;
+                fullOutput += event.delta.text;
                 yield event.delta.text;
               }
               if (event.type === 'message_start' && event.message?.usage) {
@@ -263,14 +281,53 @@ export class AiAssistService {
           },
         }).catch((e) => this.logger.error('Failed to log AI usage', e));
 
+        // Save to generation history
+        if (contentDelivered && variables.workId) {
+          const updatedMessages = [...messages, { role: 'assistant', content: fullOutput }];
+          try {
+            if (existingConversation) {
+              // Update existing conversation
+              await this.prisma.aiGenerationHistory.update({
+                where: { id: existingConversation.id },
+                data: {
+                  messages: updatedMessages as any,
+                  creditCost: (existingConversation.creditCost || 0) + creditCost,
+                  model: modelConfig.model,
+                  premiumMode,
+                  updatedAt: new Date(),
+                },
+              });
+              // Emit the same conversationId
+              yield `\n__CONVERSATION_ID__:${existingConversation.id}`;
+            } else {
+              // Create new conversation
+              const record = await this.prisma.aiGenerationHistory.create({
+                data: {
+                  userId,
+                  workId: variables.workId,
+                  episodeId: episodeId || null,
+                  templateSlug,
+                  promptSummary: (followUpMessage || variables.user_prompt || template.name).slice(0, 200),
+                  messages: updatedMessages as any,
+                  creditCost,
+                  model: modelConfig.model,
+                  premiumMode,
+                },
+              });
+              yield `\n__CONVERSATION_ID__:${record.id}`;
+            }
+          } catch (e) {
+            this.logger.error('Failed to save generation history', e);
+          }
+        }
+
         // Confirm transaction on successful delivery
         if (transactionId && contentDelivered) {
           await this.creditService.confirmTransaction(transactionId).catch((e) => this.logger.error(`Credit confirm failed: ${transactionId}`, e));
-          transactionId = null; // prevent double-confirm in catch
+          transactionId = null;
         }
       }
     } catch (error) {
-      // Refund if no content was delivered
       if (transactionId && !contentDelivered) {
         await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error(`Credit refund failed: ${transactionId}`, e));
       } else if (transactionId && contentDelivered) {

@@ -37,11 +37,22 @@ export async function consumeSSEStream(
   }
 }
 
+interface GenerateOptions {
+  templateSlug: string;
+  variables: Record<string, string>;
+  premiumMode?: boolean;
+  conversationId?: string;
+  followUpMessage?: string;
+  episodeId?: string;
+}
+
 interface UseAiStreamReturn {
   result: string;
   isStreaming: boolean;
   error: string | null;
+  conversationId: string | null;
   generate: (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => Promise<void>;
+  generateFollowUp: (opts: GenerateOptions) => Promise<void>;
   abort: () => void;
   reset: () => void;
 }
@@ -50,6 +61,7 @@ export function useAiStream(): UseAiStreamReturn {
   const [result, setResult] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [conversationId, setConversationId] = useState<string | null>(null);
   const abortRef = useRef<AbortController | null>(null);
 
   const abort = useCallback(() => {
@@ -61,9 +73,10 @@ export function useAiStream(): UseAiStreamReturn {
     setResult('');
     setError(null);
     setIsStreaming(false);
+    setConversationId(null);
   }, []);
 
-  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => {
+  const doGenerate = useCallback(async (opts: GenerateOptions) => {
     abort();
     setResult('');
     setError(null);
@@ -73,11 +86,16 @@ export function useAiStream(): UseAiStreamReturn {
     abortRef.current = controller;
 
     try {
-      const response = await api.fetchSSE(
-        '/ai/assist',
-        { templateSlug, variables, ...(premiumMode ? { premiumMode: true } : {}) },
-        controller.signal,
-      );
+      const body: Record<string, any> = {
+        templateSlug: opts.templateSlug,
+        variables: opts.variables,
+      };
+      if (opts.premiumMode) body.premiumMode = true;
+      if (opts.conversationId) body.conversationId = opts.conversationId;
+      if (opts.followUpMessage) body.followUpMessage = opts.followUpMessage;
+      if (opts.episodeId) body.episodeId = opts.episodeId;
+
+      const response = await api.fetchSSE('/ai/assist', body, controller.signal);
 
       const reader = response.body?.getReader();
       if (!reader) throw new Error('No response stream');
@@ -107,6 +125,9 @@ export function useAiStream(): UseAiStreamReturn {
             if (parsed.text) {
               setResult((prev) => prev + parsed.text);
             }
+            if (parsed.conversationId) {
+              setConversationId(parsed.conversationId);
+            }
           } catch {
             // Skip malformed data
           }
@@ -124,6 +145,8 @@ export function useAiStream(): UseAiStreamReturn {
                 setError(parsed.error);
               } else if (parsed.text) {
                 setResult((prev) => prev + parsed.text);
+              } else if (parsed.conversationId) {
+                setConversationId(parsed.conversationId);
               }
             } catch { /* skip */ }
           }
@@ -137,5 +160,14 @@ export function useAiStream(): UseAiStreamReturn {
     }
   }, [abort]);
 
-  return { result, isStreaming, error, generate, abort, reset };
+  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => {
+    setConversationId(null);
+    await doGenerate({ templateSlug, variables, premiumMode });
+  }, [doGenerate]);
+
+  const generateFollowUp = useCallback(async (opts: GenerateOptions) => {
+    await doGenerate(opts);
+  }, [doGenerate]);
+
+  return { result, isStreaming, error, conversationId, generate, generateFollowUp, abort, reset };
 }

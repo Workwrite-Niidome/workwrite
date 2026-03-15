@@ -15,6 +15,21 @@ export class AiAssistDto {
   @IsOptional()
   @IsBoolean()
   premiumMode?: boolean;
+
+  @ApiPropertyOptional({ description: 'Conversation ID for chat-style refinement' })
+  @IsOptional()
+  @IsString()
+  conversationId?: string;
+
+  @ApiPropertyOptional({ description: 'Follow-up message for refinement' })
+  @IsOptional()
+  @IsString()
+  followUpMessage?: string;
+
+  @ApiPropertyOptional({ description: 'Episode ID for history association' })
+  @IsOptional()
+  @IsString()
+  episodeId?: string;
 }
 
 class ExistingCharacterDto {

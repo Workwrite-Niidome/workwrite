@@ -45,9 +45,23 @@ export class AiAssistController {
     res.flushHeaders();
 
     try {
-      const stream = this.aiAssist.streamAssist(userId, dto.templateSlug, dto.variables, dto.premiumMode);
+      const stream = this.aiAssist.streamAssist(
+        userId,
+        dto.templateSlug,
+        dto.variables,
+        dto.premiumMode,
+        dto.conversationId,
+        dto.followUpMessage,
+        dto.episodeId,
+      );
       for await (const chunk of stream) {
-        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        // Check for metadata (conversationId)
+        if (chunk.startsWith('\n__CONVERSATION_ID__:')) {
+          const convId = chunk.replace('\n__CONVERSATION_ID__:', '');
+          res.write(`data: ${JSON.stringify({ conversationId: convId })}\n\n`);
+        } else {
+          res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+        }
       }
       res.write(`data: [DONE]\n\n`);
     } catch (err: unknown) {
@@ -67,6 +81,59 @@ export class AiAssistController {
       dto.generatedText,
       dto.existingCharacters || [],
     );
+  }
+
+  // === Generation History endpoints ===
+
+  @Get('ai/history/:workId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get AI generation history for a work' })
+  async getHistory(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    const take = Math.min(parseInt(limit || '20', 10), 50);
+    const skip = parseInt(offset || '0', 10);
+
+    const [items, total] = await Promise.all([
+      this.prisma.aiGenerationHistory.findMany({
+        where: { userId, workId },
+        orderBy: { updatedAt: 'desc' },
+        take,
+        skip,
+        select: {
+          id: true,
+          templateSlug: true,
+          promptSummary: true,
+          messages: true,
+          creditCost: true,
+          model: true,
+          premiumMode: true,
+          createdAt: true,
+          updatedAt: true,
+        },
+      }),
+      this.prisma.aiGenerationHistory.count({ where: { userId, workId } }),
+    ]);
+
+    return { data: items, total };
+  }
+
+  @Delete('ai/history/:id')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete a generation history item' })
+  async deleteHistory(
+    @CurrentUser('id') userId: string,
+    @Param('id') id: string,
+  ) {
+    await this.prisma.aiGenerationHistory.deleteMany({
+      where: { id, userId },
+    });
+    return { deleted: true };
   }
 
   // === Structural Analysis endpoints ===

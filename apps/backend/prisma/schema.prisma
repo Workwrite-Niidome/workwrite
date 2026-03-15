@@ -65,6 +65,9 @@ model User {
   creditTransactions  CreditTransaction[]
   creditPurchases     CreditPurchase[]
 
+  // AI Generation History
+  aiGenerations AiGenerationHistory[]
+
   @@index([email])
   @@index([role])
 }
@@ -154,6 +157,9 @@ model Work {
   // Story Structure
   storyCharacters StoryCharacter[]
   storyArc        StoryArc?
+
+  // AI Generation History
+  aiGenerations     AiGenerationHistory[]
 
   // AI Structural Analysis
   episodeAnalyses   EpisodeAnalysis[]
@@ -633,6 +639,26 @@ model AiUsageLog {
   @@index([userId])
   @@index([createdAt])
   @@index([feature])
+}
+
+model AiGenerationHistory {
+  id            String   @id @default(cuid())
+  userId        String
+  workId        String
+  episodeId     String?
+  templateSlug  String
+  promptSummary String?  @db.Text
+  messages      Json     // [{ role: "user"|"assistant", content: string }]
+  creditCost    Int      @default(1)
+  model         String?
+  premiumMode   Boolean  @default(false)
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workId, createdAt])
 }
 
 model EpisodeDraft {
