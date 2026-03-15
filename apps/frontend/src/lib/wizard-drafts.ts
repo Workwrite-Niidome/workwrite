@@ -13,6 +13,8 @@ const STORAGE_KEY = 'workwrite-wizard-drafts';
 function migrateOldDraft() {
   const old = localStorage.getItem('workwrite-wizard-draft');
   if (!old) return;
+  // Remove old key FIRST to prevent infinite recursion (loadDrafts → migrateOldDraft → loadDrafts...)
+  localStorage.removeItem('workwrite-wizard-draft');
   try {
     const parsed = JSON.parse(old);
     if (parsed?.data && typeof parsed.step === 'number') {
@@ -22,11 +24,18 @@ function migrateOldDraft() {
         data: parsed.data,
         savedAt: parsed.savedAt || Date.now(),
       };
-      const drafts = loadDrafts();
+      // Read existing drafts directly (not via loadDrafts) to avoid re-entering migration
+      let drafts: WizardDraft[] = [];
+      try {
+        const raw = localStorage.getItem(STORAGE_KEY);
+        if (raw) {
+          const arr = JSON.parse(raw);
+          if (Array.isArray(arr)) drafts = arr;
+        }
+      } catch { /* ignore */ }
       drafts.push(draft);
       localStorage.setItem(STORAGE_KEY, JSON.stringify(drafts));
     }
-    localStorage.removeItem('workwrite-wizard-draft');
   } catch { /* ignore */ }
 }
 

@@ -743,15 +743,17 @@ model AiCreationLog {
 }
 
 model WorkCreationPlan {
-  id               String   @id @default(cuid())
-  workId           String   @unique
-  characters       Json?
-  plotOutline      Json?
-  emotionBlueprint Json?
-  chapterOutline   Json?
-  storySummary     Json?    // Auto-generated running summary of all episodes (cached)
-  createdAt        DateTime @default(now())
-  updatedAt        DateTime @updatedAt
+  id                     String   @id @default(cuid())
+  workId                 String   @unique
+  characters             Json?
+  plotOutline            Json?
+  emotionBlueprint       Json?
+  chapterOutline         Json?
+  storySummary           Json?    // Auto-generated running summary of all episodes (cached)
+  customFieldDefinitions Json?    // Custom field definitions for characters
+  worldBuildingData      Json?    // World building data from wizard
+  createdAt              DateTime @default(now())
+  updatedAt              DateTime @updatedAt
 
   work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
 }
@@ -781,6 +783,7 @@ model StoryCharacter {
   updatedAt    DateTime @updatedAt
 
   currentState  String?   @db.Text  // AI分析による現在の状態
+  customFields  Json?              // Custom field values from wizard
 
   work          Work @relation(fields: [workId], references: [id], onDelete: Cascade)
   relationsFrom StoryCharacterRelation[] @relation("FromCharacter")

@@ -8,6 +8,9 @@ import {
   GeneratePlotDto,
   GenerateEmotionBlueprintDto,
   GenerateChapterOutlineDto,
+  GenerateEpisodesForActDto,
+  GenerateWorldBuildingDto,
+  GenerateSynopsisDto,
   SaveCreationPlanDto,
   AiFeedbackDto,
 } from './dto/creation-wizard.dto';
@@ -427,6 +430,214 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
     return `【キャラクター設定（厳守）】\n${sheets.join('\n\n')}`;
   }
 
+  // ─── Episodes for Act (new structured plot) ────────────────
+
+  async *generateEpisodesForAct(
+    userId: string,
+    workId: string,
+    dto: GenerateEpisodesForActDto,
+  ): AsyncGenerator<string> {
+    const { apiKey, model } = await this.getApiConfig(userId);
+
+    const systemPrompt = `あなたは小説のプロット設計を支援するAIです。物語の特定のセクション（幕/パート）に対するエピソード案を提案します。
+最終的な決定権は常に作者にあります。
+
+【重要】
+- 各エピソードは物語の中で独立した「話」として成立すること
+- エピソードカード間に自然な因果関係があること
+- キャラクター情報が提供されている場合、そのキャラの性格・動機に基づく行動にすること
+
+以下のJSON形式で出力してください（JSONのみ、前置き不要）:
+{
+  "episodes": [
+    {
+      "title": "エピソードタイトル",
+      "whatHappens": "何が起きるか（2-3文）",
+      "whyItHappens": "なぜ起きるか（動機・因果）",
+      "characters": ["登場キャラ名"],
+      "emotionTarget": "このエピソードの感情目標"
+    }
+  ]
+}`;
+
+    const userPrompt = `${dto.context || ''}
+
+セクション「${dto.actLabel}」（${dto.actDescription || ''}）に適したエピソードを2〜4つ提案してください。
+構成テンプレート: ${dto.structureTemplate || 'kishotenketsu'}`;
+
+    let fullOutput = '';
+    for await (const chunk of this.streamFromClaude(
+      apiKey, model, systemPrompt, userPrompt, userId, 'creation_wizard',
+    )) {
+      fullOutput += chunk;
+      yield chunk;
+    }
+
+    await this.logCreationAction(workId, userId, 'episodes_for_act', 'generated', userPrompt.length, fullOutput.length);
+  }
+
+  // ─── World Building ───────────────────────────────────────
+
+  async *generateWorldBuilding(
+    userId: string,
+    workId: string,
+    dto: GenerateWorldBuildingDto,
+  ): AsyncGenerator<string> {
+    const { apiKey, model } = await this.getApiConfig(userId);
+
+    const sectionPrompts: Record<string, string> = {
+      basics: '世界の基本設定（時代・舞台・文明レベル）を提案してください。JSON: { "basics": { "era": "...", "setting": "...", "civilizationLevel": "..." } }',
+      rules: '世界のルール・法則・魔法体系を2-3個提案してください。JSON: { "rules": [{ "name": "...", "description": "...", "constraints": "..." }] }',
+      terminology: '世界の固有名詞・専門用語を3-5個提案してください。JSON: { "terminology": [{ "term": "...", "reading": "...", "definition": "..." }] }',
+      history: '世界の歴史的背景を200字程度で提案してください。JSON: { "history": "..." }',
+      items: '物語の鍵となるアイテムを2-3個提案してください。JSON: { "items": [{ "name": "...", "appearance": "...", "ability": "...", "constraints": "...", "owner": "...", "narrativeMeaning": "..." }] }',
+    };
+
+    const systemPrompt = `あなたは小説の世界観設計を支援するAIです。作者のジャンル・テーマ・キャラクター設定を尊重しながら、世界観の提案を行います。
+最終的な決定権は常に作者にあります。出力はJSON形式のみにしてください。`;
+
+    const userPrompt = `${dto.context || ''}
+
+${dto.existingData ? `【既存の世界観設定】\n${JSON.stringify(dto.existingData, null, 0)}\n\n` : ''}${sectionPrompts[dto.section] || `セクション「${dto.section}」の設定を提案してください。`}`;
+
+    let fullOutput = '';
+    for await (const chunk of this.streamFromClaude(
+      apiKey, model, systemPrompt, userPrompt, userId, 'creation_wizard',
+    )) {
+      fullOutput += chunk;
+      yield chunk;
+    }
+
+    await this.logCreationAction(workId, userId, 'world_building', 'generated', userPrompt.length, fullOutput.length);
+  }
+
+  // ─── Synopsis generation ──────────────────────────────────
+
+  async *generateSynopsis(
+    userId: string,
+    workId: string,
+    dto: GenerateSynopsisDto,
+  ): AsyncGenerator<string> {
+    const { apiKey, model } = await this.getApiConfig(userId);
+
+    const systemPrompt = `あなたは小説のあらすじライターです。作品の設定情報をもとに、読者を引き込む魅力的なあらすじを200-400字で書いてください。
+プロットの全容を明かさず、読者の興味を引く「入口」として書くこと。JSONではなくプレーンテキストで出力してください。`;
+
+    const userPrompt = dto.context;
+
+    let fullOutput = '';
+    for await (const chunk of this.streamFromClaude(
+      apiKey, model, systemPrompt, userPrompt, userId, 'creation_wizard',
+    )) {
+      fullOutput += chunk;
+      yield chunk;
+    }
+
+    await this.logCreationAction(workId, userId, 'synopsis', 'generated', userPrompt.length, fullOutput.length);
+  }
+
+  // ─── AI Consistency Check ─────────────────────────────────
+
+  async aiConsistencyCheck(userId: string, workId: string, episodeId: string, content?: string) {
+    const { apiKey, model } = await this.getApiConfig(userId);
+
+    // Get episode content
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      select: { content: true, title: true, orderIndex: true },
+    });
+    if (!episode) throw new Error('Episode not found');
+
+    const episodeContent = content || episode.content;
+    if (!episodeContent?.trim()) {
+      return { typos: [], characterIssues: [], plotIssues: [] };
+    }
+
+    // Get creation plan for context
+    const plan = await this.prisma.workCreationPlan.findUnique({
+      where: { workId },
+    });
+
+    // Get characters
+    const characters = await this.prisma.storyCharacter.findMany({
+      where: { workId },
+      select: { name: true, personality: true, speechStyle: true, firstPerson: true, gender: true },
+    });
+
+    const contextParts: string[] = [];
+    if (characters.length > 0) {
+      contextParts.push(this.formatCharactersForPrompt(characters));
+    }
+    if (plan?.plotOutline) {
+      const plotText = typeof plan.plotOutline === 'string'
+        ? plan.plotOutline
+        : (plan.plotOutline as any)?.text || JSON.stringify(plan.plotOutline);
+      contextParts.push(`【プロット】\n${plotText}`);
+    }
+
+    const systemPrompt = `あなたは小説の校正・整合性チェックの専門家です。本文と設定情報を照合し、問題点を指摘してください。
+
+以下のJSON形式で出力してください（JSONのみ）:
+{
+  "typos": [{ "location": "該当箇所", "issue": "問題", "suggestion": "修正案" }],
+  "characterIssues": [{ "character": "キャラ名", "issue": "問題", "detail": "詳細" }],
+  "plotIssues": [{ "issue": "問題", "detail": "詳細" }]
+}
+
+問題がない場合は空配列を返してください。`;
+
+    const userPrompt = `${contextParts.join('\n\n')}
+
+【チェック対象: 第${episode.orderIndex + 1}話「${episode.title}」】
+${episodeContent.slice(0, 5000)}`;
+
+    // Use non-streaming call for consistency check
+    const creditCost = this.aiTier.getCreditCost('ai_check', false, false);
+    let transactionId: string | null = null;
+    try {
+      if (creditCost > 0) {
+        const result = await this.creditService.consumeCredits(
+          userId, creditCost, 'ai_check', model,
+        );
+        transactionId = result.transactionId;
+      }
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 4000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        if (transactionId) await this.creditService.refundTransaction(transactionId);
+        throw new Error('AI service error');
+      }
+
+      const data = await response.json();
+      const text = data.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+
+      if (transactionId) await this.creditService.confirmTransaction(transactionId);
+
+      if (jsonMatch) {
+        return JSON.parse(jsonMatch[0]);
+      }
+      return { typos: [], characterIssues: [], plotIssues: [] };
+    } catch (error) {
+      if (transactionId) await this.creditService.refundTransaction(transactionId).catch(() => {});
+      throw error;
+    }
+  }
+
   // ─── Plan CRUD ───────────────────────────────────────────────
 
   async saveCreationPlan(workId: string, dto: SaveCreationPlanDto) {
@@ -437,6 +648,8 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
         plotOutline: dto.plotOutline ?? undefined,
         emotionBlueprint: dto.emotionBlueprint ?? undefined,
         chapterOutline: dto.chapterOutline ?? undefined,
+        customFieldDefinitions: dto.customFieldDefinitions ?? undefined,
+        worldBuildingData: dto.worldBuildingData ?? undefined,
       },
       create: {
         workId,
@@ -444,6 +657,8 @@ ${dto.readerJourney ? `読者に辿ってほしい旅: ${dto.readerJourney}` : '
         plotOutline: dto.plotOutline ?? undefined,
         emotionBlueprint: dto.emotionBlueprint ?? undefined,
         chapterOutline: dto.chapterOutline ?? undefined,
+        customFieldDefinitions: dto.customFieldDefinitions ?? undefined,
+        worldBuildingData: dto.worldBuildingData ?? undefined,
       },
     });
   }

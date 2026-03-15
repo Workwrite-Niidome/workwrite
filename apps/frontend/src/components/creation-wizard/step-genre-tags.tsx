@@ -1,7 +1,6 @@
 'use client';
 
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import type { WizardData } from './wizard-shell';
 
@@ -20,32 +19,12 @@ interface Props {
   onChange: (partial: Partial<WizardData>) => void;
 }
 
-export function StepBasics({ data, onChange }: Props) {
+export function StepGenreTags({ data, onChange }: Props) {
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">基本情報</h2>
-        <p className="text-sm text-muted-foreground">あなたの作品の土台を作りましょう。</p>
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">タイトル *</label>
-        <Input
-          value={data.title}
-          onChange={(e) => onChange({ title: e.target.value })}
-          placeholder="作品タイトル"
-        />
-      </div>
-
-      <div className="space-y-2">
-        <label className="text-sm font-medium">あらすじ</label>
-        <Textarea
-          value={data.synopsis}
-          onChange={(e) => onChange({ synopsis: e.target.value })}
-          rows={4}
-          maxLength={5000}
-          placeholder="読者を引き込むあらすじを書きましょう"
-        />
+        <h2 className="text-lg font-semibold mb-1">ジャンル・タグ</h2>
+        <p className="text-sm text-muted-foreground">あなたの作品のジャンルとタグを選びましょう。後のステップでジャンルに合った設定テンプレートが提案されます。</p>
       </div>
 
       <div className="space-y-2">
@@ -76,6 +55,13 @@ export function StepBasics({ data, onChange }: Props) {
           onChange={(e) => onChange({ tags: e.target.value })}
           placeholder="冒険, 成長, 友情"
         />
+      </div>
+
+      <div className="p-4 bg-muted/50 rounded-lg">
+        <p className="text-xs text-muted-foreground leading-relaxed">
+          ジャンルを選ぶと、キャラクター設定や世界観ステップでジャンルに合ったテンプレートが自動で提案されます。
+          後からいつでも変更できます。
+        </p>
       </div>
     </div>
   );

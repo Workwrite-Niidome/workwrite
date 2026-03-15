@@ -8,9 +8,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { AiAssistPanel } from './ai-assist-panel';
 import { VersionHistoryPanel } from './version-history-panel';
+import { ReferencePanel } from './reference-panel';
+import { AiConsistencyCheck } from './ai-consistency-check';
 import { useAutosave } from '@/lib/use-autosave';
 import { api } from '@/lib/api';
-import { Sparkles, Maximize2, Minimize2, History } from 'lucide-react';
+import { Sparkles, Maximize2, Minimize2, History, BookOpen } from 'lucide-react';
 
 interface WritingEditorProps {
   workId: string;
@@ -37,6 +39,7 @@ export function WritingEditor({
   const [focusMode, setFocusMode] = useState(false);
   const [showAi, setShowAi] = useState(true);
   const [showHistory, setShowHistory] = useState(false);
+  const [showReference, setShowReference] = useState(false);
   const [submitting, setSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [draftLoaded, setDraftLoaded] = useState(false);
@@ -204,6 +207,17 @@ export function WritingEditor({
           {saveStatus === 'saved' && <span className="text-xs text-muted-foreground">保存済み</span>}
           {saveStatus === 'error' && <span className="text-xs text-destructive">保存エラー</span>}
           <div className="flex-1" />
+          {!focusMode && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={() => setShowReference(!showReference)}
+              className="text-xs"
+            >
+              <BookOpen className="h-3.5 w-3.5 mr-1" />
+              <span className="hidden sm:inline">参照</span>
+            </Button>
+          )}
           {!focusMode && episodeId && (
             <Button
               size="sm"
@@ -257,6 +271,13 @@ export function WritingEditor({
 
       {/* Main area */}
       <div className="flex-1 flex min-h-0 overflow-hidden">
+        {/* Reference Panel */}
+        {showReference && !focusMode && (
+          <div className="w-72 flex-shrink-0 border-r hidden md:flex md:flex-col min-h-0 overflow-hidden">
+            <ReferencePanel workId={workId} onClose={() => setShowReference(false)} />
+          </div>
+        )}
+
         {/* Editor */}
         <div className={`flex-1 flex flex-col min-h-0 overflow-hidden ${focusMode ? 'max-w-2xl mx-auto w-full' : ''}`}>
           <Textarea
@@ -268,6 +289,9 @@ export function WritingEditor({
             className="flex-1 resize-none border-0 rounded-none focus-visible:ring-0 text-base leading-loose p-6 overflow-y-auto"
             style={{ fontFamily: '"Noto Serif JP", "游明朝", "YuMincho", serif' }}
           />
+          {episodeId && !focusMode && (
+            <AiConsistencyCheck workId={workId} episodeId={episodeId} content={content} />
+          )}
         </div>
 
         {/* AI Panel */}

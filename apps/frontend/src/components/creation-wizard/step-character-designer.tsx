@@ -1,12 +1,13 @@
 'use client';
 
 import { useState } from 'react';
-import { Sparkles, Plus, Trash2, UserPlus, ChevronDown, ChevronRight } from 'lucide-react';
+import { Sparkles, Plus, Trash2, UserPlus, ChevronDown, ChevronRight, Settings } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
-import type { WizardData } from './wizard-shell';
+import { cn } from '@/lib/utils';
+import type { WizardData, CustomFieldDef } from './wizard-shell';
 
 interface Props {
   data: WizardData;
@@ -30,6 +31,7 @@ export interface WizardCharacter {
   /** Legacy flat description (manual input or fallback) */
   description?: string;
   aiSuggested: boolean;
+  customFieldValues?: Record<string, string>;
 }
 
 interface AiCharacter {
@@ -48,6 +50,49 @@ interface AiCharacter {
 }
 
 const ROLE_OPTIONS = ['主人公', 'ヒロイン', 'ライバル', '敵役', 'メンター', '脇役', 'その他'];
+
+// ─── Genre-based default custom fields ──────────────────────
+
+const GENRE_FIELD_TEMPLATES: Record<string, { name: string; inputType: 'text' | 'textarea' | 'select'; options?: string[] }[]> = {
+  fantasy: [
+    { name: '種族', inputType: 'text' },
+    { name: '職業', inputType: 'text' },
+    { name: '武器', inputType: 'text' },
+    { name: '魔力・スキル', inputType: 'textarea' },
+  ],
+  sf: [
+    { name: '所属組織', inputType: 'text' },
+    { name: '搭乗機体/装備', inputType: 'text' },
+    { name: '出身惑星・地域', inputType: 'text' },
+  ],
+  horror: [
+    { name: '異能の名称と詳細', inputType: 'textarea' },
+    { name: '人間かどうか', inputType: 'select', options: ['人間', '非人間', '不明'] },
+    { name: '秘密', inputType: 'textarea' },
+  ],
+  romance: [
+    { name: '家族構成', inputType: 'text' },
+    { name: '職業', inputType: 'text' },
+    { name: '趣味', inputType: 'text' },
+  ],
+  drama: [
+    { name: '家族構成', inputType: 'text' },
+    { name: '職業', inputType: 'text' },
+    { name: '趣味', inputType: 'text' },
+  ],
+};
+
+function getDefaultFieldsForGenre(genre: string): CustomFieldDef[] {
+  const templates = GENRE_FIELD_TEMPLATES[genre];
+  if (!templates) return [];
+  return templates.map((t, i) => ({
+    id: crypto.randomUUID(),
+    name: t.name,
+    inputType: t.inputType,
+    options: t.options,
+    order: i,
+  }));
+}
 
 function parseAiResponse(raw: string): { characters: AiCharacter[]; suggestions: string } | null {
   try {
@@ -80,6 +125,7 @@ function aiCharToCharacter(ai: AiCharacter): WizardCharacter {
     relationships: ai.relationships,
     uniqueTrait: ai.uniqueTrait,
     aiSuggested: true,
+    customFieldValues: {},
   };
 }
 
@@ -91,11 +137,27 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
     data._aiCharacterSuggestions || null
   );
   const [expandedIndex, setExpandedIndex] = useState<number | null>(null);
+  const [showFieldManager, setShowFieldManager] = useState(false);
 
   const characters = (data.characters || []) as WizardCharacter[];
+  const customFields = data.customFieldDefinitions || [];
+
+  // Auto-apply genre template if no custom fields exist yet
+  const [genreApplied, setGenreApplied] = useState<string | null>(null);
+  if (data.genre && data.genre !== genreApplied && customFields.length === 0) {
+    const defaults = getDefaultFieldsForGenre(data.genre);
+    if (defaults.length > 0) {
+      setTimeout(() => {
+        onChange({ customFieldDefinitions: defaults });
+        setGenreApplied(data.genre);
+      }, 0);
+    } else {
+      setGenreApplied(data.genre);
+    }
+  }
 
   function addCharacter() {
-    const newChars = [...characters, { name: '', role: '', aiSuggested: false }];
+    const newChars = [...characters, { name: '', role: '', aiSuggested: false, customFieldValues: {} }];
     onChange({ characters: newChars });
     setExpandedIndex(newChars.length - 1);
   }
@@ -103,6 +165,16 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
   function updateCharacter(index: number, field: string, value: string) {
     const updated = [...characters];
     updated[index] = { ...updated[index], [field]: value };
+    onChange({ characters: updated });
+  }
+
+  function updateCustomField(charIndex: number, fieldId: string, value: string) {
+    const updated = [...characters];
+    const char = updated[charIndex];
+    updated[charIndex] = {
+      ...char,
+      customFieldValues: { ...(char.customFieldValues || {}), [fieldId]: value },
+    };
     onChange({ characters: updated });
   }
 
@@ -128,6 +200,38 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
     onChange({ characters: [...characters, ...newChars] });
   }
 
+  // ─── Custom Field Management ─────────────────────────────
+
+  function addCustomField() {
+    const newField: CustomFieldDef = {
+      id: crypto.randomUUID(),
+      name: '',
+      inputType: 'text',
+      order: customFields.length,
+    };
+    onChange({ customFieldDefinitions: [...customFields, newField] });
+  }
+
+  function updateCustomFieldDef(index: number, partial: Partial<CustomFieldDef>) {
+    const updated = [...customFields];
+    updated[index] = { ...updated[index], ...partial };
+    onChange({ customFieldDefinitions: updated });
+  }
+
+  function removeCustomFieldDef(index: number) {
+    onChange({ customFieldDefinitions: customFields.filter((_, i) => i !== index) });
+  }
+
+  function applyGenreDefaults() {
+    if (!data.genre) return;
+    const defaults = getDefaultFieldsForGenre(data.genre);
+    if (defaults.length > 0) {
+      onChange({ customFieldDefinitions: defaults });
+    }
+  }
+
+  // ─── AI ───────────────────────────────────────────────────
+
   async function handleAiSuggest() {
     if (!vision.trim()) return;
     setAiLoading(true);
@@ -138,6 +242,7 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
       const prompt = [
         data.genre && `ジャンル: ${data.genre}`,
         data.coreMessage && `テーマ: ${data.coreMessage}`,
+        data.inspiration && `インスピレーション: ${data.inspiration}`,
         data.targetEmotions && `読者に感じてほしい感情: ${data.targetEmotions}`,
         data.readerJourney && `読者の旅路: ${data.readerJourney}`,
         `著者のビジョン: ${vision}`,
@@ -216,6 +321,64 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
           物語を動かすキャラクターを設計しましょう。自分で作成するか、AIに相談できます。
         </p>
       </div>
+
+      {/* Custom field manager toggle */}
+      <div className="flex items-center justify-between">
+        <span className="text-xs text-muted-foreground">
+          {customFields.length > 0 && `カスタムフィールド: ${customFields.map(f => f.name).filter(Boolean).join(', ')}`}
+        </span>
+        <Button variant="ghost" size="sm" onClick={() => setShowFieldManager(!showFieldManager)} className="gap-1 text-xs">
+          <Settings className="h-3 w-3" />
+          カスタムフィールド管理
+        </Button>
+      </div>
+
+      {/* Custom field manager */}
+      {showFieldManager && (
+        <div className="p-3 border border-border rounded-lg space-y-2 bg-muted/20">
+          <div className="flex items-center justify-between">
+            <p className="text-xs font-medium">カスタムフィールド定義</p>
+            {data.genre && GENRE_FIELD_TEMPLATES[data.genre] && (
+              <Button variant="ghost" size="sm" onClick={applyGenreDefaults} className="text-[10px]">
+                ジャンルデフォルトに戻す
+              </Button>
+            )}
+          </div>
+          {customFields.map((field, i) => (
+            <div key={field.id} className="flex gap-2 items-center">
+              <Input
+                value={field.name}
+                onChange={(e) => updateCustomFieldDef(i, { name: e.target.value })}
+                placeholder="フィールド名"
+                className="h-7 text-xs flex-1"
+              />
+              <select
+                value={field.inputType}
+                onChange={(e) => updateCustomFieldDef(i, { inputType: e.target.value as any })}
+                className="h-7 text-xs rounded-md border border-border bg-background px-2"
+              >
+                <option value="text">テキスト</option>
+                <option value="textarea">テキストエリア</option>
+                <option value="select">選択式</option>
+              </select>
+              {field.inputType === 'select' && (
+                <Input
+                  value={(field.options || []).join(', ')}
+                  onChange={(e) => updateCustomFieldDef(i, { options: e.target.value.split(/[,、]\s*/).filter(Boolean) })}
+                  placeholder="選択肢（カンマ区切り）"
+                  className="h-7 text-xs flex-1"
+                />
+              )}
+              <button onClick={() => removeCustomFieldDef(i)} className="text-muted-foreground hover:text-destructive">
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </div>
+          ))}
+          <Button variant="outline" size="sm" onClick={addCustomField} className="gap-1 text-xs">
+            <Plus className="h-3 w-3" /> フィールド追加
+          </Button>
+        </div>
+      )}
 
       {/* Character list */}
       <div className="space-y-3">
@@ -369,6 +532,40 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
                       className="h-7 text-xs"
                     />
                   </div>
+
+                  {/* Custom fields */}
+                  {customFields.length > 0 && (
+                    <div className="border-t border-border/50 pt-2 mt-2 space-y-2">
+                      <p className="text-[10px] text-muted-foreground font-medium">カスタムフィールド</p>
+                      {customFields.map((field) => (
+                        <div key={field.id}>
+                          <label className="text-[10px] text-muted-foreground">{field.name || '名前未設定'}</label>
+                          {field.inputType === 'select' ? (
+                            <select
+                              value={char.customFieldValues?.[field.id] || ''}
+                              onChange={(e) => updateCustomField(i, field.id, e.target.value)}
+                              className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
+                            >
+                              <option value="">選択してください</option>
+                              {(field.options || []).map((opt) => <option key={opt} value={opt}>{opt}</option>)}
+                            </select>
+                          ) : field.inputType === 'textarea' ? (
+                            <Textarea
+                              value={char.customFieldValues?.[field.id] || ''}
+                              onChange={(e) => updateCustomField(i, field.id, e.target.value)}
+                              rows={2} className="text-xs"
+                            />
+                          ) : (
+                            <Input
+                              value={char.customFieldValues?.[field.id] || ''}
+                              onChange={(e) => updateCustomField(i, field.id, e.target.value)}
+                              className="h-7 text-xs"
+                            />
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                  )}
                 </div>
               )}
             </div>

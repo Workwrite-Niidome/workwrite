@@ -170,9 +170,26 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
 
     // Plot and chapter outline (always from creation plan, regardless of structuredContext)
     if (creationPlan?.plotOutline) {
-      const plot = typeof creationPlan.plotOutline === 'string'
-        ? creationPlan.plotOutline
-        : creationPlan.plotOutline.text || '';
+      let plot = '';
+      if (typeof creationPlan.plotOutline === 'string') {
+        plot = creationPlan.plotOutline;
+      } else if (creationPlan.plotOutline.type === 'structured' && creationPlan.plotOutline.actGroups?.length > 0) {
+        // New structured format: convert actGroups to readable text for AI context
+        plot = creationPlan.plotOutline.actGroups.map((group: any) => {
+          const header = `【${group.label}】${group.description ? ` ${group.description}` : ''}`;
+          const episodes = (group.episodes || []).map((ep: any, i: number) => {
+            const parts = [`  ${i + 1}. ${ep.title || '（無題）'}`];
+            if (ep.whatHappens) parts.push(`     何が起きるか: ${ep.whatHappens}`);
+            if (ep.whyItHappens) parts.push(`     なぜ起きるか: ${ep.whyItHappens}`);
+            if (ep.characters?.length > 0) parts.push(`     登場: ${ep.characters.join('、')}`);
+            if (ep.emotionTarget) parts.push(`     感情目標: ${ep.emotionTarget}`);
+            return parts.join('\n');
+          }).join('\n');
+          return episodes ? `${header}\n${episodes}` : header;
+        }).join('\n\n');
+      } else {
+        plot = creationPlan.plotOutline.text || '';
+      }
       if (plot) contextParts.push(`【プロット】\n${plot}`);
     }
     if (creationPlan?.chapterOutline?.length > 0) {

@@ -18,8 +18,12 @@ import {
   GeneratePlotDto,
   GenerateEmotionBlueprintDto,
   GenerateChapterOutlineDto,
+  GenerateEpisodesForActDto,
+  GenerateWorldBuildingDto,
+  GenerateSynopsisDto,
   SaveCreationPlanDto,
   AiFeedbackDto,
+  AiCheckDto,
 } from './dto/creation-wizard.dto';
 
 @ApiTags('Creation Wizard')
@@ -137,6 +141,100 @@ export class CreationWizardController {
     }
   }
 
+  @Post('works/:workId/creation/episodes-for-act')
+  @ApiOperation({ summary: 'Generate episode suggestions for a specific act (SSE stream)' })
+  async generateEpisodesForAct(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Body() dto: GenerateEpisodesForActDto,
+    @Res() res: Response,
+  ) {
+    this.setSSEHeaders(res);
+    try {
+      const stream = this.creationWizardService.generateEpisodesForAct(userId, workId, dto);
+      let fullOutput = '';
+      for await (const chunk of stream) {
+        fullOutput += chunk;
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      const parsed = this.parseEpisodesJson(fullOutput);
+      if (parsed) {
+        res.write(`data: ${JSON.stringify({ parsed })}\n\n`);
+      }
+      res.write(`data: [DONE]\n\n`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    } finally {
+      res.end();
+    }
+  }
+
+  @Post('works/:workId/creation/world-building')
+  @ApiOperation({ summary: 'Generate world building suggestions (SSE stream)' })
+  async generateWorldBuilding(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Body() dto: GenerateWorldBuildingDto,
+    @Res() res: Response,
+  ) {
+    this.setSSEHeaders(res);
+    try {
+      const stream = this.creationWizardService.generateWorldBuilding(userId, workId, dto);
+      let fullOutput = '';
+      for await (const chunk of stream) {
+        fullOutput += chunk;
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      const parsed = this.parseGenericJson(fullOutput);
+      if (parsed) {
+        res.write(`data: ${JSON.stringify({ parsed })}\n\n`);
+      }
+      res.write(`data: [DONE]\n\n`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    } finally {
+      res.end();
+    }
+  }
+
+  @Post('works/:workId/creation/synopsis')
+  @ApiOperation({ summary: 'Generate synopsis from context (SSE stream)' })
+  async generateSynopsis(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Body() dto: GenerateSynopsisDto,
+    @Res() res: Response,
+  ) {
+    this.setSSEHeaders(res);
+    try {
+      const stream = this.creationWizardService.generateSynopsis(userId, workId, dto);
+      for await (const chunk of stream) {
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write(`data: [DONE]\n\n`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    } finally {
+      res.end();
+    }
+  }
+
+  @Post('works/:workId/episodes/:episodeId/ai-check')
+  @ApiOperation({ summary: 'AI consistency check for episode content' })
+  async aiCheck(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() dto: AiCheckDto,
+  ) {
+    return this.creationWizardService.aiConsistencyCheck(userId, workId, episodeId, dto.content);
+  }
+
+  // ─── JSON parsers ─────────────────────────────────────────
+
   private parseChapterJson(raw: string): { chapters: any[]; suggestions: string } | null {
     const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
 
@@ -167,7 +265,6 @@ export class CreationWizardController {
     // Strategy 3: Extract individual JSON objects with "title"
     try {
       const chapters: any[] = [];
-      // Match nested JSON objects that contain "title"
       let depth = 0;
       let objStart = -1;
       for (let i = 0; i < cleaned.length; i++) {
@@ -230,6 +327,39 @@ export class CreationWizardController {
         if (json.premise || json.threeActStructure || json.centralConflict) {
           return json;
         }
+      }
+    } catch { /* skip */ }
+    return null;
+  }
+
+  private parseEpisodesJson(raw: string): { episodes: any[] } | null {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    try {
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        const json = JSON.parse(cleaned.slice(start, end + 1));
+        if (json.episodes && Array.isArray(json.episodes)) return json;
+      }
+    } catch { /* next */ }
+    try {
+      const arrStart = cleaned.indexOf('[');
+      const arrEnd = cleaned.lastIndexOf(']');
+      if (arrStart !== -1 && arrEnd > arrStart) {
+        const arr = JSON.parse(cleaned.slice(arrStart, arrEnd + 1));
+        if (Array.isArray(arr) && arr.length > 0) return { episodes: arr };
+      }
+    } catch { /* skip */ }
+    return null;
+  }
+
+  private parseGenericJson(raw: string): any | null {
+    const cleaned = raw.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
+    try {
+      const start = cleaned.indexOf('{');
+      const end = cleaned.lastIndexOf('}');
+      if (start !== -1 && end > start) {
+        return JSON.parse(cleaned.slice(start, end + 1));
       }
     } catch { /* skip */ }
     return null;

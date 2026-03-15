@@ -277,8 +277,10 @@ class ApiClient {
   async saveCreationPlan(workId: string, plan: {
     characters?: any[];
     plotOutline?: any;
-    emotionBlueprint?: { coreMessage: string; targetEmotions: string; readerJourney: string };
+    emotionBlueprint?: any;
     chapterOutline?: any[];
+    customFieldDefinitions?: any;
+    worldBuildingData?: any;
   }) {
     return this.request<{ data: any }>(`/works/${workId}/creation/plan`, {
       method: 'PUT',
@@ -290,9 +292,11 @@ class ApiClient {
     return this.request<{ data: {
       characters?: any[];
       plotOutline?: any;
-      emotionBlueprint?: { coreMessage: string; targetEmotions: string; readerJourney: string };
+      emotionBlueprint?: any;
       chapterOutline?: any[];
       storySummary?: any;
+      customFieldDefinitions?: any;
+      worldBuildingData?: any;
     } }>(`/works/${workId}/creation/plan`);
   }
 
@@ -302,6 +306,17 @@ class ApiClient {
 
   async updateStorySummary(workId: string) {
     return this.request<{ success: boolean }>(`/works/${workId}/creation/summary`, { method: 'POST' });
+  }
+
+  async aiCheck(workId: string, episodeId: string, content?: string) {
+    return this.request<{ data: {
+      typos: { location: string; issue: string; suggestion: string }[];
+      characterIssues: { character: string; issue: string; detail: string }[];
+      plotIssues: { issue: string; detail: string }[];
+    } }>(`/works/${workId}/episodes/${episodeId}/ai-check`, {
+      method: 'POST',
+      body: JSON.stringify({ content }),
+    });
   }
 
   // Episodes
