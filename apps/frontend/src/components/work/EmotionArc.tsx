@@ -40,7 +40,7 @@ export function EmotionArc({ workId }: { workId: string }) {
   }, [workId]);
 
   if (loading) return null;
-  if (!data || (data.authorArc.length === 0 && data.readerTags.length === 0)) return null;
+  if (!data || (!data.authorArc?.length && !data.readerTags?.length)) return null;
 
   return (
     <Card>
@@ -49,7 +49,7 @@ export function EmotionArc({ workId }: { workId: string }) {
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Author's intended emotion arc */}
-        {data.authorArc.length > 0 && (
+        {data.authorArc?.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground mb-2">作者の感情設計</p>
             <div className="flex items-end gap-1 h-16">
@@ -75,7 +75,7 @@ export function EmotionArc({ workId }: { workId: string }) {
         )}
 
         {/* Reader emotion tags */}
-        {data.readerTags.length > 0 && (
+        {data.readerTags?.length > 0 && (
           <div>
             <p className="text-xs text-muted-foreground mb-2">読者の感想</p>
             <div className="flex flex-wrap gap-1.5">
