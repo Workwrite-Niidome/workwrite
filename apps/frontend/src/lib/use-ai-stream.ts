@@ -1,6 +1,42 @@
 import { useState, useRef, useCallback } from 'react';
 import { api } from './api';
 
+/**
+ * Low-level SSE stream consumer. Handles reader/decoder/buffer boilerplate.
+ * Call `onEvent` for each parsed SSE data object.
+ */
+export async function consumeSSEStream(
+  response: Response,
+  onEvent: (parsed: any) => void,
+): Promise<void> {
+  const reader = response.body?.getReader();
+  if (!reader) throw new Error('No response stream');
+
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  const processLine = (line: string) => {
+    if (!line.startsWith('data: ')) return;
+    const d = line.slice(6).trim();
+    if (d === '[DONE]') return;
+    try {
+      onEvent(JSON.parse(d));
+    } catch { /* skip malformed */ }
+  };
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() || '';
+    for (const line of lines) processLine(line);
+  }
+  if (buffer.trim()) {
+    for (const line of buffer.split('\n')) processLine(line);
+  }
+}
+
 interface UseAiStreamReturn {
   result: string;
   isStreaming: boolean;

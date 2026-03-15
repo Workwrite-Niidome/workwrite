@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api, type StoryCharacter } from '@/lib/api';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
 import {
   Plus, Trash2, ChevronDown, ChevronRight, Upload,
   Eye, EyeOff, X, Sparkles, UserPlus, ScanSearch,
@@ -422,37 +423,11 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
       const res = await api.fetchSSE('/works/none/creation/characters', {
         vision: aiVision,
       });
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No stream');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const d = line.slice(6).trim();
-          if (d === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(d);
-            if (parsed.text) accumulated += parsed.text;
-          } catch { /* skip */ }
-        }
-      }
-      if (buffer.trim()) {
-        for (const line of buffer.split('\n')) {
-          if (!line.startsWith('data: ')) continue;
-          const d = line.slice(6).trim();
-          if (d === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(d);
-            if (parsed.text) accumulated += parsed.text;
-          } catch { /* skip */ }
-        }
-      }
+
+      await consumeSSEStream(res, (event) => {
+        if (event.text) accumulated += event.text;
+      });
+
       const cleaned = accumulated.replace(/```json\s*/g, '').replace(/```\s*/g, '').trim();
       const start = cleaned.indexOf('{');
       const end = cleaned.lastIndexOf('}');
@@ -525,8 +500,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
         setExtractError('新しいキャラクターは検出されませんでした。');
       }
       setExtractedChars(chars);
-    } catch (e) {
-      console.error('Character extraction failed:', e);
+    } catch {
       setExtractError('キャラクター検出に失敗しました。しばらく待ってから再度お試しください。');
     } finally {
       setExtracting(false);

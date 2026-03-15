@@ -162,15 +162,15 @@ export class CreationWizardService {
 
         // Confirm transaction on successful delivery
         if (transactionId && contentDelivered) {
-          await this.creditService.confirmTransaction(transactionId).catch(() => {});
+          await this.creditService.confirmTransaction(transactionId).catch((e) => this.logger.error(`Credit confirm failed: ${transactionId}`, e));
           transactionId = null; // prevent double-confirm in catch
         }
       }
     } catch (error) {
       if (transactionId && !contentDelivered) {
-        await this.creditService.refundTransaction(transactionId).catch(() => {});
+        await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error(`Credit refund failed: ${transactionId}`, e));
       } else if (transactionId && contentDelivered) {
-        await this.creditService.confirmTransaction(transactionId).catch(() => {});
+        await this.creditService.confirmTransaction(transactionId).catch((e) => this.logger.error(`Credit confirm failed: ${transactionId}`, e));
       }
       throw error;
     }
@@ -677,7 +677,7 @@ ${episodeContent.slice(0, 5000)}`;
       }
       return { typos: [], characterIssues: [], plotIssues: [] };
     } catch (error) {
-      if (transactionId) await this.creditService.refundTransaction(transactionId).catch(() => {});
+      if (transactionId) await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error(`Credit refund failed: ${transactionId}`, e));
       throw error;
     }
   }

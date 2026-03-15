@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, ForbiddenException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import {
   CreateCharacterDto, UpdateCharacterDto, SetRelationDto,
@@ -7,6 +7,7 @@ import {
 
 @Injectable()
 export class StoryStructureService {
+  private readonly logger = new Logger(StoryStructureService.name);
   constructor(private prisma: PrismaService) {}
 
   // ─── Characters ──────────────────────────────────────
@@ -411,7 +412,7 @@ export class StoryStructureService {
         if (Array.isArray(defs)) {
           fieldNameMap = Object.fromEntries(defs.map((d: any) => [d.id, d.name]));
         }
-      } catch { /* ignore */ }
+      } catch (e) { this.logger.warn('Failed to load optional data', e); }
     }
 
     const parts: string[] = [];
@@ -482,7 +483,7 @@ export class StoryStructureService {
         }
         if (wbLines.length > 0) parts.push(`【世界観設定（厳守）】\n${wbLines.join('\n')}`);
       }
-    } catch { /* ignore */ }
+    } catch (e) { this.logger.warn('Failed to load optional data', e); }
 
     return parts.join('\n\n');
   }

@@ -6,6 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { api } from '@/lib/api';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
 import { cn } from '@/lib/utils';
 import type { WizardData, CustomFieldDef } from './wizard-shell';
 
@@ -254,44 +255,13 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
         themes: data.coreMessage || undefined,
       });
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No stream');
-      const decoder = new TextDecoder();
-      let buffer = '';
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const d = line.slice(6).trim();
-          if (d === '[DONE]') continue;
-          try {
-            const parsed = JSON.parse(d);
-            if (parsed.text) {
-              accumulated += parsed.text;
-              setAiRaw(accumulated);
-            }
-          } catch { /* skip */ }
+      await consumeSSEStream(res, (event) => {
+        if (event.text) {
+          accumulated += event.text;
+          setAiRaw(accumulated);
         }
-      }
-      if (buffer.trim()) {
-        const remaining = buffer.trim();
-        if (remaining.startsWith('data: ')) {
-          const d = remaining.slice(6).trim();
-          if (d !== '[DONE]') {
-            try {
-              const parsed = JSON.parse(d);
-              if (parsed.text) {
-                accumulated += parsed.text;
-                setAiRaw(accumulated);
-              }
-            } catch { /* skip */ }
-          }
-        }
-      }
+      });
+
       const result = parseAiResponse(accumulated);
       if (result) {
         setAiParsed(result);

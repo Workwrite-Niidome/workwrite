@@ -7,6 +7,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
 import type { WizardData, WorldBuildingData } from './wizard-shell';
 
 interface Props {
@@ -97,37 +98,20 @@ export function StepWorldBuilding({ data, onChange }: Props) {
         existingData: wb,
       });
 
-      const reader = res.body?.getReader();
-      if (!reader) throw new Error('No stream');
-      const decoder = new TextDecoder();
-      let buffer = '';
       let accumulated = '';
       let serverParsed: any = null;
 
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const d = line.slice(6).trim();
-          if (d === '[DONE]') continue;
-          try {
-            const event = JSON.parse(d);
-            if (event.text) accumulated += event.text;
-            if (event.parsed) serverParsed = event.parsed;
-          } catch { /* skip */ }
-        }
-      }
+      await consumeSSEStream(res, (event) => {
+        if (event.text) accumulated += event.text;
+        if (event.parsed) serverParsed = event.parsed;
+      });
 
       const parsed = serverParsed || parseWorldBuildingJson(accumulated);
       if (parsed) {
         applyAiResult(section, parsed);
       }
-    } catch (err) {
-      console.error('World building AI generation failed:', err);
+    } catch {
+      // silently fail
     } finally {
       setAiLoading(null);
     }

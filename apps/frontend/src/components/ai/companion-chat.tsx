@@ -4,6 +4,7 @@ import { Send, Trash2, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, type CompanionMessage } from '@/lib/api';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
 import { useAuth } from '@/lib/auth-context';
 
 interface CompanionChatProps {
@@ -56,51 +57,29 @@ export function CompanionChat({ workId }: CompanionChatProps) {
 
     try {
       const response = await api.fetchSSE(`/ai/companion/${workId}/chat`, { message: userMsg.content });
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No stream');
 
-      const decoder = new TextDecoder();
-      let buffer = '';
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        buffer += decoder.decode(value, { stream: true });
-        const lines = buffer.split('\n');
-        buffer = lines.pop() || '';
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-          const data = line.slice(6).trim();
-          if (data === '[DONE]') break;
-          try {
-            const parsed = JSON.parse(data);
-            if (parsed.error) {
-              setError(parsed.error);
-              // Remove empty assistant message
-              setMessages((prev) => {
-                const last = prev[prev.length - 1];
-                if (last?.role === 'assistant' && !last.content) return prev.slice(0, -1);
-                return prev;
-              });
-              break;
-            }
-            if (parsed.text) {
-              setMessages((prev) => {
-                const updated = [...prev];
-                const last = updated[updated.length - 1];
-                if (last.role === 'assistant') {
-                  updated[updated.length - 1] = { ...last, content: last.content + parsed.text };
-                }
-                return updated;
-              });
-            }
-          } catch {
-            // ignore parse errors
-          }
+      await consumeSSEStream(response, (parsed) => {
+        if (parsed.error) {
+          setError(parsed.error);
+          // Remove empty assistant message
+          setMessages((prev) => {
+            const last = prev[prev.length - 1];
+            if (last?.role === 'assistant' && !last.content) return prev.slice(0, -1);
+            return prev;
+          });
+          return;
         }
-      }
+        if (parsed.text) {
+          setMessages((prev) => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last.role === 'assistant') {
+              updated[updated.length - 1] = { ...last, content: last.content + parsed.text };
+            }
+            return updated;
+          });
+        }
+      });
     } catch {
       setMessages((prev) => {
         const updated = [...prev];

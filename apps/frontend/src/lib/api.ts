@@ -55,14 +55,6 @@ class ApiClient {
     return this.refreshPromise;
   }
 
-  /** Get a valid auth token, refreshing if needed. For use with SSE/streaming fetch calls. */
-  async getValidToken(): Promise<string | null> {
-    const token = this.getToken();
-    if (!token) return null;
-    // Try a quick HEAD or just return the token — the caller handles 401 retry
-    return token;
-  }
-
   /** Make an SSE streaming fetch with auto token refresh on 401. */
   async fetchSSE(path: string, body: any, signal?: AbortSignal): Promise<Response> {
     const token = this.getToken();
@@ -198,10 +190,6 @@ class ApiClient {
   }
 
   // Onboarding
-  async getOnboardingQuestions() {
-    return this.request<{ data: OnboardingQuestion[] }>('/users/me/onboarding/questions');
-  }
-
   async submitOnboarding(answers: OnboardingAnswer[]) {
     return this.request<{ data: { emotionVector: Record<string, number> } }>(
       '/users/me/onboarding',
@@ -216,10 +204,6 @@ class ApiClient {
     );
   }
 
-  async getOnboardingStatus() {
-    return this.request<{ data: { completed: boolean } }>('/users/me/onboarding/status');
-  }
-
   // Reading History Import
   async importReadingHistory(items: { title: string; author?: string }[]) {
     return this.request<{ data: { imported: number } }>('/reading-history/import', {
@@ -228,21 +212,7 @@ class ApiClient {
     });
   }
 
-  async getReadingHistory() {
-    return this.request<{ data: ReadingHistoryItem[] }>('/reading-history');
-  }
-
   // Works
-  async getWorks(params?: { genre?: string; cursor?: string; limit?: number }) {
-    const qs = new URLSearchParams();
-    if (params?.genre) qs.set('genre', params.genre);
-    if (params?.cursor) qs.set('cursor', params.cursor);
-    if (params?.limit) qs.set('limit', String(params.limit));
-    return this.request<{ data: Work[]; meta: { total: number; cursor?: string; hasMore: boolean } }>(
-      `/works?${qs.toString()}`,
-    );
-  }
-
   async getWork(id: string) {
     return this.request<{ data: Work }>(`/works/${id}`);
   }
@@ -298,10 +268,6 @@ class ApiClient {
       customFieldDefinitions?: any;
       worldBuildingData?: any;
     } }>(`/works/${workId}/creation/plan`);
-  }
-
-  async getStorySummary(workId: string) {
-    return this.request<any>(`/works/${workId}/creation/summary`);
   }
 
   async updateStorySummary(workId: string) {
@@ -362,13 +328,6 @@ class ApiClient {
     return this.request<{ data: Episode }>(`/episodes/${id}/unpublish`, { method: 'POST' });
   }
 
-  async scheduleEpisode(id: string, scheduledAt: string) {
-    return this.request<{ data: Episode }>(`/episodes/${id}/schedule`, {
-      method: 'POST',
-      body: JSON.stringify({ scheduledAt }),
-    });
-  }
-
   // Snapshots
   async createSnapshot(episodeId: string, label?: string) {
     return this.request<{ data: EpisodeSnapshot }>(`/episodes/${episodeId}/snapshots`, {
@@ -404,31 +363,12 @@ class ApiClient {
     );
   }
 
-  async getImportHistory() {
-    return this.request<{ data: WorkImportRecord[] }>('/works/import');
-  }
-
-  // Episode scoring
-  async scoreEpisode(episodeId: string) {
-    return this.request<{ data: QualityScoreDetail | null }>(`/scoring/episodes/${episodeId}`, { method: 'POST' });
-  }
-
   // Reading Progress
   async updateReadingProgress(workId: string, data: { episodeId: string; progressPct: number; lastPosition: number; readTimeMs: number }) {
     return this.request<{ data: ReadingProgress }>('/reading/progress', {
       method: 'POST',
       body: JSON.stringify({ workId, entries: [data] }),
     });
-  }
-
-  async getReadingProgressForWork(workId: string) {
-    return this.request<{ data: ReadingProgress[] }>(`/reading/progress/${workId}`);
-  }
-
-  async getResumePosition(workId: string) {
-    return this.request<{ data: { episodeId: string; scrollPosition: number; progressPct: number } | null }>(
-      `/reading/resume/${workId}`,
-    );
   }
 
   // Bookshelf
@@ -478,22 +418,6 @@ class ApiClient {
     return this.request<{ data: { deleted: boolean } }>(`/reading/highlights/${id}`, { method: 'DELETE' });
   }
 
-  // Comments (legacy, kept for backward compat)
-  async getCommentsForEpisode(episodeId: string) {
-    return this.request<{ data: Comment[] }>(`/comments/episode/${episodeId}`);
-  }
-
-  async createComment(data: { episodeId: string; content: string; paragraphId?: string; parentId?: string }) {
-    return this.request<{ data: Comment }>('/comments', {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteComment(id: string) {
-    return this.request<{ data: { deleted: boolean } }>(`/comments/${id}`, { method: 'DELETE' });
-  }
-
   // Letters (有料ファンレター)
   async getLettersForEpisode(episodeId: string) {
     return this.request<Letter[]>(`/letters/episode/${episodeId}`);
@@ -510,18 +434,6 @@ class ApiClient {
     return this.request<FreeLetterRemaining>('/letters/free-remaining');
   }
 
-  async getReceivedLetters() {
-    return this.request<Letter[]>('/letters/received');
-  }
-
-  async getSentLetters() {
-    return this.request<Letter[]>('/letters/sent');
-  }
-
-  async getLetterEarnings() {
-    return this.request<LetterEarnings>('/letters/earnings');
-  }
-
   // Discover
   async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
     const qs = new URLSearchParams({ q });
@@ -535,11 +447,6 @@ class ApiClient {
 
   async getTopPage() {
     return this.request<{ data: TopPageData }>('/discover/top');
-  }
-
-  async getHiddenGems(limit?: number) {
-    const qs = limit ? `?limit=${limit}` : '';
-    return this.request<{ data: Work[] }>(`/discover/hidden-gems${qs}`);
   }
 
   async getNextForMe(workId: string) {
@@ -562,24 +469,12 @@ class ApiClient {
     });
   }
 
-  async getAggregatedEmotionTags(workId: string) {
-    return this.request<{ data: AggregatedEmotionTag[] }>(`/emotions/work/${workId}/aggregate`);
-  }
-
   // Reviews
-  async getReviewsForWork(workId: string) {
-    return this.request<{ data: Review[] }>(`/reviews/work/${workId}`);
-  }
-
   async createReview(data: { workId: string; content: string }) {
     return this.request<{ data: Review }>('/reviews', {
       method: 'POST',
       body: JSON.stringify(data),
     });
-  }
-
-  async toggleReviewHelpful(reviewId: string) {
-    return this.request<{ data: { helpful: boolean } }>(`/reviews/${reviewId}/helpful`, { method: 'POST' });
   }
 
   // Reflection - State Changes
@@ -600,18 +495,9 @@ class ApiClient {
     return this.request<{ data: { balance: number } }>('/reflection/points');
   }
 
-  async getPointHistory() {
-    return this.request<{ data: PointTransaction[] }>('/reflection/points/history');
-  }
-
-  // Scoring
   // Author Dashboard
   async getAuthorOverview() {
     return this.request<{ data: unknown }>('/author/overview');
-  }
-
-  async getWorkAnalytics(workId: string) {
-    return this.request<{ data: unknown }>(`/author/works/${workId}/analytics`);
   }
 
   async getWorkEmotionCloud(workId: string) {
@@ -622,10 +508,6 @@ class ApiClient {
     return this.request<{ data: { episodeId: string; title: string; orderIndex: number; readers: number; avgProgress: number }[] }>(
       `/author/works/${workId}/heatmap`,
     );
-  }
-
-  async getAuthorRevenue() {
-    return this.request<{ data: unknown }>('/author/revenue');
   }
 
   // Scoring
@@ -789,71 +671,13 @@ class ApiClient {
     return this.request<{ deleted: boolean }>(`/works/${workId}/characters/${id}`, { method: 'DELETE' });
   }
 
-  async setCharacterRelation(workId: string, fromId: string, data: { toCharacterId: string; relationType: string; description?: string }) {
-    return this.request<any>(`/works/${workId}/characters/${fromId}/relations`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
   async migrateCharacters(workId: string) {
     return this.request<{ migrated: number }>(`/works/${workId}/characters/migrate`, { method: 'POST' });
   }
 
   // Story Structure - Arc
-  async getStoryArc(workId: string) {
-    return this.request<StoryArc | null>(`/works/${workId}/story-arc`);
-  }
-
-  async upsertStoryArc(workId: string, data: { premise?: string; centralConflict?: string; themes?: string[]; acts?: { actNumber: number; title: string; summary?: string; turningPoint?: string }[] }) {
-    return this.request<StoryArc>(`/works/${workId}/story-arc`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async createScene(workId: string, data: { actId: string; title: string; summary?: string; emotionTarget?: string; intensity?: number; characters?: string[] }) {
-    return this.request<StoryScene>(`/works/${workId}/story-arc/scenes`, {
-      method: 'POST',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async updateScene(workId: string, sceneId: string, data: Partial<StoryScene>) {
-    return this.request<StoryScene>(`/works/${workId}/story-arc/scenes/${sceneId}`, {
-      method: 'PUT',
-      body: JSON.stringify(data),
-    });
-  }
-
-  async deleteScene(workId: string, sceneId: string) {
-    return this.request<{ deleted: boolean }>(`/works/${workId}/story-arc/scenes/${sceneId}`, { method: 'DELETE' });
-  }
-
-  async migrateStoryArc(workId: string) {
-    return this.request<{ migrated: boolean }>(`/works/${workId}/story-arc/migrate`, { method: 'POST' });
-  }
-
   async getStoryContext(workId: string) {
     return this.request<string | null>(`/works/${workId}/story-context`);
-  }
-
-  // AI Structural Analysis
-  async analyzeEpisode(episodeId: string) {
-    return this.request<{ success: boolean }>(`/ai/analyze/episode/${episodeId}`, { method: 'POST' });
-  }
-
-  async analyzeWork(workId: string) {
-    return this.request<{ analyzed: number; skipped: number }>(`/ai/analyze/work/${workId}`, { method: 'POST' });
-  }
-
-  async getAiContext(workId: string, episodeOrder?: number) {
-    const params = episodeOrder !== undefined ? `?episodeOrder=${episodeOrder}` : '';
-    return this.request<{ context: unknown; formatted: string }>(`/ai/context/${workId}${params}`);
-  }
-
-  async getEpisodeAnalyses(workId: string) {
-    return this.request<unknown[]>(`/ai/analysis/${workId}`);
   }
 
   // === SNS (Posts / Timeline) ===
@@ -934,17 +758,6 @@ class ApiClient {
     if (cursor) qs.set('cursor', cursor);
     if (limit) qs.set('limit', String(limit));
     return this.request<{ data: TimelineResult }>(`/timeline/global?${qs.toString()}`);
-  }
-
-  async getTrendingPosts() {
-    return this.request<{ data: SnsPost[] }>('/timeline/trending');
-  }
-
-  async shareHighlight(highlightId: string, comment?: string) {
-    return this.request<{ data: SnsPost }>(`/reading/highlights/${highlightId}/share`, {
-      method: 'POST',
-      body: JSON.stringify({ comment }),
-    });
   }
 
   // Invite codes
@@ -1105,15 +918,7 @@ class ApiClient {
     return this.request<{ data: AiInsightData }>(`/ai/insights/${workId}`);
   }
 
-  async getPersonalAiInsights(workId: string) {
-    return this.request<{ data: AiPersonalInsightData }>(`/ai/insights/${workId}/personal`);
-  }
-
   // AI Recommendations
-  async getAiRecommendations() {
-    return this.request<{ data: AiRecommendation[] }>('/ai/recommendations/for-me');
-  }
-
   async getAiRecommendationsBecauseYouRead(workId: string) {
     return this.request<{ data: AiRecommendation[] }>(`/ai/recommendations/because-you-read/${workId}`);
   }
