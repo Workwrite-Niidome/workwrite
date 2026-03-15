@@ -174,6 +174,22 @@ export default function ReaderPage() {
       .finally(() => setLoading(false));
   }, [episodeId, router]);
 
+  // Restore scroll position from saved reading progress
+  useEffect(() => {
+    if (!isAuthenticated || !episode) return;
+    api.getReadingProgress(episode.workId)
+      .then((res) => {
+        const entry = res.data.find((p) => p.episodeId === episodeId);
+        if (entry && entry.lastPosition > 0) {
+          // Delay to ensure content is rendered
+          requestAnimationFrame(() => {
+            window.scrollTo(0, entry.lastPosition);
+          });
+        }
+      })
+      .catch(() => {});
+  }, [episodeId, isAuthenticated, episode]);
+
   // Load highlights
   useEffect(() => {
     if (!isAuthenticated) return;

@@ -364,6 +364,10 @@ class ApiClient {
   }
 
   // Reading Progress
+  async getReadingProgress(workId: string) {
+    return this.request<{ data: ReadingProgress[] }>(`/reading/progress/${workId}`);
+  }
+
   async updateReadingProgress(workId: string, data: { episodeId: string; progressPct: number; lastPosition: number; readTimeMs: number }) {
     return this.request<{ data: ReadingProgress }>('/reading/progress', {
       method: 'POST',
@@ -1125,6 +1129,7 @@ export interface ReadingProgress {
   episodeId: string;
   progressPct: number;
   scrollPosition: number;
+  lastPosition: number;
   completedAt: string | null;
 }
 
