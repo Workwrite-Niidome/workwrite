@@ -38,7 +38,7 @@ export function WorldTab({ workId }: { workId: string }) {
     });
   }
 
-  const hasContent = data.basics || data.rules.length > 0 || data.terminology.length > 0 || data.history || data.items.length > 0;
+  const hasContent = data.basics || data.rules?.length > 0 || data.terminology?.length > 0 || data.history || data.items?.length > 0;
   if (!hasContent) return null;
 
   return (
@@ -65,7 +65,7 @@ export function WorldTab({ workId }: { workId: string }) {
       )}
 
       {/* Terminology */}
-      {data.terminology.length > 0 && (
+      {data.terminology?.length > 0 && (
         <Card>
           <button
             onClick={() => toggleSection('terminology')}
@@ -92,7 +92,7 @@ export function WorldTab({ workId }: { workId: string }) {
       )}
 
       {/* Rules */}
-      {data.rules.length > 0 && (
+      {data.rules?.length > 0 && (
         <Card>
           <button
             onClick={() => toggleSection('rules')}
@@ -119,7 +119,7 @@ export function WorldTab({ workId }: { workId: string }) {
       )}
 
       {/* Items */}
-      {data.items.length > 0 && (
+      {data.items?.length > 0 && (
         <Card>
           <button
             onClick={() => toggleSection('items')}

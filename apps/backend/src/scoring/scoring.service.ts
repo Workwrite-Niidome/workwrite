@@ -188,7 +188,7 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
       const arcLines: string[] = [];
       if (storyArc.premise) arcLines.push(`前提: ${storyArc.premise}`);
       if (storyArc.centralConflict) arcLines.push(`葛藤: ${storyArc.centralConflict}`);
-      if (storyArc.themes.length > 0) arcLines.push(`テーマ: ${storyArc.themes.join(', ')}`);
+      if (storyArc.themes?.length > 0) arcLines.push(`テーマ: ${storyArc.themes.join(', ')}`);
       if (arcLines.length > 0) structuredParts.push(`\n【物語構造】\n${arcLines.join('\n')}`);
     }
 
