@@ -12,6 +12,7 @@ import {
   HelpCircle,
   Users,
   Eye,
+  Globe,
   Wand2,
   FileText,
   Layers,
@@ -486,6 +487,42 @@ export default function WritersGuidePage() {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 公開時にAIが自動付与する感情タグ（勇気、涙、癒し、ワクワクなど最大5つ）は、
                 読者のおすすめ機能で使用されます。適切なタグがつくよう、物語の感情的要素を意識して執筆すると発見されやすくなります。
+              </p>
+              <p className="text-sm text-muted-foreground leading-relaxed mt-2">
+                また、Creation Wizardで設計した感情ブループリントは自動的に作者の意図タグとして変換され、
+                読者が付けた感情タグと並列で作品ページに表示されます。「作者が込めた想い」と「読者が感じたこと」が一目で比較できます。
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                <Globe className="h-4 w-4 text-primary" />
+                読者表示設定
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                Creation Wizardで作成した世界観や感情設計のデータを、読者に公開するかどうかを作品ごとに設定できます。
+                作品編集ページの「読者表示設定」セクションで以下のトグルを切り替えてください。
+              </p>
+              <div className="space-y-2">
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <span>
+                    <strong className="text-foreground">世界観タブを公開</strong>
+                    ：ONにすると、作品ページに「世界観」タブが表示され、用語集・世界のルール・アイテム・歴史などを読者が閲覧できます。
+                    ファンタジーやSFなど独自世界を持つ作品に効果的です。
+                  </span>
+                </div>
+                <div className="flex items-start gap-2 text-sm text-muted-foreground">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <span>
+                    <strong className="text-foreground">感情設計を公開</strong>
+                    ：ONにすると、「感情の旅路」として各フェーズの感情設計がグラフで可視化されます。
+                    読者にどんな感情体験を意図したかを伝えることで、作品への理解と共感が深まります。
+                  </span>
+                </div>
+              </div>
+              <p className="text-xs text-muted-foreground mt-3">
+                どちらもデフォルトはOFFです。ネタバレになりうる情報（隠された真実など）は公開データに含まれないよう自動的に除外されます。
               </p>
             </div>
           </div>
