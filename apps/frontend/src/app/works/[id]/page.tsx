@@ -190,7 +190,7 @@ export default function WorkDetailPage() {
             </div>
           )}
 
-          {work.tags.length > 0 && (
+          {work.tags?.length > 0 && (
             <div className="flex flex-wrap gap-1.5 mt-3">
               {work.tags.map((tag) => (
                 <Badge key={tag.id} variant="outline" className="text-xs">
