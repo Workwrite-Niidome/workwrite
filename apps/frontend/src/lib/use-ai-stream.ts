@@ -37,10 +37,13 @@ export async function consumeSSEStream(
   }
 }
 
+export type AiMode = 'normal' | 'thinking' | 'premium';
+
 interface GenerateOptions {
   templateSlug: string;
   variables: Record<string, string>;
   premiumMode?: boolean;
+  aiMode?: AiMode;
   conversationId?: string;
   followUpMessage?: string;
   episodeId?: string;
@@ -51,7 +54,7 @@ interface UseAiStreamReturn {
   isStreaming: boolean;
   error: string | null;
   conversationId: string | null;
-  generate: (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => Promise<void>;
+  generate: (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean, aiMode?: AiMode) => Promise<void>;
   generateFollowUp: (opts: GenerateOptions) => Promise<void>;
   abort: () => void;
   reset: () => void;
@@ -91,6 +94,7 @@ export function useAiStream(): UseAiStreamReturn {
         variables: opts.variables,
       };
       if (opts.premiumMode) body.premiumMode = true;
+      if (opts.aiMode) body.aiMode = opts.aiMode;
       if (opts.conversationId) body.conversationId = opts.conversationId;
       if (opts.followUpMessage) body.followUpMessage = opts.followUpMessage;
       if (opts.episodeId) body.episodeId = opts.episodeId;
@@ -160,9 +164,9 @@ export function useAiStream(): UseAiStreamReturn {
     }
   }, [abort]);
 
-  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean) => {
+  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean, aiMode?: AiMode) => {
     setConversationId(null);
-    await doGenerate({ templateSlug, variables, premiumMode });
+    await doGenerate({ templateSlug, variables, premiumMode, aiMode });
   }, [doGenerate]);
 
   const generateFollowUp = useCallback(async (opts: GenerateOptions) => {

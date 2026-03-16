@@ -16,6 +16,11 @@ export class AiAssistDto {
   @IsBoolean()
   premiumMode?: boolean;
 
+  @ApiPropertyOptional({ description: 'AI mode: normal (1cr), thinking (2cr), premium (5cr)' })
+  @IsOptional()
+  @IsString()
+  aiMode?: 'normal' | 'thinking' | 'premium';
+
   @ApiPropertyOptional({ description: 'Conversation ID for chat-style refinement' })
   @IsOptional()
   @IsString()

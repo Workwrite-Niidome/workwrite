@@ -53,6 +53,7 @@ export class AiAssistController {
         dto.conversationId,
         dto.followUpMessage,
         dto.episodeId,
+        dto.aiMode,
       );
       for await (const chunk of stream) {
         // Check for metadata (conversationId)

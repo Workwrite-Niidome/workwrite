@@ -3,7 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
-import { useAiStream } from '@/lib/use-ai-stream';
+import { useAiStream, type AiMode } from '@/lib/use-ai-stream';
 import { api, type AiGenerationHistoryItem } from '@/lib/api';
 import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, Sparkles, FileText, SlidersHorizontal, Send, UserPlus, Check, Loader2, History, Trash2, MessageSquare, RotateCcw } from 'lucide-react';
 
@@ -36,7 +36,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [tier, setTier] = useState<{
     plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus?: boolean; remainingFreeUses: number | null;
   } | null>(null);
-  const [premiumMode, setPremiumMode] = useState(false);
+  const [aiMode, setAiMode] = useState<AiMode>('normal');
   const [charCount, setCharCount] = useState(1000);
   const [customPrompt, setCustomPrompt] = useState('');
   const [freePrompt, setFreePrompt] = useState('');
@@ -281,7 +281,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     setCurrentSlug(slug);
     setNewChars(null);
     reset();
-    generate(slug, buildContextVars(), premiumMode);
+    generate(slug, buildContextVars(), undefined, aiMode);
   }
 
   function handleFollowUp() {
@@ -293,7 +293,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     generateFollowUp({
       templateSlug: currentSlug || 'free-prompt',
       variables: buildContextVars(),
-      premiumMode,
+      aiMode,
       conversationId,
       followUpMessage: msg,
     });
@@ -434,25 +434,46 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 <span className="text-muted-foreground font-normal ml-0.5">cr</span>
               </span>
             </div>
-            <div className="flex items-center justify-between">
+            <div className="flex items-center gap-1">
+              <button
+                onClick={() => setAiMode('normal')}
+                className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors ${
+                  aiMode === 'normal'
+                    ? 'bg-primary/10 border-primary/30 text-primary'
+                    : 'border-border text-muted-foreground hover:border-primary/30'
+                }`}
+              >
+                通常
+                <span className="opacity-60">1cr</span>
+              </button>
               {tier.canUseThinking && (
                 <button
-                  onClick={() => setPremiumMode(!premiumMode)}
-                  className={`flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-medium border transition-colors ${
-                    premiumMode
+                  onClick={() => setAiMode('thinking')}
+                  className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors ${
+                    aiMode === 'thinking'
+                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-600'
+                      : 'border-border text-muted-foreground hover:border-purple-500/30'
+                  }`}
+                >
+                  <Sparkles className="h-2.5 w-2.5" />
+                  じっくり
+                  <span className="opacity-60">2cr</span>
+                </button>
+              )}
+              {tier.canUseOpus && (
+                <button
+                  onClick={() => setAiMode('premium')}
+                  className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors ${
+                    aiMode === 'premium'
                       ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
                       : 'border-border text-muted-foreground hover:border-amber-500/30'
                   }`}
                 >
                   <Crown className="h-2.5 w-2.5" />
-                  {premiumMode
-                    ? (tier.canUseOpus ? '高精度モード ON' : 'じっくりモード ON')
-                    : (tier.canUseOpus ? '高精度モード' : 'じっくりモード')}
+                  高精度
+                  <span className="opacity-60">5cr</span>
                 </button>
               )}
-              <span className="text-[10px] text-muted-foreground">
-                {premiumMode ? (tier.canUseOpus ? '5cr/回' : '2cr/回') : '1cr/回'}
-              </span>
             </div>
             {(tier as any).credits?.total === 0 && (
               <div className="p-2 bg-amber-500/10 rounded-md border border-amber-500/20">
@@ -559,7 +580,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                       const vars = buildContextVars();
                       vars.user_prompt = freePrompt.trim();
                       reset();
-                      generate('free-prompt', vars, premiumMode);
+                      generate('free-prompt', vars, undefined, aiMode);
                       setFreePrompt('');
                     }
                   }}
@@ -574,7 +595,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                     const vars = buildContextVars();
                     vars.user_prompt = freePrompt.trim();
                     reset();
-                    generate('free-prompt', vars, premiumMode);
+                    generate('free-prompt', vars, undefined, aiMode);
                     setFreePrompt('');
                   }}
                 >
@@ -591,7 +612,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                 setNewChars(null);
                 reset();
                 const contextVars = buildContextVars();
-                generate(slug, { ...contextVars, ...vars }, premiumMode);
+                generate(slug, { ...contextVars, ...vars }, undefined, aiMode);
               }}
               isStreaming={isStreaming}
               currentContent={selectedText || currentContent}
@@ -737,7 +758,9 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                     <Send className="h-3.5 w-3.5" />
                   </Button>
                 </div>
-                <p className="text-[10px] text-muted-foreground">1cr/回 — 打ち返し回数無制限</p>
+                <p className="text-[10px] text-muted-foreground">
+                  {aiMode === 'premium' ? '5' : aiMode === 'thinking' ? '2' : '1'}cr/回 — 打ち返し回数無制限
+                </p>
               </div>
             )}
           </div>

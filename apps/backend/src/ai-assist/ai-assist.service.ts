@@ -65,6 +65,7 @@ export class AiAssistService {
     conversationId?: string,
     followUpMessage?: string,
     episodeId?: string,
+    aiMode?: 'normal' | 'thinking' | 'premium',
   ): AsyncGenerator<string> {
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
@@ -79,13 +80,14 @@ export class AiAssistService {
     const template = await this.templates.findBySlug(templateSlug);
 
     // Check AI tier and get model config (pass slug for model routing)
-    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug);
+    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug, aiMode);
 
     // Calculate credit cost
     const creditCost = this.aiTier.getCreditCost(
       templateSlug,
       premiumMode,
       modelConfig.model.includes('opus'),
+      aiMode,
     );
 
     // Auto-inject structural context if workId is provided

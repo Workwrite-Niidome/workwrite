@@ -50,6 +50,7 @@ export class AiTierService {
     feature: string,
     premiumMode: boolean = false,
     isOpus: boolean = false,
+    aiMode?: 'normal' | 'thinking' | 'premium',
   ): number {
     // Companion is always free
     if (feature === 'companion') return 0;
@@ -57,10 +58,13 @@ export class AiTierService {
     // Light features are always free
     if (LIGHT_FEATURES.has(feature)) return 0;
 
-    // Opus mode
-    if (premiumMode && isOpus) return 5;
+    // New aiMode takes precedence over legacy premiumMode flag
+    if (aiMode === 'premium') return 5;
+    if (aiMode === 'thinking') return 2;
+    if (aiMode === 'normal') return 1;
 
-    // Thinking mode (Sonnet with extended thinking)
+    // Legacy fallback: premiumMode boolean
+    if (premiumMode && isOpus) return 5;
     if (premiumMode) return 2;
 
     // Normal Sonnet (including creation_wizard)
@@ -155,6 +159,7 @@ export class AiTierService {
     userId: string,
     premiumMode: boolean = false,
     feature?: string,
+    aiMode?: 'normal' | 'thinking' | 'premium',
   ): Promise<{
     model: string;
     thinking: boolean;
@@ -163,17 +168,30 @@ export class AiTierService {
     const tier = await this.assertCanUseAi(userId);
     const baseSonnet = await this.aiSettings.getModel();
 
-    // Premium mode with Opus (pro plan only)
-    if (premiumMode && tier.canUseOpus) {
-      return {
-        model: OPUS_MODEL,
-        thinking: true,
-        budgetTokens: 16000,
-      };
+    // Resolve effective mode from aiMode or legacy premiumMode
+    const effectiveMode = aiMode || (premiumMode ? 'thinking' : 'normal');
+
+    // Premium (Opus) mode — pro plan only, falls back to thinking
+    if (effectiveMode === 'premium') {
+      if (tier.canUseOpus) {
+        return {
+          model: OPUS_MODEL,
+          thinking: true,
+          budgetTokens: 16000,
+        };
+      }
+      // Pro-only feature — fall through to thinking if standard user somehow requests it
+      if (tier.canUseThinking) {
+        return {
+          model: baseSonnet,
+          thinking: true,
+          budgetTokens: 10000,
+        };
+      }
     }
 
-    // Standard thinking mode (standard + pro)
-    if (premiumMode && tier.canUseThinking) {
+    // Thinking mode — standard + pro
+    if (effectiveMode === 'thinking' && tier.canUseThinking) {
       return {
         model: baseSonnet,
         thinking: true,
