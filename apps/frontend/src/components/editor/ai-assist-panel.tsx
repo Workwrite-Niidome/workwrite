@@ -425,9 +425,9 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           <div className="space-y-1.5">
             <div className="flex items-center justify-between text-xs">
               <span className="text-muted-foreground">
-                {tier.plan === 'pro' && <><Crown className="inline h-3 w-3 text-amber-500 mr-1" />Pro</>}
-                {tier.plan === 'standard' && <><Crown className="inline h-3 w-3 text-purple-500 mr-1" />Standard</>}
-                {tier.plan === 'free' && <>Free</>}
+                {tier.plan === 'free' ? <>Free</> : (
+                  <><Crown className="inline h-3 w-3 text-amber-500 mr-1" />{tier.plan.charAt(0).toUpperCase() + tier.plan.slice(1)}</>
+                )}
               </span>
               <span className="font-medium">
                 {(tier as any).credits?.total ?? tier.remainingFreeUses ?? '?'}

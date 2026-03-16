@@ -695,7 +695,7 @@ class ApiClient {
     return this.request<{ data: {
       available: boolean;
       model: string;
-      tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; remainingFreeUses: number | null };
+      tier?: { plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus?: boolean; remainingFreeUses: number | null; credits?: { total: number; monthly: number; purchased: number } };
     } }>('/ai/status');
   }
 

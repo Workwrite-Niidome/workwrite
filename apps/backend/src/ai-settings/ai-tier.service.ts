@@ -78,7 +78,18 @@ export class AiTierService {
     });
 
     const rawPlan = sub?.status === 'active' ? sub.plan : 'free';
-    const plan: PlanType = rawPlan as PlanType;
+    // Normalize plan names: treat 'premium' as 'pro', unknown paid plans as 'standard'
+    let plan: PlanType;
+    if (rawPlan === 'pro' || rawPlan === 'premium') {
+      plan = 'pro';
+    } else if (rawPlan === 'standard') {
+      plan = 'standard';
+    } else if (rawPlan === 'free' || !sub || sub.status !== 'active') {
+      plan = 'free';
+    } else {
+      // Unknown paid plan — treat as standard
+      plan = 'standard';
+    }
 
     const credits = await this.creditService.getBalance(userId);
 
