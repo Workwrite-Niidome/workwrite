@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ScoringService } from '../scoring/scoring.service';
+import { CreditService } from '../billing/credit.service';
 import { AnalyzeTextDto, ImportTextDto, ImportUrlDto } from './dto/work-import.dto';
 import { NarouScraperService } from './scrapers/narou-scraper.service';
 import { KakuyomuScraperService } from './scrapers/kakuyomu-scraper.service';
@@ -15,9 +16,12 @@ export interface DetectedChapter {
 export class WorkImportService {
   private readonly logger = new Logger(WorkImportService.name);
 
+  private static readonly IMPORT_CREDIT_COST = 1;
+
   constructor(
     private prisma: PrismaService,
     private scoringService: ScoringService,
+    private creditService: CreditService,
     private narouScraper: NarouScraperService,
     private kakuyomuScraper: KakuyomuScraperService,
   ) {}
@@ -159,6 +163,20 @@ export class WorkImportService {
 
     const source = isNarou ? 'url_narou' : 'url_kakuyomu';
 
+    // Consume credits for import
+    let importTransactionId: string | null = null;
+    try {
+      const result = await this.creditService.consumeCredits(
+        userId,
+        WorkImportService.IMPORT_CREDIT_COST,
+        'url_import',
+      );
+      importTransactionId = result.transactionId;
+    } catch (e) {
+      this.logger.warn(`Credit consumption failed for URL import: ${e}`);
+      throw e;
+    }
+
     // Create import record
     const importRecord = await this.prisma.workImport.create({
       data: {
@@ -236,6 +254,13 @@ export class WorkImportService {
         }
       }
 
+      // Confirm import credit
+      if (importTransactionId) {
+        await this.creditService.confirmTransaction(importTransactionId).catch((err) =>
+          this.logger.error(`Import credit confirm failed: ${importTransactionId}`, err),
+        );
+      }
+
       return {
         importId: importRecord.id,
         workId: work.id,
@@ -244,6 +269,13 @@ export class WorkImportService {
         scoringResult,
       };
     } catch (e) {
+      // Refund import credit on failure
+      if (importTransactionId) {
+        await this.creditService.refundTransaction(importTransactionId).catch((err) =>
+          this.logger.error(`Import credit refund failed: ${importTransactionId}`, err),
+        );
+      }
+
       await this.prisma.workImport.update({
         where: { id: importRecord.id },
         data: {

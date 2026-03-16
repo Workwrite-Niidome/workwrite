@@ -98,11 +98,11 @@ export default function ReferralPage() {
         <CardContent className="space-y-1.5">
           <div className="flex justify-between text-sm">
             <span>招待者が初作品を公開</span>
-            <Badge variant="secondary">+50cr</Badge>
+            <Badge variant="secondary">+10cr</Badge>
           </div>
           <div className="flex justify-between text-sm">
             <span>招待者が初レビューを投稿</span>
-            <Badge variant="secondary">+10cr</Badge>
+            <Badge variant="secondary">+5cr</Badge>
           </div>
         </CardContent>
       </Card>

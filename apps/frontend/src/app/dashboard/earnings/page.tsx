@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, Suspense } from 'react';
 import { useSearchParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -25,7 +25,7 @@ interface ConnectStatus {
   detailsSubmitted: boolean;
 }
 
-export default function EarningsPage() {
+function EarningsPageContent() {
   const searchParams = useSearchParams();
   const connectResult = searchParams.get('connect');
 
@@ -220,9 +220,6 @@ export default function EarningsPage() {
                     表示されている収益は手数料控除後の金額です。
                   </p>
                   <p>
-                    無料枠（月3通）で送信されたレターには収益は発生しません。
-                  </p>
-                  <p>
                     {isConnectReady
                       ? '収益はStripe Connectを通じて自動的に振り込まれます。'
                       : 'Stripe Connectの設定完了後、自動振込が有効になります。'}
@@ -244,5 +241,21 @@ export default function EarningsPage() {
         </Card>
       )}
     </div>
+  );
+}
+
+export default function EarningsPage() {
+  return (
+    <Suspense fallback={
+      <div className="px-4 py-8 space-y-4">
+        <Skeleton className="h-8 w-48" />
+        <div className="grid grid-cols-2 gap-3">
+          <Skeleton className="h-24" />
+          <Skeleton className="h-24" />
+        </div>
+      </div>
+    }>
+      <EarningsPageContent />
+    </Suspense>
   );
 }

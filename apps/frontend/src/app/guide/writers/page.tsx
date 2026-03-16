@@ -515,7 +515,7 @@ export default function WritersGuidePage() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                スコアリングはクレジット消費なし（無料）で何度でも実行できます。
+                スコアリングは1回1クレジットで実行できます。
               </p>
             </div>
 
@@ -702,10 +702,11 @@ export default function WritersGuidePage() {
                       { feature: 'AI執筆アシスト（じっくり）', cost: '2cr' },
                       { feature: 'AI執筆アシスト（高精度）', cost: '5cr' },
                       { feature: 'Creation Wizard（各ステップ）', cost: '1cr' },
+                      { feature: 'AIスコアリング', cost: '1cr' },
+                      { feature: 'URLインポート', cost: '1cr' },
                       { feature: '読書タイプ再診断', cost: '1cr' },
                       { feature: '校正・推敲', cost: '0cr' },
                       { feature: 'あらすじ自動生成', cost: '0cr' },
-                      { feature: 'AIスコアリング', cost: '0cr' },
                       { feature: 'AI読書コンパニオン', cost: '0cr' },
                       { feature: 'AIレコメンド・分析', cost: '0cr' },
                     ].map((row) => (
@@ -779,7 +780,7 @@ export default function WritersGuidePage() {
             <div className="bg-muted/50 rounded-lg p-4">
               <h4 className="text-sm font-medium mb-2">無料で使い続けられる機能</h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                作品の執筆・公開・閲覧、校正、スコアリング、感情タグ、レコメンド、読者統計、ハイライト、しおり、
+                作品の執筆・公開・閲覧、校正、感情タグ、レコメンド、読者統計、ハイライト、しおり、
                 あらすじ自動生成は、すべてのプランで<strong className="text-foreground">クレジット消費なし</strong>で利用できます。
                 課金なしでも十分に創作活動が行えます。
               </p>

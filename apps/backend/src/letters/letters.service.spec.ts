@@ -5,6 +5,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
 import { LetterModerationService } from './letter-moderation.service';
+import { LetterTypeDto } from './dto/create-letter.dto';
 
 // ─── Mock factories ──────────────────────────────────────────────────────────
 
@@ -63,7 +64,7 @@ describe('LettersService', () => {
   describe('create', () => {
     const validDto = {
       episodeId: 'ep-1',
-      type: 'STANDARD' as const,
+      type: LetterTypeDto.STANDARD,
       content: 'すごく面白かったです！',
     };
 
@@ -108,7 +109,7 @@ describe('LettersService', () => {
       await expect(
         service.create('user-1', {
           episodeId: 'ep-1',
-          type: 'SHORT',
+          type: LetterTypeDto.SHORT,
           content: '応援！',
           stampId: 'cheer-1',
         }),
@@ -148,7 +149,7 @@ describe('LettersService', () => {
     it('uses giftAmount for GIFT type instead of fixed price', async () => {
       const giftDto = {
         episodeId: 'ep-1',
-        type: 'GIFT' as const,
+        type: LetterTypeDto.GIFT,
         content: 'すごい作品です！',
         giftAmount: 5000,
       };

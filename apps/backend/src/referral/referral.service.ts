@@ -3,8 +3,8 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { CreditService } from '../billing/credit.service';
 
 const REWARD_CONFIG: Record<string, number> = {
-  first_work_published: 50,
-  first_review: 10,
+  first_work_published: 10,
+  first_review: 5,
 };
 
 @Injectable()

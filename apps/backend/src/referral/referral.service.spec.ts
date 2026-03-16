@@ -51,7 +51,7 @@ describe('ReferralService', () => {
   // ─── checkAndReward ────────────────────────────────────────────────────────
 
   describe('checkAndReward', () => {
-    it('grants 50 credits for first_work_published', async () => {
+    it('grants 10 credits for first_work_published', async () => {
       // Setup: user was invited
       prisma.inviteCodeUsage.findFirst.mockResolvedValue({
         inviteCode: { createdBy: 'inviter-1' },
@@ -70,7 +70,7 @@ describe('ReferralService', () => {
           inviterId: 'inviter-1',
           inviteeId: 'invitee-1',
           triggerEvent: 'first_work_published',
-          creditAmount: 50,
+          creditAmount: 10,
           claimed: true,
         }),
       });
@@ -78,14 +78,14 @@ describe('ReferralService', () => {
       expect(prisma.creditBalance.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            balance: { increment: 50 },
-            purchasedBalance: { increment: 50 },
+            balance: { increment: 10 },
+            purchasedBalance: { increment: 10 },
           }),
         }),
       );
     });
 
-    it('grants 10 credits for first_review', async () => {
+    it('grants 5 credits for first_review', async () => {
       prisma.inviteCodeUsage.findFirst.mockResolvedValue({
         inviteCode: { createdBy: 'inviter-1' },
       });
@@ -101,8 +101,8 @@ describe('ReferralService', () => {
       expect(prisma.creditBalance.update).toHaveBeenCalledWith(
         expect.objectContaining({
           data: expect.objectContaining({
-            balance: { increment: 10 },
-            purchasedBalance: { increment: 10 },
+            balance: { increment: 5 },
+            purchasedBalance: { increment: 5 },
           }),
         }),
       );
@@ -166,8 +166,8 @@ describe('ReferralService', () => {
   describe('getDashboard', () => {
     it('returns dashboard data with totals', async () => {
       prisma.referralReward.findMany.mockResolvedValue([
-        { triggerEvent: 'first_work_published', creditAmount: 50, createdAt: new Date() },
-        { triggerEvent: 'first_review', creditAmount: 10, createdAt: new Date() },
+        { triggerEvent: 'first_work_published', creditAmount: 10, createdAt: new Date() },
+        { triggerEvent: 'first_review', creditAmount: 5, createdAt: new Date() },
       ]);
       prisma.inviteCode.findMany.mockResolvedValue([
         {
@@ -186,7 +186,7 @@ describe('ReferralService', () => {
 
       const result = await service.getDashboard('inviter-1');
 
-      expect(result.totalCreditsEarned).toBe(60);
+      expect(result.totalCreditsEarned).toBe(15);
       expect(result.totalInvitees).toBe(3);
       expect(result.inviteCodes).toHaveLength(1);
       expect(result.rewards).toHaveLength(2);
