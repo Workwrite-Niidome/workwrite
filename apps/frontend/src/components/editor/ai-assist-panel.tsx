@@ -647,29 +647,35 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
             </div>
 
             {/* Past messages in conversation */}
-            {chatMessages.map((msg, i) => (
-              <div key={i} className={`text-xs rounded-md p-2 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
-                <p className="text-[10px] font-medium text-muted-foreground mb-1">
-                  {msg.role === 'user' ? 'あなた' : 'AI'}
-                </p>
-                <div className="whitespace-pre-wrap leading-relaxed line-clamp-6">{msg.content}</div>
-                {msg.role === 'assistant' && (
-                  <div className="flex gap-1 mt-1.5">
-                    <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => onInsert(msg.content)}>
-                      <ArrowDownToLine className="h-2.5 w-2.5 mr-0.5" /> 挿入
-                    </Button>
-                    {selectedText && onReplace && (
-                      <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => onReplace(msg.content)}>
-                        <Replace className="h-2.5 w-2.5 mr-0.5" /> 置換
+            {chatMessages.map((msg, i) => {
+              const isLastAssistant = msg.role === 'assistant' && i === chatMessages.length - 1;
+              const isOlderAssistant = msg.role === 'assistant' && !isLastAssistant;
+              return (
+                <div key={i} className={`text-xs rounded-md p-2 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
+                  <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                    {msg.role === 'user' ? 'あなた' : 'AI'}
+                  </p>
+                  <div className={`whitespace-pre-wrap leading-relaxed ${
+                    isLastAssistant ? 'max-h-80 overflow-y-auto' : isOlderAssistant ? 'line-clamp-6' : ''
+                  }`}>{msg.content}</div>
+                  {isOlderAssistant && (
+                    <div className="flex gap-1 mt-1.5">
+                      <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => onInsert(msg.content)}>
+                        <ArrowDownToLine className="h-2.5 w-2.5 mr-0.5" /> 挿入
                       </Button>
-                    )}
-                    <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => { navigator.clipboard.writeText(msg.content); }}>
-                      <Copy className="h-2.5 w-2.5 mr-0.5" /> コピー
-                    </Button>
-                  </div>
-                )}
-              </div>
-            ))}
+                      {selectedText && onReplace && (
+                        <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => onReplace(msg.content)}>
+                          <Replace className="h-2.5 w-2.5 mr-0.5" /> 置換
+                        </Button>
+                      )}
+                      <Button size="sm" variant="ghost" className="h-5 text-[10px] px-1.5" onClick={() => { navigator.clipboard.writeText(msg.content); }}>
+                        <Copy className="h-2.5 w-2.5 mr-0.5" /> コピー
+                      </Button>
+                    </div>
+                  )}
+                </div>
+              );
+            })}
 
             {/* Current streaming result */}
             {(result || isStreaming) && !chatMessages.some((m) => m.content === result) && (

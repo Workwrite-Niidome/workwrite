@@ -189,6 +189,22 @@ class ApiClient {
     });
   }
 
+  async uploadAvatar(file: File) {
+    const formData = new FormData();
+    formData.append('avatar', file);
+    const token = this.getToken();
+    const res = await fetch(`${API_BASE}/users/me/avatar`, {
+      method: 'POST',
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+      body: formData,
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.message || 'アバターのアップロードに失敗しました');
+    }
+    return res.json();
+  }
+
   // Onboarding
   async submitOnboarding(answers: OnboardingAnswer[]) {
     return this.request<{ data: { emotionVector: Record<string, number> } }>(

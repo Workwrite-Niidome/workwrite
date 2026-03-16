@@ -26,6 +26,7 @@
     "@nestjs/schedule": "^6.1.1",
     "@nestjs/swagger": "^11.0.0",
     "@prisma/client": "^6.4.0",
+    "@types/multer": "^2.1.0",
     "@workwrite/shared": "*",
     "bcrypt": "^6.0.0",
     "cheerio": "^1.2.0",

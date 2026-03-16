@@ -3,6 +3,7 @@ import { ValidationPipe } from '@nestjs/common';
 import { DocumentBuilder, SwaggerModule } from '@nestjs/swagger';
 import helmet from 'helmet';
 import * as express from 'express';
+import { join } from 'path';
 import { AppModule } from './app.module';
 import { HttpExceptionFilter } from './common/filters/http-exception.filter';
 import { TransformInterceptor } from './common/interceptors/transform.interceptor';
@@ -46,6 +47,9 @@ async function bootstrap() {
     },
     credentials: true,
   });
+
+  // Serve uploaded files (avatars, etc.)
+  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
 
   // Global prefix
   app.setGlobalPrefix('api/v1');

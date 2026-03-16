@@ -21,8 +21,8 @@ const PLANS = [
     ctaHref: '/register',
     features: [
       '作品の執筆・公開・閲覧',
-      'AI執筆アシスト（通常）',
-      'AIスコアリング・感情タグ',
+      'AI執筆アシスト（通常 1cr/回）',
+      'AIスコアリング（1cr/回）',
       '読書進捗・統計',
       'レター（月3通まで無料）',
       'ハイライト・しおり機能',
@@ -76,24 +76,27 @@ const PLANS = [
 ];
 
 const CREDIT_TABLE = [
-  { action: 'AI執筆アシスト（通常）', credits: '1cr', note: '素早い応答' },
-  { action: 'AI執筆アシスト（じっくり）', credits: '2cr', note: 'より深い思考で回答' },
-  { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答' },
+  { action: 'AI執筆アシスト（通常）', credits: '1cr', note: '素早い応答（Sonnet）' },
+  { action: 'AI執筆アシスト（じっくり）', credits: '2cr', note: 'より深い思考で回答（Sonnet + Thinking）' },
+  { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答（Opus） — Proプラン限定' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
-  { action: 'AIスコアリング', credits: '0cr', note: 'プラットフォーム負担' },
-  { action: '構造解析・キャラクター抽出', credits: '0cr', note: 'プラットフォーム負担' },
-  { action: 'あらすじ自動更新', credits: '0cr', note: 'プラットフォーム負担' },
-  { action: '校正・推敲', credits: '0cr', note: 'プラットフォーム負担' },
-  { action: 'ハイライトAI解説', credits: '0cr', note: 'プラットフォーム負担' },
+  { action: 'AIスコアリング（作品品質分析）', credits: '1cr', note: '6軸評価 + 構造解析 + 改善提案' },
+  { action: 'URLインポート + 自動スコアリング', credits: '1cr', note: 'なろう・カクヨムからの作品取り込み' },
+  { action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
+  { action: '校正・推敲', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
+  { action: 'あらすじ自動生成', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
+  { action: 'ハイライトAI解説', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
   { action: 'AI読書コンパニオン', credits: '0cr', note: 'Free: 週5回 / Standard以上: 無制限' },
   { action: 'AI作品分析（インサイト）', credits: '0cr', note: 'プラットフォーム負担（キャッシュ利用）' },
   { action: 'AI類似作品レコメンド', credits: '0cr', note: 'プラットフォーム負担（キャッシュ利用）' },
+  { action: '構造解析・キャラクター抽出', credits: '0cr', note: 'プラットフォーム負担' },
+  { action: 'エンベディング生成', credits: '0cr', note: 'プラットフォーム負担' },
 ];
 
 const FAQS = [
   {
     q: 'クレジットとは何ですか？',
-    a: 'クレジットはAI執筆アシストの利用に消費されるプラットフォーム内の単位です。AIの回答モードによって消費量が異なります（通常: 1cr、じっくり: 2cr、高精度: 5cr）。スコアリングや構造解析などのバックグラウンド処理はクレジットを消費しません。',
+    a: 'クレジットはAI機能の利用に消費されるプラットフォーム内の単位です。AI執筆アシストは回答モードによって消費量が異なります（通常: 1cr、じっくり: 2cr、高精度: 5cr）。AIスコアリングやURLインポートは各1cr。校正・あらすじ生成・ハイライト解説などの軽量処理はクレジットを消費しません。',
   },
   {
     q: 'クレジットは翌月に繰り越せますか？',
@@ -326,7 +329,7 @@ export default function PricingPage() {
             クレジット消費テーブル
           </h2>
           <p className="text-xs text-muted-foreground text-center mb-10 max-w-md mx-auto">
-            AI執筆アシストのみクレジットを消費します。スコアリングや構造解析などのバックグラウンド処理は無料です。
+            AI執筆アシスト・スコアリング・インポートがクレジットを消費します。校正・あらすじ・解説などの軽量処理は無料です。
           </p>
           <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
@@ -363,17 +366,18 @@ export default function PricingPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
             {[
               '作品の執筆・公開・閲覧',
-              'AIスコアリングによる品質評価',
+              '校正・推敲（0cr）',
+              'あらすじ自動生成（0cr）',
+              'ハイライト・しおり・AI解説（0cr）',
               '感情タグの自動生成',
               '全文検索・作品の発見',
               '読書進捗・統計・ストリーク',
-              'ハイライト・しおり・AI解説',
-              'AI作品分析・レコメンド',
+              'AI作品分析・レコメンド（0cr）',
               'AI読書コンパニオン（Free: 週5回）',
               'キャラクター設計ツール',
               '物語構造テンプレート',
               'レター（月3通まで）',
-              'SNS自動投稿',
+              'SNS投稿・フォロー',
             ].map((f) => (
               <div key={f} className="flex items-center gap-2.5 text-xs">
                 <Check className="h-3.5 w-3.5 text-green-500 flex-shrink-0" />

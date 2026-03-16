@@ -15,3 +15,7 @@ coverage/
 docker-compose.override.yml
 
 .vercel
+
+# Uploaded files (keep directory structure via .gitkeep)
+uploads/
+!uploads/**/.gitkeep

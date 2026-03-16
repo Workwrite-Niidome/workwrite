@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api, type BillingStatus } from '@/lib/api';
 import { Loading } from '@/components/layout/loading';
-import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight, Crown, RefreshCw, Sparkles, CreditCard } from 'lucide-react';
+import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight, Crown, RefreshCw, Sparkles, CreditCard, Camera, Loader2 } from 'lucide-react';
 
 type AiProfile = {
   personalityType?: string;
@@ -26,6 +26,9 @@ export default function ProfilePage() {
   const [name, setName] = useState('');
   const [displayName, setDisplayName] = useState('');
   const [bio, setBio] = useState('');
+  const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
 
@@ -47,6 +50,7 @@ export default function ProfilePage() {
         setName(p.name || '');
         setDisplayName(p.displayName || '');
         setBio(p.bio || '');
+        setAvatarUrl(p.avatarUrl || null);
       })
       .catch(() => {});
 
@@ -68,6 +72,28 @@ export default function ProfilePage() {
       })
       .catch(() => {});
   }, [user]);
+
+  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+    const file = e.target.files?.[0];
+    if (!file) return;
+    if (file.size > 2 * 1024 * 1024) {
+      setMessage('画像サイズは2MB以下にしてください');
+      return;
+    }
+    setAvatarUploading(true);
+    setMessage('');
+    try {
+      const res = await api.uploadAvatar(file);
+      const newUrl = res?.data?.avatarUrl || res?.avatarUrl;
+      if (newUrl) setAvatarUrl(newUrl);
+      setMessage('アイコンを更新しました');
+    } catch (err: any) {
+      setMessage(err.message || 'アイコンの更新に失敗しました');
+    } finally {
+      setAvatarUploading(false);
+      if (fileInputRef.current) fileInputRef.current.value = '';
+    }
+  }
 
   async function handleSave(e: React.FormEvent) {
     e.preventDefault();
@@ -107,11 +133,59 @@ export default function ProfilePage() {
     { href: '/settings', label: '設定', icon: Settings },
   ];
 
+  const avatarSection = (
+    <div className="flex items-center gap-4 mb-4">
+      <div className="relative group">
+        <div className="w-16 h-16 rounded-full bg-muted flex items-center justify-center overflow-hidden border-2 border-border">
+          {avatarUrl ? (
+            <img src={avatarUrl} alt="アイコン" className="w-full h-full object-cover" />
+          ) : (
+            <span className="text-2xl font-medium text-muted-foreground">
+              {(user?.displayName || user?.name || '?')[0]}
+            </span>
+          )}
+        </div>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={avatarUploading}
+          className="absolute inset-0 rounded-full bg-black/50 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity cursor-pointer"
+        >
+          {avatarUploading ? (
+            <Loader2 className="h-5 w-5 text-white animate-spin" />
+          ) : (
+            <Camera className="h-5 w-5 text-white" />
+          )}
+        </button>
+        <input
+          ref={fileInputRef}
+          type="file"
+          accept="image/jpeg,image/png,image/gif,image/webp"
+          className="hidden"
+          onChange={handleAvatarUpload}
+        />
+      </div>
+      <div>
+        <p className="text-sm font-medium">{user?.displayName || user?.name}</p>
+        <button
+          type="button"
+          onClick={() => fileInputRef.current?.click()}
+          disabled={avatarUploading}
+          className="text-xs text-primary hover:underline"
+        >
+          {avatarUploading ? 'アップロード中...' : 'アイコンを変更'}
+        </button>
+        <p className="text-[10px] text-muted-foreground mt-0.5">JPEG, PNG, GIF, WebP / 2MB以下</p>
+      </div>
+    </div>
+  );
+
   const profileForm = (
     <form onSubmit={handleSave} className="space-y-4">
       {message && (
         <div className="p-3 text-sm rounded-md bg-muted">{message}</div>
       )}
+      {avatarSection}
       <div className="space-y-2">
         <label className="text-sm font-medium">ニックネーム</label>
         <Input value={name} onChange={(e) => setName(e.target.value)} />
