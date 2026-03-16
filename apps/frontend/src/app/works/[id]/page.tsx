@@ -159,11 +159,25 @@ export default function WorkDetailPage() {
                 </Button>
               )}
               {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
-              {work.qualityScore && (
+              {work.qualityScore ? (
                 <>
                   <ScoreBadge score={work.qualityScore.overall} className="shrink-0" />
                   <ShareScoreButton workId={workId} title={work.title} score={work.qualityScore.overall} />
                 </>
+              ) : (
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="text-xs h-7 gap-1 shrink-0"
+                  onClick={() => {
+                    const url = `${window.location.origin}/works/${workId}`;
+                    const text = `「${work.title}」を読んでみませんか？ #Workwrite`;
+                    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'width=550,height=420');
+                  }}
+                >
+                  <Share2 className="h-3.5 w-3.5" />
+                  シェア
+                </Button>
               )}
             </div>
           </div>

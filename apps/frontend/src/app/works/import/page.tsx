@@ -9,7 +9,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { api } from '@/lib/api';
 import { readTextFile } from '@/lib/file-reader';
 import { ScoreCard } from '@/components/scoring/score-card';
-import { Upload, FileText, ChevronRight, ChevronLeft, Pencil, Loader2, Link, Globe } from 'lucide-react';
+import { ShareScoreButton } from '@/components/scoring/share-score-button';
+import { Upload, FileText, ChevronRight, ChevronLeft, Pencil, Loader2, Link, Globe, Info, AlertTriangle } from 'lucide-react';
 
 interface DetectedChapter {
   title: string;
@@ -185,6 +186,44 @@ export default function ImportPage() {
             </CardContent>
           </Card>
 
+          <Card className="border-blue-200 bg-blue-50/50">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-start gap-2">
+                <Info className="h-4 w-4 text-blue-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-blue-900 space-y-1.5">
+                  <p className="font-medium text-sm">AIスコアリングについて</p>
+                  <p>
+                    本機能はAI（Claude）が作品の文体・構成・キャラクター・世界観などを構造的に分析し、
+                    6つの軸で0〜100点のスコアを算出するものです。
+                    冒頭・中盤・クライマックス・結末の4箇所をサンプリングし、
+                    伏線回収率や感情弧の推移などの構造データと合わせて総合的に評価します。
+                  </p>
+                  <p>
+                    スコアはAIによる参考指標であり、作品の絶対的な価値を定めるものではありません。
+                    創作の振り返りや改善のヒントとしてご活用ください。
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card className="border-amber-200 bg-amber-50/50">
+            <CardContent className="py-3 px-4">
+              <div className="flex items-start gap-2">
+                <AlertTriangle className="h-4 w-4 text-amber-600 mt-0.5 shrink-0" />
+                <div className="text-xs text-amber-900 space-y-1">
+                  <p className="font-medium text-sm">ご利用上の注意</p>
+                  <p>
+                    本機能はご自身の作品の分析を目的としています。
+                    他者の作品を無断でスコアリング・公開する行為は推奨しません。
+                    第三者の作品をスコアリングした結果の利用・公開に関して、
+                    当サービスは一切の責任を負いません。
+                  </p>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
           <div className="flex justify-end">
             <Button
               onClick={handleUrlImport}
@@ -228,13 +267,20 @@ export default function ImportPage() {
             />
           )}
 
-          <div className="flex gap-3">
+          <div className="flex flex-wrap gap-3 items-center">
             <Button onClick={() => router.push(`/works/${urlResult.workId}/edit`)}>
               <Pencil className="h-4 w-4 mr-1.5" /> 作品を編集
             </Button>
             <Button variant="outline" onClick={() => router.push(`/works/${urlResult.workId}`)}>
               作品を見る
             </Button>
+            {urlResult.scoringResult && (
+              <ShareScoreButton
+                workId={urlResult.workId}
+                title={urlResult.title}
+                score={urlResult.scoringResult.overall}
+              />
+            )}
             <Button
               variant="outline"
               onClick={() => {
