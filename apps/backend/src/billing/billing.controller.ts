@@ -78,4 +78,21 @@ export class BillingController {
   async createPortal(@Req() req: any) {
     return this.stripeService.createPortalSession(req.user.id);
   }
+
+  // ─── Stripe Connect ──────────────────────────────
+
+  @Get('connect/status')
+  async getConnectStatus(@Req() req: any) {
+    return { data: await this.stripeService.getConnectStatus(req.user.id) };
+  }
+
+  @Post('connect/onboarding')
+  async createConnectOnboarding(@Req() req: any) {
+    return this.stripeService.createConnectOnboardingLink(req.user.id, req.user.email);
+  }
+
+  @Post('connect/login')
+  async createConnectLogin(@Req() req: any) {
+    return this.stripeService.createConnectLoginLink(req.user.id);
+  }
 }

@@ -4,9 +4,10 @@ import { WorksService } from './works.service';
 import { PostsModule } from '../posts/posts.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { EmotionsModule } from '../emotions/emotions.module';
+import { ReferralModule } from '../referral/referral.module';
 
 @Module({
-  imports: [PostsModule, ScoringModule, EmotionsModule],
+  imports: [PostsModule, ScoringModule, EmotionsModule, ReferralModule],
   controllers: [WorksController],
   providers: [WorksService],
   exports: [WorksService],

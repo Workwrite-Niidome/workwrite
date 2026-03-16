@@ -5,8 +5,6 @@ import { NotificationsService } from '../notifications/notifications.service';
 import { LetterModerationService } from './letter-moderation.service';
 import { CreateLetterDto, LETTER_CONFIG } from './dto/create-letter.dto';
 
-const FREE_MONTHLY_LIMIT = 3;
-
 const userSelect = {
   id: true,
   name: true,
@@ -58,25 +56,18 @@ export class LettersService {
       );
     }
 
-    // Determine if free quota or paid
-    const freeUsed = await this.getMonthlyFreeCount(senderId);
+    // Calculate amount
     const amount =
       dto.type === 'GIFT'
         ? (dto.giftAmount ?? 1000)
         : config.price;
-    const isFreeQuota = freeUsed < FREE_MONTHLY_LIMIT;
-    const finalAmount = isFreeQuota ? 0 : amount;
 
-    // Process payment (if not free)
-    let paymentId: string | undefined;
-    if (!isFreeQuota) {
-      const payment = await this.payments.createTip(
-        senderId,
-        recipientId,
-        finalAmount,
-      );
-      paymentId = payment.id;
-    }
+    // Process payment
+    const payment = await this.payments.createTip(
+      senderId,
+      recipientId,
+      amount,
+    );
 
     // Create letter
     const letter = await this.prisma.letter.create({
@@ -86,11 +77,11 @@ export class LettersService {
         episodeId: dto.episodeId,
         type: dto.type,
         content: dto.content,
-        amount: finalAmount,
+        amount,
         stampId: dto.stampId,
         isHighlighted: config.highlighted,
-        isFreeQuota,
-        paymentId,
+        isFreeQuota: false,
+        paymentId: payment.id,
         moderationStatus: 'approved',
       },
       include: { sender: { select: userSelect } },
@@ -100,7 +91,7 @@ export class LettersService {
     await this.notifications.createNotification(recipientId, {
       type: 'letter',
       title: 'レターが届きました',
-      body: `${letter.sender.displayName || letter.sender.name}さんから${isFreeQuota ? '' : `¥${finalAmount}の`}レターが届きました`,
+      body: `${letter.sender.displayName || letter.sender.name}さんから¥${amount}のレターが届きました`,
       data: { letterId: letter.id, episodeId: dto.episodeId },
     });
 
@@ -139,23 +130,6 @@ export class LettersService {
     });
   }
 
-  async getMonthlyFreeCount(userId: string): Promise<number> {
-    const now = new Date();
-    const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
-    return this.prisma.letter.count({
-      where: {
-        senderId: userId,
-        isFreeQuota: true,
-        createdAt: { gte: monthStart },
-      },
-    });
-  }
-
-  async getFreeRemaining(userId: string) {
-    const used = await this.getMonthlyFreeCount(userId);
-    return { used, remaining: Math.max(0, FREE_MONTHLY_LIMIT - used), limit: FREE_MONTHLY_LIMIT };
-  }
-
   async getEarnings(userId: string) {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
@@ -186,7 +160,7 @@ export class LettersService {
         }),
       ]);
 
-    const platformCut = 0.3;
+    const platformCut = 0.2;
     const totalGross = totalEarnings._sum.amount ?? 0;
     const monthlyGross = monthlyEarnings._sum.amount ?? 0;
 

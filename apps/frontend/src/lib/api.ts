@@ -363,6 +363,19 @@ class ApiClient {
     );
   }
 
+  async importFromUrl(url: string, autoScore = true) {
+    return this.request<{ data: { importId: string; workId: string; title: string; episodes: number; scoringResult: any } }>(
+      '/works/import/url',
+      { method: 'POST', body: JSON.stringify({ url, autoScore }) },
+    );
+  }
+
+  async getImportStatus(importId: string) {
+    return this.request<{ data: { id: string; status: string; totalChapters: number; importedChapters: number; workId?: string; errorMessage?: string } }>(
+      `/works/import/${importId}/status`,
+    );
+  }
+
   // Reading Progress
   async getReadingProgress(workId: string) {
     return this.request<{ data: ReadingProgress[] }>(`/reading/progress/${workId}`);
@@ -434,8 +447,20 @@ class ApiClient {
     });
   }
 
-  async getFreeLetterRemaining() {
-    return this.request<FreeLetterRemaining>('/letters/free-remaining');
+  async getStamps() {
+    return this.request<{ data: { stamps: { id: string; name: string; emoji: string; category: string }[]; categories: Record<string, string> } }>('/letters/stamps');
+  }
+
+  async getReceivedLetters() {
+    return this.request<{ data: Letter[] }>('/letters/received');
+  }
+
+  async getSentLetters() {
+    return this.request<{ data: Letter[] }>('/letters/sent');
+  }
+
+  async getLetterEarnings() {
+    return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number } }>('/letters/earnings');
   }
 
   // Discover
@@ -586,6 +611,19 @@ class ApiClient {
 
   async createPortalSession() {
     return this.request<{ url: string }>('/billing/portal', { method: 'POST' });
+  }
+
+  // Stripe Connect
+  async getConnectStatus() {
+    return this.request<{ data: { hasAccount: boolean; accountId: string | null; chargesEnabled: boolean; payoutsEnabled: boolean; detailsSubmitted: boolean } }>('/billing/connect/status');
+  }
+
+  async createConnectOnboarding() {
+    return this.request<{ url: string }>('/billing/connect/onboarding', { method: 'POST' });
+  }
+
+  async createConnectLoginLink() {
+    return this.request<{ url: string }>('/billing/connect/login', { method: 'POST' });
   }
 
   // Admin
@@ -1184,11 +1222,6 @@ export interface Letter {
   createdAt: string;
 }
 
-export interface FreeLetterRemaining {
-  used: number;
-  remaining: number;
-  limit: number;
-}
 
 export interface LetterEarnings {
   totalLetters: number;

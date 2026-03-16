@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { api, type LetterType } from '@/lib/api';
 import { Mail, Gift, Star, Zap } from 'lucide-react';
+import { StampPicker } from './stamp-picker';
 
 const LETTER_TYPES: {
   type: LetterType;
@@ -70,9 +71,9 @@ export function LetterComposeDialog({
   const [selectedType, setSelectedType] = useState<LetterType | null>(null);
   const [content, setContent] = useState('');
   const [giftAmount, setGiftAmount] = useState(1000);
+  const [stampId, setStampId] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
-  const [freeRemaining, setFreeRemaining] = useState<number | null>(null);
 
   useEffect(() => {
     if (open) {
@@ -80,10 +81,8 @@ export function LetterComposeDialog({
       setSelectedType(null);
       setContent('');
       setGiftAmount(1000);
+      setStampId(undefined);
       setError('');
-      api.getFreeLetterRemaining()
-        .then((res) => setFreeRemaining(res.remaining))
-        .catch(() => {});
     }
   }, [open]);
 
@@ -100,6 +99,7 @@ export function LetterComposeDialog({
         episodeId,
         type: selectedType,
         content: content.trim(),
+        stampId: stampId || undefined,
         giftAmount: selectedType === 'GIFT' ? giftAmount : undefined,
       });
       onSent();
@@ -120,37 +120,24 @@ export function LetterComposeDialog({
       </DialogHeader>
       <DialogContent>
         {step === 'type' ? (
-          <div className="space-y-3">
-            {freeRemaining !== null && freeRemaining > 0 && (
-              <div className="text-xs text-center py-2 px-3 rounded-md bg-primary/10 text-primary">
-                今月あと{freeRemaining}通無料で送れます
-              </div>
-            )}
-            <div className="grid grid-cols-2 gap-2">
-              {LETTER_TYPES.map((lt) => (
-                <button
-                  key={lt.type}
-                  onClick={() => {
-                    setSelectedType(lt.type);
-                    setStep('compose');
-                  }}
-                  className={`p-3 rounded-lg border text-left transition-colors hover:ring-2 hover:ring-primary/50 ${lt.color}`}
-                >
-                  <div className="flex items-center gap-1.5 mb-1">
-                    {lt.icon}
-                    <span className="text-sm font-medium">{lt.label}</span>
-                  </div>
-                  <div className="text-xs text-muted-foreground">{lt.description}</div>
-                  <div className="text-xs font-medium mt-1">
-                    {freeRemaining && freeRemaining > 0 ? (
-                      <span className="text-primary">無料</span>
-                    ) : (
-                      lt.price
-                    )}
-                  </div>
-                </button>
-              ))}
-            </div>
+          <div className="grid grid-cols-2 gap-2">
+            {LETTER_TYPES.map((lt) => (
+              <button
+                key={lt.type}
+                onClick={() => {
+                  setSelectedType(lt.type);
+                  setStep('compose');
+                }}
+                className={`p-3 rounded-lg border text-left transition-colors hover:ring-2 hover:ring-primary/50 ${lt.color}`}
+              >
+                <div className="flex items-center gap-1.5 mb-1">
+                  {lt.icon}
+                  <span className="text-sm font-medium">{lt.label}</span>
+                </div>
+                <div className="text-xs text-muted-foreground">{lt.description}</div>
+                <div className="text-xs font-medium mt-1">{lt.price}</div>
+              </button>
+            ))}
           </div>
         ) : config ? (
           <div className="space-y-3">
@@ -164,15 +151,14 @@ export function LetterComposeDialog({
             <div className="flex justify-between text-xs text-muted-foreground">
               <span>{content.length} / {config.maxChars}文字</span>
               <span>
-                {freeRemaining && freeRemaining > 0 ? (
-                  <span className="text-primary font-medium">無料枠を使用</span>
-                ) : selectedType === 'GIFT' ? (
-                  `¥${giftAmount.toLocaleString()}`
-                ) : (
-                  config.price
-                )}
+                {selectedType === 'GIFT'
+                  ? `¥${giftAmount.toLocaleString()}`
+                  : config.price}
               </span>
             </div>
+            {selectedType && selectedType !== 'SHORT' && (
+              <StampPicker selectedStampId={stampId} onSelect={setStampId} />
+            )}
             {selectedType === 'GIFT' && (
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">金額</label>

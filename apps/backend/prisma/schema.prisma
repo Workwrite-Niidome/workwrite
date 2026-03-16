@@ -726,7 +726,9 @@ model WorkImport {
   id               String   @id @default(cuid())
   userId           String
   workId           String?
-  source           String   // "text_paste", "file_upload"
+  source           String   // "text_paste", "file_upload", "url_narou", "url_kakuyomu"
+  sourceUrl        String?
+  metadata         Json?
   status           String   @default("PENDING")
   totalChapters    Int      @default(0)
   importedChapters Int      @default(0)
@@ -734,6 +736,7 @@ model WorkImport {
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
   @@index([userId])
+  @@index([sourceUrl])
 }
 
 // ============================================================
@@ -999,6 +1002,25 @@ model InviteCodeUsage {
 
   @@unique([inviteCodeId, userId])
   @@index([userId])
+}
+
+// ============================================================
+// Referral Rewards
+// ============================================================
+
+model ReferralReward {
+  id           String   @id @default(cuid())
+  inviterId    String
+  inviteeId    String
+  triggerEvent String   // "first_work_published", "first_review"
+  creditAmount Int
+  claimed      Boolean  @default(false)
+  claimedAt    DateTime?
+  createdAt    DateTime @default(now())
+
+  @@unique([inviterId, inviteeId, triggerEvent])
+  @@index([inviterId])
+  @@index([inviteeId])
 }
 
 // ============================================================

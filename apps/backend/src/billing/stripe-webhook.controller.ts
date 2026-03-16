@@ -9,6 +9,7 @@ import {
 import { Request, Response } from 'express';
 import { StripeService } from './stripe.service';
 import { BillingService } from './billing.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 import Stripe from 'stripe';
 
 @Controller('billing')
@@ -18,6 +19,7 @@ export class StripeWebhookController {
   constructor(
     private stripeService: StripeService,
     private billingService: BillingService,
+    private prisma: PrismaService,
   ) {}
 
   @Post('webhook')
@@ -71,6 +73,11 @@ export class StripeWebhookController {
             event.data.object as Stripe.Invoice,
           );
           break;
+        case 'account.updated': {
+          const account = event.data.object as Stripe.Account;
+          this.logger.log(`Connect account updated: ${account.id}, charges_enabled=${account.charges_enabled}, payouts_enabled=${account.payouts_enabled}`);
+          break;
+        }
         default:
           this.logger.debug(`Unhandled event type: ${event.type}`);
       }

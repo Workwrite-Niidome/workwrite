@@ -6,10 +6,12 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { api, type QualityScoreDetail } from '@/lib/api';
+import { ShareScoreButton } from './share-score-button';
 
 interface ScoreCardProps {
   score: QualityScoreDetail | null;
   workId?: string;
+  workTitle?: string;
   onScoreUpdate?: (score: QualityScoreDetail) => void;
 }
 
@@ -86,7 +88,7 @@ function RadarChart({ score }: { score: QualityScoreDetail }) {
   );
 }
 
-export function ScoreCard({ score, workId, onScoreUpdate }: ScoreCardProps) {
+export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCardProps) {
   const [scoring, setScoring] = useState(false);
   const [error, setError] = useState('');
 
@@ -200,10 +202,19 @@ export function ScoreCard({ score, workId, onScoreUpdate }: ScoreCardProps) {
               </div>
             )}
 
-            <p className="text-[10px] text-muted-foreground text-right">
-              スコアリング: {new Date(score.scoredAt).toLocaleDateString('ja-JP')}
-              {' '}(1クレジット消費)
-            </p>
+            <div className="flex items-center justify-between">
+              <p className="text-[10px] text-muted-foreground">
+                スコアリング: {new Date(score.scoredAt).toLocaleDateString('ja-JP')}
+                {' '}(1クレジット消費)
+              </p>
+              {workId && (
+                <ShareScoreButton
+                  workId={workId}
+                  title={workTitle || '作品'}
+                  score={score.overall}
+                />
+              )}
+            </div>
           </>
         ) : (
           <div className="text-center py-6">

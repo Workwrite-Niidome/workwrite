@@ -5,6 +5,7 @@ import { ScoringService } from '../scoring/scoring.service';
 import { SearchService } from '../search/search.service';
 import { EmotionsService } from '../emotions/emotions.service';
 import { EmotionMappingService } from '../emotions/emotion-mapping.service';
+import { ReferralService } from '../referral/referral.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PostType } from '@prisma/client';
@@ -20,6 +21,7 @@ export class WorksService {
     private searchService: SearchService,
     private emotionsService: EmotionsService,
     private emotionMappingService: EmotionMappingService,
+    private referralService: ReferralService,
   ) {}
 
   async create(authorId: string, dto: CreateWorkDto) {
@@ -159,6 +161,9 @@ export class WorksService {
         }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
         // Auto-scoring, search indexing, emotion tag generation
         this.autoProcessWork(id).catch((e) => this.logger.warn(`Auto-process failed: ${e}`));
+        // Referral reward: first work published
+        this.referralService.checkAndReward(userId, 'first_work_published')
+          .catch((e) => this.logger.warn(`Referral reward failed: ${e}`));
       }
     }
 

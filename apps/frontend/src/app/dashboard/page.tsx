@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2 } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
@@ -86,6 +86,22 @@ export default function DashboardPage() {
             <Button><Plus className="h-4 w-4 mr-2" /> 新規作品</Button>
           </Link>
         </div>
+      </div>
+
+      {/* Quick nav */}
+      <div className="flex flex-wrap gap-2 mb-6">
+        <Link href="/dashboard/letters/received">
+          <Button variant="outline" size="sm"><Mail className="h-4 w-4 mr-1.5" /> 受信レター</Button>
+        </Link>
+        <Link href="/dashboard/letters/sent">
+          <Button variant="outline" size="sm"><Send className="h-4 w-4 mr-1.5" /> 送信レター</Button>
+        </Link>
+        <Link href="/dashboard/earnings">
+          <Button variant="outline" size="sm"><DollarSign className="h-4 w-4 mr-1.5" /> 収益</Button>
+        </Link>
+        <Link href="/dashboard/referral">
+          <Button variant="outline" size="sm"><Users className="h-4 w-4 mr-1.5" /> 招待</Button>
+        </Link>
       </div>
 
       {/* Stats Grid */}

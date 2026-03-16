@@ -1,7 +1,7 @@
-import { Controller, Post, Get, Body, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Body, Param, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { WorkImportService } from './work-import.service';
-import { AnalyzeTextDto, ImportTextDto } from './dto/work-import.dto';
+import { AnalyzeTextDto, ImportTextDto, ImportUrlDto } from './dto/work-import.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
@@ -23,6 +23,20 @@ export class WorkImportController {
   async importText(@CurrentUser('id') userId: string, @Body() dto: ImportTextDto) {
     const result = await this.importService.importText(userId, dto);
     return { data: result };
+  }
+
+  @Post('url')
+  @ApiOperation({ summary: 'Import work from なろう/カクヨム URL' })
+  async importFromUrl(@CurrentUser('id') userId: string, @Body() dto: ImportUrlDto) {
+    const result = await this.importService.importFromUrl(userId, dto);
+    return { data: result };
+  }
+
+  @Get(':importId/status')
+  @ApiOperation({ summary: 'Get import status' })
+  async getImportStatus(@Param('importId') importId: string) {
+    const status = await this.importService.getImportStatus(importId);
+    return { data: status };
   }
 
   @Get()

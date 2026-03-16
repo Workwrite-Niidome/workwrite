@@ -182,4 +182,154 @@ export class StripeService {
     if (!webhookSecret) throw new Error('STRIPE_WEBHOOK_SECRET not set');
     return stripe.webhooks.constructEvent(payload, signature, webhookSecret);
   }
+
+  // ─── Stripe Connect ──────────────────────────────
+
+  /**
+   * Create a Stripe Connect Express account for an author.
+   * Returns the account ID.
+   */
+  async createConnectAccount(userId: string, email: string): Promise<string> {
+    const stripe = this.ensureStripe();
+
+    // Check if user already has a Connect account
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeAccountId: true },
+    });
+
+    if (user?.stripeAccountId) {
+      return user.stripeAccountId;
+    }
+
+    const account = await stripe.accounts.create({
+      type: 'express',
+      country: 'JP',
+      email,
+      capabilities: {
+        card_payments: { requested: true },
+        transfers: { requested: true },
+      },
+      business_type: 'individual',
+      metadata: { userId },
+    });
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { stripeAccountId: account.id },
+    });
+
+    this.logger.log(`Created Connect account ${account.id} for user ${userId}`);
+    return account.id;
+  }
+
+  /**
+   * Generate an onboarding link for a Connect Express account.
+   */
+  async createConnectOnboardingLink(userId: string, email: string): Promise<{ url: string }> {
+    const stripe = this.ensureStripe();
+    const accountId = await this.createConnectAccount(userId, email);
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+
+    const accountLink = await stripe.accountLinks.create({
+      account: accountId,
+      refresh_url: `${baseUrl}/dashboard/earnings?connect=refresh`,
+      return_url: `${baseUrl}/dashboard/earnings?connect=complete`,
+      type: 'account_onboarding',
+    });
+
+    return { url: accountLink.url };
+  }
+
+  /**
+   * Generate a login link for a Connect Express account dashboard.
+   */
+  async createConnectLoginLink(userId: string): Promise<{ url: string }> {
+    const stripe = this.ensureStripe();
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeAccountId: true },
+    });
+
+    if (!user?.stripeAccountId) {
+      throw new BadRequestException('Stripe Connectアカウントが設定されていません');
+    }
+
+    const loginLink = await stripe.accounts.createLoginLink(user.stripeAccountId);
+    return { url: loginLink.url };
+  }
+
+  /**
+   * Get Connect account status.
+   */
+  async getConnectStatus(userId: string): Promise<{
+    hasAccount: boolean;
+    accountId: string | null;
+    chargesEnabled: boolean;
+    payoutsEnabled: boolean;
+    detailsSubmitted: boolean;
+  }> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { stripeAccountId: true },
+    });
+
+    if (!user?.stripeAccountId) {
+      return { hasAccount: false, accountId: null, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false };
+    }
+
+    if (!this.stripe) {
+      return { hasAccount: true, accountId: user.stripeAccountId, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false };
+    }
+
+    try {
+      const account = await this.stripe.accounts.retrieve(user.stripeAccountId);
+      return {
+        hasAccount: true,
+        accountId: user.stripeAccountId,
+        chargesEnabled: account.charges_enabled ?? false,
+        payoutsEnabled: account.payouts_enabled ?? false,
+        detailsSubmitted: account.details_submitted ?? false,
+      };
+    } catch {
+      return { hasAccount: true, accountId: user.stripeAccountId, chargesEnabled: false, payoutsEnabled: false, detailsSubmitted: false };
+    }
+  }
+
+  /**
+   * Create a PaymentIntent with Connect destination charge.
+   * Platform takes applicationFeePercent as fee.
+   */
+  async createConnectPaymentIntent(
+    customerId: string,
+    recipientAccountId: string,
+    amount: number,
+    applicationFeePercent: number,
+    metadata: Record<string, string>,
+  ): Promise<{ clientSecret: string; paymentIntentId: string }> {
+    const stripe = this.ensureStripe();
+    const applicationFeeAmount = Math.round(amount * applicationFeePercent);
+
+    const paymentIntent = await stripe.paymentIntents.create({
+      amount,
+      currency: 'jpy',
+      customer: customerId,
+      application_fee_amount: applicationFeeAmount,
+      transfer_data: {
+        destination: recipientAccountId,
+      },
+      metadata,
+      // Auto-confirm for simple charges (no 3D Secure needed for small amounts in Japan)
+      confirm: true,
+      automatic_payment_methods: {
+        enabled: true,
+        allow_redirects: 'never',
+      },
+    });
+
+    return {
+      clientSecret: paymentIntent.client_secret!,
+      paymentIntentId: paymentIntent.id,
+    };
+  }
 }

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight, BarChart3, Eye, TrendingDown, Globe, Heart } from 'lucide-react';
+import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight, BarChart3, Eye, TrendingDown, Globe, Heart, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -13,6 +13,8 @@ import { estimateReadingTime, cn } from '@/lib/utils';
 import { api, type Work, type StoryCharacter, type WorkReaderStats } from '@/lib/api';
 import { WorldTab } from '@/components/work/WorldTab';
 import { EmotionArc } from '@/components/work/EmotionArc';
+import { ScoreBadge } from '@/components/scoring/score-badge';
+import { ShareScoreButton } from '@/components/scoring/share-score-button';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -158,9 +160,10 @@ export default function WorkDetailPage() {
               )}
               {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
               {work.qualityScore && (
-                <Badge variant="default" className="shrink-0">
-                  スコア {Math.round(work.qualityScore.overall)}
-                </Badge>
+                <>
+                  <ScoreBadge score={work.qualityScore.overall} className="shrink-0" />
+                  <ShareScoreButton workId={workId} title={work.title} score={work.qualityScore.overall} />
+                </>
               )}
             </div>
           </div>

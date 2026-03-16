@@ -1,6 +1,9 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
-import { AnalyzeTextDto, ImportTextDto } from './dto/work-import.dto';
+import { ScoringService } from '../scoring/scoring.service';
+import { AnalyzeTextDto, ImportTextDto, ImportUrlDto } from './dto/work-import.dto';
+import { NarouScraperService } from './scrapers/narou-scraper.service';
+import { KakuyomuScraperService } from './scrapers/kakuyomu-scraper.service';
 
 export interface DetectedChapter {
   title: string;
@@ -10,7 +13,14 @@ export interface DetectedChapter {
 
 @Injectable()
 export class WorkImportService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(WorkImportService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private scoringService: ScoringService,
+    private narouScraper: NarouScraperService,
+    private kakuyomuScraper: KakuyomuScraperService,
+  ) {}
 
   analyzeText(dto: AnalyzeTextDto): { chapters: DetectedChapter[] } {
     const lines = dto.text.split('\n');
@@ -27,7 +37,6 @@ export class WorkImportService {
       const match = line.trim().match(chapterPattern);
 
       if (match) {
-        // Save previous chapter
         if (currentContent.length > 0 || currentTitle) {
           const content = currentContent.join('\n').trim();
           if (content) {
@@ -38,7 +47,6 @@ export class WorkImportService {
             });
           }
         }
-        // Check if it's a separator (--- or ***)
         if (/^(-{3,}|\*{3,})$/.test(match[1])) {
           currentTitle = `チャプター ${chapters.length + 1}`;
         } else {
@@ -52,7 +60,6 @@ export class WorkImportService {
       currentContent.push(line);
     }
 
-    // Save last chapter
     const lastContent = currentContent.join('\n').trim();
     if (lastContent) {
       chapters.push({
@@ -62,7 +69,6 @@ export class WorkImportService {
       });
     }
 
-    // If no chapters detected, treat entire text as single chapter
     if (chapters.length === 0 && dto.text.trim()) {
       chapters.push({
         title: 'チャプター 1',
@@ -129,6 +135,130 @@ export class WorkImportService {
       });
       throw e;
     }
+  }
+
+  async importFromUrl(userId: string, dto: ImportUrlDto) {
+    const url = dto.url.trim();
+    const autoScore = dto.autoScore !== false; // default true
+
+    // Detect platform
+    const isNarou = this.narouScraper.parseUrl(url) !== null;
+    const isKakuyomu = this.kakuyomuScraper.parseUrl(url) !== null;
+
+    if (!isNarou && !isKakuyomu) {
+      throw new Error('対応していないURLです。なろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください。');
+    }
+
+    // Check for duplicate import
+    const existing = await this.prisma.workImport.findFirst({
+      where: { sourceUrl: url, status: 'COMPLETED' },
+    });
+    if (existing) {
+      throw new Error('このURLは既にインポート済みです。');
+    }
+
+    const source = isNarou ? 'url_narou' : 'url_kakuyomu';
+
+    // Create import record
+    const importRecord = await this.prisma.workImport.create({
+      data: {
+        userId,
+        source,
+        sourceUrl: url,
+        status: 'PROCESSING',
+      },
+    });
+
+    try {
+      // Scrape
+      const scraper = isNarou ? this.narouScraper : this.kakuyomuScraper;
+      const scraped = await scraper.scrape(url, async (imported, total) => {
+        // Update progress
+        await this.prisma.workImport.update({
+          where: { id: importRecord.id },
+          data: { importedChapters: imported, totalChapters: total },
+        }).catch(() => {});
+      });
+
+      if (scraped.episodes.length === 0) {
+        throw new Error('エピソードを取得できませんでした。');
+      }
+
+      // Create work + episodes
+      const work = await this.prisma.work.create({
+        data: {
+          authorId: userId,
+          title: scraped.title,
+          synopsis: scraped.synopsis || null,
+          genre: scraped.genre || null,
+          status: 'DRAFT',
+        },
+      });
+
+      for (let i = 0; i < scraped.episodes.length; i++) {
+        const ep = scraped.episodes[i];
+        await this.prisma.episode.create({
+          data: {
+            workId: work.id,
+            authorId: userId,
+            title: ep.title,
+            content: ep.content,
+            orderIndex: i,
+            wordCount: ep.content.length,
+          },
+        });
+      }
+
+      // Update import record
+      await this.prisma.workImport.update({
+        where: { id: importRecord.id },
+        data: {
+          workId: work.id,
+          status: 'COMPLETED',
+          importedChapters: scraped.episodes.length,
+          totalChapters: scraped.episodes.length,
+          metadata: {
+            title: scraped.title,
+            synopsis: scraped.synopsis,
+            genre: scraped.genre,
+            episodeCount: scraped.episodes.length,
+          },
+        },
+      });
+
+      // Auto-score if requested
+      let scoringResult = null;
+      if (autoScore) {
+        try {
+          scoringResult = await this.scoringService.scoreWork(work.id, userId);
+        } catch (e) {
+          this.logger.warn(`Auto-scoring failed for work ${work.id}: ${e}`);
+        }
+      }
+
+      return {
+        importId: importRecord.id,
+        workId: work.id,
+        title: scraped.title,
+        episodes: scraped.episodes.length,
+        scoringResult,
+      };
+    } catch (e) {
+      await this.prisma.workImport.update({
+        where: { id: importRecord.id },
+        data: {
+          status: 'FAILED',
+          errorMessage: e instanceof Error ? e.message : 'Unknown error',
+        },
+      });
+      throw e;
+    }
+  }
+
+  async getImportStatus(importId: string) {
+    return this.prisma.workImport.findUnique({
+      where: { id: importId },
+    });
   }
 
   async getImportHistory(userId: string) {

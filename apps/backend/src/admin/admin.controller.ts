@@ -225,4 +225,42 @@ export class AdminController {
 
     return { total: works.length, processed, failed };
   }
+
+  // ─── Letter Moderation ──────────────────────────────
+
+  @Get('letters')
+  @ApiOperation({ summary: 'Get letters for moderation' })
+  @ApiQuery({ name: 'status', required: false })
+  async getLettersForModeration(
+    @Query('status') status?: string,
+  ) {
+    const where = status ? { moderationStatus: status } : {};
+    const letters = await this.prisma.letter.findMany({
+      where,
+      include: {
+        sender: { select: { id: true, name: true, displayName: true } },
+        recipient: { select: { id: true, name: true, displayName: true } },
+        episode: { select: { id: true, title: true, work: { select: { id: true, title: true } } } },
+      },
+      orderBy: { createdAt: 'desc' },
+      take: 100,
+    });
+    return { data: letters };
+  }
+
+  @Patch('letters/:id/moderate')
+  @ApiOperation({ summary: 'Approve or reject a letter' })
+  async moderateLetter(
+    @Param('id') id: string,
+    @Body() body: { action: 'approve' | 'reject'; reason?: string },
+  ) {
+    const letter = await this.prisma.letter.update({
+      where: { id },
+      data: {
+        moderationStatus: body.action === 'approve' ? 'approved' : 'rejected',
+        moderationReason: body.reason || null,
+      },
+    });
+    return { data: letter };
+  }
 }
