@@ -153,7 +153,7 @@ export class ScoringService {
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 4000,
+        max_tokens: 8192,
         system: [
           {
             type: 'text',
@@ -172,11 +172,35 @@ export class ScoringService {
     const data = await response.json();
     const content = data.content[0]?.text || '';
 
+    if (data.stop_reason === 'max_tokens') {
+      this.logger.warn(`Scoring response truncated (max_tokens reached). Content length: ${content.length}`);
+    }
+
     // Extract JSON from response
     const jsonMatch = content.match(/\{[\s\S]*\}/);
     if (!jsonMatch) throw new Error('No JSON in response');
 
-    const parsed = JSON.parse(jsonMatch[0]);
+    let parsed: any;
+    try {
+      parsed = JSON.parse(jsonMatch[0]);
+    } catch {
+      // If JSON is truncated, try to repair by closing unclosed strings and braces
+      let repaired = jsonMatch[0];
+      // Close any unclosed string
+      const quoteCount = (repaired.match(/(?<!\\)"/g) || []).length;
+      if (quoteCount % 2 !== 0) repaired += '"';
+      // Close unclosed arrays/objects
+      const openBrackets = (repaired.match(/\[/g) || []).length - (repaired.match(/\]/g) || []).length;
+      const openBraces = (repaired.match(/\{/g) || []).length - (repaired.match(/\}/g) || []).length;
+      for (let i = 0; i < openBrackets; i++) repaired += ']';
+      for (let i = 0; i < openBraces; i++) repaired += '}';
+      try {
+        parsed = JSON.parse(repaired);
+        this.logger.warn('Scoring JSON was truncated but repaired successfully');
+      } catch {
+        throw new Error('Failed to parse scoring JSON even after repair');
+      }
+    }
 
     // Overall = equal-weighted average of all 6 axes
     const overall = Math.round(
