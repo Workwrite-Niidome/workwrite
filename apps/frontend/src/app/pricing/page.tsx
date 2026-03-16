@@ -78,7 +78,7 @@ const PLANS = [
 const CREDIT_TABLE = [
   { action: 'AI執筆アシスト（通常）', credits: '1cr', note: '素早い応答（Sonnet）' },
   { action: 'AI執筆アシスト（じっくり）', credits: '2cr', note: 'より深い思考で回答（Sonnet + Thinking）' },
-  { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答（Opus） — Proプラン限定' },
+  { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答（Opus） — Standard以上' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
   { action: 'AIスコアリング（作品品質分析）', credits: '1cr', note: '6軸評価 + 構造解析 + 改善提案' },
   { action: 'URLインポート + 自動スコアリング', credits: '1cr', note: 'なろう・カクヨムからの作品取り込み' },

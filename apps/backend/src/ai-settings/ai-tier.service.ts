@@ -109,7 +109,7 @@ export class AiTierService {
         plan,
         canUseAi: true,
         canUseThinking: true,
-        canUseOpus: false,
+        canUseOpus: true,
         remainingFreeUses: null,
         credits,
       };

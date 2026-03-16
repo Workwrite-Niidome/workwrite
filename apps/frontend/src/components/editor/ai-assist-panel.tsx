@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream, type AiMode } from '@/lib/use-ai-stream';
@@ -95,13 +95,21 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
     }
   }, [workId]);
 
-  // When generation completes, update chat messages
+  // Refresh history when generation finishes
+  const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (!isStreaming && result && result.length > 0) {
-      setChatMessages((prev) => [...prev, { role: 'assistant', content: result }]);
+    if (prevStreamingRef.current && !isStreaming && result && result.length > 0) {
       loadHistory();
     }
+    prevStreamingRef.current = isStreaming;
   }, [isStreaming, result]);
+
+  // Save current result to chatMessages before it gets cleared by next generation
+  function commitResult() {
+    if (result && result.length > 0) {
+      setChatMessages((prev) => [...prev, { role: 'assistant', content: result }]);
+    }
+  }
 
   function loadHistory() {
     api.getAiHistory(workId, { limit: 10 })
@@ -286,6 +294,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
 
   function handleFollowUp() {
     if (!followUpInput.trim() || !conversationId || isStreaming) return;
+    commitResult();
     const msg = followUpInput.trim();
     setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
     setFollowUpInput('');
@@ -677,14 +686,28 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
               );
             })}
 
-            {/* Current streaming result */}
-            {(result || isStreaming) && !chatMessages.some((m) => m.content === result) && (
+            {/* Current streaming / completed result */}
+            {(isStreaming || result) && (
               <div className="text-xs rounded-md p-2 bg-secondary/50">
                 <p className="text-[10px] font-medium text-muted-foreground mb-1">AI</p>
-                <div className="whitespace-pre-wrap leading-relaxed">
-                  {result}
-                  {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
-                </div>
+                {isStreaming && !result ? (
+                  <div className="flex items-center gap-2 py-2">
+                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">
+                      {aiMode === 'premium' ? 'Opus で高精度生成中...' : aiMode === 'thinking' ? 'じっくり思考中...' : '生成中...'}
+                    </span>
+                    <span className="flex gap-0.5">
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </span>
+                  </div>
+                ) : (
+                  <div className="whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
+                    {result}
+                    {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
+                  </div>
+                )}
               </div>
             )}
 
@@ -692,15 +715,15 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
             {!isStreaming && result && (
               <div className="space-y-2">
                 <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => onInsert(result)} className="flex-1 text-xs">
+                  <Button size="sm" variant="outline" onClick={() => { onInsert(result); commitResult(); }} className="flex-1 text-xs">
                     <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
                   </Button>
                   {selectedText && onReplace && (
-                    <Button size="sm" variant="outline" onClick={() => onReplace(result)} className="flex-1 text-xs">
+                    <Button size="sm" variant="outline" onClick={() => { onReplace(result); commitResult(); }} className="flex-1 text-xs">
                       <Replace className="h-3 w-3 mr-1" /> 置換
                     </Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={handleCopy} className="flex-1 text-xs">
+                  <Button size="sm" variant="outline" onClick={() => { handleCopy(); commitResult(); }} className="flex-1 text-xs">
                     <Copy className="h-3 w-3 mr-1" /> {copied ? 'コピー済み' : 'コピー'}
                   </Button>
                 </div>
