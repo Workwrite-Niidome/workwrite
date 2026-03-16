@@ -2,26 +2,14 @@ import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { CreditService } from '../billing/credit.service';
+import { TextAnalyzerService } from './text-analyzer.service';
+import { StructuralDataBuilderService } from './structural-data-builder.service';
+import { SampleExtractorService } from './sample-extractor.service';
+import { SCORING_SYSTEM_PROMPT, buildScoringUserPrompt } from './scoring-prompt';
+import { ScoringResult, ScoringInput } from './types';
 
-export interface ScoringResult {
-  immersion: number;
-  transformation: number;
-  virality: number;
-  worldBuilding: number;
-  characterDepth: number;
-  structuralScore: number;
-  overall: number;
-  analysis: {
-    immersion: string;
-    transformation: string;
-    virality: string;
-    worldBuilding: string;
-    characterDepth?: string;
-    structuralScore?: string;
-  };
-  improvementTips: string[];
-  emotionTags: string[];
-}
+// Re-export for backward compatibility
+export type { ScoringResult } from './types';
 
 @Injectable()
 export class ScoringService {
@@ -33,32 +21,21 @@ export class ScoringService {
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
     private creditService: CreditService,
+    private textAnalyzer: TextAnalyzerService,
+    private structuralDataBuilder: StructuralDataBuilderService,
+    private sampleExtractor: SampleExtractorService,
   ) {}
 
   async scoreWork(workId: string, userId?: string): Promise<ScoringResult | null> {
-    const [work, characters, storyArc] = await Promise.all([
-      this.prisma.work.findUnique({
-        where: { id: workId },
-        include: {
-          episodes: { orderBy: { orderIndex: 'asc' } },
-          tags: true,
-        },
-      }),
-      this.prisma.storyCharacter.findMany({
-        where: { workId },
-        select: { name: true, role: true, personality: true, arc: true },
-        take: 10,
-      }),
-      this.prisma.storyArc.findUnique({
-        where: { workId },
-        select: { premise: true, centralConflict: true, themes: true },
-      }),
-    ]);
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      include: {
+        episodes: { orderBy: { orderIndex: 'asc' } },
+        tags: true,
+      },
+    });
 
     if (!work || work.episodes.length === 0) return null;
-
-    const fullText = work.episodes.map((ep) => ep.content).join('\n\n---\n\n');
-    const truncatedText = fullText.slice(0, 15000); // Limit for API
 
     // Credit consumption
     let transactionId: string | null = null;
@@ -78,7 +55,34 @@ export class ScoringService {
     }
 
     try {
-      const result = await this.callLlmForScoring(work.title, truncatedText, characters, storyArc);
+      // ── Phase 1: Structural Analysis (no LLM cost) ──
+      const episodes = work.episodes.map((ep) => ({
+        id: ep.id,
+        content: ep.content,
+        title: ep.title,
+        orderIndex: ep.orderIndex,
+      }));
+
+      const [metrics, structure] = await Promise.all([
+        Promise.resolve(this.textAnalyzer.analyze(episodes)),
+        this.structuralDataBuilder.build(workId, episodes),
+      ]);
+
+      const scoringInput: ScoringInput = {
+        title: work.title,
+        genre: (work as any).genre || null,
+        metrics,
+        structure,
+      };
+
+      this.logger.log(
+        `Scoring ${work.title}: ${metrics.totalCharCount} chars, ` +
+        `${metrics.episodeCount} episodes, ` +
+        `analysis coverage: ${Math.round(structure.analysisCoverage * 100)}%`,
+      );
+
+      // ── Phase 2: LLM Scoring (single call with structured data) ──
+      const result = await this.callLlmForScoring(scoringInput);
 
       await this.prisma.qualityScore.upsert({
         where: { workId },
@@ -87,8 +91,8 @@ export class ScoringService {
           transformation: result.transformation,
           virality: result.virality,
           worldBuilding: result.worldBuilding,
-          characterDepth: result.characterDepth || null,
-          structuralScore: result.structuralScore || null,
+          characterDepth: result.characterDepth,
+          structuralScore: result.structuralScore,
           overall: result.overall,
           analysisJson: result.analysis as object,
           improvementTips: result.improvementTips,
@@ -101,8 +105,8 @@ export class ScoringService {
           transformation: result.transformation,
           virality: result.virality,
           worldBuilding: result.worldBuilding,
-          characterDepth: result.characterDepth || null,
-          structuralScore: result.structuralScore || null,
+          characterDepth: result.characterDepth,
+          structuralScore: result.structuralScore,
           overall: result.overall,
           analysisJson: result.analysis as object,
           improvementTips: result.improvementTips,
@@ -129,12 +133,7 @@ export class ScoringService {
     }
   }
 
-  private async callLlmForScoring(
-    title: string,
-    text: string,
-    characters?: { name: string; role: string; personality: string | null; arc: string | null }[],
-    storyArc?: { premise: string | null; centralConflict: string | null; themes: string[] } | null,
-  ): Promise<ScoringResult> {
+  private async callLlmForScoring(input: ScoringInput): Promise<ScoringResult> {
     const apiKey = await this.aiSettings.getApiKey();
 
     if (!apiKey) {
@@ -142,57 +141,7 @@ export class ScoringService {
       return this.generateMockScores();
     }
 
-    // Use Haiku for scoring (cost-efficient, structured output)
-    const scoringSystemPrompt = `あなたは小説の品質を評価する専門家です。6つの軸で0-100点で採点し、改善提案を3つ出してください。
-
-評価軸:
-- immersion: 没入力（読者を引き込む力）
-- transformation: 変容力（読者に変化を与える力）
-- virality: 拡散力（人に薦めたくなる力）
-- worldBuilding: 世界構築力
-- characterDepth: キャラクター深度（人物の立体感、成長、一貫性）
-- structuralScore: 構造スコア（プロット構成、伏線、ペーシング）
-
-キャラクター設計データや物語構造データがある場合は、計画と実際の作品を比較して評価してください。
-
-emotionTagsは以下から3〜5個選んでください: courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe, nostalgia, suspense, mystery, hope, beauty, growth
-
-以下のJSON形式で回答してください:
-{
-  "immersion": <0-100>,
-  "transformation": <0-100>,
-  "virality": <0-100>,
-  "worldBuilding": <0-100>,
-  "characterDepth": <0-100>,
-  "structuralScore": <0-100>,
-  "analysis": {
-    "immersion": "<分析コメント>",
-    "transformation": "<分析コメント>",
-    "virality": "<分析コメント>",
-    "worldBuilding": "<分析コメント>",
-    "characterDepth": "<分析コメント>",
-    "structuralScore": "<分析コメント>"
-  },
-  "improvementTips": ["<提案1>", "<提案2>", "<提案3>"],
-  "emotionTags": ["<感情タグ3〜5個>"]
-}`;
-
-    // Build enriched user prompt with structured data
-    const structuredParts: string[] = [];
-    if (characters && characters.length > 0) {
-      structuredParts.push(`\n【キャラクター設計】\n${characters.map((c) =>
-        `- ${c.name} (${c.role}): 性格=${c.personality || '不明'}, アーク=${c.arc || '不明'}`,
-      ).join('\n')}`);
-    }
-    if (storyArc) {
-      const arcLines: string[] = [];
-      if (storyArc.premise) arcLines.push(`前提: ${storyArc.premise}`);
-      if (storyArc.centralConflict) arcLines.push(`葛藤: ${storyArc.centralConflict}`);
-      if (storyArc.themes?.length > 0) arcLines.push(`テーマ: ${storyArc.themes.join(', ')}`);
-      if (arcLines.length > 0) structuredParts.push(`\n【物語構造】\n${arcLines.join('\n')}`);
-    }
-
-    const userPrompt = `タイトル: ${title}${structuredParts.join('')}\n\n本文（抜粋）:\n${text}`;
+    const userPrompt = buildScoringUserPrompt(input);
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
@@ -204,11 +153,11 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
       },
       body: JSON.stringify({
         model: 'claude-haiku-4-5-20251001',
-        max_tokens: 2000,
+        max_tokens: 4000,
         system: [
           {
             type: 'text',
-            text: scoringSystemPrompt,
+            text: SCORING_SYSTEM_PROMPT,
             cache_control: { type: 'ephemeral' },
           },
         ],
@@ -228,8 +177,15 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
     if (!jsonMatch) throw new Error('No JSON in response');
 
     const parsed = JSON.parse(jsonMatch[0]);
+
+    // Overall = equal-weighted average of all 6 axes
     const overall = Math.round(
-      (parsed.immersion + parsed.transformation + parsed.virality + parsed.worldBuilding) / 4,
+      (parsed.immersion +
+        parsed.transformation +
+        parsed.virality +
+        parsed.worldBuilding +
+        (parsed.characterDepth || 0) +
+        (parsed.structuralScore || 0)) / 6,
     );
 
     return {
@@ -242,18 +198,18 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
   }
 
   private generateMockScores(): ScoringResult {
-    const rand = () => Math.floor(Math.random() * 30) + 50;
-    const scores = {
+    const rand = () => Math.floor(Math.random() * 30) + 35; // 35-64 range centered around 50
+    const s = {
       immersion: rand(),
       transformation: rand(),
       virality: rand(),
       worldBuilding: rand(),
-    };
-    return {
-      ...scores,
       characterDepth: rand(),
       structuralScore: rand(),
-      overall: Math.round(Object.values(scores).reduce((a, b) => a + b, 0) / 4),
+    };
+    return {
+      ...s,
+      overall: Math.round(Object.values(s).reduce((a, b) => a + b, 0) / 6),
       analysis: {
         immersion: 'スコアリング用APIキーが未設定のためモックスコアです',
         transformation: 'スコアリング用APIキーが未設定のためモックスコアです',
@@ -297,19 +253,33 @@ emotionTagsは以下から3〜5個選んでください: courage, tears, worldvi
   async scoreEpisode(episodeId: string): Promise<ScoringResult | null> {
     const episode = await this.prisma.episode.findUnique({
       where: { id: episodeId },
-      include: { work: { select: { title: true } } },
+      include: { work: { select: { id: true, title: true } } },
     });
 
     if (!episode) return null;
 
-    const truncatedText = episode.content.slice(0, 15000);
+    // For single-episode scoring, use the same 2-phase pipeline
+    const episodes = [{
+      id: episode.id,
+      content: episode.content,
+      title: episode.title,
+      orderIndex: 0,
+    }];
+
+    const [metrics, structure] = await Promise.all([
+      Promise.resolve(this.textAnalyzer.analyze(episodes)),
+      this.structuralDataBuilder.build(episode.work.id, episodes),
+    ]);
+
+    const scoringInput: ScoringInput = {
+      title: `${episode.work.title} - ${episode.title}`,
+      genre: null,
+      metrics,
+      structure,
+    };
 
     try {
-      const result = await this.callLlmForScoring(
-        `${episode.work.title} - ${episode.title}`,
-        truncatedText,
-      );
-      return result;
+      return await this.callLlmForScoring(scoringInput);
     } catch (e) {
       this.logger.error('Episode scoring failed', e);
       return null;

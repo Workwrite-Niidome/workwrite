@@ -1,10 +1,18 @@
 import { Module } from '@nestjs/common';
 import { ScoringController } from './scoring.controller';
 import { ScoringService } from './scoring.service';
+import { TextAnalyzerService } from './text-analyzer.service';
+import { SampleExtractorService } from './sample-extractor.service';
+import { StructuralDataBuilderService } from './structural-data-builder.service';
 
 @Module({
   controllers: [ScoringController],
-  providers: [ScoringService],
+  providers: [
+    ScoringService,
+    TextAnalyzerService,
+    SampleExtractorService,
+    StructuralDataBuilderService,
+  ],
   exports: [ScoringService],
 })
 export class ScoringModule {}
