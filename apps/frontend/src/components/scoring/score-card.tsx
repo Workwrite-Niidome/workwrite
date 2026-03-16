@@ -141,37 +141,24 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             {/* Radar chart */}
             <RadarChart score={score} />
 
-            {/* Main 4 axes - grid view */}
-            <div className="grid grid-cols-2 gap-2">
-              {MAIN_AXES.map((axis) => (
-                <div key={axis.key} className="text-center p-3 rounded-lg bg-muted/50">
-                  <p className="text-[10px] text-muted-foreground">{axis.label}</p>
-                  <p className="text-lg font-bold">{Math.round(score[axis.key] || 0)}</p>
-                  {score.analysis?.[axis.key] && (
-                    <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{score.analysis[axis.key]}</p>
-                  )}
-                </div>
-              ))}
-            </div>
-
-            {/* Extra axes */}
-            {EXTRA_AXES.some((a) => score[a.key as keyof QualityScoreDetail]) && (
-              <div className="grid grid-cols-2 gap-2">
-                {EXTRA_AXES.map((axis) => {
-                  const val = score[axis.key as keyof QualityScoreDetail] as number | undefined;
-                  if (!val) return null;
-                  return (
-                    <div key={axis.key} className="text-center p-2 rounded-lg bg-muted/30">
-                      <p className="text-[10px] text-muted-foreground">{axis.label}</p>
-                      <p className="text-base font-bold">{Math.round(val)}</p>
-                      {score.analysis?.[axis.key] && (
-                        <p className="text-[10px] text-muted-foreground mt-1 line-clamp-2">{score.analysis[axis.key]}</p>
-                      )}
+            {/* All 6 axes */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {[...MAIN_AXES, ...EXTRA_AXES].map((axis) => {
+                const val = score[axis.key as keyof QualityScoreDetail] as number | undefined;
+                if (val == null) return null;
+                return (
+                  <div key={axis.key} className="p-3 rounded-lg border border-border bg-muted/30">
+                    <div className="flex items-center justify-between mb-1">
+                      <p className="text-xs font-medium">{axis.label}</p>
+                      <p className="text-lg font-bold">{Math.round(val)}</p>
                     </div>
-                  );
-                })}
-              </div>
-            )}
+                    {score.analysis?.[axis.key] && (
+                      <p className="text-[11px] text-muted-foreground leading-relaxed">{score.analysis[axis.key]}</p>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
 
             {/* Emotion tags */}
             {score.emotionTags && score.emotionTags.length > 0 && (
