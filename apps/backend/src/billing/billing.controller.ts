@@ -6,6 +6,7 @@ import {
   Query,
   UseGuards,
   Req,
+  BadRequestException,
 } from '@nestjs/common';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingService } from './billing.service';
@@ -88,11 +89,25 @@ export class BillingController {
 
   @Post('connect/onboarding')
   async createConnectOnboarding(@Req() req: any) {
-    return this.stripeService.createConnectOnboardingLink(req.user.id, req.user.email);
+    try {
+      return await this.stripeService.createConnectOnboardingLink(req.user.id, req.user.email);
+    } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(
+        err?.message || 'Stripe Connectの設定に失敗しました。しばらくしてからお試しください。',
+      );
+    }
   }
 
   @Post('connect/login')
   async createConnectLogin(@Req() req: any) {
-    return this.stripeService.createConnectLoginLink(req.user.id);
+    try {
+      return await this.stripeService.createConnectLoginLink(req.user.id);
+    } catch (err: any) {
+      if (err instanceof BadRequestException) throw err;
+      throw new BadRequestException(
+        err?.message || 'Stripeダッシュボードのリンク生成に失敗しました。',
+      );
+    }
   }
 }

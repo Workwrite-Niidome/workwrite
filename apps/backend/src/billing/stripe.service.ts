@@ -199,28 +199,41 @@ export class StripeService {
     });
 
     if (user?.stripeAccountId) {
-      return user.stripeAccountId;
+      // Verify the account still exists in Stripe
+      try {
+        await stripe.accounts.retrieve(user.stripeAccountId);
+        return user.stripeAccountId;
+      } catch {
+        this.logger.warn(`Connect account ${user.stripeAccountId} not found in Stripe, creating new one`);
+      }
     }
 
-    const account = await stripe.accounts.create({
-      type: 'express',
-      country: 'JP',
-      email,
-      capabilities: {
-        card_payments: { requested: true },
-        transfers: { requested: true },
-      },
-      business_type: 'individual',
-      metadata: { userId },
-    });
+    try {
+      const account = await stripe.accounts.create({
+        type: 'express',
+        country: 'JP',
+        email,
+        capabilities: {
+          card_payments: { requested: true },
+          transfers: { requested: true },
+        },
+        business_type: 'individual',
+        metadata: { userId },
+      });
 
-    await this.prisma.user.update({
-      where: { id: userId },
-      data: { stripeAccountId: account.id },
-    });
+      await this.prisma.user.update({
+        where: { id: userId },
+        data: { stripeAccountId: account.id },
+      });
 
-    this.logger.log(`Created Connect account ${account.id} for user ${userId}`);
-    return account.id;
+      this.logger.log(`Created Connect account ${account.id} for user ${userId}`);
+      return account.id;
+    } catch (err: any) {
+      this.logger.error(`Failed to create Connect account for user ${userId}: ${err.message}`);
+      throw new BadRequestException(
+        'Stripe Connectアカウントの作成に失敗しました。Stripeの設定を確認してください。',
+      );
+    }
   }
 
   /**
@@ -231,14 +244,21 @@ export class StripeService {
     const accountId = await this.createConnectAccount(userId, email);
     const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
 
-    const accountLink = await stripe.accountLinks.create({
-      account: accountId,
-      refresh_url: `${baseUrl}/dashboard/earnings?connect=refresh`,
-      return_url: `${baseUrl}/dashboard/earnings?connect=complete`,
-      type: 'account_onboarding',
-    });
+    try {
+      const accountLink = await stripe.accountLinks.create({
+        account: accountId,
+        refresh_url: `${baseUrl}/dashboard/earnings?connect=refresh`,
+        return_url: `${baseUrl}/dashboard/earnings?connect=complete`,
+        type: 'account_onboarding',
+      });
 
-    return { url: accountLink.url };
+      return { url: accountLink.url };
+    } catch (err: any) {
+      this.logger.error(`Failed to create onboarding link for account ${accountId}: ${err.message}`);
+      throw new BadRequestException(
+        'オンボーディングリンクの生成に失敗しました。しばらくしてからお試しください。',
+      );
+    }
   }
 
   /**
