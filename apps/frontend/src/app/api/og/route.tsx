@@ -6,16 +6,18 @@ export const runtime = 'edge';
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
 function getScoreLabel(score: number): string {
+  if (score >= 90) return '傑作';
   if (score >= 80) return '秀作';
-  if (score >= 60) return '良作';
-  if (score >= 40) return '佳作';
+  if (score >= 65) return '良作';
+  if (score >= 50) return '佳作';
   return '—';
 }
 
 function getScoreColor(score: number): string {
+  if (score >= 90) return '#9333ea';
   if (score >= 80) return '#16a34a';
-  if (score >= 60) return '#2563eb';
-  if (score >= 40) return '#d97706';
+  if (score >= 65) return '#2563eb';
+  if (score >= 50) return '#d97706';
   return '#6b7280';
 }
 

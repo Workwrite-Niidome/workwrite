@@ -6,16 +6,18 @@ interface ScoreBadgeProps {
 }
 
 function getScoreColor(score: number) {
+  if (score >= 90) return 'text-purple-600 bg-purple-50 border-purple-200';
   if (score >= 80) return 'text-green-600 bg-green-50 border-green-200';
-  if (score >= 60) return 'text-blue-600 bg-blue-50 border-blue-200';
-  if (score >= 40) return 'text-amber-600 bg-amber-50 border-amber-200';
+  if (score >= 65) return 'text-blue-600 bg-blue-50 border-blue-200';
+  if (score >= 50) return 'text-amber-600 bg-amber-50 border-amber-200';
   return 'text-muted-foreground bg-muted border-border';
 }
 
 function getScoreLabel(score: number): string {
+  if (score >= 90) return '傑作';
   if (score >= 80) return '秀作';
-  if (score >= 60) return '良作';
-  if (score >= 40) return '佳作';
+  if (score >= 65) return '良作';
+  if (score >= 50) return '佳作';
   return '—';
 }
 
