@@ -202,10 +202,12 @@ export function WritingEditor({
         </div>
         {/* Row 2: Actions */}
         <div className={`flex items-center gap-1.5 px-4 pb-2 ${focusMode ? 'justify-center' : ''}`}>
-          <span className="text-xs text-muted-foreground mr-1">{content.length.toLocaleString()}字</span>
-          {saveStatus === 'saving' && <span className="text-xs text-muted-foreground">保存中...</span>}
-          {saveStatus === 'saved' && <span className="text-xs text-muted-foreground">保存済み</span>}
-          {saveStatus === 'error' && <span className="text-xs text-destructive">保存エラー</span>}
+          <span className="text-xs text-muted-foreground whitespace-nowrap shrink-0">{content.length.toLocaleString()}字</span>
+          <span className="text-xs whitespace-nowrap shrink-0">
+            {saveStatus === 'saving' && <span className="text-muted-foreground">保存中...</span>}
+            {saveStatus === 'saved' && <span className="text-muted-foreground">&#x2713;</span>}
+            {saveStatus === 'error' && <span className="text-destructive">保存エラー</span>}
+          </span>
           <div className="flex-1" />
           {!focusMode && (
             <Button
