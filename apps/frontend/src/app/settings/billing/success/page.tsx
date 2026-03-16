@@ -2,34 +2,92 @@
 
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Check } from 'lucide-react';
+import { Check, Loader2 } from 'lucide-react';
 import { useSearchParams } from 'next/navigation';
-import { Suspense } from 'react';
+import { Suspense, useState, useEffect, useRef } from 'react';
+import { api } from '@/lib/api';
 
 function SuccessContent() {
   const params = useSearchParams();
   const isCredits = params.get('type') === 'credits';
+  const [creditBalance, setCreditBalance] = useState<{ total: number; purchased: number } | null>(null);
+  const [verifying, setVerifying] = useState(isCredits);
+  const pollCount = useRef(0);
+
+  useEffect(() => {
+    if (!isCredits) return;
+
+    // Poll for credit balance update (webhook may be delayed)
+    let cancelled = false;
+    const initialBalance = { total: 0, purchased: 0 };
+
+    async function checkBalance() {
+      try {
+        const res = await api.getBillingStatus();
+        const credits = res.credits;
+
+        // On first call, record initial balance
+        if (pollCount.current === 0) {
+          initialBalance.total = credits.total;
+          initialBalance.purchased = credits.purchased;
+        }
+
+        setCreditBalance({ total: credits.total, purchased: credits.purchased });
+
+        // If purchased balance increased or we've polled enough times, stop
+        if (credits.purchased > initialBalance.purchased || pollCount.current >= 10) {
+          setVerifying(false);
+          return;
+        }
+
+        pollCount.current++;
+        if (!cancelled) {
+          setTimeout(checkBalance, 2000);
+        }
+      } catch {
+        setVerifying(false);
+      }
+    }
+
+    checkBalance();
+    return () => { cancelled = true; };
+  }, [isCredits]);
 
   return (
     <div className="min-h-[60vh] flex items-center justify-center px-4">
       <div className="text-center max-w-md">
         <div className="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 flex items-center justify-center mx-auto mb-4">
-          <Check className="h-6 w-6 text-green-600" />
+          {verifying ? (
+            <Loader2 className="h-6 w-6 text-green-600 animate-spin" />
+          ) : (
+            <Check className="h-6 w-6 text-green-600" />
+          )}
         </div>
         <h1 className="text-xl font-bold mb-2">
-          {isCredits ? '\u30AF\u30EC\u30B8\u30C3\u30C8\u8CFC\u5165\u5B8C\u4E86' : '\u30D7\u30E9\u30F3\u767B\u9332\u5B8C\u4E86'}
+          {isCredits ? 'クレジット購入完了' : 'プラン登録完了'}
         </h1>
-        <p className="text-sm text-muted-foreground mb-6">
+        <p className="text-sm text-muted-foreground mb-2">
           {isCredits
-            ? '\u30AF\u30EC\u30B8\u30C3\u30C8\u304C\u30A2\u30AB\u30A6\u30F3\u30C8\u306B\u8FFD\u52A0\u3055\u308C\u307E\u3057\u305F\u3002'
-            : '\u30D7\u30E9\u30F3\u304C\u6709\u52B9\u5316\u3055\u308C\u307E\u3057\u305F\u3002\u30AF\u30EC\u30B8\u30C3\u30C8\u304C\u4ED8\u4E0E\u3055\u308C\u3066\u3044\u307E\u3059\u3002'}
+            ? verifying
+              ? 'クレジットを反映中です...'
+              : 'クレジットがアカウントに追加されました。'
+            : 'プランが有効化されました。クレジットが付与されています。'}
         </p>
-        <div className="flex gap-3 justify-center">
+        {isCredits && creditBalance && (
+          <p className="text-lg font-bold mb-4">
+            残高: {creditBalance.total}
+            <span className="text-sm font-normal text-muted-foreground ml-1">cr</span>
+            <span className="text-xs text-muted-foreground ml-2">
+              (購入分: {creditBalance.purchased}cr)
+            </span>
+          </p>
+        )}
+        <div className="flex gap-3 justify-center mt-4">
           <Link href="/settings/billing">
-            <Button variant="outline" size="sm">{'\u8AB2\u91D1\u8A2D\u5B9A\u3078'}</Button>
+            <Button variant="outline" size="sm">課金設定へ</Button>
           </Link>
           <Link href="/">
-            <Button size="sm">{'\u30DB\u30FC\u30E0\u3078'}</Button>
+            <Button size="sm">ホームへ</Button>
           </Link>
         </div>
       </div>

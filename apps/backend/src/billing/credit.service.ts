@@ -240,11 +240,16 @@ export class CreditService {
     stripePaymentId: string,
     priceJpy: number,
   ): Promise<void> {
+    this.logger.log(`addPurchasedCredits: userId=${userId}, amount=${amount}, stripePaymentId=${stripePaymentId}`);
+
     // Idempotency check
     const existing = await this.prisma.creditPurchase.findUnique({
       where: { stripePaymentIntentId: stripePaymentId },
     });
-    if (existing) return;
+    if (existing) {
+      this.logger.log(`addPurchasedCredits: duplicate purchase detected, skipping (stripePaymentId=${stripePaymentId})`);
+      return;
+    }
 
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(
@@ -284,6 +289,8 @@ export class CreditService {
         },
       });
     });
+
+    this.logger.log(`addPurchasedCredits: SUCCESS — ${amount}cr added to user ${userId}`);
   }
 
   /** Get transaction history with pagination */

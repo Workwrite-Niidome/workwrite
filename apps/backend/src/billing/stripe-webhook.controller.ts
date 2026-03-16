@@ -41,6 +41,8 @@ export class StripeWebhookController {
       return res.status(400).json({ error: 'Invalid signature' });
     }
 
+    this.logger.log(`Webhook received: ${event.type} (id: ${event.id})`);
+
     try {
       switch (event.type) {
         case 'invoice.paid':
@@ -48,11 +50,12 @@ export class StripeWebhookController {
             event.data.object as Stripe.Invoice,
           );
           break;
-        case 'checkout.session.completed':
-          await this.billingService.handleCheckoutComplete(
-            event.data.object as Stripe.Checkout.Session,
-          );
+        case 'checkout.session.completed': {
+          const session = event.data.object as Stripe.Checkout.Session;
+          this.logger.log(`Checkout completed: userId=${session.metadata?.userId}, type=${session.metadata?.type}, paymentIntent=${session.payment_intent}`);
+          await this.billingService.handleCheckoutComplete(session);
           break;
+        }
         case 'customer.subscription.updated':
           await this.billingService.handleSubscriptionUpdated(
             event.data.object as Stripe.Subscription,
