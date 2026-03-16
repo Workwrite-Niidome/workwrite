@@ -24,6 +24,10 @@ import {
   Zap,
   Crown,
   MessageSquare,
+  Link2,
+  Mail,
+  DollarSign,
+  Share2,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -35,8 +39,10 @@ import { cn } from '@/lib/utils';
 const SECTIONS = [
   { id: 'intro', label: 'Workwriteとは', icon: BookOpen },
   { id: 'create', label: '作品を作る', icon: PenTool },
+  { id: 'import', label: 'URLインポート', icon: Link2 },
   { id: 'write', label: 'エピソードを書く', icon: FileText },
   { id: 'grow', label: '読者を増やす', icon: Users },
+  { id: 'letters', label: 'レター・収益', icon: Mail },
   { id: 'credits', label: 'クレジットと料金', icon: CreditCard },
   { id: 'faq', label: 'よくある質問', icon: HelpCircle },
 ] as const;
@@ -309,6 +315,62 @@ export default function WritersGuidePage() {
         </section>
 
         {/* ============================================================ */}
+        {/*  Section: URLインポート                                       */}
+        {/* ============================================================ */}
+        <section id="import">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Link2 className="h-5 w-5 text-primary" />
+            URLインポート
+          </h2>
+
+          <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
+            <p>
+              <strong className="text-foreground">なろう</strong>や<strong className="text-foreground">カクヨム</strong>で既に作品を公開している方は、
+              URLを貼るだけで作品をWorkwriteに取り込めます。取り込み後、自動でAI品質スコアリングが実行されます。
+            </p>
+
+            <div className="mb-4">
+              <Step
+                number={1}
+                title="URLを入力"
+                description="執筆ダッシュボードの「インポート」ページで、なろう（ncode.syosetu.com）またはカクヨム（kakuyomu.jp）の作品URLを貼り付けます。"
+                icon={Link2}
+              />
+              <Step
+                number={2}
+                title="自動取り込み"
+                description="メタデータとエピソード本文が自動で取得されます。最大500エピソードまで対応しています。"
+                icon={FileText}
+              />
+              <Step
+                number={3}
+                title="AI品質分析"
+                description="取り込み完了後、6軸のAIスコアリングが自動実行されます。あなたの作品の強みと改善ポイントが可視化されます。"
+                icon={BarChart3}
+                tips={[
+                  'スコア結果はSNSでシェアできます。OGP画像も自動生成されます。',
+                  '分析だけの利用も可能です（/analyze ページ）。',
+                ]}
+              />
+            </div>
+
+            <div className="bg-muted/50 rounded-lg p-4">
+              <h4 className="text-sm font-medium mb-2">対応サイト</h4>
+              <div className="grid grid-cols-2 gap-3">
+                <div className="text-center">
+                  <p className="text-xs font-medium text-foreground">小説家になろう</p>
+                  <p className="text-[11px] mt-0.5">ncode.syosetu.com/n○○○○/</p>
+                </div>
+                <div className="text-center">
+                  <p className="text-xs font-medium text-foreground">カクヨム</p>
+                  <p className="text-[11px] mt-0.5">kakuyomu.jp/works/○○○○</p>
+                </div>
+              </div>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
         {/*  Section: エピソードを書く                                    */}
         {/* ============================================================ */}
         <section id="write">
@@ -523,6 +585,84 @@ export default function WritersGuidePage() {
               </div>
               <p className="text-xs text-muted-foreground mt-3">
                 どちらもデフォルトはOFFです。ネタバレになりうる情報（隠された真実など）は公開データに含まれないよう自動的に除外されます。
+              </p>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/*  Section: レター・収益                                        */}
+        {/* ============================================================ */}
+        <section id="letters">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Mail className="h-5 w-5 text-primary" />
+            レター・収益
+          </h2>
+
+          <div className="space-y-6">
+            <div>
+              <h3 className="text-sm font-medium mb-2">ファンレターとは</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                読者がエピソードを読んだ後、感想や応援メッセージを「ファンレター」として著者に送れる機能です。
+                レターには有料の投げ銭が含まれ、<strong className="text-foreground">収益の80%が著者に還元</strong>されます（プラットフォーム手数料20%）。
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-3">レターの種類</h3>
+              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+                {[
+                  { type: 'ショート', price: '¥120', chars: '140文字', color: 'bg-blue-50 dark:bg-blue-950/30' },
+                  { type: 'レター', price: '¥300', chars: '500文字', color: 'bg-green-50 dark:bg-green-950/30' },
+                  { type: 'プレミアム', price: '¥500', chars: '1000文字', color: 'bg-purple-50 dark:bg-purple-950/30' },
+                  { type: 'ギフト', price: '¥1,000〜', chars: '1000文字', color: 'bg-amber-50 dark:bg-amber-950/30' },
+                ].map((lt) => (
+                  <div key={lt.type} className={`rounded-lg p-3 text-center ${lt.color}`}>
+                    <p className="text-xs font-medium">{lt.type}</p>
+                    <p className="text-sm font-bold mt-1">{lt.price}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{lt.chars}</p>
+                  </div>
+                ))}
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">
+                レター（STANDARD）以上ではスタンプを添えることができます。ギフトは自由な金額を設定可能です。
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2">AIモデレーション</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                すべてのレターはAIが自動審査し、誹謗中傷や不適切な内容を含むメッセージをブロックします。
+                著者が安心してレターを受け取れる仕組みです。
+              </p>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2">収益の確認</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                ダッシュボードの「収益」ページで、累計・月間の収益とレター数を確認できます。
+              </p>
+              <div className="bg-muted/50 rounded-lg p-4">
+                <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                  <DollarSign className="h-4 w-4 text-green-600" />
+                  Stripe Connect（著者への振込）
+                </h4>
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  収益を銀行口座に受け取るには、収益ページからStripe Connectのアカウント設定を完了してください。
+                  設定完了後、レター収益はStripe経由で自動的に振り込まれます。
+                </p>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2 flex items-center gap-1.5">
+                <Share2 className="h-4 w-4 text-primary" />
+                スコアのシェア
+              </h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                作品のAIスコアをX(Twitter)やLINEでシェアできます。
+                スコア付きの美しいOGPカード画像が自動生成され、SNSで作品の魅力を伝えやすくなります。
+                作品ページのシェアボタンからワンクリックで共有可能です。
               </p>
             </div>
           </div>

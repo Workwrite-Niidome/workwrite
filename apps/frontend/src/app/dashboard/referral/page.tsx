@@ -41,8 +41,8 @@ export default function ReferralPage() {
   const [copiedCode, setCopiedCode] = useState<string | null>(null);
 
   useEffect(() => {
-    (api as any).request('/referral/dashboard')
-      .then((res: any) => setData(res.data || null))
+    api.getReferralDashboard()
+      .then((res) => setData((res as any).data || null))
       .finally(() => setLoading(false));
   }, []);
 

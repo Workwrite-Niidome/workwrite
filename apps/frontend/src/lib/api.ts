@@ -463,6 +463,10 @@ class ApiClient {
     return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number } }>('/letters/earnings');
   }
 
+  async getReferralDashboard() {
+    return this.request<{ data: { inviteCodes: any[]; rewards: any[]; totalCreditsEarned: number; totalInvitees: number } }>('/referral/dashboard');
+  }
+
   // Discover
   async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
     const qs = new URLSearchParams({ q });
