@@ -419,16 +419,16 @@ export default function AfterwordPage() {
             <div className="flex justify-center">
               <button
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                onClick={async () => {
+                onClick={() => {
                   const text = `「${work.title}」を読了しました！\n\n#Workwrite #読書`;
-                  const url = window.location.origin + `/works/${work.id}`;
-                  if (navigator.share) {
-                    try { await navigator.share({ title: work.title, text, url }); return; } catch {}
-                  }
-                  window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'width=550,height=420');
+                  const tweetText = text;
+                  const appUrl = `twitter://post?message=${encodeURIComponent(tweetText)}`;
+                  const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+                  const w = window.open(appUrl);
+                  setTimeout(() => { if (!w || w.closed) window.open(intentUrl, '_blank', 'width=550,height=420'); }, 500);
                 }}
               >
-                感想をシェア
+                Xで感想をシェア
               </button>
             </div>
             <div className="flex justify-center gap-3 pt-4">

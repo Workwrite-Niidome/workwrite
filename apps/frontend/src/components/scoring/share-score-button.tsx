@@ -20,32 +20,24 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
 
   const shareText = `「${title}」のAI品質スコアは${Math.round(score)}点でした！ #Workwrite #小説分析 #小説書きさんと繋がりたい  #Web小説`;
 
-  async function handleShare() {
-    // モバイル: Web Share API でOSネイティブ共有シートを表示（Twitter/LINE等アプリを直接選択可能）
-    if (typeof navigator !== 'undefined' && navigator.share) {
-      try {
-        await navigator.share({
-          title: `${title} - AI品質スコア`,
-          text: shareText,
-          url: workUrl,
-        });
-        return;
-      } catch {
-        // ユーザーがキャンセルした or API未対応 → フォールバック
-      }
-    }
-    // PC or Web Share API 非対応 → メニューを表示
-    setOpen(!open);
-  }
-
   function shareToX() {
-    const url = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(workUrl)}`;
-    window.open(url, '_blank', 'width=550,height=420');
+    const tweetText = `${shareText}\n${workUrl}`;
+    const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+    // twitter:// スキームでアプリ起動を試み、失敗時はintent URLにフォールバック
+    const appUrl = `twitter://post?message=${encodeURIComponent(tweetText)}`;
+    const w = window.open(appUrl);
+    setTimeout(() => {
+      if (!w || w.closed) {
+        window.open(intentUrl, '_blank', 'width=550,height=420');
+      }
+    }, 500);
   }
 
   function shareToLine() {
-    const url = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(workUrl)}&text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank');
+    const lineText = `${shareText}\n${workUrl}`;
+    // line:// スキームでアプリ起動を試み、失敗時はWeb版にフォールバック
+    const appUrl = `https://line.me/R/share?text=${encodeURIComponent(lineText)}`;
+    window.open(appUrl, '_blank');
   }
 
   async function copyUrl() {
@@ -63,7 +55,7 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
       <Button
         variant="outline"
         size="sm"
-        onClick={handleShare}
+        onClick={() => setOpen(!open)}
         className="text-xs h-7 gap-1"
       >
         <Share2 className="h-3.5 w-3.5" />

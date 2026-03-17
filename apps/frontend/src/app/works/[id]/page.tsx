@@ -169,13 +169,14 @@ export default function WorkDetailPage() {
                   variant="outline"
                   size="sm"
                   className="text-xs h-7 gap-1 shrink-0"
-                  onClick={async () => {
+                  onClick={() => {
                     const url = `${window.location.origin}/works/${workId}`;
                     const text = `「${work.title}」を読んでみませんか？ #Workwrite`;
-                    if (navigator.share) {
-                      try { await navigator.share({ title: work.title, text, url }); return; } catch {}
-                    }
-                    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'width=550,height=420');
+                    const tweetText = `${text}\n${url}`;
+                    const appUrl = `twitter://post?message=${encodeURIComponent(tweetText)}`;
+                    const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
+                    const w = window.open(appUrl);
+                    setTimeout(() => { if (!w || w.closed) window.open(intentUrl, '_blank', 'width=550,height=420'); }, 500);
                   }}
                 >
                   <Share2 className="h-3.5 w-3.5" />
