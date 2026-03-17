@@ -20,25 +20,32 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
 
   const shareText = `「${title}」のAI品質スコアは${Math.round(score)}点でした！ #Workwrite #小説分析 #小説書きさんと繋がりたい  #Web小説`;
 
-  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+  async function handleShare() {
+    // モバイル: Web Share API でOSネイティブ共有シートを表示（Twitter/LINE等アプリを直接選択可能）
+    if (typeof navigator !== 'undefined' && navigator.share) {
+      try {
+        await navigator.share({
+          title: `${title} - AI品質スコア`,
+          text: shareText,
+          url: workUrl,
+        });
+        return;
+      } catch {
+        // ユーザーがキャンセルした or API未対応 → フォールバック
+      }
+    }
+    // PC or Web Share API 非対応 → メニューを表示
+    setOpen(!open);
+  }
 
   function shareToX() {
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(workUrl)}`;
-    if (isMobile) {
-      // モバイル: location.hrefで遷移→OSがTwitterアプリを起動(Universal Links / Intent)
-      window.location.href = url;
-    } else {
-      window.open(url, '_blank', 'width=550,height=420');
-    }
+    window.open(url, '_blank', 'width=550,height=420');
   }
 
   function shareToLine() {
     const url = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(workUrl)}&text=${encodeURIComponent(shareText)}`;
-    if (isMobile) {
-      window.location.href = url;
-    } else {
-      window.open(url, '_blank');
-    }
+    window.open(url, '_blank');
   }
 
   async function copyUrl() {
@@ -56,7 +63,7 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
       <Button
         variant="outline"
         size="sm"
-        onClick={() => setOpen(!open)}
+        onClick={handleShare}
         className="text-xs h-7 gap-1"
       >
         <Share2 className="h-3.5 w-3.5" />

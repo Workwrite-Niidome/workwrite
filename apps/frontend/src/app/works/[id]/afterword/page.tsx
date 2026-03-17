@@ -417,20 +417,19 @@ export default function AfterwordPage() {
             </div>
             {/* Share on X */}
             <div className="flex justify-center">
-              <a
-                href={`https://x.com/intent/tweet?text=${encodeURIComponent(`「${work.title}」を読了しました！\n\n#Workwrite #読書`)}`}
-                target="_blank"
-                rel="noopener noreferrer"
+              <button
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                onClick={(e) => {
-                  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
-                    e.preventDefault();
-                    window.location.href = e.currentTarget.href;
+                onClick={async () => {
+                  const text = `「${work.title}」を読了しました！\n\n#Workwrite #読書`;
+                  const url = window.location.origin + `/works/${work.id}`;
+                  if (navigator.share) {
+                    try { await navigator.share({ title: work.title, text, url }); return; } catch {}
                   }
+                  window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}`, '_blank', 'width=550,height=420');
                 }}
               >
-                Xで感想をシェア
-              </a>
+                感想をシェア
+              </button>
             </div>
             <div className="flex justify-center gap-3 pt-4">
               <Button onClick={() => { setReviewText(''); handleReviewSubmit(); }} variant="ghost" className="min-h-[48px]">
