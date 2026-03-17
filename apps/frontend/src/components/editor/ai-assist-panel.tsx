@@ -365,7 +365,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     );
   }
 
-  const hasConversation = chatMessages.length > 0 || result;
+  const hasConversation = chatMessages.length > 0 || result || isStreaming;
 
   return (
     <div className="h-full flex flex-col overflow-hidden">
@@ -542,100 +542,96 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
-        {/* Quick actions - hidden during active conversation */}
-        {!hasConversation && (
-          <>
-            <div className="space-y-1.5">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
-              <div className="flex flex-wrap gap-1.5">
-                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('chapter-opening')} disabled={isStreaming}>
-                  <FileText className="h-3 w-3" /> 章の書き出し
-                </Button>
-                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('proofread')} disabled={isStreaming}>
-                  <BookCheck className="h-3 w-3" /> 校正
-                </Button>
-                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('continue-writing')} disabled={isStreaming}>
-                  <PenLine className="h-3 w-3" /> 続きを書く
-                </Button>
-                <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('style-adjust')} disabled={isStreaming}>
-                  <Wand2 className="h-3 w-3" /> 文体調整
-                </Button>
-              </div>
-            </div>
+        {/* Quick actions */}
+        <div className="space-y-1.5">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">クイックアクション</p>
+          <div className="flex flex-wrap gap-1.5">
+            <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('chapter-opening')} disabled={isStreaming}>
+              <FileText className="h-3 w-3" /> 章の書き出し
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('proofread')} disabled={isStreaming}>
+              <BookCheck className="h-3 w-3" /> 校正
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('continue-writing')} disabled={isStreaming}>
+              <PenLine className="h-3 w-3" /> 続きを書く
+            </Button>
+            <Button size="sm" variant="outline" className="text-xs h-7 gap-1" onClick={() => handleQuickAction('style-adjust')} disabled={isStreaming}>
+              <Wand2 className="h-3 w-3" /> 文体調整
+            </Button>
+          </div>
+        </div>
 
-            {/* Character count */}
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <SlidersHorizontal className="h-3 w-3" /> 生成文字数: {charCount.toLocaleString()}字
-              </p>
-              <input type="range" min={100} max={5000} step={100} value={charCount}
-                onChange={(e) => setCharCount(Number(e.target.value))} className="w-full h-1.5 accent-foreground" />
-              <div className="flex justify-between text-[10px] text-muted-foreground"><span>100</span><span>5000</span></div>
-            </div>
+        {/* Character count */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <SlidersHorizontal className="h-3 w-3" /> 生成文字数: {charCount.toLocaleString()}字
+          </p>
+          <input type="range" min={100} max={5000} step={100} value={charCount}
+            onChange={(e) => setCharCount(Number(e.target.value))} className="w-full h-1.5 accent-foreground" />
+          <div className="flex justify-between text-[10px] text-muted-foreground"><span>100</span><span>5000</span></div>
+        </div>
 
-            {/* Custom instruction */}
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">追加指示（任意）</p>
-              <textarea value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)}
-                placeholder="例: 緊張感のある場面にして、主人公の心情を丁寧に描写して..."
-                rows={2} className="w-full text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
-            </div>
+        {/* Custom instruction */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">追加指示（任意）</p>
+          <textarea value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)}
+            placeholder="例: 緊張感のある場面にして、主人公の心情を丁寧に描写して..."
+            rows={2} className="w-full text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+        </div>
 
-            {/* Free-form prompt */}
-            <div className="space-y-1">
-              <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
-                <Send className="h-3 w-3" /> AIに直接指示
-              </p>
-              <div className="flex gap-1.5">
-                <textarea value={freePrompt} onChange={(e) => setFreePrompt(e.target.value)}
-                  onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming) {
-                      e.preventDefault();
-                      setChatMessages([]);
-                      setCurrentSlug('free-prompt');
-                      setNewChars(null);
-                      const vars = buildContextVars();
-                      vars.user_prompt = freePrompt.trim();
-                      reset();
-                      generate('free-prompt', vars, undefined, aiMode);
-                      setFreePrompt('');
-                    }
-                  }}
-                  placeholder="AIへの指示を入力... (Ctrl+Enter で送信)"
-                  rows={2} className="flex-1 text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
-                <Button size="sm" variant="default" className="self-end h-8 px-2"
-                  disabled={!freePrompt.trim() || isStreaming}
-                  onClick={() => {
-                    setChatMessages([]);
-                    setCurrentSlug('free-prompt');
-                    setNewChars(null);
-                    const vars = buildContextVars();
-                    vars.user_prompt = freePrompt.trim();
-                    reset();
-                    generate('free-prompt', vars, undefined, aiMode);
-                    setFreePrompt('');
-                  }}
-                >
-                  <Send className="h-3.5 w-3.5" />
-                </Button>
-              </div>
-            </div>
-
-            <TemplateSelector
-              templates={templates}
-              onGenerate={(slug, vars) => {
-                setChatMessages([]);
-                setCurrentSlug(slug);
-                setNewChars(null);
-                reset();
-                const contextVars = buildContextVars();
-                generate(slug, { ...contextVars, ...vars }, undefined, aiMode);
+        {/* Free-form prompt */}
+        <div className="space-y-1">
+          <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider flex items-center gap-1">
+            <Send className="h-3 w-3" /> AIに直接指示
+          </p>
+          <div className="flex gap-1.5">
+            <textarea value={freePrompt} onChange={(e) => setFreePrompt(e.target.value)}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming) {
+                  e.preventDefault();
+                  setChatMessages([]);
+                  setCurrentSlug('free-prompt');
+                  setNewChars(null);
+                  const vars = buildContextVars();
+                  vars.user_prompt = freePrompt.trim();
+                  reset();
+                  generate('free-prompt', vars, undefined, aiMode);
+                  setFreePrompt('');
+                }
               }}
-              isStreaming={isStreaming}
-              currentContent={selectedText || currentContent}
-            />
-          </>
-        )}
+              placeholder="AIへの指示を入力... (Ctrl+Enter で送信)"
+              rows={2} className="flex-1 text-xs p-2 rounded-md border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+            <Button size="sm" variant="default" className="self-end h-8 px-2"
+              disabled={!freePrompt.trim() || isStreaming}
+              onClick={() => {
+                setChatMessages([]);
+                setCurrentSlug('free-prompt');
+                setNewChars(null);
+                const vars = buildContextVars();
+                vars.user_prompt = freePrompt.trim();
+                reset();
+                generate('free-prompt', vars, undefined, aiMode);
+                setFreePrompt('');
+              }}
+            >
+              <Send className="h-3.5 w-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        <TemplateSelector
+          templates={templates}
+          onGenerate={(slug, vars) => {
+            setChatMessages([]);
+            setCurrentSlug(slug);
+            setNewChars(null);
+            reset();
+            const contextVars = buildContextVars();
+            generate(slug, { ...contextVars, ...vars }, undefined, aiMode);
+          }}
+          isStreaming={isStreaming}
+          currentContent={selectedText || currentContent}
+        />
 
         {error && (
           <div className="p-2 text-xs text-destructive bg-destructive/10 rounded-md">{error}</div>
@@ -707,8 +703,8 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   )}
                 </div>
 
-                {/* Action buttons — inside the result block, always visible */}
-                {!isStreaming && result && (
+                {/* Action buttons — always visible when there's any result */}
+                {result && (
                   <div className="flex gap-1.5">
                     <Button size="sm" variant="outline" onClick={() => { onInsert(result); commitResult(); }} className="flex-1 text-xs">
                       <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
@@ -741,7 +737,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 )}
 
                 {/* Extract new characters */}
-                {!isStreaming && result && (
+                {result && (
                   <div className="space-y-2 border-t border-border/50 pt-2">
                     <Button size="sm" variant="ghost" onClick={handleExtractCharacters} disabled={extracting}
                       className="w-full text-xs text-muted-foreground gap-1">
