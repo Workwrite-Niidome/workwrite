@@ -3,14 +3,15 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
+// Edge runtime: use public API URL (cannot reach internal services)
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://api.workwrite.jp/api/v1';
 
 function getScoreLabel(score: number): string {
   if (score >= 90) return '傑作';
   if (score >= 80) return '秀作';
   if (score >= 65) return '良作';
   if (score >= 50) return '佳作';
-  return '—';
+  return '';
 }
 
 function getScoreColor(score: number): string {
@@ -29,7 +30,6 @@ export async function GET(req: NextRequest) {
     return new Response('Missing workId', { status: 400 });
   }
 
-  // Fetch work data from backend
   let title = 'Workwrite';
   let author = '';
   let overall = 0;
@@ -40,8 +40,8 @@ export async function GET(req: NextRequest) {
 
   try {
     const [workRes, scoreRes] = await Promise.all([
-      fetch(`${API_BASE}/works/${workId}`),
-      fetch(`${API_BASE}/scoring/works/${workId}`),
+      fetch(`${API_BASE}/works/${workId}`, { headers: { 'Accept': 'application/json' } }),
+      fetch(`${API_BASE}/scoring/works/${workId}`, { headers: { 'Accept': 'application/json' } }),
     ]);
     if (workRes.ok) {
       const workData = await workRes.json();
@@ -104,9 +104,11 @@ export async function GET(req: NextRequest) {
             <div style={{ fontSize: '96px', fontWeight: 'bold', color: scoreColor, lineHeight: 1 }}>
               {overall}
             </div>
-            <div style={{ fontSize: '28px', color: scoreColor, marginTop: '8px', fontWeight: '600' }}>
-              {scoreLabel}
-            </div>
+            {scoreLabel && (
+              <div style={{ fontSize: '28px', color: scoreColor, marginTop: '8px', fontWeight: '600' }}>
+                {scoreLabel}
+              </div>
+            )}
             <div style={{ display: 'flex', gap: '16px', marginTop: '32px', flexWrap: 'wrap', justifyContent: 'center' }}>
               {[
                 { label: '没入力', value: immersion },
@@ -126,7 +128,7 @@ export async function GET(req: NextRequest) {
         {/* Footer */}
         <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: '20px' }}>
           <div style={{ fontSize: '18px', color: '#475569' }}>
-            workwrite.app
+            workwrite.jp
           </div>
         </div>
       </div>

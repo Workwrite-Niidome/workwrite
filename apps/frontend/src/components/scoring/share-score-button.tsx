@@ -18,7 +18,7 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
     ? `${window.location.origin}/works/${workId}`
     : `/works/${workId}`;
 
-  const shareText = `「${title}」のAI品質スコアは${Math.round(score)}点でした！ #Workwrite #小説分析`;
+  const shareText = `「${title}」のAI品質スコアは${Math.round(score)}点でした！ #Workwrite #小説分析 #小説書きさんと繋がりたい  #Web小説`;
 
   function shareToX() {
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(workUrl)}`;
