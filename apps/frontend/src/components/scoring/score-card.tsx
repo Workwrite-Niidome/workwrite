@@ -16,15 +16,15 @@ interface ScoreCardProps {
 }
 
 const MAIN_AXES = [
-  { key: 'immersion', label: '没入力', angle: -90 },
-  { key: 'transformation', label: '変容力', angle: 0 },
-  { key: 'virality', label: '拡散力', angle: 90 },
-  { key: 'worldBuilding', label: '世界構築力', angle: 180 },
+  { key: 'immersion', label: '没入力', desc: '読者を引き込む力', angle: -90 },
+  { key: 'transformation', label: '変容力', desc: '心に残る読後感', angle: 0 },
+  { key: 'virality', label: '拡散力', desc: '人に薦めたくなる魅力', angle: 90 },
+  { key: 'worldBuilding', label: '世界構築力', desc: '舞台設定の奥行き', angle: 180 },
 ] as const;
 
 const EXTRA_AXES = [
-  { key: 'characterDepth', label: 'キャラクター深度' },
-  { key: 'structuralScore', label: '構造スコア' },
+  { key: 'characterDepth', label: 'キャラクター深度', desc: '人物の立体感' },
+  { key: 'structuralScore', label: '構造スコア', desc: '物語の設計力' },
 ] as const;
 
 const EMOTION_TAG_LABELS: Record<string, string> = {
@@ -136,6 +136,11 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             <div className="text-center">
               <span className="text-4xl font-bold text-primary">{Math.round(score.overall)}</span>
               <span className="text-muted-foreground text-sm ml-1">/ 100</span>
+              {score.overall >= 50 && (
+                <p className="text-sm font-medium mt-1" style={{ color: score.overall >= 90 ? '#9333ea' : score.overall >= 80 ? '#16a34a' : score.overall >= 65 ? '#2563eb' : '#d97706' }}>
+                  {score.overall >= 90 ? '傑作' : score.overall >= 80 ? '秀作' : score.overall >= 65 ? '良作' : '佳作'}
+                </p>
+              )}
             </div>
 
             {/* Radar chart */}
@@ -149,7 +154,10 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
                 return (
                   <div key={axis.key} className="p-3 rounded-lg border border-border bg-muted/30">
                     <div className="flex items-center justify-between mb-1">
-                      <p className="text-xs font-medium">{axis.label}</p>
+                      <div>
+                        <p className="text-xs font-medium">{axis.label}</p>
+                        <p className="text-[10px] text-muted-foreground">{axis.desc}</p>
+                      </div>
                       <p className="text-lg font-bold">{Math.round(val)}</p>
                     </div>
                     {score.analysis?.[axis.key] && (
