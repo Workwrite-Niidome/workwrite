@@ -370,7 +370,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   return (
     <div className="h-full flex flex-col overflow-hidden">
       <div className="flex-shrink-0 flex items-center justify-between p-3 border-b">
-        <h3 className="text-sm font-medium">AI アシスト <span className="text-[9px] text-muted-foreground font-normal">v2</span></h3>
+        <h3 className="text-sm font-medium">AI アシスト</h3>
         <div className="flex items-center gap-1">
           <button
             onClick={() => setShowHistory(!showHistory)}
@@ -693,11 +693,6 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 </div>
               );
             })}
-
-            {/* DEBUG: state visibility */}
-            <div className="text-[9px] text-red-500 bg-red-50 p-1 rounded">
-              streaming={String(isStreaming)} | result={result ? `${result.length}chars` : 'empty'} | msgs={chatMessages.length}
-            </div>
 
             {/* Current streaming / completed result */}
             {(isStreaming || result) && (

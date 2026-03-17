@@ -106,8 +106,9 @@ export function useAiStream(): UseAiStreamReturn {
 
       const decoder = new TextDecoder();
       let buffer = '';
+      let streamDone = false;
 
-      while (true) {
+      while (!streamDone) {
         const { done, value } = await reader.read();
         if (done) break;
 
@@ -118,12 +119,16 @@ export function useAiStream(): UseAiStreamReturn {
         for (const line of lines) {
           if (!line.startsWith('data: ')) continue;
           const data = line.slice(6).trim();
-          if (data === '[DONE]') continue;
+          if (data === '[DONE]') {
+            streamDone = true;
+            break;
+          }
 
           try {
             const parsed = JSON.parse(data);
             if (parsed.error) {
               setError(parsed.error);
+              streamDone = true;
               break;
             }
             if (parsed.text) {
