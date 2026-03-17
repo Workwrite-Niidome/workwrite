@@ -19,7 +19,7 @@ export default function TokushohoPage() {
             />
             <Row
               label="電話番号"
-              value="請求があった場合には遅滞なく開示いたします。"
+              value="050-1792-9092（平日 10:00〜18:00、土日祝日を除く）"
             />
             <Row
               label="メールアドレス"
