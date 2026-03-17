@@ -301,6 +301,7 @@ export function WritingEditor({
           <div className="w-80 flex-shrink-0 border-l hidden md:flex md:flex-col min-h-0 overflow-hidden">
             <AiAssistPanel
               workId={workId}
+              episodeId={episodeId}
               currentContent={content}
               currentTitle={title}
               selectedText={selectedText}
@@ -334,6 +335,7 @@ export function WritingEditor({
             <div className="flex-1 min-h-0 overflow-hidden">
               <AiAssistPanel
                 workId={workId}
+                episodeId={episodeId}
                 currentContent={content}
                 selectedText={selectedText}
                 onInsert={handleInsertAi}

@@ -1,7 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 
-const MAX_CONTEXT_CHARS = 10000; // increased budget for richer context
+const MAX_CONTEXT_CHARS = 20000; // increased budget for richer context
 
 interface EpisodeContextItem {
   order: number;
@@ -36,6 +36,7 @@ export interface AiWritingContext {
   currentEpisodeOrder: number;
   episodeSummaries: EpisodeContextItem[];
   recentDetailedSummary: string;
+  recentRawText: string;
   characters: CharacterContext[];
   openForeshadowings: string[];
   worldSettings: string[];
@@ -44,6 +45,9 @@ export interface AiWritingContext {
   narrativePOV?: string;
   emotionalTone?: string;
   timeline?: string;
+  chapterBrief?: string;
+  plotOutline?: string;
+  emotionGoals?: string;
 }
 
 @Injectable()
@@ -69,6 +73,8 @@ export class AiContextBuilderService {
       worldSettings,
       dialogueSamples,
       sceneData,
+      creationPlan,
+      recentEpisodes,
     ] = await Promise.all([
       this.prisma.work.findUnique({
         where: { id: workId },
@@ -104,6 +110,16 @@ export class AiContextBuilderService {
         orderBy: { episodeOrder: 'desc' },
       }),
       this.getSceneGoalForEpisode(workId, currentEpisodeOrder),
+      this.prisma.workCreationPlan.findFirst({
+        where: { workId },
+        select: { plotOutline: true, chapterOutline: true, emotionBlueprint: true },
+      }),
+      this.prisma.episode.findMany({
+        where: { workId, orderIndex: { lt: currentEpisodeOrder } },
+        orderBy: { orderIndex: 'desc' },
+        take: 3,
+        select: { content: true, orderIndex: true, title: true },
+      }),
     ]);
 
     // Build set of character names that have appeared before current episode
@@ -137,8 +153,8 @@ export class AiContextBuilderService {
     const episodeSummaries: EpisodeContextItem[] = analyses.map((a) => ({
       order: a.episode.orderIndex,
       title: a.episode.title,
-      summary: a.summary.slice(0, 150),
-      endState: a.endState?.slice(0, 100),
+      summary: a.summary.slice(0, 300),
+      endState: a.endState?.slice(0, 300),
     }));
 
     // 2. Recent detailed summary — last 2 episodes before current
@@ -179,7 +195,7 @@ export class AiContextBuilderService {
 
     // 5. World settings
     const worldSettingList = worldSettings.map(
-      (w) => `[${w.category}] ${w.name}: ${w.description.slice(0, 100)}`,
+      (w) => `[${w.category}] ${w.name}: ${w.description.slice(0, 200)}`,
     );
 
     // 6. Narrative POV and tone from most recent analysis
@@ -187,10 +203,118 @@ export class AiContextBuilderService {
       .filter((a) => a.episode.orderIndex < currentEpisodeOrder)
       .pop();
 
+    // 7. Recent raw text — last 2 episodes before current
+    // recentEpisodes is ordered by orderIndex desc, so index 0 is most recent
+    const recentRawText = recentEpisodes
+      .slice(0, 2)
+      .reverse()
+      .map((ep, idx) => {
+        const content = ep.content || '';
+        // Most recent episode (after reverse, last item): 2000 chars; one before: 1000 chars
+        const limit = idx === 0 ? 1000 : 2000;
+        const tail = content.length > limit ? content.slice(-limit) : content;
+        return `第${ep.orderIndex + 1}話「${ep.title}」末尾:\n${tail}`;
+      })
+      .join('\n\n');
+
+    // 8. Chapter brief from creationPlan.chapterOutline
+    let chapterBrief: string | undefined;
+    if (creationPlan?.chapterOutline) {
+      const chapterOutline = creationPlan.chapterOutline as Array<{
+        title?: string;
+        summary?: string;
+        keyScenes?: string[];
+        characters?: string[];
+        emotionTarget?: string;
+        emotionIntensity?: number;
+      }> | null;
+      if (Array.isArray(chapterOutline) && chapterOutline[currentEpisodeOrder]) {
+        const ch = chapterOutline[currentEpisodeOrder];
+        const lines: string[] = [];
+        if (ch.title) lines.push(`タイトル: ${ch.title}`);
+        if (ch.summary) lines.push(`概要: ${ch.summary}`);
+        if (ch.keyScenes && ch.keyScenes.length > 0) lines.push(`主要シーン: ${ch.keyScenes.join('、')}`);
+        if (ch.characters && ch.characters.length > 0) lines.push(`登場キャラクター: ${ch.characters.join('、')}`);
+        if (ch.emotionTarget) {
+          lines.push(`感情目標: ${ch.emotionTarget}${ch.emotionIntensity != null ? `（強度${ch.emotionIntensity}/10）` : ''}`);
+        }
+        if (lines.length > 0) {
+          chapterBrief = lines.join('\n');
+        }
+      }
+    }
+
+    // 9. Plot outline from creationPlan.plotOutline
+    let plotOutline: string | undefined;
+    if (creationPlan?.plotOutline) {
+      const po = creationPlan.plotOutline as {
+        type?: string;
+        actGroups?: Array<{
+          label?: string;
+          description?: string;
+          episodes?: Array<{
+            title?: string;
+            whatHappens?: string;
+            whyItHappens?: string;
+            characters?: string[];
+            emotionTarget?: string;
+          }>;
+        }>;
+      } | string | null;
+      if (typeof po === 'string') {
+        plotOutline = po.slice(0, 2000);
+      } else if (po && typeof po === 'object' && po.type === 'structured' && Array.isArray(po.actGroups)) {
+        const lines: string[] = [];
+        let total = 0;
+        for (const ag of po.actGroups) {
+          if (total >= 2000) break;
+          const groupLines: string[] = [];
+          if (ag.label) groupLines.push(`[${ag.label}]${ag.description ? ` ${ag.description}` : ''}`);
+          if (Array.isArray(ag.episodes)) {
+            for (const ep of ag.episodes) {
+              const parts: string[] = [];
+              if (ep.title) parts.push(ep.title);
+              if (ep.whatHappens) parts.push(ep.whatHappens);
+              if (ep.whyItHappens) parts.push(`理由: ${ep.whyItHappens}`);
+              if (ep.characters && ep.characters.length > 0) parts.push(`登場: ${ep.characters.join('、')}`);
+              if (ep.emotionTarget) parts.push(`感情: ${ep.emotionTarget}`);
+              groupLines.push(`  - ${parts.join(' / ')}`);
+            }
+          }
+          const groupText = groupLines.join('\n');
+          lines.push(groupText);
+          total += groupText.length;
+        }
+        if (lines.length > 0) {
+          plotOutline = lines.join('\n').slice(0, 2000);
+        }
+      }
+    }
+
+    // 10. Emotion goals from creationPlan.emotionBlueprint
+    let emotionGoals: string | undefined;
+    if (creationPlan?.emotionBlueprint) {
+      const eb = creationPlan.emotionBlueprint as {
+        coreMessage?: string;
+        targetEmotions?: string[];
+        readerJourney?: string;
+      } | null;
+      if (eb && typeof eb === 'object') {
+        const lines: string[] = [];
+        if (eb.coreMessage) lines.push(`コアメッセージ: ${eb.coreMessage}`);
+        if (eb.targetEmotions && eb.targetEmotions.length > 0) lines.push(`感情目標: ${eb.targetEmotions.join('、')}`);
+        if (eb.readerJourney) lines.push(`読者の旅路: ${eb.readerJourney}`);
+        if (lines.length > 0) {
+          emotionGoals = lines.join('\n');
+        }
+      }
+    }
+
     return {
       currentEpisodeOrder,
       episodeSummaries,
       recentDetailedSummary,
+      recentRawText,
       characters: charContexts,
       openForeshadowings: openForeshadowingList,
       worldSettings: worldSettingList,
@@ -199,6 +323,9 @@ export class AiContextBuilderService {
       narrativePOV: latestAnalysis?.narrativePOV || undefined,
       emotionalTone: latestAnalysis?.emotionalArc || undefined,
       timeline: latestAnalysis?.timelineEnd || undefined,
+      chapterBrief,
+      plotOutline,
+      emotionGoals,
     };
   }
 
@@ -253,7 +380,26 @@ export class AiContextBuilderService {
       return false;
     };
 
-    // Priority 1: Scene goal — what this chapter should accomplish
+    // Priority 1: Grounding rules — anti-hallucination, always first
+    addSection(
+      `【絶対遵守ルール — ハルシネーション防止】\n` +
+      `- 提供されたテキスト・構造データに記述されていない過去のイベント、会話、約束、決定を「あった」として書いてはならない\n` +
+      `- 「〇〇と約束した」「〇〇を決意した」「〇〇を思い出した」等の記述は、提供テキストに明確な根拠がある場合のみ許可\n` +
+      `- 原文に存在しない人物の関係性や過去の出来事を創作しないこと\n` +
+      `- 不明な過去の出来事は参照せず、現在の場面に集中すること`,
+    );
+
+    // Priority 2: Chapter brief (from chapterOutline — what this episode should achieve)
+    if (ctx.chapterBrief) {
+      addSection(`【この話で達成すべきこと】\n${ctx.chapterBrief}`);
+    }
+
+    // Priority 3: Recent raw text (actual text from last episodes — highest priority for grounding)
+    if (ctx.recentRawText) {
+      addSection(`【直前エピソードの原文末尾】\n${ctx.recentRawText}`);
+    }
+
+    // Priority 4: Scene goal — what this chapter should accomplish
     if (ctx.sceneGoal) {
       const g = ctx.sceneGoal;
       const lines = [`第${g.actNumber}幕「${g.actTitle}」— ${g.sceneTitle}`];
@@ -265,12 +411,12 @@ export class AiContextBuilderService {
       addSection(`【この章の目的】\n${lines.join('\n')}`);
     }
 
-    // Priority 2: Recent detailed summary (~1500 chars)
+    // Priority 5: Recent detailed summary
     if (ctx.recentDetailedSummary) {
       addSection(`【直前のあらすじ】\n${ctx.recentDetailedSummary}`);
     }
 
-    // Priority 3: World setting / era (~500 chars)
+    // Priority 6: World setting / era
     {
       const worldLines: string[] = [];
       if (ctx.settingEra) {
@@ -285,7 +431,7 @@ export class AiContextBuilderService {
       }
     }
 
-    // Priority 4: Characters — split into appeared / not-yet-appeared
+    // Priority 7: Characters — split into appeared / not-yet-appeared
     if (ctx.characters.length > 0) {
       const appeared = ctx.characters.filter((c) => c.hasAppeared);
       const notAppeared = ctx.characters.filter((c) => !c.hasAppeared);
@@ -326,7 +472,12 @@ export class AiContextBuilderService {
       addSection(section);
     }
 
-    // Priority 5: Episode summaries (~1500 chars)
+    // Priority 8: Plot outline (from creationPlan)
+    if (ctx.plotOutline) {
+      addSection(`【全体のプロット構成】\n${ctx.plotOutline}`);
+    }
+
+    // Priority 9: Episode summaries
     if (ctx.episodeSummaries.length > 0) {
       const summaryLines = ctx.episodeSummaries.map(
         (e) => `第${e.order + 1}話「${e.title}」: ${e.summary}`,
@@ -334,12 +485,17 @@ export class AiContextBuilderService {
       addSection(`【これまでの話の流れ】\n${summaryLines.join('\n')}`);
     }
 
-    // Priority 6: Open foreshadowings (~500 chars)
+    // Priority 10: Open foreshadowings
     if (ctx.openForeshadowings.length > 0) {
       addSection(`【未回収の伏線】\n${ctx.openForeshadowings.join('\n')}`);
     }
 
-    // Priority 7: Narrative metadata
+    // Priority 11: Emotion goals (from emotionBlueprint)
+    if (ctx.emotionGoals) {
+      addSection(`【感情設計】\n${ctx.emotionGoals}`);
+    }
+
+    // Priority 12: Narrative metadata
     const meta: string[] = [];
     if (ctx.narrativePOV) meta.push(`視点: ${ctx.narrativePOV}`);
     if (ctx.emotionalTone) meta.push(`感情の流れ: ${ctx.emotionalTone}`);

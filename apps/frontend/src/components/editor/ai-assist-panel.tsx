@@ -9,6 +9,7 @@ import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLin
 
 interface AiAssistPanelProps {
   workId: string;
+  episodeId?: string;
   currentContent: string;
   currentTitle?: string;
   selectedText?: string;
@@ -30,7 +31,7 @@ const TEMPLATE_LABELS: Record<string, string> = {
   'free-prompt': '自由プロンプト',
 };
 
-export function AiAssistPanel({ workId, currentContent, currentTitle, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
+export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle, selectedText, onInsert, onReplace, onClose }: AiAssistPanelProps) {
   const [templates, setTemplates] = useState<PromptTemplate[]>([]);
   const [available, setAvailable] = useState<boolean | null>(null);
   const [tier, setTier] = useState<{
@@ -45,6 +46,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   const [storySummary, setStorySummary] = useState<any>(null);
   const [episodes, setEpisodes] = useState<{ title: string; content: string }[]>([]);
   const [structuredContext, setStructuredContext] = useState<string | null>(null);
+  const [currentEpisodeOrder, setCurrentEpisodeOrder] = useState<number | null>(null);
   const [extracting, setExtracting] = useState(false);
   const [newChars, setNewChars] = useState<{ name: string; role: string; gender: string; personality: string; speechStyle: string; description: string }[] | null>(null);
   const [savedChars, setSavedChars] = useState<Set<string>>(new Set());
@@ -88,6 +90,11 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
           if (res.data) {
             const sorted = [...res.data].sort((a: any, b: any) => a.orderIndex - b.orderIndex);
             setEpisodes(sorted.map((ep: any) => ({ title: ep.title, content: '' })));
+            // Resolve current episode's orderIndex
+            if (episodeId) {
+              const current = res.data.find((ep: any) => ep.id === episodeId);
+              if (current) setCurrentEpisodeOrder(current.orderIndex);
+            }
           }
         })
         .catch(() => {});
@@ -159,6 +166,7 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
   function buildContextVars(): Record<string, string> {
     const vars: Record<string, string> = { content: selectedText || currentContent };
     if (workId) vars.workId = workId;
+    if (currentEpisodeOrder != null) vars.episodeOrder = String(currentEpisodeOrder);
     const contextParts: string[] = [];
 
     if (currentTitle) contextParts.push(`現在執筆中の章: 「${currentTitle}」`);

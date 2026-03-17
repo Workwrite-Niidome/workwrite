@@ -106,6 +106,7 @@ const emptyContext = (): AiWritingContext => ({
   currentEpisodeOrder: 5,
   episodeSummaries: [],
   recentDetailedSummary: '',
+  recentRawText: '',
   characters: [],
   openForeshadowings: [],
   worldSettings: [],

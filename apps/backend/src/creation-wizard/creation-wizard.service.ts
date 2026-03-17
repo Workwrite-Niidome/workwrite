@@ -883,7 +883,14 @@ ${episodeContent.slice(0, 5000)}`;
 
     let prompt: string;
 
-    if (existingSummary && (existingSummary as any).episodes?.length > 0) {
+    // Full rebuild every 5 episodes or if existing summary has grown stale
+    const existingEpCount = (existingSummary as any)?.episodes?.length || 0;
+    const shouldFullRebuild = !existingSummary
+      || existingEpCount === 0
+      || episodes.length - existingEpCount >= 5
+      || episodes.length <= 3;
+
+    if (!shouldFullRebuild && existingSummary) {
       // --- Incremental update: send existing summary + latest 2 episodes ---
       const recentEps = episodes.slice(-2);
       const recentTexts = recentEps
@@ -898,10 +905,16 @@ ${JSON.stringify(existingSummary, null, 0)}
 【最新のエピソード（直近2話分の本文）】
 ${recentTexts}
 
+【最重要ルール】
+- 本文に書かれている事実のみを要約してください。推測・補完・行間の解釈は絶対にしないでください
+- 「〇〇だろう」「〇〇と思われる」「おそらく〇〇」のような推測表現は禁止です
+- 曖昧な場合は「不明」と記述してください
+- 既存の要約に本文の事実と矛盾する記述がある場合は、本文の記述を正として修正してください
+- 各話のsummaryには原文の重要なセリフやフレーズを「」で引用してください
+
 【指示】
-- 既存の要約の正確な部分はそのまま維持してください
 - 最新エピソードの内容を反映して、全体要約・キャラ現況・伏線を更新してください
-- 本文に書かれている事実のみを要約し、推測で補完しないでください
+- 既存の要約で本文と矛盾する部分があれば修正してください
 - episodesリストに最新話の要約を追加/更新してください
 
 以下のJSON形式で出力してください（JSONのみ）:
@@ -909,7 +922,7 @@ ${recentTexts}
 {
   "overallSummary": "物語全体の要約（300字以内、時系列で）",
   "episodes": [
-    { "title": "話タイトル", "summary": "100字以内の要約", "keyEvents": ["出来事"], "endState": "終了時点の状況" }
+    { "title": "話タイトル", "summary": "100字以内の要約（原文キーフレーズを「」で引用）", "keyEvents": ["出来事"], "endState": "終了時点の状況" }
   ],
   "characters": [
     { "name": "キャラ名", "currentState": "最新時点の状況（50字以内）", "relationships": "他キャラとの関係" }
@@ -927,16 +940,20 @@ ${recentTexts}
 
       prompt = `あなたは小説の分析専門家です。以下の小説の全話を読み、正確な要約を作成してください。
 
-【重要】本文に書かれている事実のみを要約してください。推測で補完しないでください。
+【最重要ルール】
+- 本文に書かれている事実のみを要約してください。推測・補完・行間の解釈は絶対にしないでください
+- 「〇〇だろう」「〇〇と思われる」「おそらく〇〇」のような推測表現は禁止です
+- 曖昧な場合は「不明」と記述してください
+- 各話のsummaryには原文の重要なセリフやフレーズを「」で引用してください
 
 ${episodeTexts}
 
 以下のJSON形式で出力してください（JSONのみ）:
 
 {
-  "overallSummary": "物語全体の要約（300字以内、時系列で）",
+  "overallSummary": "物語全体の要約（300字以内、時系列で、原文の重要フレーズを引用）",
   "episodes": [
-    { "title": "話タイトル", "summary": "100字以内の要約", "keyEvents": ["出来事"], "endState": "終了時点の状況" }
+    { "title": "話タイトル", "summary": "100字以内の要約（原文キーフレーズを「」で引用）", "keyEvents": ["出来事"], "endState": "終了時点の状況" }
   ],
   "characters": [
     { "name": "キャラ名", "currentState": "最新時点の状況（50字以内）", "relationships": "他キャラとの関係" }

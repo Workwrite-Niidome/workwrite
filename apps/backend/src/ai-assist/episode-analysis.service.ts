@@ -8,6 +8,7 @@ const ANTHROPIC_VERSION = '2023-06-01';
 interface AnalysisResult {
   summary: string;
   endState: string;
+  handoverContext: string;
   narrativePOV: string;
   emotionalArc: string;
   timelineStart: string;
@@ -80,37 +81,50 @@ export class EpisodeAnalysisService {
 ${prevEpisode.aiAnalysis.summary}
 
 【前回の終了時の状況】
-${prevEpisode.aiAnalysis.endState || '（なし）'}
-`;
+${prevEpisode.aiAnalysis.endState || '（なし）'}`;
+      }
+      // Also include raw text ending of previous episode for grounding
+      if (prevEpisode?.content) {
+        const rawEnding = prevEpisode.content.slice(-1500);
+        previousContext += `\n\n【前回のエピソード末尾（原文）】\n${rawEnding}`;
       }
     }
 
     const analysisSystemPrompt = `あなたは小説分析の専門家です。エピソードを分析し、構造データをJSON形式で抽出してください。
 
+【最重要ルール】
+- テキストに書かれている事実のみを抽出してください。推測・補完・行間の解釈は絶対にしないでください
+- 「〇〇だろう」「〇〇と思われる」「おそらく〇〇」のような推測表現は禁止です
+- 曖昧な場合は「不明」または「明示されていない」と記述してください
+- summaryには必ず原文のキーフレーズを「」で引用して含めてください
+
 【指示】
-- テキストに書かれている事実のみを抽出してください。推測や補完はしないでください。
-- summaryは200〜300文字で簡潔にまとめてください。
-- dialogueSamplesは各キャラクターにつき最大3つ、最も代表的なセリフを選んでください。
+- summaryは200〜400文字で、主要な出来事を時系列で記述してください。原文の重要な台詞やフレーズを「」で引用してください
+- endStateは300〜500文字で、エピソード終了時点の詳細な状況を記述してください。場所、時間帯、各キャラの物理的位置と感情状態、進行中の行動を含めてください
+- handoverContextは200〜300文字で、次の話を書く人が知るべき引き継ぎ情報を記述してください。保留中の会話、未完了の行動、次に起きるべきこと、キャラの直近の感情を含めてください
+- dialogueSamplesは各キャラクターにつき最大3つ、最も代表的なセリフを選んでください
 - foreshadowingsのtypeは以下の通り分類してください:
   - "plant": 新しく設置された伏線
   - "develop": 進展した伏線
   - "resolve": 回収された伏線
+- characterConsistencyでは、提供されたキャラクター設計との矛盾を厳密にチェックしてください（一人称、口調、性格の逸脱）
 
 以下のJSON形式で出力してください。JSONのみを出力してください。
 
 {
-  "summary": "200-300字の要約",
-  "endState": "エピソード終了時の状況描写",
+  "summary": "200-400字の要約（原文キーフレーズを「」で引用）",
+  "endState": "300-500字のエピソード終了時点の詳細な状況描写",
+  "handoverContext": "200-300字の次話への引き継ぎ情報",
   "narrativePOV": "視点（一人称主人公/三人称限定/三人称神視点等）",
   "emotionalArc": "感情の流れ（例: 期待→不安→決意）",
   "timelineStart": "時間軸開始（例: 翌朝/3日後）",
   "timelineEnd": "時間軸終了",
   "locations": [{ "name": "場所名", "description": "簡潔な描写" }],
-  "characters": [{ "name": "キャラ名", "role": "この話での役割", "action": "主な行動", "currentState": "終了時の状態" }],
+  "characters": [{ "name": "キャラ名", "role": "この話での役割", "action": "主な行動", "currentState": "終了時の状態（感情・物理的位置を含む）" }],
   "foreshadowings": [{ "description": "伏線の内容", "type": "plant/develop/resolve" }],
-  "dialogueSamples": [{ "character": "キャラ名", "line": "代表的なセリフ", "context": "状況", "emotion": "感情" }],
+  "dialogueSamples": [{ "character": "キャラ名", "line": "代表的なセリフ（原文そのまま）", "context": "状況", "emotion": "感情" }],
   "newWorldRules": [{ "category": "geography/magic/social/technology/culture", "name": "設定名", "description": "詳細" }],
-  "characterConsistency": [{ "name": "キャラ名", "consistent": true, "notes": "一貫性に関するメモ" }]
+  "characterConsistency": [{ "name": "キャラ名", "consistent": true, "notes": "一貫性に関するメモ（設計との差異を具体的に）" }]
 }`;
 
     // Build character reference for consistency checking
