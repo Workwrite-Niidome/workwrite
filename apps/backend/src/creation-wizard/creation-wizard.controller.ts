@@ -55,6 +55,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
@@ -85,6 +86,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
@@ -108,6 +110,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
@@ -138,6 +141,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
@@ -167,6 +171,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
@@ -196,6 +201,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
@@ -219,6 +225,7 @@ export class CreationWizardController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }

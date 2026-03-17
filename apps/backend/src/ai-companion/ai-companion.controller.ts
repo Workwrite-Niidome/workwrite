@@ -27,6 +27,9 @@ export class AiCompanionController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    // Keep-alive ping to prevent Railway/proxy timeout
+    const keepAlive = setInterval(() => { res.write(`: ping\n\n`); }, 15_000);
+
     try {
       const stream = this.aiCompanionService.streamChat(userId, workId, body.message);
       for await (const chunk of stream) {
@@ -37,6 +40,7 @@ export class AiCompanionController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
