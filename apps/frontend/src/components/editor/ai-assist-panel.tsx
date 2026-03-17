@@ -688,14 +688,37 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
 
             {/* Current streaming / completed result */}
             {(isStreaming || result) && (
-              <div className="text-xs rounded-md p-2 bg-secondary/50">
-                <p className="text-[10px] font-medium text-muted-foreground mb-1">AI</p>
+              <div className="text-xs rounded-md p-2 bg-secondary/50 space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-[10px] font-medium text-muted-foreground">AI</p>
+                  {isStreaming && (
+                    <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
+                      <Loader2 className="h-3 w-3 animate-spin" />
+                      {aiMode === 'premium' ? '高精度生成中' : aiMode === 'thinking' ? 'じっくり思考中' : '生成中'}
+                    </span>
+                  )}
+                </div>
+
+                {/* Action buttons — inside the result block, always visible */}
+                {!isStreaming && result && (
+                  <div className="flex gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => { onInsert(result); commitResult(); }} className="flex-1 text-xs">
+                      <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
+                    </Button>
+                    {selectedText && onReplace && (
+                      <Button size="sm" variant="outline" onClick={() => { onReplace(result); commitResult(); }} className="flex-1 text-xs">
+                        <Replace className="h-3 w-3 mr-1" /> 置換
+                      </Button>
+                    )}
+                    <Button size="sm" variant="outline" onClick={() => { handleCopy(); commitResult(); }} className="flex-1 text-xs">
+                      <Copy className="h-3 w-3 mr-1" /> {copied ? 'コピー済み' : 'コピー'}
+                    </Button>
+                  </div>
+                )}
+
+                {/* Result text */}
                 {isStreaming && !result ? (
                   <div className="flex items-center gap-2 py-2">
-                    <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">
-                      {aiMode === 'premium' ? 'Opus で高精度生成中...' : aiMode === 'thinking' ? 'じっくり思考中...' : '生成中...'}
-                    </span>
                     <span className="flex gap-0.5">
                       <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
                       <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
@@ -708,56 +731,41 @@ export function AiAssistPanel({ workId, currentContent, currentTitle, selectedTe
                     {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
                   </div>
                 )}
-              </div>
-            )}
-
-            {/* Action buttons after generation */}
-            {!isStreaming && result && (
-              <div className="space-y-2">
-                <div className="flex gap-1.5">
-                  <Button size="sm" variant="outline" onClick={() => { onInsert(result); commitResult(); }} className="flex-1 text-xs">
-                    <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
-                  </Button>
-                  {selectedText && onReplace && (
-                    <Button size="sm" variant="outline" onClick={() => { onReplace(result); commitResult(); }} className="flex-1 text-xs">
-                      <Replace className="h-3 w-3 mr-1" /> 置換
-                    </Button>
-                  )}
-                  <Button size="sm" variant="outline" onClick={() => { handleCopy(); commitResult(); }} className="flex-1 text-xs">
-                    <Copy className="h-3 w-3 mr-1" /> {copied ? 'コピー済み' : 'コピー'}
-                  </Button>
-                </div>
 
                 {/* Extract new characters */}
-                <Button size="sm" variant="ghost" onClick={handleExtractCharacters} disabled={extracting}
-                  className="w-full text-xs text-muted-foreground gap-1">
-                  {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
-                  {extracting ? '検出中...' : '新キャラクター・設定を検出'}
-                </Button>
+                {!isStreaming && result && (
+                  <div className="space-y-2 border-t border-border/50 pt-2">
+                    <Button size="sm" variant="ghost" onClick={handleExtractCharacters} disabled={extracting}
+                      className="w-full text-xs text-muted-foreground gap-1">
+                      {extracting ? <Loader2 className="h-3 w-3 animate-spin" /> : <UserPlus className="h-3 w-3" />}
+                      {extracting ? '検出中...' : '新キャラクター・設定を検出'}
+                    </Button>
 
-                {newChars !== null && newChars.length === 0 && (
-                  <p className="text-xs text-muted-foreground text-center">新しいキャラクターは検出されませんでした</p>
-                )}
-                {newChars && newChars.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">検出されたキャラクター:</p>
-                    {newChars.map((ch) => {
-                      const isSaved = savedChars.has(ch.name);
-                      return (
-                        <div key={ch.name} className="p-2 bg-muted/30 rounded border border-border/50 text-xs space-y-0.5">
-                          <div className="flex items-center justify-between">
-                            <span className="font-medium">{ch.name}（{ch.role}）</span>
-                            <Button size="sm" variant={isSaved ? 'ghost' : 'secondary'} className="h-6 text-[10px] gap-0.5"
-                              onClick={() => handleSaveCharacter(ch)} disabled={isSaved}>
-                              {isSaved ? <><Check className="h-2.5 w-2.5" /> 保存済み</> : '設定に追加'}
-                            </Button>
-                          </div>
-                          <p className="text-muted-foreground">{ch.gender} / {ch.personality}</p>
-                          {ch.speechStyle && <p className="text-muted-foreground">口調: {ch.speechStyle}</p>}
-                          <p className="text-muted-foreground">{ch.description}</p>
-                        </div>
-                      );
-                    })}
+                    {newChars !== null && newChars.length === 0 && (
+                      <p className="text-xs text-muted-foreground text-center">新しいキャラクターは検出されませんでした</p>
+                    )}
+                    {newChars && newChars.length > 0 && (
+                      <div className="space-y-1.5">
+                        <p className="text-xs font-medium text-muted-foreground">検出されたキャラクター:</p>
+                        {newChars.map((ch) => {
+                          const isSaved = savedChars.has(ch.name);
+                          return (
+                            <div key={ch.name} className="p-2 bg-muted/30 rounded border border-border/50 text-xs space-y-0.5">
+                              <div className="flex items-center justify-between">
+                                <span className="font-medium">{ch.name}（{ch.role}）</span>
+                                <Button size="sm" variant={isSaved ? 'ghost' : 'secondary'} className="h-6 text-[10px] gap-0.5"
+                                  onClick={() => handleSaveCharacter(ch)} disabled={isSaved}>
+                                  {isSaved ? <><Check className="h-2.5 w-2.5" /> 保存済み</> : '設定に追加'}
+                                </Button>
+                              </div>
+                              <p className="text-muted-foreground">{ch.gender} / {ch.personality}</p>
+                              {ch.speechStyle && <p className="text-muted-foreground">口調: {ch.speechStyle}</p>}
+                              <p className="text-muted-foreground">{ch.description}</p>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
