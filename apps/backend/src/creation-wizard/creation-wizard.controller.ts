@@ -44,7 +44,7 @@ export class CreationWizardController {
     @Body() dto: GenerateCharactersDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateCharacters(userId, workId, dto);
       for await (const chunk of stream) {
@@ -67,7 +67,7 @@ export class CreationWizardController {
     @Body() dto: GeneratePlotDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generatePlot(userId, workId, dto);
       let fullOutput = '';
@@ -97,7 +97,7 @@ export class CreationWizardController {
     @Body() dto: GenerateEmotionBlueprintDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateEmotionBlueprint(userId, workId, dto);
       for await (const chunk of stream) {
@@ -120,7 +120,7 @@ export class CreationWizardController {
     @Body() dto: GenerateChapterOutlineDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateChapterOutline(userId, workId, dto);
       let fullOutput = '';
@@ -150,7 +150,7 @@ export class CreationWizardController {
     @Body() dto: GenerateEpisodesForActDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateEpisodesForAct(userId, workId, dto);
       let fullOutput = '';
@@ -179,7 +179,7 @@ export class CreationWizardController {
     @Body() dto: GenerateWorldBuildingDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateWorldBuilding(userId, workId, dto);
       let fullOutput = '';
@@ -208,7 +208,7 @@ export class CreationWizardController {
     @Body() dto: GenerateSynopsisDto,
     @Res() res: Response,
   ) {
-    this.setSSEHeaders(res);
+    const keepAlive = this.setSSEHeaders(res);
     try {
       const stream = this.creationWizardService.generateSynopsis(userId, workId, dto);
       for await (const chunk of stream) {
@@ -423,11 +423,13 @@ export class CreationWizardController {
 
   // ─── Helpers ─────────────────────────────────────────────────
 
-  private setSSEHeaders(res: Response) {
+  private setSSEHeaders(res: Response): NodeJS.Timeout {
     res.setHeader('Content-Type', 'text/event-stream');
     res.setHeader('Cache-Control', 'no-cache');
     res.setHeader('Connection', 'keep-alive');
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
+    // Keep-alive ping to prevent Railway/proxy timeout during long AI generation
+    return setInterval(() => { res.write(`: ping\n\n`); }, 15_000);
   }
 }

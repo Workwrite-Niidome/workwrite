@@ -81,8 +81,12 @@ async function bootstrap() {
   const document = SwaggerModule.createDocument(app, config);
   SwaggerModule.setup('api/docs', app, document);
 
+  // Increase HTTP server timeout for SSE streaming (AI assist)
   const port = process.env.PORT || 3001;
-  await app.listen(port);
+  const server = await app.listen(port);
+  server.keepAliveTimeout = 120_000; // 120s
+  server.headersTimeout = 125_000;   // slightly above keepAliveTimeout
+  (server as any).requestTimeout = 300_000; // 5 min for long SSE streams
   console.log(`Server running on http://localhost:${port}`);
   console.log(`Swagger docs: http://localhost:${port}/api/docs`);
 }

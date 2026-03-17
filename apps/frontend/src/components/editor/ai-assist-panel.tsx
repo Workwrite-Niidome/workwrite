@@ -691,7 +691,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
             })}
 
             {/* Current streaming / completed result */}
-            {(isStreaming || result) && (
+            {(isStreaming || (result && !(chatMessages.length > 0 && chatMessages[chatMessages.length - 1]?.role === 'assistant' && chatMessages[chatMessages.length - 1]?.content === result))) && (
               <div className="text-xs rounded-md p-2 bg-secondary/50 space-y-2">
                 <div className="flex items-center justify-between">
                   <p className="text-[10px] font-medium text-muted-foreground">AI</p>

@@ -44,6 +44,11 @@ export class AiAssistController {
     res.setHeader('X-Accel-Buffering', 'no');
     res.flushHeaders();
 
+    // Keep-alive ping to prevent Railway/proxy timeout during long AI generation
+    const keepAlive = setInterval(() => {
+      res.write(`: ping\n\n`);
+    }, 15_000);
+
     try {
       const stream = this.aiAssist.streamAssist(
         userId,
@@ -69,6 +74,7 @@ export class AiAssistController {
       const message = err instanceof Error ? err.message : 'Unknown error';
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
+      clearInterval(keepAlive);
       res.end();
     }
   }
