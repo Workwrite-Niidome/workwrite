@@ -20,14 +20,25 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
 
   const shareText = `「${title}」のAI品質スコアは${Math.round(score)}点でした！ #Workwrite #小説分析 #小説書きさんと繋がりたい  #Web小説`;
 
+  const isMobile = typeof navigator !== 'undefined' && /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
   function shareToX() {
     const url = `https://x.com/intent/tweet?text=${encodeURIComponent(shareText)}&url=${encodeURIComponent(workUrl)}`;
-    window.open(url, '_blank', 'width=550,height=420');
+    if (isMobile) {
+      // モバイル: location.hrefで遷移→OSがTwitterアプリを起動(Universal Links / Intent)
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank', 'width=550,height=420');
+    }
   }
 
   function shareToLine() {
     const url = `https://social-plugins.line.me/lineit/share?url=${encodeURIComponent(workUrl)}&text=${encodeURIComponent(shareText)}`;
-    window.open(url, '_blank');
+    if (isMobile) {
+      window.location.href = url;
+    } else {
+      window.open(url, '_blank');
+    }
   }
 
   async function copyUrl() {

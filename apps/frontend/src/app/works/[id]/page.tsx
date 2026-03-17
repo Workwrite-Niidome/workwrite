@@ -172,7 +172,12 @@ export default function WorkDetailPage() {
                   onClick={() => {
                     const url = `${window.location.origin}/works/${workId}`;
                     const text = `「${work.title}」を読んでみませんか？ #Workwrite`;
-                    window.open(`https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`, '_blank', 'width=550,height=420');
+                    const shareUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(text)}&url=${encodeURIComponent(url)}`;
+                    if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                      window.location.href = shareUrl;
+                    } else {
+                      window.open(shareUrl, '_blank', 'width=550,height=420');
+                    }
                   }}
                 >
                   <Share2 className="h-3.5 w-3.5" />

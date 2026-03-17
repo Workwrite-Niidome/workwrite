@@ -422,6 +422,12 @@ export default function AfterwordPage() {
                 target="_blank"
                 rel="noopener noreferrer"
                 className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                onClick={(e) => {
+                  if (/iPhone|iPad|iPod|Android/i.test(navigator.userAgent)) {
+                    e.preventDefault();
+                    window.location.href = e.currentTarget.href;
+                  }
+                }}
               >
                 Xで感想をシェア
               </a>
