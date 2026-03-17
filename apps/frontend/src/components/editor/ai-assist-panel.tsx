@@ -694,6 +694,11 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               );
             })}
 
+            {/* DEBUG: state visibility */}
+            <div className="text-[9px] text-red-500 bg-red-50 p-1 rounded">
+              streaming={String(isStreaming)} | result={result ? `${result.length}chars` : 'empty'} | msgs={chatMessages.length}
+            </div>
+
             {/* Current streaming / completed result */}
             {(isStreaming || result) && (
               <div className="text-xs rounded-md p-2 bg-secondary/50 space-y-2">
