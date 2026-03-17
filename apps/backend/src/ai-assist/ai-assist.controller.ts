@@ -165,6 +165,7 @@ export class AiAssistController {
   async analyzeWork(
     @Param('workId') workId: string,
     @CurrentUser('id') userId: string,
+    @Query('force') force?: string,
   ) {
     const work = await this.prisma.work.findUnique({
       where: { id: workId },
@@ -173,7 +174,7 @@ export class AiAssistController {
     if (!work || work.authorId !== userId) {
       return { error: 'Work not found' };
     }
-    const result = await this.episodeAnalysis.analyzeAllEpisodes(workId);
+    const result = await this.episodeAnalysis.analyzeAllEpisodes(workId, force === 'true');
     return result;
   }
 

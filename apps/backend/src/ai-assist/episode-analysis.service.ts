@@ -346,6 +346,7 @@ ${episode.content}`;
 
   async analyzeAllEpisodes(
     workId: string,
+    force = false,
   ): Promise<{ analyzed: number; skipped: number }> {
     const episodes = await this.prisma.episode.findMany({
       where: { workId },
@@ -353,21 +354,29 @@ ${episode.content}`;
       select: { id: true },
     });
 
+    // Force mode: delete all existing analyses to bypass version check
+    if (force) {
+      await this.prisma.episodeAnalysis.deleteMany({ where: { workId } });
+      this.logger.log(`Force mode: deleted all existing analyses for work ${workId}`);
+    }
+
     let analyzed = 0;
     let skipped = 0;
 
     for (const ep of episodes) {
-      const needs = await this.needsAnalysis(ep.id);
-      if (!needs) {
-        skipped++;
-        continue;
+      if (!force) {
+        const needs = await this.needsAnalysis(ep.id);
+        if (!needs) {
+          skipped++;
+          continue;
+        }
       }
       await this.analyzeEpisode(workId, ep.id);
       analyzed++;
     }
 
     this.logger.log(
-      `analyzeAllEpisodes for work ${workId}: analyzed=${analyzed}, skipped=${skipped}`,
+      `analyzeAllEpisodes for work ${workId}: analyzed=${analyzed}, skipped=${skipped}, force=${force}`,
     );
     return { analyzed, skipped };
   }

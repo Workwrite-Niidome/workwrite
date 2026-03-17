@@ -862,7 +862,7 @@ ${episodeContent.slice(0, 5000)}`;
    * - If existing summary: only send previous summary + latest 2 episodes full text
    * This keeps token cost low (~3000-6000 input tokens) regardless of total episode count.
    */
-  async updateStorySummary(workId: string, userId: string): Promise<void> {
+  async updateStorySummary(workId: string, userId: string, force = false): Promise<void> {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) return;
 
@@ -883,9 +883,10 @@ ${episodeContent.slice(0, 5000)}`;
 
     let prompt: string;
 
-    // Full rebuild every 5 episodes or if existing summary has grown stale
+    // Full rebuild every 5 episodes, if forced, or if existing summary has grown stale
     const existingEpCount = (existingSummary as any)?.episodes?.length || 0;
-    const shouldFullRebuild = !existingSummary
+    const shouldFullRebuild = force
+      || !existingSummary
       || existingEpCount === 0
       || episodes.length - existingEpCount >= 5
       || episodes.length <= 3;

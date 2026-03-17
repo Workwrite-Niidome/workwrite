@@ -5,6 +5,7 @@ import {
   Put,
   Param,
   Body,
+  Query,
   Res,
   UseGuards,
 } from '@nestjs/common';
@@ -408,8 +409,9 @@ export class CreationWizardController {
   async updateStorySummary(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
+    @Query('force') force?: string,
   ) {
-    await this.creationWizardService.updateStorySummary(workId, userId);
+    await this.creationWizardService.updateStorySummary(workId, userId, force === 'true');
     return { success: true };
   }
 
