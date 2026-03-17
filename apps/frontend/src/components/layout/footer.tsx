@@ -46,6 +46,7 @@ export function Footer() {
             <ul className="space-y-2 text-muted-foreground">
               <li><Link href="/terms" className="hover:text-foreground transition-colors">Terms</Link></li>
               <li><Link href="/privacy" className="hover:text-foreground transition-colors">Privacy</Link></li>
+              <li><Link href="/legal/tokushoho" className="hover:text-foreground transition-colors">特定商取引法に基づく表記</Link></li>
             </ul>
           </div>
         </div>
