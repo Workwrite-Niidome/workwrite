@@ -13,9 +13,23 @@ export default function TokushohoPage() {
           <tbody className="divide-y divide-border">
             <Row label="販売業者" value="合同会社Workwrite" />
             <Row label="運営責任者" value="新留 一輝" />
-            <Row label="所在地" value="請求があった場合には遅滞なく開示いたします。" />
-            <Row label="電話番号" value="請求があった場合には遅滞なく開示いたします。" />
-            <Row label="メールアドレス" value="info@workwrite.co.jp" />
+            <Row
+              label="所在地"
+              value="〒330-0835 埼玉県さいたま市大宮区北袋町1-601-1"
+            />
+            <Row
+              label="電話番号"
+              value="請求があった場合には遅滞なく開示いたします。"
+            />
+            <Row
+              label="メールアドレス"
+              value={
+                <div>
+                  <p>info@workwrite.co.jp</p>
+                  <p className="text-xs mt-1">お問い合わせ対応時間: 平日 10:00〜18:00（土日祝日を除く）</p>
+                </div>
+              }
+            />
             <Row label="ウェブサイト" value="https://workwrite.jp" />
 
             <Row
@@ -25,6 +39,7 @@ export default function TokushohoPage() {
                   <li>Standard プラン: 月額 2,980円（税込）</li>
                   <li>Pro プラン: 月額 7,980円（税込）</li>
                   <li>クレジット追加購入: 100cr = 980円（税込）</li>
+                  <li>※ 各商品ページに表示された価格が適用されます。</li>
                 </ul>
               }
             />
@@ -36,7 +51,7 @@ export default function TokushohoPage() {
 
             <Row
               label="支払方法"
-              value="クレジットカード決済（Stripe を通じた決済）"
+              value="クレジットカード決済（Visa、Mastercard、American Express、JCB — Stripe を通じた決済）"
             />
 
             <Row
@@ -55,14 +70,25 @@ export default function TokushohoPage() {
             />
 
             <Row
-              label="返品・キャンセルについて"
+              label="申込みの有効期限"
+              value={
+                <ul className="space-y-1 list-disc pl-5">
+                  <li>Standard プランは初回7日間の無料トライアル付きです。トライアル期間中に解約した場合、料金は発生しません。</li>
+                  <li>サブスクリプションは解約手続きを行うまで毎月自動更新されます。</li>
+                </ul>
+              }
+            />
+
+            <Row
+              label="返品・交換・キャンセルについて"
               value={
                 <div className="space-y-2">
-                  <p>デジタルコンテンツの性質上、サービス提供開始後の返金は原則として行いません。</p>
+                  <p>デジタルサービスの性質上、サービス提供開始後の返品・交換はお受けしておりません。</p>
                   <ul className="space-y-1 list-disc pl-5">
-                    <li>サブスクリプションはいつでも解約可能です。解約後も当該請求期間の終了時まで引き続きご利用いただけます。</li>
+                    <li>サブスクリプションはマイページからいつでも解約可能です。解約後も当該請求期間の終了日まで引き続きサービスをご利用いただけます。日割り返金は行っておりません。</li>
                     <li>追加購入したクレジットの返金はいたしかねます。</li>
-                    <li>決済処理に関する紛争・返金は Stripe の規約に準拠して対応いたします。</li>
+                    <li>サービスに重大な不具合がある場合、または当社の責めに帰すべき事由がある場合は、個別にご対応いたします。info@workwrite.co.jp までお問い合わせください。</li>
+                    <li>決済処理に関する紛争・チャージバックは Stripe の規約に準拠して対応いたします。</li>
                   </ul>
                 </div>
               }
@@ -70,15 +96,21 @@ export default function TokushohoPage() {
 
             <Row
               label="動作環境"
-              value="最新版の Google Chrome、Safari、Firefox、Microsoft Edge を推奨しています。"
+              value={
+                <div>
+                  <p>Webブラウザで動作するクラウドサービスです。</p>
+                  <p className="mt-1">推奨ブラウザ: 最新版の Google Chrome、Safari、Firefox、Microsoft Edge</p>
+                  <p className="mt-1">推奨OS: iOS 16以降、Android 12以降、Windows 10以降、macOS 12以降</p>
+                </div>
+              }
             />
 
             <Row
               label="特別条件"
               value={
                 <ul className="space-y-1 list-disc pl-5">
-                  <li>Standard プランは初回7日間の無料トライアルをご利用いただけます。トライアル期間中に解約すれば料金は発生しません。</li>
-                  <li>サブスクリプションの料金は予告なく変更される場合があります。変更時は既存の有料会員へ事前に通知いたします。</li>
+                  <li>サブスクリプションの料金は変更される場合があります。変更時は既存の有料会員へ30日前までに通知いたします。</li>
+                  <li>クーポンや割引が適用される場合、適用条件は各プロモーションの案内に記載されます。</li>
                 </ul>
               }
             />
