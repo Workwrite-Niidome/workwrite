@@ -4,7 +4,7 @@ import type { Metadata } from 'next';
 const API_BASE =
   process.env.API_INTERNAL_URL ||
   process.env.NEXT_PUBLIC_API_URL ||
-  'https://api.workwrite.jp/api/v1';
+  'https://backend-production-db434.up.railway.app/api/v1';
 const SITE_URL =
   process.env.NEXT_PUBLIC_SITE_URL ||
   (process.env.VERCEL_PROJECT_PRODUCTION_URL
