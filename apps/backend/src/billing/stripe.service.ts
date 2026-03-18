@@ -101,7 +101,7 @@ export class StripeService {
       throw new BadRequestException(`${plan}プランの価格が設定されていません。管理者にお問い合わせください。`);
     }
 
-    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -137,7 +137,7 @@ export class StripeService {
       throw new BadRequestException('クレジット追加購入の価格が設定されていません。管理者にお問い合わせください。');
     }
 
-    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
 
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
@@ -167,7 +167,7 @@ export class StripeService {
       throw new BadRequestException('Stripeカスタマー情報が見つかりません');
     }
 
-    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
     const session = await stripe.billingPortal.sessions.create({
       customer: user.stripeCustomerId,
       return_url: `${baseUrl}/settings/billing`,
@@ -242,7 +242,7 @@ export class StripeService {
   async createConnectOnboardingLink(userId: string, email: string): Promise<{ url: string }> {
     const stripe = this.ensureStripe();
     const accountId = await this.createConnectAccount(userId, email);
-    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'http://localhost:3000';
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
 
     try {
       const accountLink = await stripe.accountLinks.create({

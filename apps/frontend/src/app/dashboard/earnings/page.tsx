@@ -45,14 +45,21 @@ function EarningsPageContent() {
     ]).finally(() => setLoading(false));
   }, []);
 
+  const [error, setError] = useState('');
+
   async function handleOnboarding() {
     setOnboardingLoading(true);
+    setError('');
     try {
       const res = await api.createConnectOnboarding();
       const url = (res as any)?.url ?? (res as any)?.data?.url;
-      if (url) window.location.href = url;
+      if (url) {
+        window.location.href = url;
+      } else {
+        setError('Stripeへのリダイレクトに失敗しました。もう一度お試しください。');
+      }
     } catch (err: any) {
-      alert(err.message || 'Stripe Connectの設定に失敗しました');
+      setError(err.message || 'Stripe Connectの設定に失敗しました。しばらくしてからお試しください。');
     } finally {
       setOnboardingLoading(false);
     }
@@ -99,6 +106,13 @@ function EarningsPageContent() {
         <div className="p-3 mb-4 text-sm text-amber-700 bg-amber-50 rounded-md flex items-center gap-2">
           <AlertCircle className="h-4 w-4 shrink-0" />
           セッションが期限切れです。もう一度お試しください。
+        </div>
+      )}
+
+      {error && (
+        <div className="p-3 mb-4 text-sm text-red-700 bg-red-50 rounded-md flex items-center gap-2">
+          <AlertCircle className="h-4 w-4 shrink-0" />
+          {error}
         </div>
       )}
 
