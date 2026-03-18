@@ -145,6 +145,8 @@ export class WorkImportService {
     const url = dto.url.trim();
     const autoScore = dto.autoScore !== false; // default true
 
+    this.logger.log(`importFromUrl: url=${url}, userId=${userId}`);
+
     // Detect platform
     const isNarou = this.narouScraper.parseUrl(url) !== null;
     const isKakuyomu = this.kakuyomuScraper.parseUrl(url) !== null;
@@ -269,6 +271,9 @@ export class WorkImportService {
         scoringResult,
       };
     } catch (e) {
+      const errorMessage = e instanceof Error ? e.message : 'Unknown error';
+      this.logger.error(`importFromUrl failed for ${url}: ${errorMessage}`, e instanceof Error ? e.stack : '');
+
       // Refund import credit on failure
       if (importTransactionId) {
         await this.creditService.refundTransaction(importTransactionId).catch((err) =>
@@ -280,10 +285,10 @@ export class WorkImportService {
         where: { id: importRecord.id },
         data: {
           status: 'FAILED',
-          errorMessage: e instanceof Error ? e.message : 'Unknown error',
+          errorMessage,
         },
       });
-      throw e;
+      throw new Error(`インポートに失敗しました: ${errorMessage}`);
     }
   }
 

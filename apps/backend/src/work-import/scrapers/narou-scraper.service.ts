@@ -66,11 +66,30 @@ export class NarouScraperService {
     };
   }
 
+  private async fetchWithRetry(url: string, retries = 3): Promise<Response> {
+    for (let i = 0; i < retries; i++) {
+      try {
+        const res = await fetch(url, {
+          headers: { 'User-Agent': 'Workwrite/1.0 (Novel Analysis Tool)' },
+        });
+        if (res.status === 429 || res.status >= 500) {
+          this.logger.warn(`Fetch ${url} returned ${res.status}, retry ${i + 1}/${retries}`);
+          await this.sleep(3000 * (i + 1));
+          continue;
+        }
+        return res;
+      } catch (e) {
+        this.logger.warn(`Fetch ${url} failed: ${e}, retry ${i + 1}/${retries}`);
+        if (i === retries - 1) throw e;
+        await this.sleep(3000 * (i + 1));
+      }
+    }
+    throw new Error(`${retries}回リトライしましたが取得に失敗しました: ${url}`);
+  }
+
   private async fetchMetadata(ncode: string): Promise<{ title: string; synopsis: string; genre: string }> {
     const apiUrl = `https://api.syosetu.com/novelapi/api/?of=t-s-ga-k-g&ncode=${ncode}&out=json`;
-    const res = await fetch(apiUrl, {
-      headers: { 'User-Agent': 'Workwrite/1.0 (Novel Analysis Tool)' },
-    });
+    const res = await this.fetchWithRetry(apiUrl);
     if (!res.ok) throw new Error(`なろうAPI応答エラー: ${res.status}`);
 
     const data = await res.json();
@@ -97,9 +116,7 @@ export class NarouScraperService {
 
   private async fetchToc(ncode: string): Promise<{ title: string; url: string }[]> {
     const tocUrl = `https://ncode.syosetu.com/${ncode}/`;
-    const res = await fetch(tocUrl, {
-      headers: { 'User-Agent': 'Workwrite/1.0 (Novel Analysis Tool)' },
-    });
+    const res = await this.fetchWithRetry(tocUrl);
     if (!res.ok) throw new Error(`目次ページの取得に失敗: ${res.status}`);
 
     const html = await res.text();
@@ -136,9 +153,7 @@ export class NarouScraperService {
   }
 
   private async fetchEpisodeContent(url: string): Promise<string> {
-    const res = await fetch(url, {
-      headers: { 'User-Agent': 'Workwrite/1.0 (Novel Analysis Tool)' },
-    });
+    const res = await this.fetchWithRetry(url);
     if (!res.ok) throw new Error(`エピソード取得失敗: ${res.status}`);
 
     const html = await res.text();
