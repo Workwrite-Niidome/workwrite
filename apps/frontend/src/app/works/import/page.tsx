@@ -120,7 +120,7 @@ export default function ImportPage() {
 
   const isNarouUrl = /ncode\.syosetu\.com/i.test(importUrl);
   const isKakuyomuUrl = /kakuyomu\.jp/i.test(importUrl);
-  const detectedPlatform = isNarouUrl ? 'なろう' : isKakuyomuUrl ? 'カクヨム' : null;
+  const detectedPlatform = isNarouUrl ? '小説家になろう' : isKakuyomuUrl ? 'カクヨム' : null;
 
   return (
     <div className="px-4 py-8 max-w-2xl mx-auto">

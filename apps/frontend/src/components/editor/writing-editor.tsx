@@ -12,7 +12,7 @@ import { ReferencePanel } from './reference-panel';
 import { AiConsistencyCheck } from './ai-consistency-check';
 import { useAutosave } from '@/lib/use-autosave';
 import { api } from '@/lib/api';
-import { Sparkles, Maximize2, Minimize2, History, BookOpen } from 'lucide-react';
+import { Sparkles, Maximize2, Minimize2, History, BookOpen, HelpCircle } from 'lucide-react';
 
 interface WritingEditorProps {
   workId: string;
@@ -241,6 +241,14 @@ export function WritingEditor({
               <Sparkles className="h-3.5 w-3.5 mr-1" />
               <span className="hidden sm:inline">AI</span>
             </Button>
+          )}
+          {!focusMode && (
+            <a href="/guide/writers" target="_blank" rel="noopener noreferrer">
+              <Button size="sm" variant="ghost" className="text-xs">
+                <HelpCircle className="h-3.5 w-3.5 mr-1" />
+                <span className="hidden sm:inline">ガイド</span>
+              </Button>
+            </a>
           )}
           <Button
             size="sm"

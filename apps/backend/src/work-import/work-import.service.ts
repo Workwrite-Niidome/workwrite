@@ -152,7 +152,7 @@ export class WorkImportService {
     const isKakuyomu = this.kakuyomuScraper.parseUrl(url) !== null;
 
     if (!isNarou && !isKakuyomu) {
-      throw new BadRequestException('対応していないURLです。なろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください。');
+      throw new BadRequestException('対応していないURLです。小説家になろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください。');
     }
 
     // Check for duplicate import

@@ -81,7 +81,7 @@ const CREDIT_TABLE = [
   { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答（Opus） — Standard以上' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
   { action: 'AIスコアリング（作品品質分析）', credits: '1cr', note: '6軸評価 + 構造解析 + 改善提案' },
-  { action: 'URLインポート + 自動スコアリング', credits: '1cr', note: 'なろう・カクヨムからの作品取り込み' },
+  { action: 'URLインポート + 自動スコアリング', credits: '1cr', note: '小説家になろう・カクヨムからの作品取り込み' },
   { action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
   { action: '校正・推敲', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
   { action: 'あらすじ自動生成', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },

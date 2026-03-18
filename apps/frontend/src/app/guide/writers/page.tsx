@@ -325,7 +325,7 @@ export default function WritersGuidePage() {
 
           <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
             <p>
-              <strong className="text-foreground">なろう</strong>や<strong className="text-foreground">カクヨム</strong>で既に作品を公開している方は、
+              <strong className="text-foreground">小説家になろう</strong>や<strong className="text-foreground">カクヨム</strong>で既に作品を公開している方は、
               URLを貼るだけで作品をWorkwriteに取り込めます。取り込み後、自動でAI品質スコアリングが実行されます。
             </p>
 
@@ -333,7 +333,7 @@ export default function WritersGuidePage() {
               <Step
                 number={1}
                 title="URLを入力"
-                description="執筆ダッシュボードの「インポート」ページで、なろう（ncode.syosetu.com）またはカクヨム（kakuyomu.jp）の作品URLを貼り付けます。"
+                description="執筆ダッシュボードの「インポート」ページで、小説家になろう（ncode.syosetu.com）またはカクヨム（kakuyomu.jp）の作品URLを貼り付けます。"
                 icon={Link2}
               />
               <Step
@@ -487,14 +487,6 @@ export default function WritersGuidePage() {
           </h2>
 
           <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-medium mb-2">あとがきを書く</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed">
-                作品のあとがきページでは、執筆の裏話や制作秘話を読者に共有できます。
-                あとがきを充実させることで、読者との距離が縮まり、フォロワー獲得につながります。
-              </p>
-            </div>
-
             <div>
               <h3 className="text-sm font-medium mb-2">AIスコアリングを活用する</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">

@@ -63,7 +63,7 @@ export default function AnalyzePage() {
           あなたの小説を<br />AIが分析します
         </h1>
         <p className="text-muted-foreground mb-8 max-w-md mx-auto">
-          なろう・カクヨムのURLを入力するだけ。6つの軸でAIがスコアリングし、改善提案もお届けします。
+          小説家になろう・カクヨムのURLを入力するだけ。6つの軸でAIがスコアリングし、改善提案もお届けします。
         </p>
 
         {/* URL Input */}
@@ -89,12 +89,12 @@ export default function AnalyzePage() {
           </div>
           {url && isValidUrl && (
             <p className="text-xs text-green-600">
-              {isNarou ? 'なろう' : 'カクヨム'}の作品として検出
+              {isNarou ? '小説家になろう' : 'カクヨム'}の作品として検出
             </p>
           )}
           {url && !isValidUrl && url.length > 10 && (
             <p className="text-xs text-muted-foreground">
-              なろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください
+              小説家になろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください
             </p>
           )}
           {error && (
@@ -170,7 +170,7 @@ export default function AnalyzePage() {
                 <Globe className="h-8 w-8 mx-auto mb-3 text-primary" />
                 <p className="font-medium text-sm mb-1">URL入力だけ</p>
                 <p className="text-xs text-muted-foreground">
-                  なろう・カクヨムのURLを貼るだけ。コピペ不要で即分析開始
+                  小説家になろう・カクヨムのURLを貼るだけ。コピペ不要で即分析開始
                 </p>
               </CardContent>
             </Card>
