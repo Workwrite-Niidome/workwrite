@@ -128,9 +128,10 @@ model Work {
   synopsis    String?    @db.Text
   prologue    String?    @db.Text
   coverUrl    String?
-  status      WorkStatus @default(DRAFT)
-  genre       String?
-  settingEra  String?    // 時代・世界観設定（例: 中世ヨーロッパ風ファンタジー、現代日本、近未来SF）
+  status           WorkStatus       @default(DRAFT)
+  completionStatus CompletionStatus @default(ONGOING)
+  genre            String?
+  settingEra       String?          // 時代・世界観設定（例: 中世ヨーロッパ風ファンタジー、現代日本、近未来SF）
   createdAt   DateTime   @default(now())
   updatedAt   DateTime   @updatedAt
   publishedAt DateTime?
@@ -185,6 +186,12 @@ enum WorkStatus {
   DRAFT
   PUBLISHED
   UNPUBLISHED
+}
+
+enum CompletionStatus {
+  ONGOING    // 連載中
+  COMPLETED  // 完結済み
+  HIATUS     // 休載中
 }
 
 model Episode {

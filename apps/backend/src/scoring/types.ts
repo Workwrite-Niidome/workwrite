@@ -87,6 +87,7 @@ export interface StructuralProfile {
 export interface ScoringInput {
   title: string;
   genre: string | null;
+  completionStatus: 'ONGOING' | 'COMPLETED' | 'HIATUS';
   metrics: ProgrammaticMetrics;
   structure: StructuralProfile;
 }

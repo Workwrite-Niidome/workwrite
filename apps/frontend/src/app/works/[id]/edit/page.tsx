@@ -199,6 +199,21 @@ export default function EditWorkPage() {
           {work.status === 'UNPUBLISHED' && (
             <Button onClick={() => setConfirmPublish(true)} size="sm" variant="default">再公開する</Button>
           )}
+          <select
+            value={(work as any).completionStatus || 'ONGOING'}
+            onChange={async (e) => {
+              try {
+                const res = await api.updateWork(workId, { completionStatus: e.target.value } as any);
+                setWork(res.data);
+                setMessage(e.target.value === 'COMPLETED' ? '完結に設定しました' : e.target.value === 'HIATUS' ? '休載中に設定しました' : '連載中に設定しました');
+              } catch { setMessage('変更に失敗しました'); }
+            }}
+            className="h-8 px-2 text-xs rounded-md border border-border bg-background"
+          >
+            <option value="ONGOING">連載中</option>
+            <option value="COMPLETED">完結</option>
+            <option value="HIATUS">休載中</option>
+          </select>
           <Button onClick={() => setConfirmDelete(true)} variant="destructive" size="sm" className="px-2">
             <Trash2 className="h-4 w-4" />
           </Button>

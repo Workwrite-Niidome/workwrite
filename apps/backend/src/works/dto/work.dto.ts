@@ -1,6 +1,6 @@
 import { IsString, IsOptional, IsEnum, MaxLength, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
-import { WorkStatus } from '@prisma/client';
+import { WorkStatus, CompletionStatus } from '@prisma/client';
 
 export class CreateWorkDto {
   @ApiProperty({ example: '星降る夜のファンタジア' })
@@ -70,6 +70,11 @@ export class UpdateWorkDto {
   @IsOptional()
   @IsEnum(WorkStatus)
   status?: WorkStatus;
+
+  @ApiPropertyOptional({ enum: CompletionStatus })
+  @IsOptional()
+  @IsEnum(CompletionStatus)
+  completionStatus?: CompletionStatus;
 
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()

@@ -150,6 +150,7 @@ export class WorksService {
     if (dto.prologue !== undefined) updateData.prologue = dto.prologue;
     if (dto.coverUrl !== undefined) updateData.coverUrl = dto.coverUrl;
     if (dto.genre !== undefined) updateData.genre = dto.genre;
+    if (dto.completionStatus !== undefined) updateData.completionStatus = dto.completionStatus;
     if (dto.status !== undefined) {
       updateData.status = dto.status;
       if (dto.status === 'PUBLISHED' && !work.publishedAt) {

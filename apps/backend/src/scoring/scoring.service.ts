@@ -71,6 +71,7 @@ export class ScoringService {
       const scoringInput: ScoringInput = {
         title: work.title,
         genre: (work as any).genre || null,
+        completionStatus: (work as any).completionStatus || 'ONGOING',
         metrics,
         structure,
       };
@@ -298,6 +299,7 @@ export class ScoringService {
     const scoringInput: ScoringInput = {
       title: `${episode.work.title} - ${episode.title}`,
       genre: null,
+      completionStatus: 'ONGOING',
       metrics,
       structure,
     };

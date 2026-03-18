@@ -142,9 +142,12 @@ courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe
  * All labels use natural language — no variable names exposed to the LLM.
  */
 export function buildScoringUserPrompt(input: ScoringInput): string {
-  const { title, genre, metrics, structure } = input;
+  const { title, genre, completionStatus, metrics, structure } = input;
   const m = metrics;
   const s = structure;
+
+  const completionLabel = completionStatus === 'COMPLETED' ? '完結済み'
+    : completionStatus === 'HIATUS' ? '休載中' : '連載中';
 
   const sections: string[] = [];
 
@@ -152,20 +155,35 @@ export function buildScoringUserPrompt(input: ScoringInput): string {
   sections.push(`【作品概要】
 タイトル: ${title}
 ジャンル: ${genre || '不明'}
+連載状態: ${completionLabel}
 エピソード数: ${m.episodeCount}話
-総文字数: ${m.totalCharCount.toLocaleString()}文字
-構造分析カバレッジ: ${Math.round(s.analysisCoverage * 100)}%`);
+総文字数: ${m.totalCharCount.toLocaleString()}文字`);
+
+  // ── 分析データの注意 ──
+  if (s.analysisCoverage < 1.0) {
+    const pct = Math.round(s.analysisCoverage * 100);
+    sections.push(`【注意】この作品の構造分析は全${m.episodeCount}話のうち${pct}%のみ完了しています。感情弧や伏線データが一部の話に限られている場合は、テキストサンプルを重視して評価してください。データが不足している部分を「データがない」と指摘するのではなく、テキストサンプルから読み取れる範囲で評価してください。`);
+  }
+
+  if (completionStatus !== 'COMPLETED') {
+    sections.push(`【注意】この作品は${completionLabel}です。伏線が未回収であること、結末が存在しないことは減点対象にしないでください。連載中の作品は「ここまでの展開」として評価し、構造スコアの結末評価は省いてください。`);
+  }
 
   // ── 文体の定量分析 ──
+  // Convert episode length variance to human-readable description
+  const avgLen = m.avgEpisodeLength;
+  const stdDev = Math.round(Math.sqrt(m.episodeLengthVariance));
+  const varianceDesc = stdDev > avgLen * 0.5 ? '各話の文字数にかなりばらつきがある'
+    : stdDev > avgLen * 0.3 ? '各話の文字数にややばらつきがある'
+    : '各話の文字数はおおむね揃っている';
+
   sections.push(`【文体の定量分析】
 会話の占める割合: ${(m.dialogueRatio * 100).toFixed(1)}%（会話の総数: ${m.dialogueLineCount}回、一回あたりの平均文字数: ${m.avgDialogueLength}文字）
-一文あたりの平均文字数: ${m.avgSentenceLength}文字（文長のばらつき: ${m.sentenceLengthVariance}）
-短い文（20文字未満）の割合: ${(m.shortSentenceRatio * 100).toFixed(1)}% / 長い文（80文字超）の割合: ${(m.longSentenceRatio * 100).toFixed(1)}%
-段落の総数: ${m.paragraphCount}（一段落あたりの平均文字数: ${m.avgParagraphLength}文字、一行だけの段落の割合: ${(m.singleLineParagraphRatio * 100).toFixed(1)}%）
-使用されている漢字の種類数: ${m.uniqueKanjiCount}種 / 語彙の豊富さ（多様性指標）: ${m.vocabularyRichness}
+一文あたりの平均文字数: ${m.avgSentenceLength}文字
+短い文の割合: ${(m.shortSentenceRatio * 100).toFixed(1)}% / 長い文の割合: ${(m.longSentenceRatio * 100).toFixed(1)}%
+段落の総数: ${m.paragraphCount}（一段落あたりの平均文字数: ${m.avgParagraphLength}文字）
 場面転換の回数: ${m.sceneBreakCount}回
-感嘆符（！）の密度: 千文字あたり${m.exclamationDensity.toFixed(1)}回 / 疑問符（？）の密度: 千文字あたり${m.questionDensity.toFixed(1)}回 / 省略記号（…）の密度: 千文字あたり${m.ellipsisDensity.toFixed(1)}回
-各話の文字数のばらつき: ${m.episodeLengthVariance}（一話あたりの平均文字数: ${m.avgEpisodeLength}文字）`);
+一話あたりの平均文字数: ${m.avgEpisodeLength}文字（${varianceDesc}）`);
 
   // ── 各話の要約 ──
   if (s.episodeSummaries.length > 0) {
@@ -177,7 +195,11 @@ export function buildScoringUserPrompt(input: ScoringInput): string {
 
   // ── 感情弧の推移 ──
   if (s.emotionalArcProgression.length > 0) {
-    sections.push(`【各話の感情弧の推移】\n${s.emotionalArcProgression.map((arc, i) => `第${i + 1}話: ${arc}`).join('\n')}`);
+    let arcSection = `【各話の感情弧の推移】\n${s.emotionalArcProgression.map((arc, i) => `第${i + 1}話: ${arc}`).join('\n')}`;
+    if (s.emotionalArcProgression.length < m.episodeCount) {
+      arcSection += `\n※ ${m.episodeCount}話中${s.emotionalArcProgression.length}話分のデータです。未分析の話についてはテキストサンプルから推測してください。`;
+    }
+    sections.push(arcSection);
   }
 
   // ── 視点 ──
@@ -188,9 +210,17 @@ export function buildScoringUserPrompt(input: ScoringInput): string {
   // ── 伏線の分析 ──
   if (s.totalForeshadowingsPlanted > 0) {
     let section = `【伏線の分析】
-設置された伏線の数: ${s.totalForeshadowingsPlanted}件 / 回収された伏線の数: ${s.totalForeshadowingsResolved}件 / 回収率: ${(s.foreshadowingResolutionRate * 100).toFixed(0)}%`;
+設置された伏線の数: ${s.totalForeshadowingsPlanted}件 / 回収された伏線の数: ${s.totalForeshadowingsResolved}件`;
+    if (completionStatus === 'COMPLETED') {
+      section += ` / 回収率: ${(s.foreshadowingResolutionRate * 100).toFixed(0)}%`;
+    } else {
+      section += `\n※ 連載中のため未回収の伏線は今後の展開で回収される可能性があります。未回収を減点対象にしないでください。`;
+    }
     if (s.unresolvedForeshadowings.length > 0) {
-      section += `\nまだ回収されていない伏線:\n${s.unresolvedForeshadowings.map((f) => `- ${f}`).join('\n')}`;
+      section += `\nまだ回収されていない伏線:\n${s.unresolvedForeshadowings.slice(0, 5).map((f) => `- ${f}`).join('\n')}`;
+      if (s.unresolvedForeshadowings.length > 5) {
+        section += `\n（他${s.unresolvedForeshadowings.length - 5}件）`;
+      }
     }
     sections.push(section);
   }

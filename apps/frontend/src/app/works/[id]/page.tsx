@@ -159,6 +159,12 @@ export default function WorkDetailPage() {
                 </Button>
               )}
               {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
+              {(work as any).completionStatus === 'COMPLETED' && (
+                <Badge variant="default" className="shrink-0 bg-green-600">完結</Badge>
+              )}
+              {(work as any).completionStatus === 'HIATUS' && (
+                <Badge variant="outline" className="shrink-0">休載中</Badge>
+              )}
               {work.qualityScore ? (
                 <>
                   <ScoreBadge score={work.qualityScore.overall} className="shrink-0" />
