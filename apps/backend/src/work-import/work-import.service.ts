@@ -1,4 +1,4 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { CreditService } from '../billing/credit.service';
@@ -152,7 +152,7 @@ export class WorkImportService {
     const isKakuyomu = this.kakuyomuScraper.parseUrl(url) !== null;
 
     if (!isNarou && !isKakuyomu) {
-      throw new Error('対応していないURLです。なろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください。');
+      throw new BadRequestException('対応していないURLです。なろう (ncode.syosetu.com) またはカクヨム (kakuyomu.jp) のURLを入力してください。');
     }
 
     // Check for duplicate import
@@ -160,7 +160,7 @@ export class WorkImportService {
       where: { sourceUrl: url, status: 'COMPLETED' },
     });
     if (existing) {
-      throw new Error('このURLは既にインポート済みです。');
+      throw new BadRequestException('このURLは既にインポート済みです。同じ作品を再インポートする場合は、先に既存の作品を削除してください。');
     }
 
     const source = isNarou ? 'url_narou' : 'url_kakuyomu';
