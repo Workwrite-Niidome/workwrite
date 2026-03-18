@@ -141,9 +141,8 @@ class ApiClient {
     if (!res.ok) {
       const error = await res.json().catch(() => ({ error: { message: 'サーバーエラーが発生しました' } }));
       const message = error.error?.message || 'Unknown error';
-      // Provide clearer messages for common HTTP errors
       if (res.status === 500) {
-        throw new ApiError(res.status, 'サーバー内部エラー: データベースに接続できない可能性があります', error.error);
+        throw new ApiError(res.status, message || 'サーバー内部エラーが発生しました', error.error);
       }
       throw new ApiError(res.status, message, error.error);
     }
