@@ -173,9 +173,9 @@ export function buildScoringUserPrompt(input: ScoringInput): string {
   // Convert episode length variance to human-readable description
   const avgLen = m.avgEpisodeLength;
   const stdDev = Math.round(Math.sqrt(m.episodeLengthVariance));
-  const varianceDesc = stdDev > avgLen * 0.5 ? '各話の文字数にかなりばらつきがある'
-    : stdDev > avgLen * 0.3 ? '各話の文字数にややばらつきがある'
-    : '各話の文字数はおおむね揃っている';
+  // 各話の文字数のばらつきは普通のこと。極端な場合(平均の100%超)のみ言及
+  const varianceDesc = stdDev > avgLen * 1.0 ? '各話の文字数にかなり大きな差がある'
+    : ''; // 通常のばらつきは言及しない
 
   sections.push(`【文体の定量分析】
 会話の占める割合: ${(m.dialogueRatio * 100).toFixed(1)}%（会話の総数: ${m.dialogueLineCount}回、一回あたりの平均文字数: ${m.avgDialogueLength}文字）
@@ -183,7 +183,7 @@ export function buildScoringUserPrompt(input: ScoringInput): string {
 短い文の割合: ${(m.shortSentenceRatio * 100).toFixed(1)}% / 長い文の割合: ${(m.longSentenceRatio * 100).toFixed(1)}%
 段落の総数: ${m.paragraphCount}（一段落あたりの平均文字数: ${m.avgParagraphLength}文字）
 場面転換の回数: ${m.sceneBreakCount}回
-一話あたりの平均文字数: ${m.avgEpisodeLength}文字（${varianceDesc}）`);
+一話あたりの平均文字数: ${m.avgEpisodeLength}文字${varianceDesc ? `（${varianceDesc}）` : ''}`);
 
   // ── 各話の要約 ──
   if (s.episodeSummaries.length > 0) {
