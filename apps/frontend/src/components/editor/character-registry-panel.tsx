@@ -18,16 +18,41 @@ interface Props {
   onClose: () => void;
 }
 
-const ROLE_OPTIONS = ['主人公', 'ヒロイン', 'ライバル', '敵役', 'メンター', '脇役', 'その他'];
+const ROLE_SUGGESTIONS = [
+  '主人公', 'ヒロイン', 'ヒーロー',
+  '仲間', '相棒', '幼馴染', '親友',
+  'ライバル', '好敵手',
+  '敵役', 'ラスボス', '黒幕',
+  'メンター', '師匠', '先輩',
+  '家族', '恋人', '元恋人',
+  '語り手', '狂言回し',
+  '脇役', 'モブ',
+];
 const GENDER_OPTIONS = ['男性', '女性', 'その他', '不明'];
 
 const ROLE_COLORS: Record<string, string> = {
   '主人公': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
   'ヒロイン': 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300',
+  'ヒーロー': 'bg-amber-100 text-amber-800 dark:bg-amber-900/40 dark:text-amber-300',
+  '仲間': 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+  '相棒': 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+  '幼馴染': 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
+  '親友': 'bg-sky-100 text-sky-800 dark:bg-sky-900/40 dark:text-sky-300',
   'ライバル': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
+  '好敵手': 'bg-blue-100 text-blue-800 dark:bg-blue-900/40 dark:text-blue-300',
   '敵役': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  'ラスボス': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
+  '黒幕': 'bg-red-100 text-red-800 dark:bg-red-900/40 dark:text-red-300',
   'メンター': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  '師匠': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  '先輩': 'bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300',
+  '家族': 'bg-orange-100 text-orange-800 dark:bg-orange-900/40 dark:text-orange-300',
+  '恋人': 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300',
+  '元恋人': 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300',
+  '語り手': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
+  '狂言回し': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
   '脇役': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
+  'モブ': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
   'その他': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
 };
 
@@ -131,13 +156,16 @@ function CharacterForm({
           />
         </Field>
         <Field label="役割">
-          <select
+          <input
+            list="char-role-suggestions"
             value={local.role}
             onChange={(e) => { set({ role: e.target.value }); setTimeout(save, 0); }}
+            placeholder="主人公、幼馴染..."
             className="h-8 text-sm rounded-md border border-border bg-background px-2 min-w-[90px]"
-          >
-            {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-          </select>
+          />
+          <datalist id="char-role-suggestions">
+            {ROLE_SUGGESTIONS.map((r) => <option key={r} value={r} />)}
+          </datalist>
         </Field>
       </div>
 

@@ -50,7 +50,16 @@ interface AiCharacter {
   uniqueTrait?: string;
 }
 
-const ROLE_OPTIONS = ['主人公', 'ヒロイン', 'ライバル', '敵役', 'メンター', '脇役', 'その他'];
+const ROLE_SUGGESTIONS = [
+  '主人公', 'ヒロイン', 'ヒーロー',
+  '仲間', '相棒', '幼馴染', '親友',
+  'ライバル', '好敵手',
+  '敵役', 'ラスボス', '黒幕',
+  'メンター', '師匠', '先輩',
+  '家族', '恋人', '元恋人',
+  '語り手', '狂言回し',
+  '脇役', 'モブ',
+];
 
 // ─── Genre-based default custom fields ──────────────────────
 
@@ -399,14 +408,16 @@ export function StepCharacterDesigner({ data, onChange }: Props) {
                     </div>
                     <div>
                       <label className="text-[10px] text-muted-foreground">役割</label>
-                      <select
+                      <input
+                        list={`role-suggestions-${i}`}
                         value={char.role}
                         onChange={(e) => updateCharacter(i, 'role', e.target.value)}
+                        placeholder="主人公、幼馴染、ライバル..."
                         className="w-full h-7 text-xs rounded-md border border-border bg-background px-2"
-                      >
-                        <option value="">選択してください</option>
-                        {ROLE_OPTIONS.map((r) => <option key={r} value={r}>{r}</option>)}
-                      </select>
+                      />
+                      <datalist id={`role-suggestions-${i}`}>
+                        {ROLE_SUGGESTIONS.map((r) => <option key={r} value={r} />)}
+                      </datalist>
                     </div>
                   </div>
 
