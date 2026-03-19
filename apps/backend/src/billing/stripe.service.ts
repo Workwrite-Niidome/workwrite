@@ -229,9 +229,11 @@ export class StripeService {
       this.logger.log(`Created Connect account ${account.id} for user ${userId}`);
       return account.id;
     } catch (err: any) {
-      this.logger.error(`Failed to create Connect account for user ${userId}: ${err.message}`);
+      const stripeCode = err?.code || err?.type || 'unknown';
+      const stripeMsg = err?.raw?.message || err?.message || 'unknown error';
+      this.logger.error(`Failed to create Connect account for user ${userId}: [${stripeCode}] ${stripeMsg}`);
       throw new BadRequestException(
-        'Stripe Connectアカウントの作成に失敗しました。Stripeの設定を確認してください。',
+        `Stripe Connectアカウントの作成に失敗しました（${stripeCode}）。しばらくしてからお試しください。`,
       );
     }
   }
