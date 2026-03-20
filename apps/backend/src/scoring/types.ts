@@ -88,6 +88,7 @@ export interface ScoringInput {
   title: string;
   genre: string | null;
   completionStatus: 'ONGOING' | 'COMPLETED' | 'HIATUS';
+  isImported: boolean;
   metrics: ProgrammaticMetrics;
   structure: StructuralProfile;
 }

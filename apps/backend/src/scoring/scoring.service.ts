@@ -63,15 +63,17 @@ export class ScoringService {
         orderIndex: ep.orderIndex,
       }));
 
-      const [metrics, structure] = await Promise.all([
+      const [metrics, structure, importRecord] = await Promise.all([
         Promise.resolve(this.textAnalyzer.analyze(episodes)),
         this.structuralDataBuilder.build(workId, episodes),
+        this.prisma.workImport.findFirst({ where: { workId }, select: { source: true } }),
       ]);
 
       const scoringInput: ScoringInput = {
         title: work.title,
         genre: (work as any).genre || null,
         completionStatus: (work as any).completionStatus || 'ONGOING',
+        isImported: !!importRecord,
         metrics,
         structure,
       };
@@ -257,7 +259,10 @@ export class ScoringService {
   }
 
   async getScoreWithAnalysis(workId: string) {
-    const score = await this.prisma.qualityScore.findUnique({ where: { workId } });
+    const [score, importRecord] = await Promise.all([
+      this.prisma.qualityScore.findUnique({ where: { workId } }),
+      this.prisma.workImport.findFirst({ where: { workId }, select: { source: true } }),
+    ]);
     if (!score) return { data: null };
     return {
       data: {
@@ -271,6 +276,7 @@ export class ScoringService {
         analysis: score.analysisJson as Record<string, string> | null,
         tips: (score.improvementTips as string[]) || [],
         scoredAt: score.scoredAt.toISOString(),
+        isImported: !!importRecord,
       },
     };
   }
@@ -300,6 +306,7 @@ export class ScoringService {
       title: `${episode.work.title} - ${episode.title}`,
       genre: null,
       completionStatus: 'ONGOING',
+      isImported: false,
       metrics,
       structure,
     };

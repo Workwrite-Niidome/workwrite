@@ -67,6 +67,7 @@ function makeInput(overrides: Partial<ScoringInput> = {}): ScoringInput {
     title: 'テスト作品',
     genre: 'ファンタジー',
     completionStatus: 'ONGOING',
+    isImported: false,
     metrics: makeMetrics(),
     structure: makeStructure(),
     ...overrides,
@@ -119,6 +120,34 @@ describe('buildScoringUserPrompt - completionStatus', () => {
   it('HIATUS warning mentions that the work is 休載中', () => {
     const prompt = buildScoringUserPrompt(makeInput({ completionStatus: 'HIATUS' }));
     expect(prompt).toContain('この作品は休載中です');
+  });
+});
+
+// ─────────────────────────────────────────────────────────
+// IMPORTED WORKS
+// ─────────────────────────────────────────────────────────
+
+describe('buildScoringUserPrompt - isImported', () => {
+  it('shows 簡易分析 for imported works', () => {
+    const prompt = buildScoringUserPrompt(makeInput({ isImported: true }));
+    expect(prompt).toContain('簡易分析');
+    expect(prompt).toContain('インポート');
+  });
+
+  it('shows 詳細分析 for non-imported works', () => {
+    const prompt = buildScoringUserPrompt(makeInput({ isImported: false }));
+    expect(prompt).toContain('詳細分析');
+    expect(prompt).not.toContain('簡易分析モード');
+  });
+
+  it('instructs not to penalize missing design data for imported works', () => {
+    const prompt = buildScoringUserPrompt(makeInput({ isImported: true }));
+    expect(prompt).toContain('設計データがないことを減点しない');
+  });
+
+  it('mentions Workwrite registration suggestion for imported works', () => {
+    const prompt = buildScoringUserPrompt(makeInput({ isImported: true }));
+    expect(prompt).toContain('キャラクター設定やプロットを登録');
   });
 });
 

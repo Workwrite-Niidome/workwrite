@@ -132,6 +132,14 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
       <CardContent className="space-y-4">
         {score ? (
           <>
+            {(score as any).isImported && (
+              <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
+                <p className="text-[11px] text-amber-700 dark:text-amber-400">
+                  簡易分析 — この作品は外部プラットフォームからインポートされたため、本文の抜粋をもとにした簡易的な分析です。
+                  キャラクター設定やプロットを登録すると、より精密な分析が可能になります。
+                </p>
+              </div>
+            )}
             {/* Overall score */}
             <div className="text-center">
               <span className="text-4xl font-bold text-primary">{Math.round(score.overall)}</span>

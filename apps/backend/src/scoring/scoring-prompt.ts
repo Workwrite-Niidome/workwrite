@@ -141,7 +141,7 @@ courage, tears, worldview, healing, excitement, thinking, laughter, empathy, awe
  * All labels use natural language — no variable names exposed to the LLM.
  */
 export function buildScoringUserPrompt(input: ScoringInput): string {
-  const { title, genre, completionStatus, metrics, structure } = input;
+  const { title, genre, completionStatus, isImported, metrics, structure } = input;
   const m = metrics;
   const s = structure;
 
@@ -155,11 +155,24 @@ export function buildScoringUserPrompt(input: ScoringInput): string {
 タイトル: ${title}
 ジャンル: ${genre || '不明'}
 連載状態: ${completionLabel}
+分析モード: ${isImported ? '簡易分析（外部プラットフォームからのインポート作品）' : '詳細分析'}
 エピソード数: ${m.episodeCount}話
 総文字数: ${m.totalCharCount.toLocaleString()}文字`);
 
+  // ── インポート作品の注意 ──
+  if (isImported) {
+    sections.push(`【重要: 簡易分析モード】
+この作品は外部プラットフォームからインポートされたもので、キャラクター設定・プロット設計・世界観データなどの構造化データがありません。
+以下のルールで評価してください:
+- 本文の抜粋4箇所と定量的な文体情報のみを根拠に評価する
+- 「キャラクター深度」は、本文中の台詞や描写から読み取れる範囲で評価する（設計データがないことを減点しない）
+- 「構造スコア」は、各話の要約がない場合は本文の流れから判断する
+- 改善提案は「Workwriteでキャラクター設定やプロットを登録すると、より精密な分析が可能です」という一文を3つ目の提案の末尾に添える
+- フィードバック全体を通じて「データがないから評価できない」という表現は絶対に使わない。本文から読み取れる範囲で堂々と評価する`);
+  }
+
   // ── 分析データの注意 ──
-  if (s.analysisCoverage < 1.0) {
+  if (!isImported && s.analysisCoverage < 1.0) {
     const pct = Math.round(s.analysisCoverage * 100);
     sections.push(`【注意】この作品の構造分析は全${m.episodeCount}話のうち${pct}%のみ完了しています。感情弧や伏線データが一部の話に限られている場合は、テキストサンプルを重視して評価してください。データが不足している部分を「データがない」と指摘するのではなく、テキストサンプルから読み取れる範囲で評価してください。`);
   }
