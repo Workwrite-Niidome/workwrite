@@ -1,5 +1,6 @@
 import { Injectable, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { MeiliSearch, Index } from 'meilisearch';
 
 export interface WorkDocument {
@@ -24,10 +25,14 @@ export interface WorkDocument {
 @Injectable()
 export class SearchService implements OnModuleInit {
   private client: MeiliSearch;
-  private worksIndex: Index;
+  private worksIndex: Index | null = null;
+  private meiliAvailable = false;
   private readonly logger = new Logger(SearchService.name);
 
-  constructor(private config: ConfigService) {
+  constructor(
+    private config: ConfigService,
+    private prisma: PrismaService,
+  ) {
     this.client = new MeiliSearch({
       host: this.config.get('MEILI_HOST', 'http://localhost:7700'),
       apiKey: this.config.get('MEILI_MASTER_KEY', 'ultra_reader_meili_dev_key'),
@@ -44,12 +49,16 @@ export class SearchService implements OnModuleInit {
         sortableAttributes: ['qualityScore', 'totalViews', 'totalReads', 'publishedAt', 'immersionScore', 'worldBuildingScore'],
         rankingRules: ['words', 'typo', 'proximity', 'attribute', 'sort', 'exactness'],
       });
+      this.meiliAvailable = true;
+      this.logger.log('Meilisearch connected and configured');
     } catch (e) {
-      this.logger.warn('Meilisearch initialization failed (service may not be running)', e);
+      this.meiliAvailable = false;
+      this.logger.warn('Meilisearch not available, using PostgreSQL fallback for search');
     }
   }
 
   async indexWork(doc: WorkDocument) {
+    if (!this.meiliAvailable || !this.worksIndex) return;
     try {
       await this.worksIndex.addDocuments([doc]);
     } catch (e) {
@@ -58,6 +67,7 @@ export class SearchService implements OnModuleInit {
   }
 
   async removeWork(id: string) {
+    if (!this.meiliAvailable || !this.worksIndex) return;
     try {
       await this.worksIndex.deleteDocument(id);
     } catch (e) {
@@ -66,6 +76,19 @@ export class SearchService implements OnModuleInit {
   }
 
   async search(query: string, options?: {
+    genre?: string;
+    emotionTags?: string[];
+    limit?: number;
+    offset?: number;
+    sort?: string;
+  }) {
+    if (this.meiliAvailable && this.worksIndex) {
+      return this.searchMeili(query, options);
+    }
+    return this.searchPostgres(query, options);
+  }
+
+  private async searchMeili(query: string, options?: {
     genre?: string;
     emotionTags?: string[];
     limit?: number;
@@ -85,7 +108,7 @@ export class SearchService implements OnModuleInit {
         score: ['qualityScore:desc'],
       };
 
-      const result = await this.worksIndex.search(query, {
+      const result = await this.worksIndex!.search(query, {
         limit: options?.limit ?? 20,
         offset: options?.offset ?? 0,
         filter: filter.length > 0 ? filter.join(' AND ') : undefined,
@@ -98,7 +121,68 @@ export class SearchService implements OnModuleInit {
         processingTimeMs: result.processingTimeMs,
       };
     } catch {
-      return { hits: [], total: 0, processingTimeMs: 0 };
+      // Meilisearch failed at runtime, fall back to Postgres
+      this.logger.warn('Meilisearch search failed, falling back to PostgreSQL');
+      return this.searchPostgres(query, options);
     }
+  }
+
+  private async searchPostgres(query: string, options?: {
+    genre?: string;
+    emotionTags?: string[];
+    limit?: number;
+    offset?: number;
+    sort?: string;
+  }) {
+    const limit = options?.limit ?? 20;
+    const offset = options?.offset ?? 0;
+
+    const where: any = {
+      status: 'PUBLISHED',
+      OR: [
+        { title: { contains: query, mode: 'insensitive' } },
+        { synopsis: { contains: query, mode: 'insensitive' } },
+        { author: { name: { contains: query, mode: 'insensitive' } } },
+        { author: { displayName: { contains: query, mode: 'insensitive' } } },
+        { tags: { some: { tag: { contains: query, mode: 'insensitive' } } } },
+      ],
+    };
+
+    if (options?.genre) {
+      where.genre = options.genre;
+    }
+
+    let orderBy: any = { publishedAt: 'desc' };
+    if (options?.sort === 'score') {
+      orderBy = { qualityScore: { overall: 'desc' } };
+    } else if (options?.sort === 'newest') {
+      orderBy = { publishedAt: 'desc' };
+    }
+
+    const [works, total] = await Promise.all([
+      this.prisma.work.findMany({
+        where,
+        include: {
+          author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+          tags: true,
+          qualityScore: { select: { overall: true } },
+          _count: { select: { episodes: true, reviews: true } },
+        },
+        orderBy,
+        take: limit,
+        skip: offset,
+      }),
+      this.prisma.work.count({ where }),
+    ]);
+
+    return {
+      hits: works.map((w) => ({
+        ...w,
+        authorName: w.author?.displayName || w.author?.name || '',
+        publishedAt: w.publishedAt?.getTime() || 0,
+      })),
+      total,
+      processingTimeMs: 0,
+    };
   }
 }
