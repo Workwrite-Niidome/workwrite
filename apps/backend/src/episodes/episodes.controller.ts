@@ -52,10 +52,11 @@ export class EpisodesController {
     @Param('workId') workId: string,
     @CurrentUser('id') userId: string,
     @Body() dto: CreateEpisodeDto,
+    @Query('skipAnalysis') skipAnalysis?: string,
   ) {
     const result = await this.episodesService.create(workId, userId, dto);
-    // Auto-update in background (non-blocking)
-    if (dto.content && dto.content.length > 100) {
+    // Auto-update in background (non-blocking, skip if explicitly requested)
+    if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
       this.triggerSummaryUpdate(workId, userId);
       this.triggerEpisodeAnalysis(workId, result.id);
       this.triggerOriginalityCheck(workId);
@@ -71,10 +72,11 @@ export class EpisodesController {
     @Param('id') id: string,
     @CurrentUser('id') userId: string,
     @Body() dto: UpdateEpisodeDto,
+    @Query('skipAnalysis') skipAnalysis?: string,
   ) {
     const result = await this.episodesService.update(id, userId, dto);
-    // Auto-update when content changes
-    if (dto.content && dto.content.length > 100) {
+    // Auto-update when content changes (skip if explicitly requested)
+    if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
       const episode = await this.episodesService.findOne(id, userId);
       this.triggerSummaryUpdate(episode.workId, userId);
       this.triggerEpisodeAnalysis(episode.workId, id);
