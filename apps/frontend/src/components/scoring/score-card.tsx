@@ -15,16 +15,13 @@ interface ScoreCardProps {
   onScoreUpdate?: (score: QualityScoreDetail) => void;
 }
 
-const MAIN_AXES = [
+const ALL_AXES = [
   { key: 'immersion', label: '没入力', desc: '読者を引き込む力', angle: -90 },
-  { key: 'transformation', label: '変容力', desc: '心に残る読後感', angle: 0 },
-  { key: 'virality', label: '拡散力', desc: '人に薦めたくなる魅力', angle: 90 },
-  { key: 'worldBuilding', label: '世界構築力', desc: '舞台設定の奥行き', angle: 180 },
-] as const;
-
-const EXTRA_AXES = [
-  { key: 'characterDepth', label: 'キャラクター深度', desc: '人物の立体感' },
-  { key: 'structuralScore', label: '構造スコア', desc: '物語の設計力' },
+  { key: 'transformation', label: '変容力', desc: '心に残る読後感', angle: -30 },
+  { key: 'virality', label: '拡散力', desc: '人に薦めたくなる魅力', angle: 30 },
+  { key: 'worldBuilding', label: '世界構築力', desc: '舞台設定の奥行き', angle: 90 },
+  { key: 'characterDepth', label: 'キャラクター深度', desc: '人物の立体感', angle: 150 },
+  { key: 'structuralScore', label: '構造スコア', desc: '物語の設計力', angle: 210 },
 ] as const;
 
 const EMOTION_TAG_LABELS: Record<string, string> = {
@@ -40,13 +37,13 @@ function polarToCartesian(cx: number, cy: number, r: number, angleDeg: number) {
 }
 
 function RadarChart({ score }: { score: QualityScoreDetail }) {
-  const cx = 100;
-  const cy = 100;
-  const maxR = 80;
+  const cx = 120;
+  const cy = 120;
+  const maxR = 90;
   const levels = [25, 50, 75, 100];
 
-  const points = MAIN_AXES.map((axis) => {
-    const value = score[axis.key] || 0;
+  const points = ALL_AXES.map((axis) => {
+    const value = score[axis.key as keyof QualityScoreDetail] as number || 0;
     const r = (value / 100) * maxR;
     return polarToCartesian(cx, cy, r, axis.angle);
   });
@@ -54,30 +51,30 @@ function RadarChart({ score }: { score: QualityScoreDetail }) {
   const polygon = points.map((p) => `${p.x},${p.y}`).join(' ');
 
   return (
-    <svg viewBox="0 0 200 200" className="w-full max-w-[180px] mx-auto">
+    <svg viewBox="0 0 240 240" className="w-full max-w-[220px] mx-auto">
       {levels.map((level) => {
         const r = (level / 100) * maxR;
-        const gridPoints = MAIN_AXES.map((axis) => polarToCartesian(cx, cy, r, axis.angle));
+        const gridPoints = ALL_AXES.map((axis) => polarToCartesian(cx, cy, r, axis.angle));
         const gridPolygon = gridPoints.map((p) => `${p.x},${p.y}`).join(' ');
         return (
           <polygon key={level} points={gridPolygon} fill="none" stroke="currentColor" className="text-border" strokeWidth="0.5" />
         );
       })}
-      {MAIN_AXES.map((axis) => {
+      {ALL_AXES.map((axis) => {
         const end = polarToCartesian(cx, cy, maxR, axis.angle);
         return <line key={axis.key} x1={cx} y1={cy} x2={end.x} y2={end.y} stroke="currentColor" className="text-border" strokeWidth="0.5" />;
       })}
       <polygon points={polygon} fill="currentColor" className="text-primary/20" stroke="currentColor" strokeWidth="1.5" />
-      {MAIN_AXES.map((axis) => {
-        const pos = polarToCartesian(cx, cy, maxR + 16, axis.angle);
+      {ALL_AXES.map((axis) => {
+        const pos = polarToCartesian(cx, cy, maxR + 18, axis.angle);
         return (
-          <text key={axis.key} x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" fontSize="9">
+          <text key={axis.key} x={pos.x} y={pos.y} textAnchor="middle" dominantBaseline="middle" className="fill-muted-foreground" fontSize="8">
             {axis.label}
           </text>
         );
       })}
-      {MAIN_AXES.map((axis, i) => {
-        const value = Math.round(score[axis.key] || 0);
+      {ALL_AXES.map((axis, i) => {
+        const value = Math.round((score[axis.key as keyof QualityScoreDetail] as number) || 0);
         return (
           <text key={`val-${axis.key}`} x={points[i].x} y={points[i].y - 8} textAnchor="middle" className="fill-foreground font-medium" fontSize="8">
             {value}
@@ -156,7 +153,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
 
             {/* All 6 axes */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {[...MAIN_AXES, ...EXTRA_AXES].map((axis) => {
+              {ALL_AXES.map((axis) => {
                 const val = score[axis.key as keyof QualityScoreDetail] as number | undefined;
                 if (val == null) return null;
                 return (
