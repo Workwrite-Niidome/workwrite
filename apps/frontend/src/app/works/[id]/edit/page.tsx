@@ -437,6 +437,7 @@ function CreationPlanCard({
   const [targetEmotions, setTargetEmotions] = useState('');
   const [readerJourney, setReaderJourney] = useState('');
   const [plotText, setPlotText] = useState('');
+  const [worldText, setWorldText] = useState('');
   const [chapters, setChapters] = useState<{ title: string; summary: string }[]>([]);
 
   function startEditing() {
@@ -454,6 +455,23 @@ function CreationPlanCard({
       }).join('\n\n'));
     } else {
       setPlotText(typeof po === 'string' ? po : po?.text || '');
+    }
+    // World building
+    const wb = creationPlan?.worldBuildingData;
+    if (wb) {
+      const parts: string[] = [];
+      if (wb.basics?.era) parts.push(`時代: ${wb.basics.era}`);
+      if (wb.basics?.setting) parts.push(`舞台: ${wb.basics.setting}`);
+      if (wb.basics?.civilizationLevel) parts.push(`文明レベル: ${wb.basics.civilizationLevel}`);
+      for (const rule of wb.rules || []) {
+        if (rule.name) parts.push(`ルール「${rule.name}」: ${rule.description || ''}`);
+      }
+      for (const term of wb.terminology || []) {
+        if (term.term) parts.push(`${term.term}: ${term.definition || ''}`);
+      }
+      setWorldText(parts.join('\n'));
+    } else {
+      setWorldText('');
     }
     setChapters(
       (creationPlan?.chapterOutline || []).map((ch: any) => ({
@@ -473,6 +491,9 @@ function CreationPlanCard({
       }
       if (plotText.trim()) {
         plan.plotOutline = { text: plotText, aiAssisted: false };
+      }
+      if (worldText.trim()) {
+        plan.worldBuildingData = { freeText: worldText };
       }
       if (chapters.length > 0) {
         plan.chapterOutline = chapters.filter((ch) => ch.title.trim());
@@ -576,6 +597,18 @@ function CreationPlanCard({
                   value={plotText}
                   onChange={(e) => setPlotText(e.target.value)}
                   placeholder="プロット構想"
+                  rows={4}
+                  className="text-xs"
+                />
+              </div>
+
+              {/* World Building */}
+              <div className="space-y-2">
+                <p className="text-xs font-medium text-muted-foreground">世界観・設定</p>
+                <Textarea
+                  value={worldText}
+                  onChange={(e) => setWorldText(e.target.value)}
+                  placeholder="時代、舞台、ルール、用語など自由に記述&#10;例:&#10;時代: 中世ヨーロッパ風&#10;ルール「魔法」: 詠唱が必要、代償として体力を消費"
                   rows={4}
                   className="text-xs"
                 />
@@ -705,7 +738,10 @@ function CreationPlanCard({
               )}
               {creationPlan.worldBuildingData && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">世界観</p>
+                  <p className="text-xs font-medium text-muted-foreground mb-1">世界観・設定</p>
+                  {creationPlan.worldBuildingData.freeText ? (
+                    <p className="text-xs whitespace-pre-wrap">{creationPlan.worldBuildingData.freeText}</p>
+                  ) : (
                   <div className="space-y-1.5">
                     {creationPlan.worldBuildingData.basics?.era && (
                       <p className="text-xs"><span className="text-muted-foreground">時代:</span> {creationPlan.worldBuildingData.basics.era}</p>
@@ -741,6 +777,7 @@ function CreationPlanCard({
                       </div>
                     )}
                   </div>
+                  )}
                 </div>
               )}
             </>
