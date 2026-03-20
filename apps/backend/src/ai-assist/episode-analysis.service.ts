@@ -139,7 +139,19 @@ ${prevEpisode.aiAnalysis.endState || '（なし）'}`;
       ).join('\n')}\n`;
     }
 
-    const userPrompt = `${previousContext}${characterReference}
+    // Build open foreshadowing list for resolution detection
+    let foreshadowingReference = '';
+    const openForeshadowings = await this.prisma.foreshadowing.findMany({
+      where: { workId, status: 'open' },
+      orderBy: { plantedIn: 'asc' },
+    });
+    if (openForeshadowings.length > 0) {
+      foreshadowingReference = `\n【未回収の伏線リスト（このエピソードで回収されたものがあれば、foreshadowingsにtype:"resolve"で含めてください）】\n${
+        openForeshadowings.map((f, i) => `[F${i + 1}] (第${f.plantedIn + 1}話で設置) ${f.description}`).join('\n')
+      }\n※ 回収された伏線のdescriptionは、上記リストの記述をそのまま使ってください（マッチング精度のため）\n`;
+    }
+
+    const userPrompt = `${previousContext}${characterReference}${foreshadowingReference}
 【エピソードタイトル】${episode.title}
 
 【本文】
