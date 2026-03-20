@@ -3,7 +3,6 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
-// Edge runtime: use public API URL (cannot reach internal services)
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-db434.up.railway.app/api/v1';
 
 function getScoreLabel(score: number): string {
@@ -27,8 +26,18 @@ export async function GET(req: NextRequest) {
   if (!workId) {
     return new ImageResponse(
       (
-        <div style={{ width: '100%', height: '100%', display: 'flex', alignItems: 'center', justifyContent: 'center', background: '#0f172a', color: 'white', fontSize: 48, fontWeight: 700 }}>
-          Workwrite
+        <div style={{
+          width: '100%', height: '100%', display: 'flex', flexDirection: 'column',
+          alignItems: 'center', justifyContent: 'center',
+          background: 'linear-gradient(160deg, #faf9f7 0%, #f0ede8 100%)',
+          fontFamily: 'sans-serif',
+        }}>
+          <div style={{ fontSize: 48, fontWeight: 800, color: '#1a1a1a', letterSpacing: -1 }}>
+            Workwrite
+          </div>
+          <div style={{ fontSize: 20, color: '#6b7280', marginTop: 12 }}>
+            AIが執筆パートナーになる、品質重視の創作プラットフォーム
+          </div>
         </div>
       ),
       { width: 1200, height: 630 },
@@ -36,7 +45,10 @@ export async function GET(req: NextRequest) {
   }
 
   let title = 'Workwrite';
+  let synopsis = '';
   let author = '';
+  let genre = '';
+  let episodeCount = 0;
   let overall = 0;
   let hasScore = false;
 
@@ -48,7 +60,10 @@ export async function GET(req: NextRequest) {
       const workData = await workRes.json();
       const work = workData.data || workData;
       title = work.title || title;
+      synopsis = work.synopsis || '';
       author = work.author?.displayName || work.author?.name || '';
+      genre = work.genre || '';
+      episodeCount = work._count?.episodes || work.episodes?.length || 0;
       if (work.qualityScore && work.qualityScore.overall) {
         overall = Math.round(work.qualityScore.overall);
         hasScore = true;
@@ -58,7 +73,6 @@ export async function GET(req: NextRequest) {
     // Use defaults
   }
 
-  // If no score from work data, try scoring endpoint
   if (!hasScore) {
     try {
       const scoreRes = await fetch(`${API_BASE}/scoring/works/${workId}`, {
@@ -77,7 +91,8 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  const displayTitle = title.length > 25 ? title.slice(0, 25) + '…' : title;
+  const displayTitle = title.length > 30 ? title.slice(0, 30) + '...' : title;
+  const displaySynopsis = synopsis.length > 120 ? synopsis.slice(0, 120) + '...' : synopsis;
   const scoreColor = getScoreColor(overall);
   const scoreLabel = hasScore ? getScoreLabel(overall) : '';
 
@@ -89,69 +104,136 @@ export async function GET(req: NextRequest) {
           height: '100%',
           display: 'flex',
           flexDirection: 'column',
-          background: 'linear-gradient(135deg, #0f172a 0%, #1e293b 100%)',
-          padding: 60,
+          background: 'linear-gradient(160deg, #faf9f7 0%, #f0ede8 100%)',
+          fontFamily: 'sans-serif',
+          position: 'relative',
         }}
       >
-        {/* Header */}
-        <div style={{ display: 'flex', alignItems: 'center', marginBottom: 40 }}>
-          <div style={{ fontSize: 24, fontWeight: 700, color: '#a78bfa', letterSpacing: 1 }}>
-            Workwrite
-          </div>
-        </div>
+        {/* Accent line at top */}
+        <div style={{
+          position: 'absolute', top: 0, left: 0, right: 0,
+          height: 4,
+          background: 'linear-gradient(90deg, #a78bfa, #818cf8, #6366f1)',
+          display: 'flex',
+        }} />
 
-        {/* Main content */}
-        <div style={{ display: 'flex', flex: 1, alignItems: 'center' }}>
-          {/* Left: Title + Author */}
-          <div style={{ display: 'flex', flexDirection: 'column', flex: 1 }}>
-            <div style={{ fontSize: 48, fontWeight: 800, color: '#f8fafc', lineHeight: 1.3, marginBottom: 16 }}>
+        {/* Content area */}
+        <div style={{ display: 'flex', flex: 1, padding: '48px 60px 32px' }}>
+          {/* Left: Title + Synopsis */}
+          <div style={{
+            display: 'flex', flexDirection: 'column', flex: 1,
+            justifyContent: 'center', paddingRight: hasScore ? 48 : 0,
+          }}>
+            {/* Genre badge */}
+            {genre && (
+              <div style={{
+                display: 'flex', marginBottom: 16,
+              }}>
+                <span style={{
+                  fontSize: 14, fontWeight: 600,
+                  color: '#6366f1',
+                  background: 'rgba(99, 102, 241, 0.08)',
+                  border: '1px solid rgba(99, 102, 241, 0.15)',
+                  padding: '4px 12px',
+                  borderRadius: 100,
+                }}>
+                  {genre}
+                </span>
+              </div>
+            )}
+
+            {/* Title */}
+            <div style={{
+              fontSize: 44, fontWeight: 800, color: '#1a1a1a',
+              lineHeight: 1.25, marginBottom: 16,
+              letterSpacing: -0.5,
+            }}>
               {displayTitle}
             </div>
-            {author ? (
-              <div style={{ fontSize: 22, color: '#94a3b8', display: 'flex' }}>
-                by {author}
+
+            {/* Synopsis */}
+            {displaySynopsis && (
+              <div style={{
+                fontSize: 18, color: '#4b5563', lineHeight: 1.7,
+                marginBottom: 20,
+              }}>
+                {displaySynopsis}
               </div>
-            ) : null}
+            )}
+
+            {/* Author + meta */}
+            <div style={{ display: 'flex', alignItems: 'center', gap: 16 }}>
+              {author && (
+                <span style={{ fontSize: 16, color: '#6b7280', fontWeight: 500 }}>
+                  {author}
+                </span>
+              )}
+              {episodeCount > 0 && (
+                <span style={{ fontSize: 14, color: '#9ca3af' }}>
+                  {episodeCount}話
+                </span>
+              )}
+            </div>
           </div>
 
-          {/* Right: Score */}
-          {hasScore ? (
-            <div
-              style={{
-                display: 'flex',
-                flexDirection: 'column',
-                alignItems: 'center',
-                justifyContent: 'center',
-                minWidth: 240,
-                background: 'rgba(167, 139, 250, 0.1)',
-                border: '2px solid rgba(167, 139, 250, 0.25)',
-                borderRadius: 24,
-                padding: '32px 40px',
-              }}
-            >
-              <div style={{ fontSize: 14, color: '#94a3b8', fontWeight: 600, marginBottom: 8, display: 'flex' }}>
+          {/* Right: Score card */}
+          {hasScore && (
+            <div style={{
+              display: 'flex', flexDirection: 'column',
+              alignItems: 'center', justifyContent: 'center',
+              minWidth: 200,
+              background: 'white',
+              borderRadius: 16,
+              padding: '32px 36px',
+              boxShadow: '0 1px 3px rgba(0,0,0,0.06)',
+              border: '1px solid rgba(0,0,0,0.06)',
+            }}>
+              <div style={{
+                fontSize: 12, color: '#9ca3af', fontWeight: 600,
+                marginBottom: 8, letterSpacing: 1, display: 'flex',
+              }}>
                 AI品質スコア
               </div>
               <div style={{ display: 'flex', alignItems: 'baseline' }}>
-                <span style={{ fontSize: 80, fontWeight: 800, color: scoreColor, lineHeight: 1 }}>
+                <span style={{
+                  fontSize: 72, fontWeight: 800, color: scoreColor, lineHeight: 1,
+                }}>
                   {overall}
                 </span>
-                <span style={{ fontSize: 24, color: '#64748b', marginLeft: 4 }}>/100</span>
               </div>
-              {scoreLabel ? (
-                <div style={{ fontSize: 22, color: scoreColor, fontWeight: 700, marginTop: 8, display: 'flex' }}>
+              {scoreLabel && (
+                <div style={{
+                  fontSize: 18, color: scoreColor, fontWeight: 700,
+                  marginTop: 4, display: 'flex',
+                }}>
                   {scoreLabel}
                 </div>
-              ) : null}
+              )}
             </div>
-          ) : null}
+          )}
         </div>
 
         {/* Footer */}
-        <div style={{ display: 'flex', justifyContent: 'flex-end', marginTop: 20 }}>
-          <div style={{ fontSize: 18, color: '#475569' }}>
-            workwrite.jp
+        <div style={{
+          display: 'flex', alignItems: 'center', justifyContent: 'space-between',
+          padding: '0 60px 28px',
+        }}>
+          <div style={{ display: 'flex', alignItems: 'center', gap: 8 }}>
+            <div style={{
+              width: 24, height: 24, borderRadius: 4,
+              background: '#1a1a1a', display: 'flex',
+              alignItems: 'center', justifyContent: 'center',
+              fontSize: 14, fontWeight: 800, color: '#a78bfa',
+            }}>
+              W
+            </div>
+            <span style={{ fontSize: 16, fontWeight: 700, color: '#374151' }}>
+              Workwrite
+            </span>
           </div>
+          <span style={{ fontSize: 14, color: '#9ca3af' }}>
+            workwrite.jp
+          </span>
         </div>
       </div>
     ),
