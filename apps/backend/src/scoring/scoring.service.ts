@@ -5,6 +5,7 @@ import { CreditService } from '../billing/credit.service';
 import { TextAnalyzerService } from './text-analyzer.service';
 import { StructuralDataBuilderService } from './structural-data-builder.service';
 import { SampleExtractorService } from './sample-extractor.service';
+import { WorkStructureExtractorService } from './work-structure-extractor.service';
 import { SCORING_SYSTEM_PROMPT, buildScoringUserPrompt } from './scoring-prompt';
 import { ScoringResult, ScoringInput } from './types';
 
@@ -24,6 +25,7 @@ export class ScoringService {
     private textAnalyzer: TextAnalyzerService,
     private structuralDataBuilder: StructuralDataBuilderService,
     private sampleExtractor: SampleExtractorService,
+    private structureExtractor: WorkStructureExtractorService,
   ) {}
 
   async scoreWork(workId: string, userId?: string): Promise<ScoringResult | null> {
@@ -63,17 +65,31 @@ export class ScoringService {
         orderIndex: ep.orderIndex,
       }));
 
-      const [metrics, structure, importRecord] = await Promise.all([
+      const importRecord = await this.prisma.workImport.findFirst({
+        where: { workId },
+        select: { source: true },
+      });
+      const isImported = !!importRecord;
+
+      // For imported works: auto-extract structure (characters, world, plot) before scoring
+      if (isImported) {
+        const hasStructure = await this.prisma.storyCharacter.count({ where: { workId } });
+        if (hasStructure === 0) {
+          this.logger.log(`Auto-extracting structure for imported work ${workId}`);
+          await this.structureExtractor.extractAndSave(workId, episodes);
+        }
+      }
+
+      const [metrics, structure] = await Promise.all([
         Promise.resolve(this.textAnalyzer.analyze(episodes)),
         this.structuralDataBuilder.build(workId, episodes),
-        this.prisma.workImport.findFirst({ where: { workId }, select: { source: true } }),
       ]);
 
       const scoringInput: ScoringInput = {
         title: work.title,
         genre: (work as any).genre || null,
         completionStatus: (work as any).completionStatus || 'ONGOING',
-        isImported: !!importRecord,
+        isImported,
         metrics,
         structure,
       };

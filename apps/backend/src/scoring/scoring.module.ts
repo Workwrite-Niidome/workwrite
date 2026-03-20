@@ -4,6 +4,7 @@ import { ScoringService } from './scoring.service';
 import { TextAnalyzerService } from './text-analyzer.service';
 import { SampleExtractorService } from './sample-extractor.service';
 import { StructuralDataBuilderService } from './structural-data-builder.service';
+import { WorkStructureExtractorService } from './work-structure-extractor.service';
 
 @Module({
   controllers: [ScoringController],
@@ -12,7 +13,8 @@ import { StructuralDataBuilderService } from './structural-data-builder.service'
     TextAnalyzerService,
     SampleExtractorService,
     StructuralDataBuilderService,
+    WorkStructureExtractorService,
   ],
-  exports: [ScoringService],
+  exports: [ScoringService, WorkStructureExtractorService],
 })
 export class ScoringModule {}
