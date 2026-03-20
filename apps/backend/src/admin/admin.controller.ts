@@ -218,4 +218,42 @@ export class AdminController {
     });
     return { data: letter };
   }
+
+  // ─── Foreshadowing management ───────────────────────────
+
+  @Get('works/:workId/foreshadowings')
+  @ApiOperation({ summary: 'List all foreshadowings for a work' })
+  async listForeshadowings(@Param('workId') workId: string) {
+    const items = await this.prisma.foreshadowing.findMany({
+      where: { workId },
+      orderBy: { plantedIn: 'asc' },
+    });
+    return { data: items };
+  }
+
+  @Patch('foreshadowings/:id/resolve')
+  @ApiOperation({ summary: 'Manually resolve a foreshadowing' })
+  async resolveForeshadowing(
+    @Param('id') id: string,
+    @Body() body: { resolvedIn: number },
+  ) {
+    const item = await this.prisma.foreshadowing.update({
+      where: { id },
+      data: { resolvedIn: body.resolvedIn, status: 'resolved' },
+    });
+    return { data: item };
+  }
+
+  @Patch('foreshadowings/:id')
+  @ApiOperation({ summary: 'Update foreshadowing fields' })
+  async updateForeshadowing(
+    @Param('id') id: string,
+    @Body() body: { description?: string; importance?: string; status?: string; resolvedIn?: number },
+  ) {
+    const item = await this.prisma.foreshadowing.update({
+      where: { id },
+      data: body,
+    });
+    return { data: item };
+  }
 }

@@ -244,16 +244,36 @@ ${episode.content}`;
             }
           } else if (f.type === 'resolve') {
             // Try to find and resolve matching foreshadowing
-            const existing = await this.prisma.foreshadowing.findFirst({
-              where: {
-                workId,
-                status: 'open',
-                description: { contains: f.description.slice(0, 20) },
-              },
+            // Fetch all open foreshadowings and do bidirectional substring matching
+            const openForeshadowings = await this.prisma.foreshadowing.findMany({
+              where: { workId, status: 'open' },
             });
-            if (existing) {
+            const resolveDesc = f.description.toLowerCase();
+            let bestMatch: (typeof openForeshadowings)[0] | null = null;
+            let bestScore = 0;
+            for (const open of openForeshadowings) {
+              const plantDesc = open.description.toLowerCase();
+              // Check bidirectional: resolve contains plant keywords, or plant contains resolve keywords
+              const plantWords = plantDesc.split(/[\s、。（）「」]/u).filter((w) => w.length >= 3);
+              const resolveWords = resolveDesc.split(/[\s、。（）「」]/u).filter((w) => w.length >= 3);
+              let score = 0;
+              for (const pw of plantWords) {
+                if (resolveDesc.includes(pw)) score += pw.length;
+              }
+              for (const rw of resolveWords) {
+                if (plantDesc.includes(rw)) score += rw.length;
+              }
+              // Also check direct substring (either direction)
+              if (resolveDesc.includes(plantDesc.slice(0, 15))) score += 10;
+              if (plantDesc.includes(resolveDesc.slice(0, 15))) score += 10;
+              if (score > bestScore) {
+                bestScore = score;
+                bestMatch = open;
+              }
+            }
+            if (bestMatch && bestScore >= 3) {
               await this.prisma.foreshadowing.update({
-                where: { id: existing.id },
+                where: { id: bestMatch.id },
                 data: {
                   resolvedIn: episode.orderIndex,
                   status: 'resolved',
