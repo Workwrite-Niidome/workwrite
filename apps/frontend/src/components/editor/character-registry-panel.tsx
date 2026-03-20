@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -69,6 +69,58 @@ interface AiSuggestedChar {
   motivation?: string;
   relationships?: string;
   uniqueTrait?: string;
+}
+
+// ─── Role combobox ──────────────────────────────────────────────
+
+function RoleInput({ value, onChange, onBlur }: { value: string; onChange: (v: string) => void; onBlur: () => void }) {
+  const [open, setOpen] = useState(false);
+  const [inputValue, setInputValue] = useState(value);
+  const ref = useRef<HTMLDivElement>(null);
+
+  useEffect(() => { setInputValue(value); }, [value]);
+
+  useEffect(() => {
+    function handleClickOutside(e: MouseEvent) {
+      if (ref.current && !ref.current.contains(e.target as Node)) setOpen(false);
+    }
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  const filtered = ROLE_SUGGESTIONS.filter((r) =>
+    !inputValue || r.includes(inputValue) || inputValue.includes(r)
+  );
+
+  return (
+    <div ref={ref} className="relative">
+      <input
+        value={inputValue}
+        onChange={(e) => { setInputValue(e.target.value); onChange(e.target.value); }}
+        onFocus={() => setOpen(true)}
+        onBlur={() => { setTimeout(() => { setOpen(false); onBlur(); }, 150); }}
+        placeholder="主人公、幼馴染..."
+        className="h-8 text-sm rounded-md border border-border bg-background px-2 w-full min-w-[90px]"
+      />
+      {open && filtered.length > 0 && (
+        <div className="absolute top-full left-0 right-0 z-50 mt-1 max-h-40 overflow-y-auto bg-card border border-border rounded-md shadow-lg">
+          {filtered.map((r) => (
+            <button
+              key={r}
+              onMouseDown={(e) => { e.preventDefault(); setInputValue(r); onChange(r); setOpen(false); setTimeout(onBlur, 0); }}
+              className={cn(
+                'w-full text-left text-xs px-3 py-1.5 hover:bg-secondary transition-colors flex items-center gap-2',
+                r === inputValue && 'bg-secondary font-medium',
+              )}
+            >
+              <span className={cn('w-2 h-2 rounded-full flex-shrink-0', (ROLE_COLORS[r] || ROLE_COLORS['その他']).split(' ')[0])} />
+              {r}
+            </button>
+          ))}
+        </div>
+      )}
+    </div>
+  );
 }
 
 // ─── Inline field component ─────────────────────────────────────
@@ -156,16 +208,11 @@ function CharacterForm({
           />
         </Field>
         <Field label="役割">
-          <input
-            list="char-role-suggestions"
+          <RoleInput
             value={local.role}
-            onChange={(e) => { set({ role: e.target.value }); setTimeout(save, 0); }}
-            placeholder="主人公、幼馴染..."
-            className="h-8 text-sm rounded-md border border-border bg-background px-2 min-w-[90px]"
+            onChange={(v) => { set({ role: v }); }}
+            onBlur={save}
           />
-          <datalist id="char-role-suggestions">
-            {ROLE_SUGGESTIONS.map((r) => <option key={r} value={r} />)}
-          </datalist>
         </Field>
       </div>
 
@@ -203,21 +250,23 @@ function CharacterForm({
 
       {/* Row 3: Personality + SpeechStyle (core fields) */}
       <Field label="性格">
-        <Input
+        <Textarea
           value={local.personality || ''}
           onChange={(e) => set({ personality: e.target.value })}
           onBlur={save}
           placeholder="内向的だが正義感が強い"
-          className="h-8 text-sm"
+          rows={2}
+          className="text-sm resize-y min-h-[2.5rem]"
         />
       </Field>
       <Field label="口調・話し方">
-        <Input
+        <Textarea
           value={local.speechStyle || ''}
           onChange={(e) => set({ speechStyle: e.target.value })}
           onBlur={save}
           placeholder="丁寧語、「〜だと思います」が口癖"
-          className="h-8 text-sm"
+          rows={2}
+          className="text-sm resize-y min-h-[2.5rem]"
         />
       </Field>
 
@@ -239,7 +288,7 @@ function CharacterForm({
               onBlur={save}
               placeholder="黒髪のショートカット、常にメガネ"
               rows={2}
-              className="text-sm"
+              className="text-sm resize-y min-h-[2.5rem]"
             />
           </Field>
           <Field label="背景・過去">
@@ -248,26 +297,28 @@ function CharacterForm({
               onChange={(e) => set({ background: e.target.value })}
               onBlur={save}
               placeholder="幼少期に家族を失い..."
-              rows={2}
-              className="text-sm"
+              rows={3}
+              className="text-sm resize-y min-h-[2.5rem]"
             />
           </Field>
           <Field label="動機・目標">
-            <Input
+            <Textarea
               value={local.motivation || ''}
               onChange={(e) => set({ motivation: e.target.value })}
               onBlur={save}
               placeholder="仲間を守るために強くなりたい"
-              className="h-8 text-sm"
+              rows={2}
+              className="text-sm resize-y min-h-[2.5rem]"
             />
           </Field>
           <Field label="成長アーク">
-            <Input
+            <Textarea
               value={local.arc || ''}
               onChange={(e) => set({ arc: e.target.value })}
               onBlur={save}
               placeholder="臆病 → 勇気を持つ"
-              className="h-8 text-sm"
+              rows={2}
+              className="text-sm resize-y min-h-[2.5rem]"
             />
           </Field>
           <Field label="著者メモ">
@@ -277,7 +328,7 @@ function CharacterForm({
               onBlur={save}
               placeholder="第3章で退場予定..."
               rows={2}
-              className="text-sm"
+              className="text-sm resize-y min-h-[2.5rem]"
             />
           </Field>
           {customFieldDefs.length > 0 && (
