@@ -78,7 +78,7 @@ export class ScoringService {
           this.logger.log(`Auto-extracting structure for imported work ${workId}`);
           await this.structureExtractor.extractAndSave(workId, episodes);
         }
-        await this.structureExtractor.batchAnalyzeEpisodes(workId, episodes);
+        // batchAnalyzeEpisodes removed — extractAndSave already generates episode summaries
       }
 
       const [metrics, structure] = await Promise.all([

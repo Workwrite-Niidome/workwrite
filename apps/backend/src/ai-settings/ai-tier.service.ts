@@ -24,6 +24,7 @@ const OPUS_MODEL = 'claude-opus-4-6';
 const LIGHT_FEATURES = new Set([
   'proofread', 'episode_scoring', 'synopsis-gen',
   'highlight_explain', 'onboarding_profile', 'embedding_generation',
+  'companion', 'reflection', 'consistency_check',
 ]);
 
 // Free tier weekly limit for AI reading companion

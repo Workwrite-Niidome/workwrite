@@ -55,12 +55,11 @@ export class EpisodesController {
     @Query('skipAnalysis') skipAnalysis?: string,
   ) {
     const result = await this.episodesService.create(workId, userId, dto);
-    // Auto-update in background (non-blocking, skip if explicitly requested)
+    // Originality check only on save (lightweight, no API call)
     if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
-      this.triggerSummaryUpdate(workId, userId);
-      this.triggerEpisodeAnalysis(workId, result.id);
       this.triggerOriginalityCheck(workId);
     }
+    // Episode analysis and summary update are deferred to publish time
     return result;
   }
 
@@ -75,13 +74,12 @@ export class EpisodesController {
     @Query('skipAnalysis') skipAnalysis?: string,
   ) {
     const result = await this.episodesService.update(id, userId, dto);
-    // Auto-update when content changes (skip if explicitly requested)
+    // Originality check only on save (lightweight, no API call)
     if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
       const episode = await this.episodesService.findOne(id, userId);
-      this.triggerSummaryUpdate(episode.workId, userId);
-      this.triggerEpisodeAnalysis(episode.workId, id);
       this.triggerOriginalityCheck(episode.workId);
     }
+    // Episode analysis and summary update are deferred to publish time
     return result;
   }
 
@@ -111,8 +109,9 @@ export class EpisodesController {
   @ApiOperation({ summary: 'Publish episode' })
   async publish(@Param('id') id: string, @CurrentUser('id') userId: string) {
     const result = await this.episodesService.publish(id, userId);
-    // Update summary on publish
     const episode = await this.episodesService.findOne(id, userId);
+    // Run analysis and summary on publish (the right time for API calls)
+    this.triggerEpisodeAnalysis(episode.workId, id);
     this.triggerSummaryUpdate(episode.workId, userId);
     // Auto-post to SNS
     this.createAutoEpisodePost(userId, episode).catch((e) =>
