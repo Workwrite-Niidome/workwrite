@@ -155,7 +155,7 @@ class ApiClient {
   }
 
   // Auth
-  async register(data: { email: string; password: string; name: string; inviteCode: string }) {
+  async register(data: { email: string; password: string; name: string }) {
     return this.request<{ data: AuthResponse }>('/auth/register', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -478,10 +478,6 @@ class ApiClient {
     return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number } }>('/letters/earnings');
   }
 
-  async getReferralDashboard() {
-    return this.request<{ data: { inviteCodes: any[]; rewards: any[]; totalCreditsEarned: number; totalInvitees: number } }>('/referral/dashboard');
-  }
-
   // Discover
   async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
     const qs = new URLSearchParams({ q });
@@ -595,10 +591,6 @@ class ApiClient {
 
   async deleteAccount() {
     return this.request<{ data: { deleted: boolean } }>('/users/me', { method: 'DELETE' });
-  }
-
-  async getMyInviteCodes() {
-    return this.request<{ code: string; label: string; maxUses: number; usedCount: number; isActive: boolean; createdAt: string; usages: { userId: string; usedAt: string }[] }[]>('/auth/my-invite-codes');
   }
 
   // Billing
@@ -819,26 +811,6 @@ class ApiClient {
     if (cursor) qs.set('cursor', cursor);
     if (limit) qs.set('limit', String(limit));
     return this.request<{ data: TimelineResult }>(`/timeline/global?${qs.toString()}`);
-  }
-
-  // Invite codes
-  async getInviteCodes() {
-    return this.request<{ data: InviteCode[] }>('/admin/invite-codes');
-  }
-
-  async createInviteCode(opts: { label?: string; maxUses?: number; expiresAt?: string }) {
-    return this.request<{ data: InviteCode }>('/admin/invite-codes', {
-      method: 'POST',
-      body: JSON.stringify(opts),
-    });
-  }
-
-  async toggleInviteCode(id: string) {
-    return this.request<{ data: InviteCode }>(`/admin/invite-codes/${id}`, { method: 'PATCH' });
-  }
-
-  async deleteInviteCode(id: string) {
-    return this.request<{ data: InviteCode }>(`/admin/invite-codes/${id}`, { method: 'DELETE' });
   }
 
   async getAdminWorks(params?: { page?: number; limit?: number; status?: string }) {
@@ -1142,6 +1114,7 @@ export interface Work {
   status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
   genre: string | null;
   isAiGenerated?: boolean;
+  originality?: number | null;
   author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
   tags: { id: string; tag: string; type: string }[];
   qualityScore?: { overall: number } | null;
@@ -1468,18 +1441,6 @@ export interface WorkImportRecord {
   importedChapters: number;
   errorMessage: string | null;
   createdAt: string;
-}
-
-export interface InviteCode {
-  id: string;
-  code: string;
-  label: string | null;
-  maxUses: number;
-  usedCount: number;
-  isActive: boolean;
-  expiresAt: string | null;
-  createdAt: string;
-  _count?: { usages: number };
 }
 
 // Story Structure

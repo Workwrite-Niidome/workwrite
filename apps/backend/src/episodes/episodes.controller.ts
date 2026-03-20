@@ -58,6 +58,7 @@ export class EpisodesController {
     if (dto.content && dto.content.length > 100) {
       this.triggerSummaryUpdate(workId, userId);
       this.triggerEpisodeAnalysis(workId, result.id);
+      this.triggerOriginalityCheck(workId);
     }
     return result;
   }
@@ -77,6 +78,7 @@ export class EpisodesController {
       const episode = await this.episodesService.findOne(id, userId);
       this.triggerSummaryUpdate(episode.workId, userId);
       this.triggerEpisodeAnalysis(episode.workId, id);
+      this.triggerOriginalityCheck(episode.workId);
     }
     return result;
   }
@@ -188,6 +190,13 @@ export class EpisodesController {
   private triggerEpisodeAnalysis(workId: string, episodeId: string) {
     this.episodeAnalysis.analyzeEpisode(workId, episodeId).catch((e) => {
       this.logger.warn(`Failed to auto-analyze episode ${episodeId}: ${e.message}`);
+    });
+  }
+
+  /** Fire-and-forget originality check (non-blocking) */
+  private triggerOriginalityCheck(workId: string) {
+    this.worksService.calculateAndFlagAiGenerated(workId).catch((e) => {
+      this.logger.warn(`Failed to check originality for work ${workId}: ${e.message}`);
     });
   }
 

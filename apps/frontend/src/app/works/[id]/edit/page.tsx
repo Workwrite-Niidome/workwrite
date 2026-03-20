@@ -12,6 +12,7 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { Loading } from '@/components/layout/loading';
 import { ScoreCard } from '@/components/scoring/score-card';
+import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work, type QualityScoreDetail } from '@/lib/api';
 import { CharacterRegistryPanel } from '@/components/editor/character-registry-panel';
 
@@ -185,7 +186,25 @@ export default function EditWorkPage() {
   return (
     <div className="px-4 py-8">
       <div className="mb-6">
-        <h1 className="text-2xl font-bold mb-3">作品編集</h1>
+        <div className="flex items-center gap-3 mb-3">
+          <h1 className="text-2xl font-bold">作品編集</h1>
+          {work.isAiGenerated && <AiGeneratedBadge size="md" />}
+        </div>
+        {(work as any).originality != null && (work as any).originality < 1.0 && (
+          <div className={`text-xs mb-3 px-3 py-2 rounded-md border ${
+            work.isAiGenerated
+              ? 'bg-violet-500/10 border-violet-500/30 text-violet-700 dark:text-violet-300'
+              : 'bg-muted/50 border-border text-muted-foreground'
+          }`}>
+            <p className="font-medium">
+              AI使用率: {Math.round((1 - (work as any).originality) * 100)}%
+              {work.isAiGenerated && ' — AI Generated 作品として表示されます'}
+            </p>
+            <p className="mt-0.5 text-[11px] opacity-75">
+              AI執筆アシストで生成されたテキストとエピソード本文の一致率に基づいて自動判定されます。50%以上でAI Generatedバッジが付与されます。
+            </p>
+          </div>
+        )}
         <div className="flex flex-wrap gap-2">
           <Link href={`/works/${workId}/preview`}>
             <Button variant="outline" size="sm"><Eye className="h-3.5 w-3.5 mr-1" /> プレビュー</Button>

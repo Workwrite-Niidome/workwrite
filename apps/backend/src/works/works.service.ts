@@ -5,7 +5,6 @@ import { ScoringService } from '../scoring/scoring.service';
 import { SearchService } from '../search/search.service';
 import { EmotionsService } from '../emotions/emotions.service';
 import { EmotionMappingService } from '../emotions/emotion-mapping.service';
-import { ReferralService } from '../referral/referral.service';
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
@@ -22,7 +21,6 @@ export class WorksService {
     private searchService: SearchService,
     private emotionsService: EmotionsService,
     private emotionMappingService: EmotionMappingService,
-    private referralService: ReferralService,
     private episodeAnalysisService: EpisodeAnalysisService,
   ) {}
 
@@ -165,9 +163,6 @@ export class WorksService {
         }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
         // Auto-scoring, search indexing, emotion tag generation
         this.autoProcessWork(id).catch((e) => this.logger.warn(`Auto-process failed: ${e}`));
-        // Referral reward: first work published
-        this.referralService.checkAndReward(userId, 'first_work_published')
-          .catch((e) => this.logger.warn(`Referral reward failed: ${e}`));
       }
     }
 
@@ -431,38 +426,86 @@ export class WorksService {
   }
 
   /**
-   * Calculate originality from AiCreationLog and auto-set isAiGenerated
-   * if AI-written text ratio exceeds threshold.
+   * Calculate originality by comparing AI-generated text (from AiGenerationHistory)
+   * against actual episode content. This is more reliable than relying on frontend
+   * "insert" button logging, because it directly matches text.
+   *
+   * Algorithm:
+   * 1. Get all AI assistant outputs for this work (AiGenerationHistory.messages)
+   * 2. Get all episode content
+   * 3. For each AI output, check how much of it appears in the episodes (substring matching)
+   * 4. Sum matched characters / total episode characters = AI ratio
+   * 5. If AI ratio > threshold → auto-flag as isAiGenerated
+   *
+   * Threshold: 50% AI text → isAiGenerated = true
    */
-  private async calculateAndFlagAiGenerated(workId: string) {
-    const logs = await this.prisma.aiCreationLog.findMany({
-      where: { workId, action: 'accepted' },
+  async calculateAndFlagAiGenerated(workId: string) {
+    const AI_RATIO_THRESHOLD = 0.5; // 50%以上がAI生成テキストなら自動フラグ
+
+    // 1. Get all AI generation history for this work
+    const histories = await this.prisma.aiGenerationHistory.findMany({
+      where: { workId },
+      select: { messages: true, templateSlug: true },
     });
 
-    const CREATION_STAGE_WEIGHT = 0.3;
-    const WRITING_ASSIST_WEIGHT = 1.0;
-    const AI_GENERATED_THRESHOLD = 0.7; // originality < 0.3 means 70%+ AI
-
-    let weightedAiChars = 0;
-    for (const log of logs) {
-      const weight = log.stage === 'writing_assist' ? WRITING_ASSIST_WEIGHT : CREATION_STAGE_WEIGHT;
-      weightedAiChars += log.acceptedChars * weight;
+    // Extract all AI assistant outputs
+    const aiTexts: string[] = [];
+    for (const h of histories) {
+      const msgs = h.messages as Array<{ role: string; content: string }>;
+      if (!Array.isArray(msgs)) continue;
+      for (const msg of msgs) {
+        if (msg.role === 'assistant' && msg.content) {
+          // Clean up: remove very short outputs (< 50 chars, likely metadata)
+          const text = msg.content.trim();
+          if (text.length >= 50) aiTexts.push(text);
+        }
+      }
     }
 
+    // 2. Get all episode content
     const episodes = await this.prisma.episode.findMany({
       where: { workId },
-      select: { wordCount: true },
+      select: { content: true, wordCount: true },
     });
     const totalChars = episodes.reduce((sum, ep) => sum + ep.wordCount, 0);
+    if (totalChars === 0) return;
 
-    const originality = Math.max(0, Math.min(1, 1.0 - weightedAiChars / Math.max(totalChars, 1)));
+    const allEpisodeText = episodes.map((ep) => ep.content).join('\n');
+
+    // 3. Match AI texts against episode content
+    // Use sliding window substring matching: for each AI output, find the longest
+    // contiguous substring that appears in the episode text
+    let matchedChars = 0;
+    const alreadyCounted = new Set<string>(); // Avoid double-counting overlapping matches
+
+    for (const aiText of aiTexts) {
+      // Split AI text into chunks of ~200 chars and check if each chunk exists in episodes
+      const chunkSize = 200;
+      for (let i = 0; i < aiText.length; i += chunkSize) {
+        const chunk = aiText.slice(i, i + chunkSize);
+        if (chunk.length < 30) continue; // Too short to be meaningful
+        // Use a representative substring (middle portion) to avoid matching common phrases
+        const sample = chunk.length > 80
+          ? chunk.slice(20, chunk.length - 20)
+          : chunk;
+        if (sample.length < 30) continue;
+
+        if (!alreadyCounted.has(sample) && allEpisodeText.includes(sample)) {
+          matchedChars += chunk.length;
+          alreadyCounted.add(sample);
+        }
+      }
+    }
+
+    const aiRatio = matchedChars / Math.max(totalChars, 1);
+    const originality = Math.max(0, Math.min(1, 1.0 - aiRatio));
 
     const updateData: Record<string, unknown> = { originality };
 
-    // Auto-flag as AI-generated if originality is below threshold
-    if (originality < (1.0 - AI_GENERATED_THRESHOLD)) {
+    // Auto-flag as AI-generated if ratio exceeds threshold
+    if (aiRatio >= AI_RATIO_THRESHOLD) {
       updateData.isAiGenerated = true;
-      this.logger.log(`Work ${workId} auto-flagged as AI-generated (originality: ${originality.toFixed(2)})`);
+      this.logger.log(`Work ${workId} auto-flagged as AI-generated (AI ratio: ${(aiRatio * 100).toFixed(1)}%, originality: ${originality.toFixed(2)})`);
     }
 
     await this.prisma.work.update({
@@ -470,7 +513,11 @@ export class WorksService {
       data: updateData,
     });
 
-    this.logger.log(`Originality for work ${workId}: ${originality.toFixed(2)} (${logs.length} AI logs, ${totalChars} total chars)`);
+    this.logger.log(
+      `Originality for work ${workId}: ${originality.toFixed(2)} ` +
+      `(AI ratio: ${(aiRatio * 100).toFixed(1)}%, matched: ${matchedChars}/${totalChars} chars, ` +
+      `${aiTexts.length} AI outputs, ${histories.length} history records)`,
+    );
   }
 
   async getEmotionProfile(workId: string) {
