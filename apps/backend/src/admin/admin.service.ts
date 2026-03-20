@@ -1,5 +1,4 @@
 import { Injectable, NotFoundException, ForbiddenException, BadRequestException } from '@nestjs/common';
-import { randomBytes } from 'crypto';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreditService } from '../billing/credit.service';
 
@@ -163,86 +162,7 @@ export class AdminService {
     return this.prisma.review.delete({ where: { id: reviewId } });
   }
 
-  // ─── Invite Codes ────────────────────────────────────────
-
-  private generateCode(): string {
-    return 'WW-' + randomBytes(4).toString('hex').toUpperCase();
-  }
-
-  async getInviteCodes() {
-    return this.prisma.inviteCode.findMany({
-      orderBy: { createdAt: 'desc' },
-      include: {
-        usages: {
-          include: { inviteCode: false },
-          orderBy: { usedAt: 'desc' },
-          take: 10,
-        },
-        _count: { select: { usages: true } },
-      },
-    });
-  }
-
-  async createInviteCode(
-    adminId: string,
-    opts: { label?: string; maxUses?: number; expiresAt?: string },
-  ) {
-    return this.prisma.inviteCode.create({
-      data: {
-        code: this.generateCode(),
-        label: opts.label || null,
-        maxUses: opts.maxUses || 1,
-        createdBy: adminId,
-        expiresAt: opts.expiresAt ? new Date(opts.expiresAt) : null,
-      },
-    });
-  }
-
-  async toggleInviteCode(id: string) {
-    const code = await this.prisma.inviteCode.findUnique({ where: { id } });
-    if (!code) throw new NotFoundException('Invite code not found');
-    return this.prisma.inviteCode.update({
-      where: { id },
-      data: { isActive: !code.isActive },
-    });
-  }
-
-  async deleteInviteCode(id: string) {
-    return this.prisma.inviteCode.delete({ where: { id } });
-  }
-
-  // ─── User Invite Code & Credit Grant ────────────────────
-
-  /** Grant invite codes to a specific user (admin-created, user-owned) */
-  async grantInviteCodesToUser(
-    adminId: string,
-    userId: string,
-    count: number = 5,
-    label?: string,
-    maxUses?: number,
-  ) {
-    const user = await this.prisma.user.findUnique({
-      where: { id: userId },
-      select: { id: true, name: true },
-    });
-    if (!user) throw new NotFoundException('User not found');
-    if (count < 1 || count > 50) throw new BadRequestException('count must be 1-50');
-
-    const codes = [];
-    for (let i = 0; i < count; i++) {
-      const code = await this.prisma.inviteCode.create({
-        data: {
-          code: this.generateCode(),
-          label: label || `${user.name}用（管理者付与）`,
-          maxUses: maxUses || 1,
-          createdBy: userId, // ユーザー名義で作成
-        },
-      });
-      codes.push(code);
-    }
-
-    return { granted: codes.length, userId, codes };
-  }
+  // ─── Credit Grant ────────────────────────────────────────
 
   /** Grant free credits to a user (ADMIN_GRANT type) */
   async grantCreditsToUser(

@@ -112,35 +112,6 @@ export class AdminController {
     return this.adminService.deleteReview(id);
   }
 
-  // ─── Invite Code Management ────────────────────────────────
-
-  @Get('invite-codes')
-  @ApiOperation({ summary: 'List all invite codes' })
-  async getInviteCodes() {
-    return this.adminService.getInviteCodes();
-  }
-
-  @Post('invite-codes')
-  @ApiOperation({ summary: 'Create a new invite code' })
-  async createInviteCode(
-    @CurrentUser('id') adminId: string,
-    @Body() body: { label?: string; maxUses?: number; expiresAt?: string },
-  ) {
-    return this.adminService.createInviteCode(adminId, body);
-  }
-
-  @Patch('invite-codes/:id')
-  @ApiOperation({ summary: 'Toggle invite code active status' })
-  async toggleInviteCode(@Param('id') id: string) {
-    return this.adminService.toggleInviteCode(id);
-  }
-
-  @Delete('invite-codes/:id')
-  @ApiOperation({ summary: 'Delete an invite code' })
-  async deleteInviteCode(@Param('id') id: string) {
-    return this.adminService.deleteInviteCode(id);
-  }
-
   // ─── Subscription Plan Management ─────────────────────────
 
   @Post('users/:id/plan')
@@ -167,23 +138,7 @@ export class AdminController {
     return this.aiTier.getUserTier(userId);
   }
 
-  // ─── User Invite Code & Credit Grant ────────────────────
-
-  @Post('users/:id/invite-codes')
-  @ApiOperation({ summary: 'Grant invite codes to a specific user (for testing)' })
-  async grantUserInviteCodes(
-    @CurrentUser('id') adminId: string,
-    @Param('id') userId: string,
-    @Body() body: { count?: number; label?: string; maxUses?: number },
-  ) {
-    return this.adminService.grantInviteCodesToUser(
-      adminId,
-      userId,
-      body.count || 5,
-      body.label,
-      body.maxUses,
-    );
-  }
+  // ─── Credit Grant ────────────────────────────────────────
 
   @Post('users/:id/credits')
   @ApiOperation({ summary: 'Grant free credits to a specific user (for testing)' })

@@ -115,6 +115,20 @@ export default function LoginPage() {
             <Button type="submit" className="w-full" disabled={loading || serverStatus === 'server_down'}>
               {loading ? 'ログイン中...' : 'ログイン'}
             </Button>
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">または</span></div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => { window.location.href = api.getTwitterAuthUrl(); }}
+              disabled={serverStatus === 'server_down'}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              X (Twitter) でログイン
+            </Button>
             <p className="text-sm text-muted-foreground">
               アカウントをお持ちでない方は{' '}
               <Link href="/register" className="text-primary hover:underline">新規登録</Link>

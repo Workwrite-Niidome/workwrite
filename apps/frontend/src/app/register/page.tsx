@@ -14,7 +14,6 @@ export default function RegisterPage() {
   const [name, setName] = useState('');
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
-  const [inviteCode, setInviteCode] = useState('');
   const [agreed, setAgreed] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(false);
@@ -37,7 +36,7 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await register(email, password, name, inviteCode);
+      await register(email, password, name);
       router.push('/onboarding');
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -45,8 +44,6 @@ export default function RegisterPage() {
           setError('サーバーに接続できません。しばらく待ってから再度お試しください。');
         } else if (err.message === 'Email already registered') {
           setError('このメールアドレスは既に登録されています');
-        } else if (err.message.includes('招待コード')) {
-          setError(err.message);
         } else {
           setError(err.message);
         }
@@ -63,7 +60,7 @@ export default function RegisterPage() {
       <Card className="w-full max-w-md">
         <CardHeader className="text-center">
           <CardTitle>新規登録</CardTitle>
-          <CardDescription>招待コードをお持ちの方はベータ版にご参加いただけます</CardDescription>
+          <CardDescription>アカウントを作成してWorkwriteを始めましょう</CardDescription>
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
@@ -83,18 +80,6 @@ export default function RegisterPage() {
                 {error}
               </div>
             )}
-            <div className="space-y-2">
-              <label htmlFor="inviteCode" className="text-sm font-medium">招待コード</label>
-              <Input
-                id="inviteCode"
-                value={inviteCode}
-                onChange={(e) => setInviteCode(e.target.value.toUpperCase())}
-                placeholder="WW-XXXXXXXX"
-                required
-                className="font-mono tracking-wider"
-              />
-              <p className="text-xs text-muted-foreground">ベータテスターの方に配布している招待コードを入力してください</p>
-            </div>
             <div className="space-y-2">
               <label htmlFor="name" className="text-sm font-medium">ニックネーム</label>
               <Input
@@ -145,6 +130,20 @@ export default function RegisterPage() {
           <CardFooter className="flex flex-col space-y-3">
             <Button type="submit" className="w-full" disabled={loading || serverStatus === 'down'}>
               {loading ? '登録中...' : '登録する'}
+            </Button>
+            <div className="relative w-full">
+              <div className="absolute inset-0 flex items-center"><span className="w-full border-t" /></div>
+              <div className="relative flex justify-center text-xs uppercase"><span className="bg-card px-2 text-muted-foreground">または</span></div>
+            </div>
+            <Button
+              type="button"
+              variant="outline"
+              className="w-full gap-2"
+              onClick={() => { window.location.href = api.getTwitterAuthUrl(); }}
+              disabled={serverStatus === 'down'}
+            >
+              <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+              X (Twitter) で登録
             </Button>
             <p className="text-sm text-muted-foreground">
               すでにアカウントをお持ちの方は{' '}

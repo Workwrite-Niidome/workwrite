@@ -2,7 +2,6 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
-  BadRequestException,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -20,21 +19,6 @@ export class AuthService {
   ) {}
 
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
-    // Validate invite code
-    const invite = await this.prisma.inviteCode.findUnique({
-      where: { code: dto.inviteCode.trim().toUpperCase() },
-    });
-
-    if (!invite || !invite.isActive) {
-      throw new BadRequestException('招待コードが無効です');
-    }
-    if (invite.expiresAt && invite.expiresAt < new Date()) {
-      throw new BadRequestException('招待コードの有効期限が切れています');
-    }
-    if (invite.usedCount >= invite.maxUses) {
-      throw new BadRequestException('招待コードの使用回数の上限に達しています');
-    }
-
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
     });
@@ -52,22 +36,10 @@ export class AuthService {
       },
     });
 
-    // Record invite code usage
-    await this.prisma.inviteCode.update({
-      where: { id: invite.id },
-      data: { usedCount: { increment: 1 } },
-    });
-    await this.prisma.inviteCodeUsage.create({
-      data: { inviteCodeId: invite.id, userId: user.id },
-    });
-
     // Create point account
     await this.prisma.pointAccount.create({
       data: { userId: user.id },
     });
-
-    // Auto-generate 5 invite codes for the new user
-    await this.generateUserInviteCodes(user.id, user.name);
 
     return this.generateTokens(user);
   }
@@ -183,42 +155,6 @@ export class AuthService {
     });
     if (user?.isBanned) return null;
     return user;
-  }
-
-  /** Generate 5 personal invite codes for a newly registered user */
-  private async generateUserInviteCodes(userId: string, userName: string) {
-    const codes: string[] = [];
-    for (let i = 0; i < 5; i++) {
-      // Generate a short readable code: USER-XXXX format
-      const random = Math.random().toString(36).substring(2, 6).toUpperCase();
-      codes.push(`${random}-${Date.now().toString(36).slice(-4).toUpperCase()}`);
-    }
-
-    await this.prisma.inviteCode.createMany({
-      data: codes.map((code) => ({
-        code,
-        label: `${userName}の招待コード`,
-        maxUses: 1,
-        createdBy: userId,
-        isActive: true,
-      })),
-    });
-  }
-
-  /** Get invite codes created by a user */
-  async getUserInviteCodes(userId: string) {
-    return this.prisma.inviteCode.findMany({
-      where: { createdBy: userId },
-      orderBy: { createdAt: 'asc' },
-      include: {
-        usages: {
-          select: {
-            userId: true,
-            usedAt: true,
-          },
-        },
-      },
-    });
   }
 
   private generateTokens(user: {

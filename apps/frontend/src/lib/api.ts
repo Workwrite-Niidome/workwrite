@@ -176,6 +176,17 @@ class ApiClient {
     });
   }
 
+  getTwitterAuthUrl(): string {
+    return `${API_BASE}/auth/twitter`;
+  }
+
+  async twitterCallback(oauthToken: string, oauthVerifier: string) {
+    return this.request<AuthResponse>('/auth/twitter/callback', {
+      method: 'POST',
+      body: JSON.stringify({ oauth_token: oauthToken, oauth_verifier: oauthVerifier }),
+    });
+  }
+
   // Users
   async getMyProfile() {
     return this.request<{ data: UserProfile }>('/users/me');

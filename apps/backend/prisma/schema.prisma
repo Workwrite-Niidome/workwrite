@@ -985,6 +985,7 @@ model CharacterDialogueSample {
 // Invite Codes (Beta)
 // ============================================================
 
+// DEPRECATED - invitation system removed (kept for data preservation)
 model InviteCode {
   id          String    @id @default(cuid())
   code        String    @unique
@@ -1002,6 +1003,7 @@ model InviteCode {
   @@index([createdBy])
 }
 
+// DEPRECATED - invitation system removed (kept for data preservation)
 model InviteCodeUsage {
   id           String   @id @default(cuid())
   inviteCodeId String
@@ -1016,6 +1018,7 @@ model InviteCodeUsage {
 
 // ============================================================
 // Referral Rewards
+// DEPRECATED - referral reward system removed (kept for data preservation)
 // ============================================================
 
 model ReferralReward {

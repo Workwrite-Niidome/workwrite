@@ -36,7 +36,6 @@ import { StoryStructureModule } from './story-structure/story-structure.module';
 import { PostsModule } from './posts/posts.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { BillingModule } from './billing/billing.module';
-import { ReferralModule } from './referral/referral.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -81,7 +80,6 @@ import { HealthController } from './health.controller';
     StoryStructureModule,
     PostsModule,
     TimelineModule,
-    ReferralModule,
   ],
   controllers: [HealthController],
 })

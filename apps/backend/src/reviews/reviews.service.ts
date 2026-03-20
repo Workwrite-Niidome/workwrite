@@ -1,7 +1,6 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostsService } from '../posts/posts.service';
-import { ReferralService } from '../referral/referral.service';
 import { PostType } from '@prisma/client';
 
 @Injectable()
@@ -11,7 +10,6 @@ export class ReviewsService {
   constructor(
     private prisma: PrismaService,
     private postsService: PostsService,
-    private referralService: ReferralService,
   ) {}
 
   async create(userId: string, data: { workId: string; content: string }) {
@@ -39,9 +37,6 @@ export class ReviewsService {
         content: `『${title}』にレビューを投稿しました\n\n${excerpt}${data.content.length > 100 ? '...' : ''}`,
         workId: data.workId,
       }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
-      // Referral reward: first review
-      this.referralService.checkAndReward(userId, 'first_review')
-        .catch((e) => this.logger.warn(`Referral reward failed: ${e}`));
     }
 
     return review;

@@ -4,11 +4,10 @@ import { WorksService } from './works.service';
 import { PostsModule } from '../posts/posts.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { EmotionsModule } from '../emotions/emotions.module';
-import { ReferralModule } from '../referral/referral.module';
 import { AiAssistModule } from '../ai-assist/ai-assist.module';
 
 @Module({
-  imports: [PostsModule, ScoringModule, EmotionsModule, ReferralModule, AiAssistModule],
+  imports: [PostsModule, ScoringModule, EmotionsModule, AiAssistModule],
   controllers: [WorksController],
   providers: [WorksService],
   exports: [WorksService],
