@@ -74,12 +74,15 @@ export class EpisodesController {
     @Query('skipAnalysis') skipAnalysis?: string,
   ) {
     const result = await this.episodesService.update(id, userId, dto);
-    // Originality check only on save (lightweight, no API call)
     if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
       const episode = await this.episodesService.findOne(id, userId);
+      // Originality check on every save (lightweight, no API call)
       this.triggerOriginalityCheck(episode.workId);
+      // For published episodes: re-analyze if content changed significantly (20%+)
+      if (episode.publishedAt) {
+        this.triggerAnalysisIfSignificantChange(episode.workId, episode.id, dto.content, userId);
+      }
     }
-    // Episode analysis and summary update are deferred to publish time
     return result;
   }
 
@@ -192,6 +195,34 @@ export class EpisodesController {
     this.episodeAnalysis.analyzeEpisode(workId, episodeId).catch((e) => {
       this.logger.warn(`Failed to auto-analyze episode ${episodeId}: ${e.message}`);
     });
+  }
+
+  /**
+   * For published episodes: re-run analysis only if content changed by 20%+.
+   * Compares new content length against the last analyzed version.
+   */
+  private async triggerAnalysisIfSignificantChange(
+    workId: string, episodeId: string, newContent: string, userId: string,
+  ) {
+    try {
+      const analysis = await this.episodeAnalysis.getAnalysis(episodeId);
+      if (!analysis) {
+        // No previous analysis — run it
+        this.triggerEpisodeAnalysis(workId, episodeId);
+        this.triggerSummaryUpdate(workId, userId);
+        return;
+      }
+      // Compare: if content length changed by 20%+ from the summary length, re-analyze
+      const prevLength = (analysis.summary?.length || 0) * 5; // rough estimate of original content from summary
+      const changeRatio = Math.abs(newContent.length - prevLength) / Math.max(prevLength, 1);
+      if (changeRatio > 0.2) {
+        this.logger.log(`Published episode ${episodeId} content changed significantly (${Math.round(changeRatio * 100)}%), re-analyzing`);
+        this.triggerEpisodeAnalysis(workId, episodeId);
+        this.triggerSummaryUpdate(workId, userId);
+      }
+    } catch {
+      // On error, skip re-analysis silently
+    }
   }
 
   /** Fire-and-forget originality check (non-blocking) */

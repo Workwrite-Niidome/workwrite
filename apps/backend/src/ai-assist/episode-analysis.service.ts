@@ -413,6 +413,12 @@ ${episode.content}`;
     return { analyzed, skipped };
   }
 
+  async getAnalysis(episodeId: string) {
+    return this.prisma.episodeAnalysis.findUnique({
+      where: { episodeId },
+    });
+  }
+
   async getAnalysisForWork(workId: string) {
     return this.prisma.episodeAnalysis.findMany({
       where: { workId },
