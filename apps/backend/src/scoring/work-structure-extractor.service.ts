@@ -289,6 +289,7 @@ ${fullText}`;
         });
         if (existing) continue;
 
+        const endState = episode.content.slice(-300);
         await this.prisma.episodeAnalysis.create({
           data: {
             episodeId: episode.id,
@@ -296,7 +297,7 @@ ${fullText}`;
             summary: summary.summary,
             emotionalArc: summary.emotionalArc,
             narrativePOV: data.narrativePOV || null,
-            endState: '',
+            endState,
             version: 1,
           },
         });
@@ -350,5 +351,244 @@ ${fullText}`;
         });
       }
     }
+
+    // A1: Programmatic dialogue extraction using regex for 「」patterns
+    await this.extractDialogueProgrammatically(workId, episodes);
+  }
+
+  private async extractDialogueProgrammatically(
+    workId: string,
+    episodes: EpisodeInput[],
+  ): Promise<void> {
+    const existing = await this.prisma.characterDialogueSample.findMany({
+      where: { workId },
+      select: { line: true },
+    });
+    const existingLines = new Set(existing.map((d) => d.line));
+
+    const newSamples: { workId: string; characterName: string; line: string; episodeOrder: number }[] = [];
+
+    for (const episode of episodes) {
+      const dialogueRegex = /「([^」]{5,100})」/g;
+      let match: RegExpExecArray | null;
+      while ((match = dialogueRegex.exec(episode.content)) !== null) {
+        const line = match[1];
+        if (existingLines.has(line)) continue;
+
+        // Try to find speaker: look up to 50 chars before the 「
+        const before = episode.content.slice(Math.max(0, match.index - 50), match.index);
+        // Match a character name pattern: 2-8 Japanese characters followed by optional punctuation/whitespace
+        const speakerMatch = before.match(/([^\s、。！？「」\n]{2,8})(?:は|が|の|も|、|\s)*$/);
+        const characterName = speakerMatch ? speakerMatch[1] : '不明';
+
+        existingLines.add(line);
+        newSamples.push({
+          workId,
+          characterName,
+          line,
+          episodeOrder: episode.orderIndex,
+        });
+
+        // Limit to avoid storing too many samples
+        if (newSamples.length >= 50) break;
+      }
+      if (newSamples.length >= 50) break;
+    }
+
+    if (newSamples.length > 0) {
+      await this.prisma.characterDialogueSample.createMany({
+        data: newSamples,
+        skipDuplicates: true,
+      });
+      this.logger.log(`Programmatically extracted ${newSamples.length} dialogue samples for work ${workId}`);
+    }
+  }
+
+  /**
+   * B1: Batch analyze episodes in groups of 5 using Haiku.
+   * Runs after extractAndSave so characters/world are already in DB.
+   */
+  async batchAnalyzeEpisodes(workId: string, episodes: EpisodeInput[]): Promise<void> {
+    if (episodes.length === 0) return;
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) {
+      this.logger.warn('No API key, skipping batch episode analysis');
+      return;
+    }
+
+    const sorted = [...episodes].sort((a, b) => a.orderIndex - b.orderIndex);
+    const batchSize = 5;
+
+    for (let i = 0; i < sorted.length; i += batchSize) {
+      const batch = sorted.slice(i, i + batchSize);
+
+      try {
+        await this.analyzeBatch(workId, batch, apiKey);
+      } catch (err: any) {
+        this.logger.error(`Batch episode analysis failed for work ${workId}, batch starting at index ${i}: ${err.message}`);
+        // Log and continue — don't throw
+      }
+
+      // B3: 1-second delay between batch calls to avoid rate limiting
+      if (i + batchSize < sorted.length) {
+        await new Promise((resolve) => setTimeout(resolve, 1000));
+      }
+    }
+  }
+
+  private async analyzeBatch(
+    workId: string,
+    batch: EpisodeInput[],
+    apiKey: string,
+  ): Promise<void> {
+    const batchSystemPrompt = `あなたは小説分析の専門家です。複数のエピソードを分析し、各エピソードのデータをJSON配列で返してください。
+
+【最重要ルール】
+- テキストに書かれている事実のみを抽出してください。推測・補完・行間の解釈は絶対にしないでください
+- 「〇〇だろう」「〇〇と思われる」「おそらく〇〇」のような推測表現は禁止です
+- 曖昧な場合は「不明」または「明示されていない」と記述してください
+- summaryには必ず原文のキーフレーズを「」で引用して含めてください
+
+以下のJSON配列形式で回答してください（JSON以外の文章は不要）:
+[
+  {
+    "orderIndex": 0,
+    "summary": "200-300文字の要約。原文のキーフレーズを「」で引用",
+    "endState": "200-300文字のエピソード終了時点の状況",
+    "emotionalArc": "感情の流れ（例: 期待→不安→決意）",
+    "foreshadowings": [
+      { "description": "伏線の内容", "status": "open/resolved" }
+    ],
+    "dialogueSamples": [
+      { "character": "キャラクター名", "line": "印象的なセリフ（「」なしで記入）" }
+    ]
+  }
+]`;
+
+    const episodesText = batch.map((ep) => {
+      const content = ep.content.slice(0, 2000);
+      return `=== 第${ep.orderIndex + 1}話「${ep.title}」===\n${content}`;
+    }).join('\n\n');
+
+    const userPrompt = `以下のエピソードを分析してください:\n\n${episodesText}`;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': '2023-06-01',
+      },
+      body: JSON.stringify({
+        model: 'claude-haiku-4-5-20251001',
+        max_tokens: 4096,
+        system: batchSystemPrompt,
+        messages: [{ role: 'user', content: userPrompt }],
+      }),
+    });
+
+    if (!response.ok) {
+      throw new Error(`Claude API error: ${response.status}`);
+    }
+
+    const data = await response.json();
+    const content = data.content[0]?.text || '';
+
+    const jsonMatch = content.match(/\[[\s\S]*\]/);
+    if (!jsonMatch) {
+      this.logger.warn(`No JSON array in batch analysis response for work ${workId}`);
+      return;
+    }
+
+    let batchResults: any[];
+    try {
+      batchResults = JSON.parse(jsonMatch[0]);
+    } catch (err: any) {
+      this.logger.error(`Failed to parse batch analysis JSON for work ${workId}: ${err.message}`);
+      return;
+    }
+
+    if (!Array.isArray(batchResults)) return;
+
+    // Save results
+    for (const result of batchResults) {
+      const episode = batch.find((ep) => ep.orderIndex === result.orderIndex);
+      if (!episode) continue;
+
+      try {
+        // Upsert EpisodeAnalysis
+        await this.prisma.episodeAnalysis.upsert({
+          where: { episodeId: episode.id },
+          update: {
+            summary: result.summary || '',
+            endState: result.endState || episode.content.slice(-300),
+            emotionalArc: result.emotionalArc || '',
+          },
+          create: {
+            episodeId: episode.id,
+            workId,
+            summary: result.summary || '',
+            endState: result.endState || episode.content.slice(-300),
+            emotionalArc: result.emotionalArc || '',
+            narrativePOV: null,
+            version: 1,
+          },
+        });
+
+        // Save foreshadowings
+        if (Array.isArray(result.foreshadowings) && result.foreshadowings.length > 0) {
+          const existingFore = await this.prisma.foreshadowing.findMany({
+            where: { workId },
+            select: { description: true },
+          });
+          const existingDescs = new Set(existingFore.map((f) => f.description));
+
+          const newFore = result.foreshadowings.filter(
+            (f: any) => f.description && !existingDescs.has(f.description),
+          );
+          if (newFore.length > 0) {
+            await this.prisma.foreshadowing.createMany({
+              data: newFore.map((f: any) => ({
+                workId,
+                description: f.description,
+                plantedIn: episode.orderIndex,
+                status: f.status || 'open',
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+
+        // Save dialogue samples
+        if (Array.isArray(result.dialogueSamples) && result.dialogueSamples.length > 0) {
+          const existingDlg = await this.prisma.characterDialogueSample.findMany({
+            where: { workId },
+            select: { line: true },
+          });
+          const existingLines = new Set(existingDlg.map((d) => d.line));
+
+          const newSamples = result.dialogueSamples.filter(
+            (d: any) => d.line && !existingLines.has(d.line),
+          );
+          if (newSamples.length > 0) {
+            await this.prisma.characterDialogueSample.createMany({
+              data: newSamples.map((d: any) => ({
+                workId,
+                characterName: d.character || '不明',
+                line: d.line,
+                episodeOrder: episode.orderIndex,
+              })),
+              skipDuplicates: true,
+            });
+          }
+        }
+      } catch (err: any) {
+        this.logger.error(`Failed to save batch analysis for episode ${episode.id}: ${err.message}`);
+        // Continue to next episode
+      }
+    }
+
+    this.logger.log(`Batch analysis saved for work ${workId}, ${batchResults.length} episodes`);
   }
 }
