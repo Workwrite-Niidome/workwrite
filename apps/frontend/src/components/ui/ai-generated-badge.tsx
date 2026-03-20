@@ -1,6 +1,6 @@
 'use client';
 
-import { Bot } from 'lucide-react';
+import { Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface AiGeneratedBadgeProps {
@@ -18,7 +18,7 @@ export function AiGeneratedBadge({ className, size = 'sm' }: AiGeneratedBadgePro
         className,
       )}
     >
-      <Bot className={size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'} />
+      <Sparkles className={size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'} />
       {size === 'xs' ? 'AI' : 'AI'}
     </span>
   );
