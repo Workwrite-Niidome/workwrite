@@ -6,6 +6,7 @@ import { SearchService } from '../search/search.service';
 import { EmotionsService } from '../emotions/emotions.service';
 import { EmotionMappingService } from '../emotions/emotion-mapping.service';
 import { ReferralService } from '../referral/referral.service';
+import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PostType } from '@prisma/client';
@@ -22,6 +23,7 @@ export class WorksService {
     private emotionsService: EmotionsService,
     private emotionMappingService: EmotionMappingService,
     private referralService: ReferralService,
+    private episodeAnalysisService: EpisodeAnalysisService,
   ) {}
 
   async create(authorId: string, dto: CreateWorkDto) {
@@ -307,7 +309,15 @@ export class WorksService {
 
   /** Auto-score, generate emotion tags, and index to search after publishing */
   async autoProcessWork(workId: string) {
-    // 1. Score the work
+    // 0. Run episode analysis first (extracts foreshadowing, emotion arcs, character voices, etc.)
+    try {
+      const analysisResult = await this.episodeAnalysisService.analyzeAllEpisodes(workId);
+      this.logger.log(`Pre-scoring episode analysis for work ${workId}: analyzed=${analysisResult.analyzed}, skipped=${analysisResult.skipped}`);
+    } catch (e) {
+      this.logger.warn(`Episode analysis failed for work ${workId}, proceeding with scoring: ${e}`);
+    }
+
+    // 1. Score the work (now with structural data from episode analysis)
     const score = await this.scoringService.scoreWork(workId);
     this.logger.log(`Auto-scored work ${workId}: overall=${score?.overall}`);
 
