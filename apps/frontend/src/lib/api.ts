@@ -180,10 +180,10 @@ class ApiClient {
     return `${API_BASE}/auth/twitter`;
   }
 
-  async twitterCallback(oauthToken: string, oauthVerifier: string) {
+  async twitterCallback(code: string, state: string) {
     return this.request<AuthResponse>('/auth/twitter/callback', {
       method: 'POST',
-      body: JSON.stringify({ oauth_token: oauthToken, oauth_verifier: oauthVerifier }),
+      body: JSON.stringify({ code, state }),
     });
   }
 

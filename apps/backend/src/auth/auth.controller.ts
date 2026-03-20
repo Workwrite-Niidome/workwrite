@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Query, Res, HttpCode, HttpStatus, Logger, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Res, HttpCode, HttpStatus, Logger, BadRequestException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Response } from 'express';
@@ -6,14 +6,14 @@ import * as crypto from 'crypto';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/register.dto';
 
-// In-memory store for OAuth request tokens (short-lived)
-const oauthTokenStore = new Map<string, { secret: string; createdAt: number }>();
+// In-memory store for PKCE code_verifier (short-lived, keyed by state)
+const pkceStore = new Map<string, { codeVerifier: string; createdAt: number }>();
 
-// Clean up expired tokens every 5 minutes
+// Clean up expired entries every 5 minutes
 setInterval(() => {
   const now = Date.now();
-  for (const [key, val] of oauthTokenStore) {
-    if (now - val.createdAt > 10 * 60 * 1000) oauthTokenStore.delete(key);
+  for (const [key, val] of pkceStore) {
+    if (now - val.createdAt > 10 * 60 * 1000) pkceStore.delete(key);
   }
 }, 5 * 60 * 1000);
 
@@ -53,169 +53,111 @@ export class AuthController {
     return this.authService.refreshTokens(dto.refreshToken);
   }
 
-  // ─── Twitter/X OAuth 1.0a ─────────────────────────────────
+  // ─── Twitter/X OAuth 2.0 PKCE ────────────────────────────
 
   @Get('twitter')
-  @ApiOperation({ summary: 'Redirect to Twitter for OAuth login' })
+  @ApiOperation({ summary: 'Redirect to Twitter for OAuth 2.0 login' })
   async twitterAuth(@Res() res: Response) {
-    const apiKey = this.config.get<string>('TWITTER_API_KEY');
-    const apiSecret = this.config.get<string>('TWITTER_API_SECRET');
+    const clientId = this.config.get<string>('TWITTER_CLIENT_ID');
     const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
     const callbackUrl = `${frontendUrl}/auth/twitter/callback`;
 
-    if (!apiKey || !apiSecret) {
+    if (!clientId) {
       throw new BadRequestException('Twitter OAuth is not configured');
     }
 
-    try {
-      const requestTokenData = await this.getOAuthRequestToken(apiKey, apiSecret, callbackUrl);
-      oauthTokenStore.set(requestTokenData.oauth_token, {
-        secret: requestTokenData.oauth_token_secret,
-        createdAt: Date.now(),
-      });
+    // Generate PKCE code_verifier and code_challenge
+    const codeVerifier = crypto.randomBytes(32).toString('base64url');
+    const codeChallenge = crypto
+      .createHash('sha256')
+      .update(codeVerifier)
+      .digest('base64url');
 
-      res.redirect(`https://api.twitter.com/oauth/authenticate?oauth_token=${requestTokenData.oauth_token}`);
-    } catch (err: any) {
-      this.logger.error(`Twitter OAuth request token failed: ${err.message}`);
-      throw new BadRequestException('Twitter認証の開始に失敗しました');
-    }
+    const state = crypto.randomBytes(16).toString('hex');
+
+    // Store code_verifier for callback
+    pkceStore.set(state, { codeVerifier, createdAt: Date.now() });
+
+    const params = new URLSearchParams({
+      response_type: 'code',
+      client_id: clientId,
+      redirect_uri: callbackUrl,
+      scope: 'tweet.read users.read offline.access',
+      state,
+      code_challenge: codeChallenge,
+      code_challenge_method: 'S256',
+    });
+
+    res.redirect(`https://twitter.com/i/oauth2/authorize?${params.toString()}`);
   }
 
   @Post('twitter/callback')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Handle Twitter OAuth callback' })
-  async twitterCallback(@Body() body: { oauth_token: string; oauth_verifier: string }) {
-    const apiKey = this.config.get<string>('TWITTER_API_KEY');
-    const apiSecret = this.config.get<string>('TWITTER_API_SECRET');
+  @ApiOperation({ summary: 'Handle Twitter OAuth 2.0 callback' })
+  async twitterCallback(@Body() body: { code: string; state: string }) {
+    const clientId = this.config.get<string>('TWITTER_CLIENT_ID');
+    const clientSecret = this.config.get<string>('TWITTER_CLIENT_SECRET');
+    const frontendUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
+    const callbackUrl = `${frontendUrl}/auth/twitter/callback`;
 
-    if (!apiKey || !apiSecret) {
+    if (!clientId || !clientSecret) {
       throw new BadRequestException('Twitter OAuth is not configured');
     }
 
-    const stored = oauthTokenStore.get(body.oauth_token);
+    const stored = pkceStore.get(body.state);
     if (!stored) {
       throw new BadRequestException('無効または期限切れの認証リクエストです。もう一度お試しください。');
     }
-    oauthTokenStore.delete(body.oauth_token);
+    pkceStore.delete(body.state);
 
     try {
-      // Exchange request token for access token
-      const accessData = await this.getOAuthAccessToken(
-        apiKey, apiSecret, body.oauth_token, stored.secret, body.oauth_verifier,
-      );
+      // Exchange authorization code for access token
+      const tokenRes = await fetch('https://api.twitter.com/2/oauth2/token', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/x-www-form-urlencoded',
+          Authorization: `Basic ${Buffer.from(`${clientId}:${clientSecret}`).toString('base64')}`,
+        },
+        body: new URLSearchParams({
+          code: body.code,
+          grant_type: 'authorization_code',
+          redirect_uri: callbackUrl,
+          code_verifier: stored.codeVerifier,
+        }).toString(),
+      });
 
-      // Fetch user profile
-      const profile = await this.getTwitterProfile(apiKey, apiSecret, accessData.oauth_token, accessData.oauth_token_secret);
+      if (!tokenRes.ok) {
+        const err = await tokenRes.text();
+        this.logger.error(`Twitter token exchange failed: ${tokenRes.status} ${err}`);
+        throw new Error(`Token exchange failed: ${tokenRes.status}`);
+      }
+
+      const tokenData = await tokenRes.json();
+      const accessToken = tokenData.access_token;
+
+      // Fetch user profile from Twitter API v2
+      const profileRes = await fetch('https://api.twitter.com/2/users/me?user.fields=name,username,profile_image_url', {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+
+      if (!profileRes.ok) {
+        throw new Error(`Profile fetch failed: ${profileRes.status}`);
+      }
+
+      const profileData = await profileRes.json();
+      const profile = profileData.data;
 
       // Create or link account
       return this.authService.findOrCreateOAuthUser({
         provider: 'twitter',
-        providerId: profile.id_str,
-        email: `twitter_${profile.id_str}@workwrite.jp`, // Twitter doesn't always provide email
-        name: profile.name || profile.screen_name,
-        avatarUrl: profile.profile_image_url_https?.replace('_normal', '') || undefined,
+        providerId: profile.id,
+        email: `twitter_${profile.id}@workwrite.jp`,
+        name: profile.name || profile.username,
+        avatarUrl: profile.profile_image_url?.replace('_normal', '') || undefined,
       });
     } catch (err: any) {
       this.logger.error(`Twitter OAuth callback failed: ${err.message}`);
       throw new BadRequestException('Twitter認証に失敗しました。もう一度お試しください。');
     }
-  }
-
-  // ─── OAuth 1.0a Helpers ───────────────────────────────────
-
-  private async getOAuthRequestToken(apiKey: string, apiSecret: string, callbackUrl: string) {
-    const params = this.buildOAuthParams(apiKey, {
-      oauth_callback: callbackUrl,
-    });
-    const signature = this.signRequest('POST', 'https://api.twitter.com/oauth/request_token', params, apiSecret, '');
-    params.oauth_signature = signature;
-
-    const res = await fetch('https://api.twitter.com/oauth/request_token', {
-      method: 'POST',
-      headers: { Authorization: this.buildAuthHeader(params) },
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Request token failed: ${res.status} ${text}`);
-    }
-
-    const body = await res.text();
-    return Object.fromEntries(new URLSearchParams(body)) as Record<string, string>;
-  }
-
-  private async getOAuthAccessToken(
-    apiKey: string, apiSecret: string,
-    oauthToken: string, oauthTokenSecret: string, oauthVerifier: string,
-  ) {
-    const params = this.buildOAuthParams(apiKey, {
-      oauth_token: oauthToken,
-      oauth_verifier: oauthVerifier,
-    });
-    const signature = this.signRequest('POST', 'https://api.twitter.com/oauth/access_token', params, apiSecret, oauthTokenSecret);
-    params.oauth_signature = signature;
-
-    const res = await fetch('https://api.twitter.com/oauth/access_token', {
-      method: 'POST',
-      headers: { Authorization: this.buildAuthHeader(params) },
-    });
-
-    if (!res.ok) throw new Error(`Access token failed: ${res.status}`);
-
-    const body = await res.text();
-    return Object.fromEntries(new URLSearchParams(body)) as Record<string, string>;
-  }
-
-  private async getTwitterProfile(
-    apiKey: string, apiSecret: string,
-    oauthToken: string, oauthTokenSecret: string,
-  ) {
-    const url = 'https://api.twitter.com/1.1/account/verify_credentials.json?include_email=true';
-    const params = this.buildOAuthParams(apiKey, { oauth_token: oauthToken });
-    const signature = this.signRequest('GET', url.split('?')[0], { ...params, include_email: 'true' }, apiSecret, oauthTokenSecret);
-    params.oauth_signature = signature;
-
-    const res = await fetch(url, {
-      headers: { Authorization: this.buildAuthHeader(params) },
-    });
-
-    if (!res.ok) throw new Error(`Profile fetch failed: ${res.status}`);
-    return res.json();
-  }
-
-  private buildOAuthParams(apiKey: string, extra: Record<string, string> = {}): Record<string, string> {
-    return {
-      oauth_consumer_key: apiKey,
-      oauth_nonce: crypto.randomBytes(16).toString('hex'),
-      oauth_signature_method: 'HMAC-SHA1',
-      oauth_timestamp: Math.floor(Date.now() / 1000).toString(),
-      oauth_version: '1.0',
-      ...extra,
-    };
-  }
-
-  private signRequest(method: string, url: string, params: Record<string, string>, apiSecret: string, tokenSecret: string): string {
-    const sortedParams = Object.keys(params)
-      .sort()
-      .map((k) => `${this.pctEncode(k)}=${this.pctEncode(params[k])}`)
-      .join('&');
-
-    const baseString = `${method}&${this.pctEncode(url)}&${this.pctEncode(sortedParams)}`;
-    const signingKey = `${this.pctEncode(apiSecret)}&${this.pctEncode(tokenSecret)}`;
-
-    return crypto.createHmac('sha1', signingKey).update(baseString).digest('base64');
-  }
-
-  private buildAuthHeader(params: Record<string, string>): string {
-    const parts = Object.keys(params)
-      .filter((k) => k.startsWith('oauth_'))
-      .sort()
-      .map((k) => `${this.pctEncode(k)}="${this.pctEncode(params[k])}"`)
-      .join(', ');
-    return `OAuth ${parts}`;
-  }
-
-  private pctEncode(str: string): string {
-    return encodeURIComponent(str).replace(/[!'()*]/g, (c) => `%${c.charCodeAt(0).toString(16).toUpperCase()}`);
   }
 }

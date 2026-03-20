@@ -5,32 +5,29 @@ import { useRouter, useSearchParams } from 'next/navigation';
 import { Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
 import { api } from '@/lib/api';
-import { useAuth } from '@/lib/auth-context';
 
 function TwitterCallbackContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const [error, setError] = useState('');
-  const { login: setAuthState } = useAuth();
 
   useEffect(() => {
-    const oauthToken = searchParams.get('oauth_token');
-    const oauthVerifier = searchParams.get('oauth_verifier');
+    const code = searchParams.get('code');
+    const state = searchParams.get('state');
 
-    if (!oauthToken || !oauthVerifier) {
+    if (!code || !state) {
       setError('Twitter認証がキャンセルされました');
       setTimeout(() => router.push('/login'), 2000);
       return;
     }
 
-    api.twitterCallback(oauthToken, oauthVerifier)
+    api.twitterCallback(code, state)
       .then((res) => {
         const data = (res as any).data || res;
         api.setToken(data.accessToken);
         if (typeof window !== 'undefined') {
           localStorage.setItem('refreshToken', data.refreshToken);
         }
-        // Redirect to intended page or home
         const redirect = sessionStorage.getItem('auth_redirect') || '/';
         sessionStorage.removeItem('auth_redirect');
         window.location.href = redirect;
