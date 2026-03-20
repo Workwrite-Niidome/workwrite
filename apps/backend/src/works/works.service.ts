@@ -309,15 +309,7 @@ export class WorksService {
 
   /** Auto-score, generate emotion tags, and index to search after publishing */
   async autoProcessWork(workId: string) {
-    // 0. Run episode analysis first (extracts foreshadowing, emotion arcs, character voices, etc.)
-    try {
-      const analysisResult = await this.episodeAnalysisService.analyzeAllEpisodes(workId);
-      this.logger.log(`Pre-scoring episode analysis for work ${workId}: analyzed=${analysisResult.analyzed}, skipped=${analysisResult.skipped}`);
-    } catch (e) {
-      this.logger.warn(`Episode analysis failed for work ${workId}, proceeding with scoring: ${e}`);
-    }
-
-    // 1. Score the work (now with structural data from episode analysis)
+    // 1. Score the work
     const score = await this.scoringService.scoreWork(workId);
     this.logger.log(`Auto-scored work ${workId}: overall=${score?.overall}`);
 
