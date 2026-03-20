@@ -76,11 +76,10 @@ export class EpisodesController {
     const result = await this.episodesService.update(id, userId, dto);
     if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
       const episode = await this.episodesService.findOne(id, userId);
-      // Originality check on every save (lightweight, no API call)
       this.triggerOriginalityCheck(episode.workId);
-      // For published episodes: re-analyze if content changed significantly (20%+)
+      // For published episodes: re-analyze if content changed meaningfully
       if (episode.publishedAt) {
-        this.triggerAnalysisIfSignificantChange(episode.workId, episode.id, dto.content, userId);
+        this.triggerAnalysisIfSignificantChange(episode, dto.content, userId);
       }
     }
     return result;
@@ -198,27 +197,34 @@ export class EpisodesController {
   }
 
   /**
-   * For published episodes: re-run analysis only if content changed by 20%+.
-   * Compares new content length against the last analyzed version.
+   * For published episodes: re-run analysis only if content changed meaningfully.
+   * Strips whitespace/newlines before comparing to ignore formatting-only changes.
    */
   private async triggerAnalysisIfSignificantChange(
-    workId: string, episodeId: string, newContent: string, userId: string,
+    episode: any, newContent: string, userId: string,
   ) {
     try {
-      const analysis = await this.episodeAnalysis.getAnalysis(episodeId);
+      const analysis = await this.episodeAnalysis.getAnalysis(episode.id);
       if (!analysis) {
-        // No previous analysis — run it
-        this.triggerEpisodeAnalysis(workId, episodeId);
-        this.triggerSummaryUpdate(workId, userId);
+        this.triggerEpisodeAnalysis(episode.workId, episode.id);
+        this.triggerSummaryUpdate(episode.workId, userId);
         return;
       }
-      // Compare: if content length changed by 20%+ from the summary length, re-analyze
-      const prevLength = (analysis.summary?.length || 0) * 5; // rough estimate of original content from summary
-      const changeRatio = Math.abs(newContent.length - prevLength) / Math.max(prevLength, 1);
+
+      // Skip if analysis version matches current content version
+      if (analysis.version === episode.contentVersion) return;
+
+      // Normalize: strip all whitespace/newlines/fullwidth spaces
+      const normalize = (s: string) => s.replace(/[\s\n\r\u3000]+/g, '').length;
+      const newLen = normalize(newContent);
+      const prevLen = normalize(episode.content || '');
+
+      // If normalized length differs by less than 20%, it's likely formatting-only
+      const changeRatio = prevLen > 0 ? Math.abs(newLen - prevLen) / prevLen : 1;
       if (changeRatio > 0.2) {
-        this.logger.log(`Published episode ${episodeId} content changed significantly (${Math.round(changeRatio * 100)}%), re-analyzing`);
-        this.triggerEpisodeAnalysis(workId, episodeId);
-        this.triggerSummaryUpdate(workId, userId);
+        this.logger.log(`Published episode ${episode.id} content changed ${Math.round(changeRatio * 100)}% (normalized), re-analyzing`);
+        this.triggerEpisodeAnalysis(episode.workId, episode.id);
+        this.triggerSummaryUpdate(episode.workId, userId);
       }
     } catch {
       // On error, skip re-analysis silently

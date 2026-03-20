@@ -81,6 +81,11 @@ export class UpdateWorkDto {
   @IsEnum(CompletionStatus)
   completionStatus?: CompletionStatus;
 
+  @ApiPropertyOptional({ description: 'AI生成作品フラグ' })
+  @IsOptional()
+  @IsBoolean()
+  isAiGenerated?: boolean;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()
