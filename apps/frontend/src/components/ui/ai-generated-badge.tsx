@@ -5,7 +5,7 @@ import { cn } from '@/lib/utils';
 
 interface AiGeneratedBadgeProps {
   className?: string;
-  size?: 'xs' | 'sm' | 'md';
+  size?: 'sm' | 'md';
 }
 
 export function AiGeneratedBadge({ className, size = 'sm' }: AiGeneratedBadgeProps) {
@@ -14,12 +14,12 @@ export function AiGeneratedBadge({ className, size = 'sm' }: AiGeneratedBadgePro
       className={cn(
         'inline-flex items-center gap-0.5 rounded-full border font-medium shrink-0',
         'bg-violet-500/10 border-violet-500/30 text-violet-600 dark:text-violet-400',
-        size === 'xs' ? 'text-[9px] px-1.5 py-0.5' : size === 'sm' ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2.5 py-1',
+        size === 'sm' ? 'text-[10px] px-1.5 py-0.5' : 'text-xs px-2.5 py-1',
         className,
       )}
     >
-      <Sparkles className={size === 'md' ? 'h-3 w-3' : 'h-2.5 w-2.5'} />
-      {size === 'xs' ? 'AI' : 'AI'}
+      <Sparkles className={size === 'sm' ? 'h-2.5 w-2.5' : 'h-3 w-3'} />
+      AI Generated
     </span>
   );
 }

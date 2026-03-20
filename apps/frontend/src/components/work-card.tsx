@@ -21,14 +21,11 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
       <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
         <CardContent className="p-5 space-y-2.5">
           <div className="flex items-start justify-between gap-2">
-            <div className="flex items-center gap-1.5">
-              {work.isAiGenerated && <AiGeneratedBadge size="xs" />}
-              {work.genre && (
-                <Badge variant="outline" className="text-[11px] shrink-0">
-                  {GENRE_LABELS[work.genre] || work.genre}
-                </Badge>
-              )}
-            </div>
+            {work.genre && (
+              <Badge variant="outline" className="text-[11px] shrink-0">
+                {GENRE_LABELS[work.genre] || work.genre}
+              </Badge>
+            )}
             {work.qualityScore && (
               <ScoreBadge score={work.qualityScore.overall} className="shrink-0" />
             )}
@@ -49,6 +46,7 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
           )}
 
           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
+            {work.isAiGenerated && <AiGeneratedBadge />}
             {work.tags?.slice(0, 3).map((t) => (
               <span key={t.id} className="text-[11px] text-muted-foreground">#{t.tag}</span>
             ))}
