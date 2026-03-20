@@ -368,7 +368,7 @@ export default function EditWorkPage() {
             </CardContent>
           </Card>
 
-          <ScoreCard score={scoreDetail} workId={workId} onScoreUpdate={setScoreDetail} />
+          <ScoreCard score={scoreDetail} workId={workId} workTitle={title} onScoreUpdate={setScoreDetail} />
 
           {/* Reader Display Settings */}
           <ReaderDisplaySettings workId={workId} creationPlan={creationPlan} />

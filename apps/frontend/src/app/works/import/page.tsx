@@ -264,6 +264,8 @@ export default function ImportPage() {
                 emotionTags: urlResult.scoringResult.emotionTags,
                 scoredAt: new Date().toISOString(),
               }}
+              workId={urlResult.workId}
+              workTitle={urlResult.title}
             />
           )}
 

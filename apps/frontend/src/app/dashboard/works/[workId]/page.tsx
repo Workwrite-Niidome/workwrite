@@ -33,17 +33,19 @@ export default function WorkAnalyticsPage() {
   const [score, setScore] = useState<QualityScoreDetail | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapEntry[]>([]);
   const [emotionCloud, setEmotionCloud] = useState<EmotionCloudEntry[]>([]);
+  const [workTitle, setWorkTitle] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     Promise.all([
+      api.getWork(workId).then((res) => setWorkTitle(res.data?.title || '')).catch(() => {}),
       api.getScoreAnalysis(workId).catch(() => ({ data: null })),
       api.getWorkHeatmap(workId).catch(() => ({ data: [] })),
       api.getWorkEmotionCloud(workId).catch(() => ({ data: [] })),
-    ]).then(([scoreRes, heatmapRes, emotionRes]) => {
-      setScore(scoreRes.data);
-      setHeatmap(heatmapRes.data);
-      setEmotionCloud(emotionRes.data);
+    ]).then(([, scoreRes, heatmapRes, emotionRes]) => {
+      setScore((scoreRes as any)?.data ?? null);
+      setHeatmap((heatmapRes as any)?.data ?? []);
+      setEmotionCloud((emotionRes as any)?.data ?? []);
     }).finally(() => setLoading(false));
   }, [workId]);
 
@@ -72,7 +74,7 @@ export default function WorkAnalyticsPage() {
       <div className="grid gap-6 md:grid-cols-2">
         {/* Quality Score - unified component */}
         <div className="md:col-span-2">
-          <ScoreCard score={score} workId={workId} onScoreUpdate={setScore} />
+          <ScoreCard score={score} workId={workId} workTitle={workTitle} onScoreUpdate={setScore} />
         </div>
 
         {/* Reading Heatmap */}
