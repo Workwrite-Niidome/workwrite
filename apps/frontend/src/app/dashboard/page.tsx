@@ -9,6 +9,7 @@ import { ConfirmDialog } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScoreBadge } from '@/components/scoring/score-badge';
+import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work } from '@/lib/api';
 import { loadDrafts, deleteDraft, type WizardDraft } from '@/lib/wizard-drafts';
 
@@ -236,6 +237,7 @@ export default function DashboardPage() {
                     <CardTitle className="text-lg truncate group-hover:text-primary transition-colors">
                       {work.title}
                     </CardTitle>
+                    {work.isAiGenerated && <AiGeneratedBadge />}
                     <Badge variant={work.status === 'PUBLISHED' ? 'default' : 'secondary'} className="shrink-0">
                       {STATUS_LABELS[work.status]}
                     </Badge>

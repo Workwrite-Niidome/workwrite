@@ -421,6 +421,56 @@ export class WorksService {
       });
       this.logger.log(`Indexed work ${workId} to search`);
     }
+
+    // 4. Calculate originality and auto-flag AI-generated works
+    try {
+      await this.calculateAndFlagAiGenerated(workId);
+    } catch (e) {
+      this.logger.warn(`Originality calculation failed for work ${workId}: ${e}`);
+    }
+  }
+
+  /**
+   * Calculate originality from AiCreationLog and auto-set isAiGenerated
+   * if AI-written text ratio exceeds threshold.
+   */
+  private async calculateAndFlagAiGenerated(workId: string) {
+    const logs = await this.prisma.aiCreationLog.findMany({
+      where: { workId, action: 'accepted' },
+    });
+
+    const CREATION_STAGE_WEIGHT = 0.3;
+    const WRITING_ASSIST_WEIGHT = 1.0;
+    const AI_GENERATED_THRESHOLD = 0.7; // originality < 0.3 means 70%+ AI
+
+    let weightedAiChars = 0;
+    for (const log of logs) {
+      const weight = log.stage === 'writing_assist' ? WRITING_ASSIST_WEIGHT : CREATION_STAGE_WEIGHT;
+      weightedAiChars += log.acceptedChars * weight;
+    }
+
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId },
+      select: { wordCount: true },
+    });
+    const totalChars = episodes.reduce((sum, ep) => sum + ep.wordCount, 0);
+
+    const originality = Math.max(0, Math.min(1, 1.0 - weightedAiChars / Math.max(totalChars, 1)));
+
+    const updateData: Record<string, unknown> = { originality };
+
+    // Auto-flag as AI-generated if originality is below threshold
+    if (originality < (1.0 - AI_GENERATED_THRESHOLD)) {
+      updateData.isAiGenerated = true;
+      this.logger.log(`Work ${workId} auto-flagged as AI-generated (originality: ${originality.toFixed(2)})`);
+    }
+
+    await this.prisma.work.update({
+      where: { id: workId },
+      data: updateData,
+    });
+
+    this.logger.log(`Originality for work ${workId}: ${originality.toFixed(2)} (${logs.length} AI logs, ${totalChars} total chars)`);
   }
 
   async getEmotionProfile(workId: string) {
