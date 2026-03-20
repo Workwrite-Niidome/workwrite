@@ -95,6 +95,19 @@ export class AdminController {
     return this.adminService.updateWorkStatus(id, dto.status);
   }
 
+  @Patch('works/:id/ai-generated')
+  @ApiOperation({ summary: 'Toggle AI generated flag' })
+  async updateAiGenerated(
+    @Param('id') id: string,
+    @Body() body: { isAiGenerated: boolean },
+  ) {
+    const work = await this.prisma.work.update({
+      where: { id },
+      data: { isAiGenerated: body.isAiGenerated },
+    });
+    return { data: { id: work.id, isAiGenerated: work.isAiGenerated } };
+  }
+
   @Get('reviews')
   @ApiOperation({ summary: 'List reviews (paginated)' })
   @ApiQuery({ name: 'page', required: false })

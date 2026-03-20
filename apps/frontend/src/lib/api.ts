@@ -841,6 +841,13 @@ class ApiClient {
     );
   }
 
+  async updateWorkAiGenerated(workId: string, isAiGenerated: boolean) {
+    return this.request<{ data: { id: string; isAiGenerated: boolean } }>(
+      `/admin/works/${workId}/ai-generated`,
+      { method: 'PATCH', body: JSON.stringify({ isAiGenerated }) },
+    );
+  }
+
   async getAdminReviews(params?: { page?: number; limit?: number }) {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
@@ -1350,6 +1357,7 @@ export interface AdminWork {
   title: string;
   status: string;
   genre: string | null;
+  isAiGenerated: boolean;
   createdAt: string;
   author: { id: string; name: string; displayName: string | null };
   qualityScore: { overall: number } | null;

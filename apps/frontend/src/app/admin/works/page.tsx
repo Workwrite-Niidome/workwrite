@@ -67,6 +67,7 @@ export default function AdminWorksPage() {
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider min-w-[240px] w-[40%]">Title</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Author</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Status</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">AI</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Score</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Episodes</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider whitespace-nowrap">Actions</th>
@@ -76,14 +77,14 @@ export default function AdminWorksPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-border">
-                    {Array.from({ length: 6 }).map((_, j) => (
+                    {Array.from({ length: 7 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                     ))}
                   </tr>
                 ))
               ) : works.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="px-4 py-8 text-center text-muted-foreground">No works found</td>
+                  <td colSpan={7} className="px-4 py-8 text-center text-muted-foreground">No works found</td>
                 </tr>
               ) : (
                 works.map((work) => (
@@ -105,6 +106,24 @@ export default function AdminWorksPage() {
                       >
                         {STATUSES.map((s) => <option key={s} value={s}>{s}</option>)}
                       </select>
+                    </td>
+                    <td className="px-4 py-3">
+                      <button
+                        onClick={async () => {
+                          try {
+                            await api.updateWorkAiGenerated(work.id, !work.isAiGenerated);
+                            fetchWorks();
+                          } catch {}
+                        }}
+                        className={`inline-flex items-center h-6 px-2 rounded text-[10px] font-medium transition-colors ${
+                          work.isAiGenerated
+                            ? 'bg-accent/20 text-accent-foreground hover:bg-accent/30'
+                            : 'bg-secondary text-muted-foreground hover:bg-secondary/80'
+                        }`}
+                        title={work.isAiGenerated ? 'Click to remove AI badge' : 'Click to add AI badge'}
+                      >
+                        {work.isAiGenerated ? 'AI' : '-'}
+                      </button>
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">
                       {work.qualityScore ? Math.round(work.qualityScore.overall) : '-'}

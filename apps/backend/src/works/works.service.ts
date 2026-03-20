@@ -152,6 +152,7 @@ export class WorksService {
     if (dto.coverUrl !== undefined) updateData.coverUrl = dto.coverUrl;
     if (dto.genre !== undefined) updateData.genre = dto.genre;
     if (dto.completionStatus !== undefined) updateData.completionStatus = dto.completionStatus;
+    if (dto.isAiGenerated !== undefined) updateData.isAiGenerated = dto.isAiGenerated;
     if (dto.status !== undefined) {
       updateData.status = dto.status;
       if (dto.status === 'PUBLISHED' && !work.publishedAt) {
