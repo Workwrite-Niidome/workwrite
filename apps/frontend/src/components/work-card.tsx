@@ -2,6 +2,7 @@ import Link from 'next/link';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScoreBadge } from '@/components/scoring/score-badge';
+import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GENRE_LABELS } from '@/lib/constants';
 import type { Work } from '@/lib/api';
@@ -20,11 +21,14 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
       <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
         <CardContent className="p-5 space-y-2.5">
           <div className="flex items-start justify-between gap-2">
-            {work.genre && (
-              <Badge variant="outline" className="text-[11px] shrink-0">
-                {GENRE_LABELS[work.genre] || work.genre}
-              </Badge>
-            )}
+            <div className="flex items-center gap-1.5">
+              {work.isAiGenerated && <AiGeneratedBadge />}
+              {work.genre && (
+                <Badge variant="outline" className="text-[11px] shrink-0">
+                  {GENRE_LABELS[work.genre] || work.genre}
+                </Badge>
+              )}
+            </div>
             {work.qualityScore && (
               <ScoreBadge score={work.qualityScore.overall} className="shrink-0" />
             )}

@@ -32,6 +32,7 @@ export class WorksService {
         synopsis: dto.synopsis,
         coverUrl: dto.coverUrl,
         genre: dto.genre,
+        isAiGenerated: dto.isAiGenerated || false,
       },
       include: { tags: true },
     });

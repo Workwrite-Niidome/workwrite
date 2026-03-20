@@ -15,6 +15,7 @@ import { WorldTab } from '@/components/work/WorldTab';
 import { EmotionArc } from '@/components/work/EmotionArc';
 import { ScoreBadge } from '@/components/scoring/score-badge';
 import { ShareScoreButton } from '@/components/scoring/share-score-button';
+import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -158,6 +159,7 @@ export default function WorkDetailPage() {
                   )}
                 </Button>
               )}
+              {work.isAiGenerated && <AiGeneratedBadge size="md" />}
               {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
               {(work as any).completionStatus === 'COMPLETED' && (
                 <Badge variant="default" className="shrink-0 bg-green-600">完結</Badge>

@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsEnum, MaxLength, IsArray } from 'class-validator';
+import { IsString, IsOptional, IsEnum, IsBoolean, MaxLength, IsArray } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 import { WorkStatus, CompletionStatus } from '@prisma/client';
 
@@ -35,6 +35,11 @@ export class CreateWorkDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({ description: 'AI生成作品フラグ' })
+  @IsOptional()
+  @IsBoolean()
+  isAiGenerated?: boolean;
 }
 
 export class UpdateWorkDto {

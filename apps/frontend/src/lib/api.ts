@@ -1141,6 +1141,7 @@ export interface Work {
   coverUrl: string | null;
   status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
   genre: string | null;
+  isAiGenerated?: boolean;
   author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
   tags: { id: string; tag: string; type: string }[];
   qualityScore?: { overall: number } | null;

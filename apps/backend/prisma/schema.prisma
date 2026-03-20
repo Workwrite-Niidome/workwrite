@@ -171,6 +171,9 @@ model Work {
   // SNS
   posts Post[]
 
+  // AI-generated content flag
+  isAiGenerated  Boolean @default(false)
+
   // Denormalized stats
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
