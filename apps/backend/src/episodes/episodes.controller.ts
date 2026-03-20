@@ -10,7 +10,11 @@ import { CreationWizardService } from '../creation-wizard/creation-wizard.servic
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 import { PostsService } from '../posts/posts.service';
 import { WorksService } from '../works/works.service';
-import { PostType } from '@prisma/client';
+import { PostType, Episode } from '@prisma/client';
+
+interface EpisodeWithWork extends Episode {
+  work?: { id: string; title: string; authorId?: string };
+}
 
 @ApiTags('Episodes')
 @Controller()
@@ -201,7 +205,7 @@ export class EpisodesController {
    * Strips whitespace/newlines before comparing to ignore formatting-only changes.
    */
   private async triggerAnalysisIfSignificantChange(
-    episode: any, newContent: string, userId: string,
+    episode: EpisodeWithWork, newContent: string, userId: string,
   ) {
     try {
       const analysis = await this.episodeAnalysis.getAnalysis(episode.id);
@@ -212,12 +216,12 @@ export class EpisodesController {
       }
 
       // Skip if analysis version matches current content version
-      if (analysis.version === episode.contentVersion) return;
+      if (analysis.version === (episode.contentVersion ?? 0)) return;
 
       // Normalize: strip all whitespace/newlines/fullwidth spaces
       const normalize = (s: string) => s.replace(/[\s\n\r\u3000]+/g, '').length;
       const newLen = normalize(newContent);
-      const prevLen = normalize(episode.content || '');
+      const prevLen = normalize(episode.content ?? '');
 
       // If normalized length differs by less than 20%, it's likely formatting-only
       const changeRatio = prevLen > 0 ? Math.abs(newLen - prevLen) / prevLen : 1;
@@ -239,15 +243,15 @@ export class EpisodesController {
   }
 
   /** Create auto-post when episode is published */
-  private async createAutoEpisodePost(userId: string, episode: any) {
-    const work = episode.work || {};
-    const title = work.title || '';
+  private async createAutoEpisodePost(userId: string, episode: EpisodeWithWork) {
+    const work = episode.work;
+    const title = work?.title || '';
     const epTitle = episode.title || '';
     const order = episode.orderIndex ?? 0;
     const content = `『${title}』第${order}話「${epTitle}」を公開しました`;
     await this.postsService.createAutoPost(userId, PostType.AUTO_EPISODE, {
       content,
-      workId: work.id || episode.workId,
+      workId: work?.id || episode.workId,
       episodeId: episode.id,
     });
   }

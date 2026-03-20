@@ -103,7 +103,7 @@ export class AdminController {
   ) {
     const work = await this.prisma.work.update({
       where: { id },
-      data: { isAiGenerated: body.isAiGenerated },
+      data: { isAiGenerated: Boolean(body.isAiGenerated) },
     });
     return { data: { id: work.id, isAiGenerated: work.isAiGenerated } };
   }
@@ -222,11 +222,12 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { action: 'approve' | 'reject'; reason?: string },
   ) {
+    const action = body.action === 'approve' ? 'approve' : 'reject';
     const letter = await this.prisma.letter.update({
       where: { id },
       data: {
-        moderationStatus: body.action === 'approve' ? 'approved' : 'rejected',
-        moderationReason: body.reason || null,
+        moderationStatus: action === 'approve' ? 'approved' : 'rejected',
+        moderationReason: typeof body.reason === 'string' ? body.reason : null,
       },
     });
     return { data: letter };
@@ -263,9 +264,15 @@ export class AdminController {
     @Param('id') id: string,
     @Body() body: { description?: string; importance?: string; status?: string; resolvedIn?: number },
   ) {
+    const data: Record<string, unknown> = {};
+    if (body.description !== undefined) data.description = body.description;
+    if (body.importance !== undefined) data.importance = body.importance;
+    if (body.status !== undefined) data.status = body.status;
+    if (body.resolvedIn !== undefined) data.resolvedIn = body.resolvedIn;
+
     const item = await this.prisma.foreshadowing.update({
       where: { id },
-      data: body,
+      data,
     });
     return { data: item };
   }

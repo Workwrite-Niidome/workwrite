@@ -35,7 +35,7 @@ export class SearchService implements OnModuleInit {
   ) {
     this.client = new MeiliSearch({
       host: this.config.get('MEILI_HOST', 'http://localhost:7700'),
-      apiKey: this.config.get('MEILI_MASTER_KEY', 'ultra_reader_meili_dev_key'),
+      apiKey: this.config.get('MEILI_MASTER_KEY'),
     });
   }
 
