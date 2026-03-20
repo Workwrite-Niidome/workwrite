@@ -133,10 +133,10 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
         {score ? (
           <>
             {(score as any).isImported && (
-              <div className="p-2 bg-amber-50 dark:bg-amber-950/30 rounded-md border border-amber-200 dark:border-amber-800">
-                <p className="text-[11px] text-amber-700 dark:text-amber-400">
-                  簡易分析 — この作品は外部プラットフォームからインポートされたため、本文の抜粋をもとにした簡易的な分析です。
-                  キャラクター設定やプロットを登録すると、より精密な分析が可能になります。
+              <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
+                <p className="text-[11px] text-blue-700 dark:text-blue-400">
+                  本文から読み取れる魅力をもとに分析しました。キャラクター設定やプロットをWorkwriteに登録すると、
+                  キャラの一貫性チェックや伏線追跡など、さらに深い分析が可能になります。
                 </p>
               </div>
             )}

@@ -128,26 +128,26 @@ describe('buildScoringUserPrompt - completionStatus', () => {
 // ─────────────────────────────────────────────────────────
 
 describe('buildScoringUserPrompt - isImported', () => {
-  it('shows 簡易分析 for imported works', () => {
+  it('shows 本文重視分析 for imported works', () => {
     const prompt = buildScoringUserPrompt(makeInput({ isImported: true }));
-    expect(prompt).toContain('簡易分析');
+    expect(prompt).toContain('本文重視分析');
     expect(prompt).toContain('インポート');
   });
 
-  it('shows 詳細分析 for non-imported works', () => {
+  it('shows 総合分析 for non-imported works', () => {
     const prompt = buildScoringUserPrompt(makeInput({ isImported: false }));
-    expect(prompt).toContain('詳細分析');
-    expect(prompt).not.toContain('簡易分析モード');
+    expect(prompt).toContain('総合分析');
+    expect(prompt).not.toContain('本文重視の分析');
   });
 
   it('instructs not to penalize missing design data for imported works', () => {
     const prompt = buildScoringUserPrompt(makeInput({ isImported: true }));
-    expect(prompt).toContain('設計データがないことを減点しない');
+    expect(prompt).toContain('構造化データがないことは一切減点しない');
   });
 
   it('mentions Workwrite registration suggestion for imported works', () => {
     const prompt = buildScoringUserPrompt(makeInput({ isImported: true }));
-    expect(prompt).toContain('キャラクター設定やプロットを登録');
+    expect(prompt).toContain('Workwriteに登録');
   });
 });
 
