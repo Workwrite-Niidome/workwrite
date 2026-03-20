@@ -8,9 +8,19 @@ interface ShareScoreButtonProps {
   workId: string;
   title: string;
   score: number;
+  variant?: 'compact' | 'prominent';
 }
 
-export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps) {
+function getShareText(title: string, score: number): string {
+  const s = Math.round(score);
+  if (s >= 90) return `AIが「傑作」と判定！「${title}」のAI品質スコア: ${s}/100\nあなたの作品は何点？ 無料で診断 →`;
+  if (s >= 80) return `「${title}」がAI品質スコア${s}点の「秀作」判定！\nあなたの小説も無料で診断できます →`;
+  if (s >= 65) return `「${title}」のAI品質スコアは${s}点（良作）でした。\n改善提案も具体的で面白い。あなたも試してみて →`;
+  if (s >= 50) return `AI品質分析やってみた。「${title}」は${s}点。\n改善ポイントが具体的で参考になる →`;
+  return `「${title}」をAI品質分析してみた（${s}点）。\n自分の作品の強みと課題が見えて面白い →`;
+}
+
+export function ShareScoreButton({ workId, title, score, variant = 'compact' }: ShareScoreButtonProps) {
   const [copied, setCopied] = useState(false);
   const [open, setOpen] = useState(false);
 
@@ -18,26 +28,18 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
     ? `${window.location.origin}/works/${workId}`
     : `/works/${workId}`;
 
-  const shareText = `「${title}」のAI品質スコアは${Math.round(score)}点でした！ #Workwrite #小説分析 #小説書きさんと繋がりたい  #Web小説`;
+  const shareText = getShareText(title, score);
+  const hashtags = '#Workwrite #小説書きさんと繋がりたい';
 
   function shareToX() {
-    const tweetText = `${shareText}\n${workUrl}`;
+    const tweetText = `${shareText}\n${workUrl}\n${hashtags}`;
     const intentUrl = `https://x.com/intent/tweet?text=${encodeURIComponent(tweetText)}`;
-    // twitter:// スキームでアプリ起動を試み、失敗時はintent URLにフォールバック
-    const appUrl = `twitter://post?message=${encodeURIComponent(tweetText)}`;
-    const w = window.open(appUrl);
-    setTimeout(() => {
-      if (!w || w.closed) {
-        window.open(intentUrl, '_blank', 'width=550,height=420');
-      }
-    }, 500);
+    window.open(intentUrl, '_blank', 'width=550,height=420');
   }
 
   function shareToLine() {
     const lineText = `${shareText}\n${workUrl}`;
-    // line:// スキームでアプリ起動を試み、失敗時はWeb版にフォールバック
-    const appUrl = `https://line.me/R/share?text=${encodeURIComponent(lineText)}`;
-    window.open(appUrl, '_blank');
+    window.open(`https://line.me/R/share?text=${encodeURIComponent(lineText)}`, '_blank');
   }
 
   async function copyUrl() {
@@ -48,6 +50,26 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
     } catch {
       // fallback
     }
+  }
+
+  if (variant === 'prominent') {
+    return (
+      <div className="space-y-2">
+        <Button onClick={shareToX} className="w-full gap-2" size="lg">
+          <svg className="h-4 w-4" viewBox="0 0 24 24" fill="currentColor"><path d="M18.244 2.25h3.308l-7.227 8.26 8.502 11.24H16.17l-5.214-6.817L4.99 21.75H1.68l7.73-8.835L1.254 2.25H8.08l4.713 6.231zm-1.161 17.52h1.833L7.084 4.126H5.117z"/></svg>
+          X (Twitter) でシェア
+        </Button>
+        <div className="flex gap-2">
+          <Button onClick={shareToLine} variant="outline" className="flex-1 gap-2" size="sm">
+            LINE
+          </Button>
+          <Button onClick={copyUrl} variant="outline" className="flex-1 gap-2" size="sm">
+            {copied ? <Check className="h-3.5 w-3.5 text-green-600" /> : <Copy className="h-3.5 w-3.5" />}
+            {copied ? 'コピー済み' : 'URLコピー'}
+          </Button>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -77,7 +99,6 @@ export function ShareScoreButton({ workId, title, score }: ShareScoreButtonProps
               onClick={() => { shareToLine(); setOpen(false); }}
               className="w-full text-left text-xs font-medium px-3 py-2 rounded-md hover:bg-secondary transition-colors flex items-center gap-2"
             >
-              <svg className="h-3.5 w-3.5" viewBox="0 0 24 24" fill="currentColor"><path d="M19.365 9.863c.349 0 .63.285.63.631 0 .345-.281.63-.63.63H17.61v1.125h1.755c.349 0 .63.283.63.63 0 .344-.281.629-.63.629h-2.386c-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63h2.386c.349 0 .63.285.63.63 0 .349-.281.63-.63.63H17.61v1.125h1.755zm-3.855 3.016c0 .27-.174.51-.432.596-.064.021-.133.031-.199.031-.211 0-.391-.09-.51-.25l-2.443-3.317v2.94c0 .344-.279.629-.631.629-.346 0-.626-.285-.626-.629V8.108c0-.27.173-.51.43-.595.06-.023.136-.033.194-.033.195 0 .375.104.495.254l2.462 3.33V8.108c0-.345.282-.63.63-.63.345 0 .63.285.63.63v4.771zm-5.741 0c0 .344-.282.629-.631.629-.345 0-.627-.285-.627-.629V8.108c0-.345.282-.63.627-.63.349 0 .631.285.631.63v4.771zm-2.466.629H4.917c-.345 0-.63-.285-.63-.629V8.108c0-.345.285-.63.63-.63.349 0 .63.285.63.63v4.141h1.756c.348 0 .629.283.629.63 0 .344-.281.629-.629.629M24 10.314C24 4.943 18.615.572 12 .572S0 4.943 0 10.314c0 4.811 4.27 8.842 10.035 9.608.391.082.923.258 1.058.59.12.301.079.766.038 1.08l-.164 1.02c-.045.301-.24 1.186 1.049.645 1.291-.539 6.916-4.078 9.436-6.975C23.176 14.393 24 12.458 24 10.314"/></svg>
               LINE
             </button>
             <button

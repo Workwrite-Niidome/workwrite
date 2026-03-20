@@ -1327,6 +1327,7 @@ export interface QualityScoreDetail {
   tips: string[];
   emotionTags?: string[];
   scoredAt: string;
+  isImported?: boolean;
 }
 
 export interface NotificationItem {

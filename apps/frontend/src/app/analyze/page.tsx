@@ -1,17 +1,20 @@
 'use client';
 
-import { useState } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { Suspense } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { ScoreCard } from '@/components/scoring/score-card';
+import { ShareScoreButton } from '@/components/scoring/share-score-button';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
-import { Zap, Loader2, BookOpen, BarChart3, Globe, Pencil } from 'lucide-react';
+import { Zap, Loader2, BookOpen, BarChart3, Globe, Pencil, Sparkles, ArrowRight } from 'lucide-react';
 
-export default function AnalyzePage() {
+function AnalyzeContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [url, setUrl] = useState('');
   const [importing, setImporting] = useState(false);
@@ -27,17 +30,41 @@ export default function AnalyzePage() {
   const isKakuyomu = /kakuyomu\.jp/i.test(url);
   const isValidUrl = isNarou || isKakuyomu;
 
+  // Auto-run analysis after login redirect
+  useEffect(() => {
+    if (authLoading) return;
+    const autorun = searchParams.get('autorun');
+    if (autorun && isAuthenticated) {
+      const savedUrl = sessionStorage.getItem('analyze_url');
+      if (savedUrl) {
+        sessionStorage.removeItem('analyze_url');
+        setUrl(savedUrl);
+        // Trigger analysis after state update
+        setTimeout(() => {
+          const el = document.getElementById('analyze-trigger');
+          if (el) el.click();
+        }, 100);
+      }
+    }
+  }, [authLoading, isAuthenticated, searchParams]);
+
   async function handleAnalyze() {
-    if (!isValidUrl) return;
+    const targetUrl = url.trim();
+    if (!targetUrl) return;
+    if (!/ncode\.syosetu\.com/i.test(targetUrl) && !/kakuyomu\.jp/i.test(targetUrl)) return;
+
     if (!isAuthenticated) {
-      router.push(`/login?redirect=${encodeURIComponent('/analyze')}`);
+      // Save URL and redirect to login — analysis auto-triggers after login
+      sessionStorage.setItem('analyze_url', targetUrl);
+      router.push(`/login?redirect=${encodeURIComponent('/analyze?autorun=1')}`);
       return;
     }
+
     setImporting(true);
     setError('');
     setResult(null);
     try {
-      const res = await api.importFromUrl(url.trim());
+      const res = await api.importFromUrl(targetUrl);
       setResult({
         workId: res.data.workId,
         title: res.data.title,
@@ -50,6 +77,9 @@ export default function AnalyzePage() {
       setImporting(false);
     }
   }
+
+  const overallScore = result?.scoringResult?.overall ? Math.round(result.scoringResult.overall) : 0;
+  const scoreLabel = overallScore >= 90 ? '傑作' : overallScore >= 80 ? '秀作' : overallScore >= 65 ? '良作' : overallScore >= 50 ? '佳作' : '';
 
   return (
     <div className="min-h-screen">
@@ -72,10 +102,12 @@ export default function AnalyzePage() {
             <Input
               value={url}
               onChange={(e) => setUrl(e.target.value)}
+              onKeyDown={(e) => { if (e.key === 'Enter') handleAnalyze(); }}
               placeholder="https://ncode.syosetu.com/n1234ab/"
               className="flex-1 h-11"
             />
             <Button
+              id="analyze-trigger"
               onClick={handleAnalyze}
               disabled={!isValidUrl || importing}
               size="lg"
@@ -106,6 +138,7 @@ export default function AnalyzePage() {
       {/* Result */}
       {result && (
         <section className="px-4 pb-12 max-w-lg mx-auto space-y-4">
+          {/* Score summary card */}
           <Card>
             <CardContent className="py-4 px-4">
               <p className="text-green-600 font-medium mb-1">分析完了</p>
@@ -114,6 +147,7 @@ export default function AnalyzePage() {
             </CardContent>
           </Card>
 
+          {/* Score Card */}
           {result.scoringResult && (
             <ScoreCard
               score={{
@@ -128,18 +162,65 @@ export default function AnalyzePage() {
                 tips: result.scoringResult.improvementTips,
                 emotionTags: result.scoringResult.emotionTags,
                 scoredAt: new Date().toISOString(),
+                isImported: true,
               }}
+              workId={result.workId}
+              workTitle={result.title}
             />
           )}
 
-          <div className="flex gap-3 justify-center">
-            <Button onClick={() => router.push(`/works/${result.workId}`)}>
-              <BookOpen className="h-4 w-4 mr-1.5" /> 作品を見る
-            </Button>
-            <Button variant="outline" onClick={() => router.push(`/works/${result.workId}/edit`)}>
-              <Pencil className="h-4 w-4 mr-1.5" /> 編集する
-            </Button>
-          </div>
+          {/* Share CTA — prominent, immediately after score */}
+          {result.scoringResult && (
+            <Card className="bg-gradient-to-br from-primary/5 via-primary/10 to-purple-500/10 border-primary/20">
+              <CardContent className="py-6 px-4 text-center space-y-3">
+                <p className="text-lg font-bold">
+                  {overallScore >= 80
+                    ? `${scoreLabel}判定おめでとうございます！`
+                    : overallScore >= 50
+                    ? `${scoreLabel}！さらに磨ける可能性があります`
+                    : 'スコアを確認しました！'}
+                </p>
+                <p className="text-sm text-muted-foreground">
+                  あなたの結果をシェアして、他の作家にも診断を勧めてみましょう
+                </p>
+                <ShareScoreButton
+                  workId={result.workId}
+                  title={result.title}
+                  score={result.scoringResult.overall}
+                  variant="prominent"
+                />
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Workwrite tools CTA */}
+          <Card className="border-dashed">
+            <CardContent className="py-5 px-4 space-y-3">
+              <p className="text-sm font-medium">改善提案を活かして作品を磨きませんか？</p>
+              <div className="space-y-2 text-xs text-muted-foreground">
+                <div className="flex items-start gap-2">
+                  <Sparkles className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
+                  <span><strong className="text-foreground">AI執筆アシスト</strong> — キャラ設定・世界観を踏まえた提案で、具体的に改善</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <BarChart3 className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
+                  <span><strong className="text-foreground">詳細分析モード</strong> — キャラクター・プロットを登録すると、6軸の精度が大幅に向上</span>
+                </div>
+                <div className="flex items-start gap-2">
+                  <BookOpen className="h-3.5 w-3.5 mt-0.5 text-primary shrink-0" />
+                  <span><strong className="text-foreground">読者に届く</strong> — 品質スコアで発見される。更新頻度に依存しない</span>
+                </div>
+              </div>
+              <div className="flex gap-2 pt-1">
+                <Button onClick={() => router.push(`/works/${result.workId}/edit`)} className="flex-1 gap-1.5">
+                  <Pencil className="h-3.5 w-3.5" /> 作品を編集する
+                </Button>
+                <Button variant="outline" onClick={() => router.push(`/works/${result.workId}`)} className="gap-1.5">
+                  <ArrowRight className="h-3.5 w-3.5" /> 作品ページ
+                </Button>
+              </div>
+            </CardContent>
+          </Card>
         </section>
       )}
 
@@ -178,5 +259,13 @@ export default function AnalyzePage() {
         </section>
       )}
     </div>
+  );
+}
+
+export default function AnalyzePage() {
+  return (
+    <Suspense fallback={<div className="min-h-screen" />}>
+      <AnalyzeContent />
+    </Suspense>
   );
 }
