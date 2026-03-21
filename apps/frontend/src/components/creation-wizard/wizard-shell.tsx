@@ -55,6 +55,7 @@ export interface ActGroup {
 export interface WizardData {
   // Step 0: Genre & Tags
   genre: string;
+  subGenres: string[];
   tags: string;
   // Step 1: Emotion Blueprint
   emotionMode: 'recommended' | 'alternative' | 'skip';
@@ -91,7 +92,7 @@ const EMPTY_WORLD_BUILDING: WorldBuildingData = {
 };
 
 const INITIAL_DATA: WizardData = {
-  genre: '', tags: '',
+  genre: '', subGenres: [], tags: '',
   emotionMode: 'recommended',
   coreMessage: '', targetEmotions: '', readerJourney: '',
   inspiration: '', readerOneLiner: '',
@@ -195,11 +196,16 @@ export function WizardShell() {
     setSubmitting(true);
     setError('');
     try {
-      const tags = data.tags.split(/[,、\s]+/).filter(Boolean);
+      const userTags = data.tags.split(/[,、\s]+/).filter(Boolean);
+      const subGenreTags = data.subGenres || [];
+      const tags = [...new Set([...subGenreTags, ...userTags])];
+      const genreLabel: Record<string, string> = {
+        fantasy: 'ファンタジー', sf: 'SF', modern: '現代', historical: '歴史・時代',
+      };
       const res = await api.createWork({
         title: data.title,
         synopsis: data.synopsis,
-        genre: data.genre,
+        genre: genreLabel[data.genre] || data.genre,
         tags,
       });
       const workId = res.data.id;
@@ -279,13 +285,12 @@ export function WizardShell() {
             <li key={s.key} className="flex items-center">
               {i > 0 && <div className={cn('w-6 h-px mx-1', i <= step ? 'bg-primary' : 'bg-border')} />}
               <button
-                onClick={() => i < step && setStep(i)}
-                disabled={i > step}
+                onClick={() => setStep(i)}
                 className={cn(
-                  'flex items-center gap-1.5 text-xs py-1 px-2 rounded-full transition-colors',
+                  'flex items-center gap-1.5 text-xs py-1 px-2 rounded-full transition-colors cursor-pointer',
                   i === step && 'bg-primary text-primary-foreground font-medium',
-                  i < step && 'text-primary cursor-pointer hover:bg-primary/10',
-                  i > step && 'text-muted-foreground cursor-default',
+                  i < step && 'text-primary hover:bg-primary/10',
+                  i > step && 'text-muted-foreground hover:bg-muted',
                 )}
               >
                 {i < step ? <Check className="h-3 w-3" /> : <span className="w-4 text-center">{i + 1}</span>}

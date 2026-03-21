@@ -6,6 +6,7 @@ import type { WizardData } from './wizard-shell';
 function makeData(overrides: Partial<WizardData> = {}): WizardData {
   return {
     genre: '',
+    subGenres: [],
     tags: '',
     emotionMode: 'recommended',
     coreMessage: '',

@@ -4,15 +4,24 @@ import { Input } from '@/components/ui/input';
 import { cn } from '@/lib/utils';
 import type { WizardData } from './wizard-shell';
 
-const GENRES = [
-  'fantasy', 'sf', 'mystery', 'romance', 'horror', 'literary',
-  'adventure', 'comedy', 'drama', 'historical', 'other',
+const MAIN_GENRES = [
+  { key: 'fantasy', label: 'ファンタジー' },
+  { key: 'sf', label: 'SF・近未来' },
+  { key: 'modern', label: '現代・日常' },
+  { key: 'historical', label: '歴史・時代' },
 ];
-const GENRE_LABELS: Record<string, string> = {
-  fantasy: 'ファンタジー', sf: 'SF', mystery: 'ミステリー', romance: '恋愛',
-  horror: 'ホラー', literary: '文芸', adventure: '冒険', comedy: 'コメディ',
-  drama: 'ドラマ', historical: '歴史', other: 'その他',
-};
+
+const SUB_GENRES = [
+  { key: 'romance', label: '恋愛' },
+  { key: 'mystery', label: 'ミステリー' },
+  { key: 'horror', label: 'ホラー' },
+  { key: 'action', label: 'アクション' },
+  { key: 'drama', label: 'ヒューマンドラマ' },
+  { key: 'comedy', label: 'コメディ' },
+  { key: 'adventure', label: '冒険' },
+  { key: 'literary', label: '文芸' },
+  { key: 'thriller', label: 'サスペンス' },
+];
 
 interface Props {
   data: WizardData;
@@ -20,49 +29,98 @@ interface Props {
 }
 
 export function StepGenreTags({ data, onChange }: Props) {
+  const subGenres: string[] = (data as any).subGenres || [];
+
+  function toggleSubGenre(key: string) {
+    const current = [...subGenres];
+    const idx = current.indexOf(key);
+    if (idx >= 0) {
+      current.splice(idx, 1);
+    } else {
+      current.push(key);
+    }
+    onChange({ subGenres: current } as any);
+  }
+
   return (
     <div className="space-y-6">
       <div>
-        <h2 className="text-lg font-semibold mb-1">ジャンル・タグ</h2>
-        <p className="text-sm text-muted-foreground">あなたの作品のジャンルとタグを選びましょう。後のステップでジャンルに合った設定テンプレートが提案されます。</p>
+        <h2 className="text-lg font-semibold mb-1">ジャンル</h2>
+        <p className="text-sm text-muted-foreground">作品の舞台となる大ジャンルと、テーマとなるサブジャンルを選んでください。</p>
       </div>
 
+      {/* Main Genre (single select) */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">ジャンル</label>
-        <div className="flex flex-wrap gap-2">
-          {GENRES.map((g) => (
+        <label className="text-sm font-medium">大ジャンル（舞台）</label>
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+          {MAIN_GENRES.map((g) => (
             <button
-              key={g}
+              key={g.key}
               type="button"
-              onClick={() => onChange({ genre: data.genre === g ? '' : g })}
+              onClick={() => onChange({ genre: data.genre === g.key ? '' : g.key })}
               className={cn(
-                'px-3 py-1.5 rounded-full text-sm border transition-colors',
-                data.genre === g
-                  ? 'bg-primary text-primary-foreground border-primary'
-                  : 'border-border hover:border-primary/50 text-foreground',
+                'px-4 py-3 rounded-lg text-sm font-medium border transition-all',
+                data.genre === g.key
+                  ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                  : 'border-border hover:border-primary/50 text-foreground hover:bg-muted/50',
               )}
             >
-              {GENRE_LABELS[g]}
+              {g.label}
             </button>
           ))}
         </div>
       </div>
 
+      {/* Sub Genres (multiple select) */}
       <div className="space-y-2">
-        <label className="text-sm font-medium">タグ（カンマ区切り）</label>
+        <label className="text-sm font-medium">サブジャンル（テーマ・複数選択可）</label>
+        <div className="flex flex-wrap gap-2">
+          {SUB_GENRES.map((g) => (
+            <button
+              key={g.key}
+              type="button"
+              onClick={() => toggleSubGenre(g.key)}
+              className={cn(
+                'px-3 py-1.5 rounded-full text-sm border transition-colors',
+                subGenres.includes(g.key)
+                  ? 'bg-primary/10 text-primary border-primary/30 font-medium'
+                  : 'border-border hover:border-primary/50 text-foreground',
+              )}
+            >
+              {g.label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tags */}
+      <div className="space-y-2">
+        <label className="text-sm font-medium">タグ（自由入力・カンマ区切り）</label>
         <Input
           value={data.tags}
           onChange={(e) => onChange({ tags: e.target.value })}
-          placeholder="冒険, 成長, 友情"
+          placeholder="異世界転生, 成長, 友情, ダークファンタジー"
         />
+        <p className="text-[10px] text-muted-foreground">作品の特徴を表すキーワードを入力してください。読者が作品を見つけやすくなります。</p>
       </div>
 
-      <div className="p-4 bg-muted/50 rounded-lg">
-        <p className="text-xs text-muted-foreground leading-relaxed">
-          ジャンルを選ぶと、キャラクター設定や世界観ステップでジャンルに合ったテンプレートが自動で提案されます。
-          後からいつでも変更できます。
-        </p>
-      </div>
+      {/* Selected summary */}
+      {(data.genre || subGenres.length > 0) && (
+        <div className="p-3 bg-muted/50 rounded-lg text-xs text-muted-foreground">
+          {data.genre && (
+            <span className="font-medium text-foreground">
+              {MAIN_GENRES.find((g) => g.key === data.genre)?.label}
+            </span>
+          )}
+          {subGenres.length > 0 && (
+            <span>
+              {data.genre ? ' × ' : ''}
+              {subGenres.map((k) => SUB_GENRES.find((g) => g.key === k)?.label).filter(Boolean).join('・')}
+            </span>
+          )}
+          <p className="mt-1">ジャンルに合ったキャラクター設定や世界観テンプレートが次のステップで提案されます。</p>
+        </div>
+      )}
     </div>
   );
 }

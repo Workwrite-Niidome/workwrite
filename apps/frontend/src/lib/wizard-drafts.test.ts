@@ -25,6 +25,7 @@ if (!(globalThis as any).crypto) {
 // This mirrors the shape defined in wizard-shell.tsx without the import cost.
 type LocalWizardData = {
   genre: string;
+  subGenres: string[];
   tags: string;
   emotionMode: 'recommended' | 'alternative' | 'skip';
   coreMessage: string;
@@ -49,6 +50,7 @@ type LocalWizardData = {
 function makeWizardData(overrides: Partial<LocalWizardData> = {}): LocalWizardData {
   return {
     genre: 'fantasy',
+    subGenres: [],
     tags: '冒険',
     emotionMode: 'recommended',
     coreMessage: 'テストメッセージ',
