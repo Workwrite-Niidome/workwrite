@@ -115,54 +115,82 @@ export class NarouScraperService {
   }
 
   private async fetchToc(ncode: string): Promise<{ title: string; url: string }[]> {
-    const tocUrl = `https://ncode.syosetu.com/${ncode}/`;
-    const res = await this.fetchWithRetry(tocUrl);
-    if (!res.ok) throw new Error(`目次ページの取得に失敗: ${res.status}`);
+    const allEpisodes: { title: string; url: string }[] = [];
+    let page = 1;
 
-    const html = await res.text();
-    const $ = cheerio.load(html);
-    const episodes: { title: string; url: string }[] = [];
+    while (true) {
+      const tocUrl = page === 1
+        ? `https://ncode.syosetu.com/${ncode}/`
+        : `https://ncode.syosetu.com/${ncode}/?p=${page}`;
 
-    // Current layout (2025+): .p-eplist__subtitle a
-    $('.p-eplist__subtitle a').each((_, el) => {
-      const $el = $(el);
-      const href = $el.attr('href');
-      const title = $el.text().trim();
-      if (href && title) {
-        const fullUrl = href.startsWith('http') ? href : `https://ncode.syosetu.com${href}`;
-        episodes.push({ title, url: fullUrl });
+      const res = await this.fetchWithRetry(tocUrl);
+      if (!res.ok) {
+        if (page === 1) throw new Error(`目次ページの取得に失敗: ${res.status}`);
+        break;
       }
-    });
 
-    // Legacy layout: .novel_sublist2 a
-    if (episodes.length === 0) {
-      $('.novel_sublist2 a').each((_, el) => {
+      const html = await res.text();
+      const $ = cheerio.load(html);
+      const pageEpisodes: { title: string; url: string }[] = [];
+
+      // Current layout (2025+): .p-eplist__subtitle a
+      $('.p-eplist__subtitle a').each((_, el) => {
         const $el = $(el);
         const href = $el.attr('href');
         const title = $el.text().trim();
         if (href && title) {
           const fullUrl = href.startsWith('http') ? href : `https://ncode.syosetu.com${href}`;
-          episodes.push({ title, url: fullUrl });
-        }
-      });
-    }
-
-    // Fallback: match links by ncode pattern
-    if (episodes.length === 0) {
-      $('a[href*="/' + ncode + '/"]').each((_, el) => {
-        const $el = $(el);
-        const href = $el.attr('href') || '';
-        if (/\/\d+\/?$/.test(href)) {
-          const title = $el.text().trim();
-          const fullUrl = href.startsWith('http') ? href : `https://ncode.syosetu.com${href}`;
-          if (title && !episodes.some((e) => e.url === fullUrl)) {
-            episodes.push({ title, url: fullUrl });
+          if (!allEpisodes.some((e) => e.url === fullUrl)) {
+            pageEpisodes.push({ title, url: fullUrl });
           }
         }
       });
+
+      // Legacy layout: .novel_sublist2 a
+      if (pageEpisodes.length === 0) {
+        $('.novel_sublist2 a').each((_, el) => {
+          const $el = $(el);
+          const href = $el.attr('href');
+          const title = $el.text().trim();
+          if (href && title) {
+            const fullUrl = href.startsWith('http') ? href : `https://ncode.syosetu.com${href}`;
+            if (!allEpisodes.some((e) => e.url === fullUrl)) {
+              pageEpisodes.push({ title, url: fullUrl });
+            }
+          }
+        });
+      }
+
+      // Fallback: match links by ncode pattern
+      if (pageEpisodes.length === 0 && page === 1) {
+        $('a[href*="/' + ncode + '/"]').each((_, el) => {
+          const $el = $(el);
+          const href = $el.attr('href') || '';
+          if (/\/\d+\/?$/.test(href)) {
+            const title = $el.text().trim();
+            const fullUrl = href.startsWith('http') ? href : `https://ncode.syosetu.com${href}`;
+            if (title && !allEpisodes.some((e) => e.url === fullUrl)) {
+              pageEpisodes.push({ title, url: fullUrl });
+            }
+          }
+        });
+      }
+
+      if (pageEpisodes.length === 0) break;
+
+      allEpisodes.push(...pageEpisodes);
+
+      // Check for next page link
+      const hasNextPage = $(`a[href*="?p=${page + 1}"]`).length > 0
+        || $('a.c-pager__item--next').length > 0;
+      if (!hasNextPage) break;
+
+      page++;
+      await this.sleep(NarouScraperService.RATE_LIMIT_MS);
     }
 
-    return episodes;
+    this.logger.log(`Narou ${ncode}: found ${allEpisodes.length} episodes across ${page} TOC pages`);
+    return allEpisodes;
   }
 
   private async fetchEpisodeContent(url: string): Promise<string> {

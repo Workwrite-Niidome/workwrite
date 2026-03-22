@@ -214,146 +214,173 @@ ${fullText}`;
     data: ExtractedStructure,
   ): Promise<void> {
     // Save characters
-    if (data.characters?.length > 0) {
-      const existingChars = await this.prisma.storyCharacter.findMany({
-        where: { workId },
-        select: { name: true },
-      });
-      const existingNames = new Set(existingChars.map((c) => c.name));
-
-      const newChars = data.characters.filter((c) => !existingNames.has(c.name));
-      if (newChars.length > 0) {
-        await this.prisma.storyCharacter.createMany({
-          data: newChars.map((c) => ({
-            workId,
-            name: c.name,
-            role: c.role || '',
-            gender: c.gender,
-            personality: c.personality,
-            speechStyle: c.speechStyle,
-            firstPerson: c.firstPerson,
-            description: c.description,
-            aiSuggested: true,
-          })),
-          skipDuplicates: true,
+    try {
+      if (data.characters?.length > 0) {
+        const existingChars = await this.prisma.storyCharacter.findMany({
+          where: { workId },
+          select: { name: true },
         });
+        const existingNames = new Set(existingChars.map((c) => c.name));
+
+        const newChars = data.characters.filter((c) => !existingNames.has(c.name));
+        if (newChars.length > 0) {
+          await this.prisma.storyCharacter.createMany({
+            data: newChars.map((c) => ({
+              workId,
+              name: c.name,
+              role: c.role || '',
+              gender: c.gender,
+              personality: c.personality,
+              speechStyle: c.speechStyle,
+              firstPerson: c.firstPerson,
+              appearance: c.description,
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
+    } catch (err: any) {
+      this.logger.error(`Failed to save characters for work ${workId}: ${err.message}`);
     }
 
     // Save world settings
-    if (data.worldSettings?.length > 0) {
-      const existing = await this.prisma.worldSetting.findMany({
-        where: { workId },
-        select: { name: true },
-      });
-      const existingNames = new Set(existing.map((w) => w.name));
-
-      const newSettings = data.worldSettings.filter((w) => !existingNames.has(w.name));
-      if (newSettings.length > 0) {
-        await this.prisma.worldSetting.createMany({
-          data: newSettings.map((w) => ({
-            workId,
-            category: w.category,
-            name: w.name,
-            description: w.description,
-            isActive: true,
-          })),
-          skipDuplicates: true,
+    try {
+      if (data.worldSettings?.length > 0) {
+        const existing = await this.prisma.worldSetting.findMany({
+          where: { workId },
+          select: { name: true },
         });
+        const existingNames = new Set(existing.map((w) => w.name));
+
+        const newSettings = data.worldSettings.filter((w) => !existingNames.has(w.name));
+        if (newSettings.length > 0) {
+          await this.prisma.worldSetting.createMany({
+            data: newSettings.map((w) => ({
+              workId,
+              category: w.category,
+              name: w.name,
+              description: w.description,
+              isActive: true,
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
+    } catch (err: any) {
+      this.logger.error(`Failed to save world settings for work ${workId}: ${err.message}`);
     }
 
     // Save story arc
-    if (data.storyArc) {
-      const existing = await this.prisma.storyArc.findUnique({ where: { workId } });
-      if (!existing) {
-        await this.prisma.storyArc.create({
-          data: {
-            workId,
-            premise: data.storyArc.premise,
-            centralConflict: data.storyArc.centralConflict,
-            themes: data.storyArc.themes,
-          },
-        });
+    try {
+      if (data.storyArc) {
+        const existing = await this.prisma.storyArc.findUnique({ where: { workId } });
+        if (!existing) {
+          await this.prisma.storyArc.create({
+            data: {
+              workId,
+              premise: data.storyArc.premise,
+              centralConflict: data.storyArc.centralConflict,
+              themes: data.storyArc.themes,
+            },
+          });
+        }
       }
+    } catch (err: any) {
+      this.logger.error(`Failed to save story arc for work ${workId}: ${err.message}`);
     }
 
     // Save episode analyses (summaries + emotional arcs)
-    if (data.episodeSummaries?.length > 0) {
-      for (const summary of data.episodeSummaries) {
-        const episode = episodes.find((e) => e.orderIndex === summary.orderIndex);
-        if (!episode) continue;
+    try {
+      if (data.episodeSummaries?.length > 0) {
+        for (const summary of data.episodeSummaries) {
+          const episode = episodes.find((e) => e.orderIndex === summary.orderIndex);
+          if (!episode) continue;
 
-        const existing = await this.prisma.episodeAnalysis.findUnique({
-          where: { episodeId: episode.id },
-        });
-        if (existing) continue;
+          const existing = await this.prisma.episodeAnalysis.findUnique({
+            where: { episodeId: episode.id },
+          });
+          if (existing) continue;
 
-        const endState = episode.content.slice(-300);
-        await this.prisma.episodeAnalysis.create({
-          data: {
-            episodeId: episode.id,
-            workId,
-            summary: summary.summary,
-            emotionalArc: summary.emotionalArc,
-            narrativePOV: data.narrativePOV || null,
-            endState,
-            version: 1,
-          },
-        });
+          const endState = episode.content.slice(-300);
+          await this.prisma.episodeAnalysis.create({
+            data: {
+              episodeId: episode.id,
+              workId,
+              summary: summary.summary,
+              emotionalArc: summary.emotionalArc,
+              narrativePOV: data.narrativePOV || null,
+              endState,
+              version: 1,
+            },
+          });
+        }
       }
+    } catch (err: any) {
+      this.logger.error(`Failed to save episode analyses for work ${workId}: ${err.message}`);
     }
 
     // Save foreshadowings
-    if (data.foreshadowings?.length > 0) {
-      const existing = await this.prisma.foreshadowing.findMany({
-        where: { workId },
-        select: { description: true },
-      });
-      const existingDescs = new Set(existing.map((f) => f.description));
-
-      const newForeshadowings = data.foreshadowings.filter(
-        (f) => !existingDescs.has(f.description),
-      );
-      if (newForeshadowings.length > 0) {
-        await this.prisma.foreshadowing.createMany({
-          data: newForeshadowings.map((f) => ({
-            workId,
-            description: f.description,
-            plantedIn: f.plantedIn,
-            status: f.status || 'open',
-          })),
-          skipDuplicates: true,
+    try {
+      if (data.foreshadowings?.length > 0) {
+        const existing = await this.prisma.foreshadowing.findMany({
+          where: { workId },
+          select: { description: true },
         });
+        const existingDescs = new Set(existing.map((f) => f.description));
+
+        const newForeshadowings = data.foreshadowings.filter(
+          (f) => !existingDescs.has(f.description),
+        );
+        if (newForeshadowings.length > 0) {
+          await this.prisma.foreshadowing.createMany({
+            data: newForeshadowings.map((f) => ({
+              workId,
+              description: f.description,
+              plantedIn: f.plantedIn,
+              status: f.status || 'open',
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
+    } catch (err: any) {
+      this.logger.error(`Failed to save foreshadowings for work ${workId}: ${err.message}`);
     }
 
     // Save dialogue samples
-    if (data.dialogueSamples?.length > 0) {
-      const existing = await this.prisma.characterDialogueSample.findMany({
-        where: { workId },
-        select: { line: true },
-      });
-      const existingLines = new Set(existing.map((d) => d.line));
-
-      const newSamples = data.dialogueSamples.filter(
-        (d) => !existingLines.has(d.line),
-      );
-      if (newSamples.length > 0) {
-        await this.prisma.characterDialogueSample.createMany({
-          data: newSamples.map((d) => ({
-            workId,
-            characterName: d.character,
-            line: d.line,
-            episodeOrder: d.episodeOrder,
-          })),
-          skipDuplicates: true,
+    try {
+      if (data.dialogueSamples?.length > 0) {
+        const existing = await this.prisma.characterDialogueSample.findMany({
+          where: { workId },
+          select: { line: true },
         });
+        const existingLines = new Set(existing.map((d) => d.line));
+
+        const newSamples = data.dialogueSamples.filter(
+          (d) => !existingLines.has(d.line),
+        );
+        if (newSamples.length > 0) {
+          await this.prisma.characterDialogueSample.createMany({
+            data: newSamples.map((d) => ({
+              workId,
+              characterName: d.character,
+              line: d.line,
+              episodeOrder: d.episodeOrder,
+            })),
+            skipDuplicates: true,
+          });
+        }
       }
+    } catch (err: any) {
+      this.logger.error(`Failed to save dialogue samples for work ${workId}: ${err.message}`);
     }
 
     // A1: Programmatic dialogue extraction using regex for 「」patterns
-    await this.extractDialogueProgrammatically(workId, episodes);
+    try {
+      await this.extractDialogueProgrammatically(workId, episodes);
+    } catch (err: any) {
+      this.logger.error(`Failed to extract dialogue programmatically for work ${workId}: ${err.message}`);
+    }
   }
 
   private async extractDialogueProgrammatically(

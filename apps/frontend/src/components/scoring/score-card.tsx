@@ -130,8 +130,8 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
         {score ? (
           <>
             {(score as any).isImported && (
-              <div className="p-2 bg-blue-50 dark:bg-blue-950/30 rounded-md border border-blue-200 dark:border-blue-800">
-                <p className="text-[11px] text-blue-700 dark:text-blue-400">
+              <div className="p-2.5 bg-muted/50 rounded-md border border-border">
+                <p className="text-[11px] text-muted-foreground leading-relaxed">
                   本文から読み取れる魅力をもとに分析しました。キャラクター設定やプロットをWorkwriteに登録すると、
                   キャラの一貫性チェックや伏線追跡など、さらに深い分析が可能になります。
                 </p>
