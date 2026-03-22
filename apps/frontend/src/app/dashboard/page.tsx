@@ -145,6 +145,9 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Reaction Feed */}
+      <ReactionFeed />
+
       {/* Wizard Drafts */}
       {drafts.length > 0 && (
         <div className="space-y-3 mb-8">
@@ -287,6 +290,60 @@ export default function DashboardPage() {
         variant="destructive"
         onConfirm={handleDeleteDraft}
       />
+    </div>
+  );
+}
+
+const EMOTION_LABELS: Record<string, string> = {
+  moved: '泣いた', warm: '温かい', surprised: '驚いた', fired_up: '燃えた', thoughtful: '深い',
+};
+
+function ReactionFeed() {
+  const [feed, setFeed] = useState<{ id: string; userDisplayName: string; workTitle: string; episodeTitle: string; claps: number; emotion: string | null; createdAt: string }[]>([]);
+
+  useEffect(() => {
+    api.getMyReactionFeed()
+      .then((res) => setFeed(res.data || []))
+      .catch(() => {});
+  }, []);
+
+  if (feed.length === 0) return null;
+
+  function timeAgo(date: string) {
+    const diff = Date.now() - new Date(date).getTime();
+    const mins = Math.floor(diff / 60000);
+    if (mins < 1) return 'たった今';
+    if (mins < 60) return `${mins}分前`;
+    const hours = Math.floor(mins / 60);
+    if (hours < 24) return `${hours}時間前`;
+    const days = Math.floor(hours / 24);
+    return `${days}日前`;
+  }
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-lg font-semibold mb-3">最近の読者リアクション</h2>
+      <Card>
+        <CardContent className="pt-4 pb-2">
+          <div className="space-y-0 divide-y divide-border">
+            {feed.slice(0, 10).map((item) => (
+              <div key={item.id} className="flex items-center gap-3 py-2.5 text-sm">
+                <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
+                <div className="min-w-0 flex-1">
+                  <span className="text-muted-foreground">{item.userDisplayName}</span>
+                  <span className="text-muted-foreground mx-1">が</span>
+                  <span className="font-medium truncate">『{item.workTitle}』</span>
+                  <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
+                  <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
+                  {item.emotion && (
+                    <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
+                  )}
+                </div>
+              </div>
+            ))}
+          </div>
+        </CardContent>
+      </Card>
     </div>
   );
 }

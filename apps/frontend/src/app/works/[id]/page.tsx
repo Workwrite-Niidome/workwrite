@@ -690,6 +690,42 @@ export default function WorkDetailPage() {
             </ul>
           </div>
         )}
+
+        {/* Recommendations: この作品が好きなら */}
+        <RecommendationSection workId={workId} />
+      </div>
+    </div>
+  );
+}
+
+function RecommendationSection({ workId }: { workId: string }) {
+  const [recs, setRecs] = useState<{ work: Work; reason: string }[]>([]);
+
+  useEffect(() => {
+    api.getAiRecommendationsBecauseYouRead(workId)
+      .then((res) => {
+        if (res.data && res.data.length > 0) setRecs(res.data.slice(0, 3));
+      })
+      .catch(() => {});
+  }, [workId]);
+
+  if (recs.length === 0) return null;
+
+  return (
+    <div className="space-y-3">
+      <h2 className="text-sm font-medium">この作品が好きなら</h2>
+      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+        {recs.map((rec) => (
+          <Link key={rec.work.id} href={`/works/${rec.work.id}`} className="group block">
+            <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
+              <CardContent className="p-4 space-y-1.5">
+                <p className="text-sm font-medium line-clamp-2 group-hover:text-primary transition-colors">{rec.work.title}</p>
+                <p className="text-xs text-muted-foreground">{rec.work.author?.displayName || rec.work.author?.name}</p>
+                {rec.reason && <p className="text-[11px] text-muted-foreground line-clamp-2">{rec.reason}</p>}
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
       </div>
     </div>
   );

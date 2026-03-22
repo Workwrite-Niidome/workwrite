@@ -93,4 +93,38 @@ export class ReactionsService {
       createdAt: r.createdAt,
     }));
   }
+
+  /** Get reaction feed across ALL works by a specific author */
+  async getAuthorReactionFeed(authorId: string, limit = 20) {
+    const works = await this.prisma.work.findMany({
+      where: { authorId },
+      select: { id: true, title: true },
+    });
+    if (works.length === 0) return [];
+
+    const workIds = works.map(w => w.id);
+    const workMap = new Map(works.map(w => [w.id, w.title]));
+
+    const feed = await this.prisma.episodeReaction.findMany({
+      where: { workId: { in: workIds } },
+      orderBy: { createdAt: 'desc' },
+      take: limit,
+      include: {
+        user: { select: { displayName: true, name: true } },
+        episode: { select: { title: true, orderIndex: true } },
+      },
+    });
+
+    return feed.map(r => ({
+      id: r.id,
+      type: 'reaction' as const,
+      userDisplayName: r.user.displayName ?? r.user.name,
+      workTitle: workMap.get(r.workId) || '',
+      episodeTitle: r.episode.title,
+      episodeOrderIndex: r.episode.orderIndex,
+      claps: r.claps,
+      emotion: r.emotion,
+      createdAt: r.createdAt,
+    }));
+  }
 }

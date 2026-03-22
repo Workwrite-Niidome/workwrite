@@ -47,4 +47,9 @@ export class ReactionsController {
   async getWorkReactionFeed(@Param('workId') workId: string) {
     return this.reactionsService.getWorkReactionFeed(workId);
   }
+
+  @Get('reactions/my/feed')
+  async getMyReactionFeed(@CurrentUser('id') userId: string) {
+    return this.reactionsService.getAuthorReactionFeed(userId);
+  }
 }
