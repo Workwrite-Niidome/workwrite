@@ -59,6 +59,45 @@ export function PreviewTab({ design, onFinalize, finalizing, creditsRemaining, c
 
   return (
     <div className="p-4 space-y-4">
+      {/* Finalize button — top for visibility */}
+      <Button
+        onClick={onFinalize}
+        disabled={!design.episodeCount || finalizing}
+        className="w-full gap-2"
+        size="lg"
+      >
+        {finalizing ? (
+          <Loader2 className="h-4 w-4 animate-spin" />
+        ) : (
+          <ChevronRight className="h-4 w-4" />
+        )}
+        設計を確定して第1話を生成
+      </Button>
+
+      {/* Credit estimate */}
+      {episodeCount > 0 && (
+        <Card className="border-indigo-400/30 bg-indigo-50/10 dark:bg-indigo-950/10">
+          <CardContent className="pt-4 pb-3">
+            <div className="grid grid-cols-2 gap-3 text-sm">
+              <div>
+                <p className="text-muted-foreground text-[10px]">通常モード</p>
+                <p className="font-bold text-xs">{episodeCount} x 1 = {episodeCount}cr</p>
+              </div>
+              <div>
+                <p className="text-muted-foreground text-[10px]">高精度モード</p>
+                <p className="font-bold text-xs">{episodeCount} x 5 = {episodeCount * 5}cr</p>
+              </div>
+            </div>
+            {creditsRemaining !== null && (
+              <p className="text-[10px] mt-1.5 text-muted-foreground">
+                残り: <span className="font-medium text-foreground">{creditsRemaining}cr</span>
+                {' '}(消費済み: {creditsConsumed}cr)
+              </p>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Summary */}
       <Card>
         <CardContent className="pt-5 space-y-2">
@@ -78,45 +117,6 @@ export function PreviewTab({ design, onFinalize, finalizing, creditsRemaining, c
           />
         </CardContent>
       </Card>
-
-      {/* Credit estimate */}
-      {episodeCount > 0 && charCount > 0 && (
-        <Card className="border-indigo-400/30 bg-indigo-50/10 dark:bg-indigo-950/10">
-          <CardContent className="pt-5">
-            <h3 className="text-sm font-medium mb-2">推定クレジット消費</h3>
-            <div className="grid grid-cols-2 gap-4 text-sm">
-              <div>
-                <p className="text-muted-foreground text-xs">通常モード</p>
-                <p className="font-bold text-sm">{episodeCount} x 1 = {episodeCount}cr</p>
-              </div>
-              <div>
-                <p className="text-muted-foreground text-xs">高精度モード</p>
-                <p className="font-bold text-sm">{episodeCount} x 5 = {episodeCount * 5}cr</p>
-              </div>
-            </div>
-            {creditsRemaining !== null && (
-              <p className="text-xs mt-2">
-                残り: <span className="font-bold">{creditsRemaining}cr</span>
-                {' '}(消費済み: {creditsConsumed}cr)
-              </p>
-            )}
-          </CardContent>
-        </Card>
-      )}
-
-      {/* Finalize button */}
-      <Button
-        onClick={onFinalize}
-        disabled={!design.episodeCount || !design.charCountPerEpisode || finalizing}
-        className="w-full gap-2"
-      >
-        {finalizing ? (
-          <Loader2 className="h-4 w-4 animate-spin" />
-        ) : (
-          <ChevronRight className="h-4 w-4" />
-        )}
-        設計を確定して第1話を生成
-      </Button>
     </div>
   );
 }
