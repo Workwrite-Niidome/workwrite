@@ -73,8 +73,17 @@ function normalizeDesignUpdate(raw: any): Partial<DesignData> {
   if (str(raw.tone)) d.tone = str(raw.tone);
   const scope = raw.scope || raw.episodeCount;
   if (scope && scope !== 'null') {
-    const m = String(scope).match(/(\d+)/);
-    if (m) d.episodeCount = parseInt(m[1], 10);
+    const scopeStr = String(scope);
+    // Extract episode count and char count from strings like "10話 × 3000字" or "8話"
+    const epMatch = scopeStr.match(/(\d+)\s*話/);
+    const charMatch = scopeStr.match(/(\d+)\s*字/);
+    if (epMatch) d.episodeCount = parseInt(epMatch[1], 10);
+    if (charMatch) d.charCountPerEpisode = parseInt(charMatch[1], 10);
+    // Fallback: just a number
+    if (!epMatch && !charMatch) {
+      const numMatch = scopeStr.match(/(\d+)/);
+      if (numMatch) d.episodeCount = parseInt(numMatch[1], 10);
+    }
   }
   return d;
 }
@@ -90,7 +99,7 @@ function isChecklistItemFilled(design: DesignData, key: string): boolean {
     case 'conflict': return !!design.conflict;
     case 'plotOutline': return !!design.plotOutline;
     case 'tone': return !!design.tone;
-    case 'episodeCount': return !!design.episodeCount && !!design.charCountPerEpisode;
+    case 'episodeCount': return !!design.episodeCount;
     default: return false;
   }
 }
