@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
@@ -128,6 +128,9 @@ export default function DashboardPage() {
         </Link>
         <Link href="/dashboard/earnings">
           <Button variant="outline" size="sm"><DollarSign className="h-4 w-4 mr-1.5" /> 収益</Button>
+        </Link>
+        <Link href="/dashboard/referral">
+          <Button variant="outline" size="sm"><Gift className="h-4 w-4 mr-1.5" /> 招待</Button>
         </Link>
       </div>
 
@@ -486,7 +489,7 @@ function CrEarningGuide() {
     { label: '作品を読了する', cr: 1, href: '/', description: '作品を最後まで読む' },
     { label: 'レビューを書く', cr: 5, href: '/', description: '20文字以上のレビューを投稿' },
     { label: '感情タグをつける', cr: 1, href: '/', description: '読んだ作品に感情を記録' },
-    { label: '友達を招待する', cr: 20, href: '/settings', description: '招待リンクから登録' },
+    { label: '友達を招待する', cr: 10, href: '/dashboard/referral', description: '招待リンクから登録（最大5人）' },
     { label: '初めて作品を公開する', cr: 10, href: '/works/new', description: '作家デビュー（1回限り）' },
   ];
 

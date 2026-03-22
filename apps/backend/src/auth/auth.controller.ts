@@ -1,10 +1,12 @@
-import { Controller, Post, Get, Body, Res, HttpCode, HttpStatus, Logger, BadRequestException } from '@nestjs/common';
+import { Controller, Post, Get, Body, Res, HttpCode, HttpStatus, Logger, BadRequestException, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
-import { Response } from 'express';
+import { Response, Request } from 'express';
 import * as crypto from 'crypto';
 import { AuthService } from './auth.service';
 import { RegisterDto, LoginDto, RefreshTokenDto } from './dto/register.dto';
+import { JwtAuthGuard } from './guards/jwt-auth.guard';
+import { CurrentUser } from './decorators/current-user.decorator';
 
 // In-memory store for PKCE code_verifier (short-lived, keyed by state)
 const pkceStore = new Map<string, { codeVerifier: string; createdAt: number }>();
@@ -51,6 +53,14 @@ export class AuthController {
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
   refresh(@Body() dto: RefreshTokenDto) {
     return this.authService.refreshTokens(dto.refreshToken);
+  }
+
+  @Get('referral')
+  @UseGuards(JwtAuthGuard)
+  @ApiOperation({ summary: 'Get referral info for current user' })
+  @ApiResponse({ status: 200, description: 'Referral info returned' })
+  getReferralInfo(@CurrentUser('id') userId: string) {
+    return this.authService.getReferralInfo(userId);
   }
 
   // ─── Twitter/X OAuth 2.0 PKCE ────────────────────────────

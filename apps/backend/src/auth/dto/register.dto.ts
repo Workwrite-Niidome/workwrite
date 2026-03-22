@@ -24,10 +24,10 @@ export class RegisterDto {
   @MaxLength(50)
   displayName?: string;
 
-  @ApiPropertyOptional({ description: '招待者のユーザーID（招待リンクから自動設定）' })
+  @ApiPropertyOptional({ description: '招待者の紹介コード（招待リンクから自動設定）' })
   @IsOptional()
   @IsString()
-  @Matches(/^[a-z0-9]{20,30}$/, { message: '無効な招待コードです' })
+  @Matches(/^[A-Z0-9]{6}$/, { message: '無効な招待コードです' })
   referrerId?: string;
 }
 

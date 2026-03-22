@@ -55,6 +55,12 @@ model User {
   lettersSent     Letter[] @relation("lettersSent")
   lettersReceived Letter[] @relation("lettersReceived")
 
+  // Referral
+  referralCode    String?  @unique
+  referralCredits Int      @default(0)
+  referredBy      String?  // userId of who referred this user
+  referralCount   Int      @default(0) // how many users this user has referred
+
   // Stripe
   stripeCustomerId  String?
   stripeAccountId   String?

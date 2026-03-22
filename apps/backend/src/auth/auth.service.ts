@@ -11,7 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RegisterDto, LoginDto, AuthResponseDto } from './dto/register.dto';
 
-const REFERRAL_REWARD_CR = 20;
+const REFERRAL_REWARD_CR = 10;
+const MAX_REFERRALS = 5;
 
 @Injectable()
 export class AuthService {
@@ -46,7 +47,7 @@ export class AuthService {
       data: { userId: user.id },
     });
 
-    // Grant referral reward if invited
+    // Grant referral reward if invited via referral code
     if (dto.referrerId) {
       this.grantReferralReward(dto.referrerId, user.id).catch((e) =>
         this.logger.warn(`Referral reward failed: ${e}`),
@@ -170,37 +171,93 @@ export class AuthService {
   }
 
   /**
-   * Grant Cr reward to the referrer when a new user registers via invite link.
+   * Get or create a referral code for the user.
    */
-  private async grantReferralReward(referrerId: string, newUserId: string) {
-    // Prevent self-referral
-    if (referrerId === newUserId) return;
+  async getOrCreateReferralCode(userId: string): Promise<string> {
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referralCode: true },
+    });
+    if (user?.referralCode) return user.referralCode;
 
-    // Verify referrer exists
-    const referrer = await this.prisma.user.findUnique({ where: { id: referrerId } });
+    // Generate a unique 6-char uppercase alphanumeric code
+    const chars = 'ABCDEFGHJKLMNPQRSTUVWXYZ23456789'; // no I/O/0/1 to avoid confusion
+    let code: string;
+    let attempts = 0;
+    do {
+      code = '';
+      for (let i = 0; i < 6; i++) {
+        code += chars[Math.floor(Math.random() * chars.length)];
+      }
+      const existing = await this.prisma.user.findUnique({ where: { referralCode: code } });
+      if (!existing) break;
+      attempts++;
+    } while (attempts < 10);
+
+    await this.prisma.user.update({
+      where: { id: userId },
+      data: { referralCode: code },
+    });
+
+    return code;
+  }
+
+  /**
+   * Get referral info for the dashboard.
+   */
+  async getReferralInfo(userId: string) {
+    const code = await this.getOrCreateReferralCode(userId);
+    const user = await this.prisma.user.findUnique({
+      where: { id: userId },
+      select: { referralCount: true, referralCredits: true },
+    });
+
+    return {
+      code,
+      count: user?.referralCount ?? 0,
+      maxInvites: MAX_REFERRALS,
+      creditsEarned: user?.referralCredits ?? 0,
+    };
+  }
+
+  /**
+   * Grant Cr reward to the referrer when a new user registers via referral code.
+   */
+  private async grantReferralReward(referralCode: string, newUserId: string) {
+    // Look up referrer by referral code
+    const referrer = await this.prisma.user.findUnique({ where: { referralCode } });
     if (!referrer) return;
+
+    // Prevent self-referral
+    if (referrer.id === newUserId) return;
+
+    // Check max referrals
+    if (referrer.referralCount >= MAX_REFERRALS) {
+      this.logger.log(`Referrer ${referrer.id} has reached max referrals (${MAX_REFERRALS})`);
+      return;
+    }
 
     // Ensure credit balance exists
     await this.prisma.creditBalance.upsert({
-      where: { userId: referrerId },
+      where: { userId: referrer.id },
       update: {},
-      create: { userId: referrerId, balance: 20, monthlyBalance: 20, purchasedBalance: 0, monthlyGranted: 20, lastGrantedAt: new Date() },
+      create: { userId: referrer.id, balance: 0, monthlyBalance: 0, purchasedBalance: 0, monthlyGranted: 0 },
     });
 
     // Atomic: lock + check + grant inside single transaction
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(
-        'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', referrerId,
+        'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', referrer.id,
       );
 
       // Check for duplicate (inside transaction = race-safe)
       const existing = await tx.creditTransaction.findFirst({
-        where: { userId: referrerId, type: 'REFERRAL_REWARD', description: `招待報酬 (${newUserId})` },
+        where: { userId: referrer.id, type: 'REFERRAL_REWARD', description: `招待報酬 (${newUserId})` },
       });
       if (existing) return;
 
       const balance = await tx.creditBalance.update({
-        where: { userId: referrerId },
+        where: { userId: referrer.id },
         data: {
           balance: { increment: REFERRAL_REWARD_CR },
           purchasedBalance: { increment: REFERRAL_REWARD_CR },
@@ -209,7 +266,7 @@ export class AuthService {
 
       await tx.creditTransaction.create({
         data: {
-          userId: referrerId,
+          userId: referrer.id,
           amount: REFERRAL_REWARD_CR,
           type: 'REFERRAL_REWARD',
           status: 'confirmed',
@@ -217,9 +274,24 @@ export class AuthService {
           description: `招待報酬 (${newUserId})`,
         },
       });
+
+      // Update referrer's referral stats
+      await tx.user.update({
+        where: { id: referrer.id },
+        data: {
+          referralCount: { increment: 1 },
+          referralCredits: { increment: REFERRAL_REWARD_CR },
+        },
+      });
+
+      // Set referredBy on new user
+      await tx.user.update({
+        where: { id: newUserId },
+        data: { referredBy: referrer.id },
+      });
     });
 
-    this.logger.log(`Granted ${REFERRAL_REWARD_CR}Cr referral reward to ${referrerId} for inviting ${newUserId}`);
+    this.logger.log(`Granted ${REFERRAL_REWARD_CR}Cr referral reward to ${referrer.id} for inviting ${newUserId}`);
   }
 
   private generateTokens(user: {

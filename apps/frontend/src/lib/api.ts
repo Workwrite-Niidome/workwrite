@@ -584,6 +584,11 @@ class ApiClient {
     return this.request<{ data: { balance: number } }>('/reflection/points');
   }
 
+  // Referral
+  async getReferralInfo() {
+    return this.request<{ data: { code: string; count: number; maxInvites: number; creditsEarned: number } }>('/auth/referral');
+  }
+
   // Author Dashboard
   async getAuthorOverview() {
     return this.request<{ data: unknown }>('/author/overview');
