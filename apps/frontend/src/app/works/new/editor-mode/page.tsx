@@ -681,22 +681,7 @@ function EditorModeDesignContent() {
                 style={{ width: `${(filledCount / CHECKLIST_ITEMS.length) * 100}%` }}
               />
             </div>
-            <ul className="space-y-2">
-              {CHECKLIST_ITEMS.map((item) => {
-                const filled = isChecklistItemFilled(design, item.key);
-                return (
-                  <li key={item.key} className="flex items-center gap-2 text-sm">
-                    <div className={cn(
-                      'h-5 w-5 rounded-full flex items-center justify-center border transition-colors',
-                      filled ? 'bg-green-500 border-green-500 text-white' : 'border-border',
-                    )}>
-                      {filled && <Check className="h-3 w-3" />}
-                    </div>
-                    <span className={filled ? 'text-foreground' : 'text-muted-foreground'}>{item.label}</span>
-                  </li>
-                );
-              })}
-            </ul>
+            <ChecklistWithPreview design={design} />
           </div>
 
           {/* Design preview */}
@@ -959,6 +944,80 @@ function CharacterCard({
   );
 }
 
+
+function getDesignValueForKey(design: DesignData, key: string): string | null {
+  switch (key) {
+    case 'genre': return design.genre || null;
+    case 'theme': return design.theme || null;
+    case 'afterReading': return design.afterReading || null;
+    case 'protagonist': {
+      const p = design.protagonist;
+      return p?.name ? `${p.name}（${p.role || ''}）— ${p.personality || ''}` : null;
+    }
+    case 'characters': {
+      const chars = design.characters;
+      if (!chars || chars.length < 2) return null;
+      return chars.map((c) => `${c.name}（${c.role || ''}）`).join('、');
+    }
+    case 'worldBuilding': return design.worldBuilding || null;
+    case 'conflict': return design.conflict || null;
+    case 'plotOutline': return design.plotOutline || null;
+    case 'tone': return design.tone || null;
+    case 'episodeCount': {
+      if (!design.episodeCount) return null;
+      return `${design.episodeCount}話 × ${design.charCountPerEpisode || '?'}字`;
+    }
+    default: return null;
+  }
+}
+
+function ChecklistWithPreview({ design }: { design: DesignData }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  return (
+    <ul className="space-y-1">
+      {CHECKLIST_ITEMS.map((item) => {
+        const filled = isChecklistItemFilled(design, item.key);
+        const value = getDesignValueForKey(design, item.key);
+        const isExpanded = expandedKey === item.key;
+
+        return (
+          <li key={item.key}>
+            <button
+              onClick={() => filled && setExpandedKey(isExpanded ? null : item.key)}
+              className={cn(
+                'w-full flex items-center gap-2 text-sm py-1.5 px-2 rounded-md transition-colors text-left',
+                filled ? 'hover:bg-muted cursor-pointer' : 'cursor-default',
+                isExpanded && 'bg-muted',
+              )}
+            >
+              <div className={cn(
+                'h-5 w-5 rounded-full flex items-center justify-center border transition-colors shrink-0',
+                filled ? 'bg-green-500 border-green-500 text-white' : 'border-border',
+              )}>
+                {filled && <Check className="h-3 w-3" />}
+              </div>
+              <span className={cn('flex-1', filled ? 'text-foreground' : 'text-muted-foreground')}>
+                {item.label}
+              </span>
+              {filled && (
+                <ChevronRight className={cn(
+                  'h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0',
+                  isExpanded && 'rotate-90',
+                )} />
+              )}
+            </button>
+            {isExpanded && value && (
+              <div className="ml-9 mr-2 mb-2 p-2 rounded bg-muted/50 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap animate-in fade-in slide-in-from-top-1 duration-200">
+                {value}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
+  );
+}
 
 export default function EditorModeDesignPage() {
   return (
