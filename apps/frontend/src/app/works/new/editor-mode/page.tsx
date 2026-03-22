@@ -47,13 +47,40 @@ const CHECKLIST_ITEMS = [
   { key: 'episodeCount', label: '話数・各話の文字数目安' },
 ] as const;
 
+/** Normalize AI's __DESIGN_UPDATE__ output to match our DesignData shape */
+function normalizeDesignUpdate(raw: any): Partial<DesignData> {
+  const d: Partial<DesignData> = {};
+  const str = (v: any) => v && v !== 'null' ? String(v) : undefined;
+  if (str(raw.genre_setting || raw.genre)) d.genre = str(raw.genre_setting || raw.genre);
+  if (str(raw.theme)) d.theme = str(raw.theme);
+  if (str(raw.emotion || raw.afterReading)) d.afterReading = str(raw.emotion || raw.afterReading);
+  if (raw.protagonist && raw.protagonist !== 'null') {
+    d.protagonist = typeof raw.protagonist === 'string'
+      ? { name: raw.protagonist, role: '', personality: '', speechStyle: '' }
+      : raw.protagonist;
+  }
+  if (raw.characters && raw.characters !== 'null' && Array.isArray(raw.characters)) {
+    d.characters = raw.characters;
+  }
+  if (str(raw.world || raw.worldBuilding)) d.worldBuilding = str(raw.world || raw.worldBuilding);
+  if (str(raw.conflict)) d.conflict = str(raw.conflict);
+  if (str(raw.plot || raw.plotOutline)) d.plotOutline = str(raw.plot || raw.plotOutline);
+  if (str(raw.tone)) d.tone = str(raw.tone);
+  const scope = raw.scope || raw.episodeCount;
+  if (scope && scope !== 'null') {
+    const m = String(scope).match(/(\d+)/);
+    if (m) d.episodeCount = parseInt(m[1], 10);
+  }
+  return d;
+}
+
 function isChecklistItemFilled(design: DesignData, key: string): boolean {
   switch (key) {
     case 'genre': return !!design.genre;
     case 'theme': return !!design.theme;
     case 'afterReading': return !!design.afterReading;
-    case 'protagonist': return !!design.protagonist?.name;
-    case 'characters': return (design.characters?.length ?? 0) >= 2;
+    case 'protagonist': return !!(typeof design.protagonist === 'object' ? design.protagonist?.name : design.protagonist);
+    case 'characters': return Array.isArray(design.characters) ? design.characters.length >= 2 : !!design.characters;
     case 'worldBuilding': return !!design.worldBuilding;
     case 'conflict': return !!design.conflict;
     case 'plotOutline': return !!design.plotOutline;
@@ -204,7 +231,8 @@ function EditorModeDesignContent() {
         const designMatch = accumulated.match(pattern);
         if (designMatch) {
           try {
-            const designUpdate = JSON.parse(designMatch[1]);
+            const raw = JSON.parse(designMatch[1]);
+            const designUpdate = normalizeDesignUpdate(raw);
             setDesign(prev => ({ ...prev, ...designUpdate }));
             // Remove the entire design update block from displayed message
             const cleanContent = accumulated
@@ -951,12 +979,15 @@ function getDesignValueForKey(design: DesignData, key: string): string | null {
     case 'afterReading': return design.afterReading || null;
     case 'protagonist': {
       const p = design.protagonist;
+      if (typeof p === 'string') return p;
       return p?.name ? `${p.name}（${p.role || ''}）— ${p.personality || ''}` : null;
     }
     case 'characters': {
       const chars = design.characters;
-      if (!chars || chars.length < 2) return null;
-      return chars.map((c) => `${c.name}（${c.role || ''}）`).join('、');
+      if (!chars) return null;
+      if (typeof chars === 'string') return chars;
+      if (!Array.isArray(chars) || chars.length === 0) return null;
+      return chars.map((c: any) => typeof c === 'string' ? c : `${c.name}（${c.role || ''}）`).join('、');
     }
     case 'worldBuilding': return design.worldBuilding || null;
     case 'conflict': return design.conflict || null;
