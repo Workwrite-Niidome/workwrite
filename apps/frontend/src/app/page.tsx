@@ -150,7 +150,7 @@ export default function Home() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">人気作品</h2>
-            <Link href="/search?q=&sort=score" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/search?sort=popular" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               すべて見る →
             </Link>
           </div>
@@ -170,7 +170,7 @@ export default function Home() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">埋もれた名作</h2>
-            <Link href="/search?q=" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/search?category=hidden-gems&sort=score" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               すべて見る →
             </Link>
           </div>
@@ -190,7 +190,7 @@ export default function Home() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">新着</h2>
-            <Link href="/search?q=&sort=newest" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+            <Link href="/search?sort=newest" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               すべて見る →
             </Link>
           </div>
@@ -265,7 +265,7 @@ function AiWorksSection() {
     <section>
       <div className="flex justify-between items-center mb-4">
         <h2 className="text-sm font-medium">AI作品</h2>
-        <Link href="/discover" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+        <Link href="/search?category=ai" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
           すべて見る →
         </Link>
       </div>

@@ -81,7 +81,13 @@ export class SearchService implements OnModuleInit {
     limit?: number;
     offset?: number;
     sort?: string;
+    category?: string;
+    aiGenerated?: boolean;
   }) {
+    // Category/AI filters require Postgres (Meili doesn't have these fields)
+    if (options?.category || options?.aiGenerated) {
+      return this.searchPostgres(query, options);
+    }
     if (this.meiliAvailable && this.worksIndex) {
       return this.searchMeili(query, options);
     }
@@ -133,23 +139,38 @@ export class SearchService implements OnModuleInit {
     limit?: number;
     offset?: number;
     sort?: string;
+    category?: string;
+    aiGenerated?: boolean;
   }) {
     const limit = options?.limit ?? 20;
     const offset = options?.offset ?? 0;
 
-    const where: any = {
-      status: 'PUBLISHED',
-      OR: [
+    const where: any = { status: 'PUBLISHED' };
+
+    // Only apply text search if query is non-empty
+    if (query && query.trim()) {
+      where.OR = [
         { title: { contains: query, mode: 'insensitive' } },
         { synopsis: { contains: query, mode: 'insensitive' } },
         { author: { name: { contains: query, mode: 'insensitive' } } },
         { author: { displayName: { contains: query, mode: 'insensitive' } } },
         { tags: { some: { tag: { contains: query, mode: 'insensitive' } } } },
-      ],
-    };
+      ];
+    }
 
     if (options?.genre) {
       where.genre = options.genre;
+    }
+
+    // Category filters
+    if (options?.category === 'hidden-gems') {
+      const avg = await this.prisma.qualityScore.aggregate({ _avg: { overall: true } });
+      where.qualityScore = { overall: { gte: (avg._avg.overall ?? 50) * 1.2 } };
+      where.totalViews = { lt: 100 };
+    }
+
+    if (options?.aiGenerated === true || options?.category === 'ai') {
+      where.isAiGenerated = true;
     }
 
     let orderBy: any = { publishedAt: 'desc' };
@@ -159,6 +180,8 @@ export class SearchService implements OnModuleInit {
       scoreSort = true;
     } else if (options?.sort === 'newest') {
       orderBy = { publishedAt: 'desc' };
+    } else if (options?.sort === 'popular') {
+      orderBy = { totalViews: 'desc' };
     }
 
     const [works, total] = await Promise.all([

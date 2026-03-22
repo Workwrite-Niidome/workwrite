@@ -17,7 +17,13 @@ const SORT_OPTIONS = [
   { value: 'relevance', label: '関連度' },
   { value: 'newest', label: '新しい順' },
   { value: 'score', label: 'スコア順' },
+  { value: 'popular', label: '人気順' },
 ];
+
+const CATEGORY_LABELS: Record<string, string> = {
+  'hidden-gems': '埋もれた名作',
+  'ai': 'AI作品',
+};
 
 const PAGE_SIZE = 20;
 
@@ -25,18 +31,20 @@ function SearchContent() {
   const searchParams = useSearchParams();
   const initialQuery = searchParams.get('q') || '';
   const initialSort = searchParams.get('sort') || 'relevance';
+  const initialCategory = searchParams.get('category') || '';
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState(initialQuery);
   const [genre, setGenre] = useState('');
   const [sortBy, setSortBy] = useState(initialSort);
+  const [category, setCategory] = useState(initialCategory);
   const [results, setResults] = useState<Work[]>([]);
   const [total, setTotal] = useState(0);
   const [page, setPage] = useState(0);
   const [loading, setLoading] = useState(false);
 
   useEffect(() => {
-    if (initialQuery !== undefined) doSearch(initialQuery, 0);
-  }, [initialQuery]);
+    doSearch(initialQuery, 0);
+  }, [initialQuery, initialSort, initialCategory]);
 
   async function doSearch(q: string, pageNum: number) {
     setLoading(true);
@@ -44,9 +52,10 @@ function SearchContent() {
       const res = await api.searchWorks(q, {
         genre: genre || undefined,
         sort: sortBy !== 'relevance' ? sortBy : undefined,
+        category: category || undefined,
         limit: PAGE_SIZE,
         offset: pageNum * PAGE_SIZE,
-      });
+      } as any);
       setResults(res.data.hits);
       setTotal(res.data.total);
       setPage(pageNum);
@@ -76,6 +85,15 @@ function SearchContent() {
 
   return (
     <div className="px-4 md:px-6 py-8">
+      {/* Page title based on category/sort */}
+      <h1 className="text-lg font-bold mb-4">
+        {category === 'hidden-gems' ? '埋もれた名作' :
+         category === 'ai' ? 'AI作品' :
+         sortBy === 'popular' ? '人気作品' :
+         sortBy === 'newest' ? '新着作品' :
+         sortBy === 'score' ? 'スコア順' :
+         '作品を探す'}
+      </h1>
       <form onSubmit={handleSubmit} className="flex gap-2 mb-4">
         <div className="relative flex-1">
           <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
@@ -110,9 +128,19 @@ function SearchContent() {
         >
           {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
         </select>
-        {(genre || sortBy !== 'relevance') && (
+        <select
+          value={category}
+          onChange={(e) => { setCategory(e.target.value); doSearch(query, 0); }}
+          className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
+          aria-label="カテゴリ"
+        >
+          <option value="">すべて</option>
+          <option value="hidden-gems">埋もれた名作</option>
+          <option value="ai">AI作品</option>
+        </select>
+        {(genre || sortBy !== 'relevance' || category) && (
           <button
-            onClick={() => { setGenre(''); setSortBy('relevance'); doSearch(query, 0); }}
+            onClick={() => { setGenre(''); setSortBy('relevance'); setCategory(''); doSearch(query, 0); }}
             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             フィルターをクリア

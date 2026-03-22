@@ -494,7 +494,7 @@ class ApiClient {
   }
 
   // Discover
-  async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string; aiGenerated?: boolean }) {
+  async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string; aiGenerated?: boolean; category?: string }) {
     const qs = new URLSearchParams({ q });
     if (options?.genre) qs.set('genre', options.genre);
     if (options?.emotionTags?.length) qs.set('emotionTags', options.emotionTags.join(','));
@@ -502,6 +502,7 @@ class ApiClient {
     if (options?.offset) qs.set('offset', String(options.offset));
     if (options?.sort) qs.set('sort', options.sort);
     if (options?.aiGenerated !== undefined) qs.set('aiGenerated', String(options.aiGenerated));
+    if (options?.category) qs.set('category', options.category);
     return this.request<{ data: { hits: Work[]; total: number } }>(`/discover/search?${qs.toString()}`);
   }
 

@@ -32,6 +32,8 @@ export class DiscoverController {
   @ApiQuery({ name: 'sort', required: false })
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'offset', required: false })
+  @ApiQuery({ name: 'category', required: false })
+  @ApiQuery({ name: 'aiGenerated', required: false })
   search(
     @Query('q') q: string,
     @Query('genre') genre?: string,
@@ -39,6 +41,8 @@ export class DiscoverController {
     @Query('sort') sort?: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('category') category?: string,
+    @Query('aiGenerated') aiGenerated?: string,
   ) {
     return this.discoverService.search(q, {
       genre,
@@ -46,6 +50,8 @@ export class DiscoverController {
       sort,
       limit: limit ? parseInt(limit, 10) : undefined,
       offset: offset ? parseInt(offset, 10) : undefined,
+      category,
+      aiGenerated: aiGenerated === 'true' ? true : undefined,
     });
   }
 

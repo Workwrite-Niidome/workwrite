@@ -9,7 +9,7 @@ export class DiscoverService {
     private searchService: SearchService,
   ) {}
 
-  async search(query: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
+  async search(query: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string; category?: string; aiGenerated?: boolean }) {
     return this.searchService.search(query, options);
   }
 
@@ -26,10 +26,35 @@ export class DiscoverService {
   }
 
   async getPopularWorks(limit = 10) {
-    return this.prisma.work.findMany({
-      where: { status: 'PUBLISHED' },
-      orderBy: { totalViews: 'desc' },
-      take: limit,
+    // Popular = most reading activity in last 30 days
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    const recentActivity = await this.prisma.readingProgress.groupBy({
+      by: ['workId'],
+      where: { updatedAt: { gte: thirtyDaysAgo } },
+      _count: { userId: true },
+      orderBy: { _count: { userId: 'desc' } },
+      take: limit * 2,
+    });
+
+    if (recentActivity.length === 0) {
+      return this.prisma.work.findMany({
+        where: { status: 'PUBLISHED' },
+        orderBy: { totalViews: 'desc' },
+        take: limit,
+        include: {
+          author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+          tags: true,
+          qualityScore: { select: { overall: true } },
+          _count: { select: { reviews: true, episodes: true } },
+        },
+      });
+    }
+
+    const workIds = recentActivity.map((r) => r.workId);
+    const works = await this.prisma.work.findMany({
+      where: { id: { in: workIds }, status: 'PUBLISHED' },
       include: {
         author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
         tags: true,
@@ -37,6 +62,9 @@ export class DiscoverService {
         _count: { select: { reviews: true, episodes: true } },
       },
     });
+
+    const workMap = new Map(works.map((w) => [w.id, w]));
+    return workIds.map((id) => workMap.get(id)).filter(Boolean).slice(0, limit) as typeof works;
   }
 
   async getRecentWorks(limit = 10) {
