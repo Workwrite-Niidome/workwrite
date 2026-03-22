@@ -228,6 +228,19 @@ export class AiTierService {
     };
   }
 
+  /** Get model config for companion (no credit check, always Haiku) */
+  async getCompanionModelConfig(): Promise<{
+    model: string;
+    thinking: boolean;
+    budgetTokens: number;
+  }> {
+    return {
+      model: HAIKU_MODEL,
+      thinking: false,
+      budgetTokens: 0,
+    };
+  }
+
   /** Admin: grant a plan to a user */
   async grantPlan(adminId: string, targetUserId: string, plan: 'standard' | 'pro'): Promise<void> {
     await this.prisma.subscription.upsert({

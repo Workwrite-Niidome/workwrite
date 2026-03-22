@@ -26,8 +26,9 @@ export class AiCompanionService {
     workId: string,
     userMessage: string,
   ): AsyncGenerator<string> {
-    // Check tier (enforces free weekly limit, throws ForbiddenException if exceeded)
-    const modelConfig = await this.aiTier.getModelConfig(userId, false, 'companion');
+    // Check companion-specific limits (weekly limit for free users, not credit-based)
+    await this.aiTier.assertCanUseCompanion(userId);
+    const modelConfig = await this.aiTier.getCompanionModelConfig();
 
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
