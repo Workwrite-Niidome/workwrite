@@ -58,12 +58,31 @@ export class ScoringService {
 
     try {
       // ── Phase 1: Structural Analysis (no LLM cost) ──
-      const episodes = work.episodes.map((ep) => ({
+      const allEpisodes = work.episodes.map((ep) => ({
         id: ep.id,
         content: ep.content,
         title: ep.title,
         orderIndex: ep.orderIndex,
       }));
+
+      // Limit to 150K chars (~小説1冊分) for scoring accuracy
+      const MAX_SCORING_CHARS = 150_000;
+      let episodes = allEpisodes;
+      const totalChars = allEpisodes.reduce((s, ep) => s + ep.content.length, 0);
+      if (totalChars > MAX_SCORING_CHARS) {
+        let charCount = 0;
+        const limited: typeof allEpisodes = [];
+        for (const ep of allEpisodes) {
+          if (charCount + ep.content.length > MAX_SCORING_CHARS && limited.length > 0) break;
+          limited.push(ep);
+          charCount += ep.content.length;
+        }
+        this.logger.log(
+          `Work ${workId}: ${totalChars} chars exceeds ${MAX_SCORING_CHARS} limit, ` +
+          `scoring first ${limited.length}/${allEpisodes.length} episodes (${charCount} chars)`,
+        );
+        episodes = limited;
+      }
 
       const importRecord = await this.prisma.workImport.findFirst({
         where: { workId },
@@ -72,13 +91,13 @@ export class ScoringService {
       const isImported = !!importRecord;
 
       // For imported works: auto-extract structure (characters, world, plot) before scoring
+      // Use all episodes for structure extraction (characters appear throughout)
       if (isImported) {
         const hasStructure = await this.prisma.storyCharacter.count({ where: { workId } });
         if (hasStructure === 0) {
           this.logger.log(`Auto-extracting structure for imported work ${workId}`);
-          await this.structureExtractor.extractAndSave(workId, episodes);
+          await this.structureExtractor.extractAndSave(workId, allEpisodes);
         }
-        // batchAnalyzeEpisodes removed — extractAndSave already generates episode summaries
       }
 
       const [metrics, structure] = await Promise.all([
