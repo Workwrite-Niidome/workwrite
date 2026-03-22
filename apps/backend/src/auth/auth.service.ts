@@ -2,6 +2,7 @@ import {
   Injectable,
   UnauthorizedException,
   ConflictException,
+  Logger,
 } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
@@ -10,8 +11,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RegisterDto, LoginDto, AuthResponseDto } from './dto/register.dto';
 
+const REFERRAL_REWARD_CR = 20;
+
 @Injectable()
 export class AuthService {
+  private readonly logger = new Logger(AuthService.name);
+
   constructor(
     private prisma: PrismaService,
     private jwt: JwtService,
@@ -40,6 +45,13 @@ export class AuthService {
     await this.prisma.pointAccount.create({
       data: { userId: user.id },
     });
+
+    // Grant referral reward if invited
+    if (dto.referrerId) {
+      this.grantReferralReward(dto.referrerId, user.id).catch((e) =>
+        this.logger.warn(`Referral reward failed: ${e}`),
+      );
+    }
 
     return this.generateTokens(user);
   }
@@ -155,6 +167,51 @@ export class AuthService {
     });
     if (user?.isBanned) return null;
     return user;
+  }
+
+  /**
+   * Grant Cr reward to the referrer when a new user registers via invite link.
+   */
+  private async grantReferralReward(referrerId: string, newUserId: string) {
+    // Verify referrer exists
+    const referrer = await this.prisma.user.findUnique({ where: { id: referrerId } });
+    if (!referrer) return;
+
+    // Check for duplicate (prevent double-grant)
+    const existing = await this.prisma.creditTransaction.findFirst({
+      where: { userId: referrerId, type: 'REFERRAL_REWARD', description: { contains: newUserId } },
+    });
+    if (existing) return;
+
+    // Ensure credit balance exists
+    const balance = await this.prisma.creditBalance.upsert({
+      where: { userId: referrerId },
+      update: {},
+      create: { userId: referrerId, balance: 20, monthlyBalance: 20, purchasedBalance: 0, monthlyGranted: 20, lastGrantedAt: new Date() },
+    });
+
+    // Grant credits
+    await this.prisma.$transaction(async (tx) => {
+      await tx.creditBalance.update({
+        where: { userId: referrerId },
+        data: {
+          balance: { increment: REFERRAL_REWARD_CR },
+          purchasedBalance: { increment: REFERRAL_REWARD_CR },
+        },
+      });
+      await tx.creditTransaction.create({
+        data: {
+          userId: referrerId,
+          amount: REFERRAL_REWARD_CR,
+          type: 'REFERRAL_REWARD',
+          status: 'confirmed',
+          balance: balance.balance + REFERRAL_REWARD_CR,
+          description: `招待報酬 (${newUserId})`,
+        },
+      });
+    });
+
+    this.logger.log(`Granted ${REFERRAL_REWARD_CR}Cr referral reward to ${referrerId} for inviting ${newUserId}`);
   }
 
   private generateTokens(user: {

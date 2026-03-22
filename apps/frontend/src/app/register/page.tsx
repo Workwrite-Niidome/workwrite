@@ -2,8 +2,8 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { AlertTriangle } from 'lucide-react';
+import { useRouter, useSearchParams } from 'next/navigation';
+import { AlertTriangle, Gift } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardHeader, CardTitle, CardDescription, CardContent, CardFooter } from '@/components/ui/card';
@@ -20,6 +20,8 @@ export default function RegisterPage() {
   const [serverStatus, setServerStatus] = useState<'checking' | 'ok' | 'down'>('checking');
   const { register } = useAuth();
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const referrerId = searchParams.get('ref');
 
   useEffect(() => {
     api.checkHealth().then(({ ok, db }) => {
@@ -36,7 +38,7 @@ export default function RegisterPage() {
     setError('');
     setLoading(true);
     try {
-      await register(email, password, name);
+      await register(email, password, name, referrerId || undefined);
       router.push('/onboarding');
     } catch (err: unknown) {
       if (err instanceof Error) {
@@ -64,6 +66,12 @@ export default function RegisterPage() {
         </CardHeader>
         <form onSubmit={handleSubmit}>
           <CardContent className="space-y-4">
+            {referrerId && (
+              <div className="flex items-center gap-2 p-3 text-sm text-green-800 bg-green-50 dark:text-green-200 dark:bg-green-950/50 rounded-md border border-green-200 dark:border-green-800">
+                <Gift className="h-4 w-4 shrink-0" />
+                招待リンクから登録すると、紹介者にボーナスが届きます
+              </div>
+            )}
             {serverStatus === 'down' && (
               <div className="flex items-start gap-2 p-3 text-sm text-orange-800 bg-orange-50 dark:text-orange-200 dark:bg-orange-950/50 rounded-md border border-orange-200 dark:border-orange-800">
                 <AlertTriangle className="h-4 w-4 mt-0.5 shrink-0" />

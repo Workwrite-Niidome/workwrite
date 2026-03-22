@@ -1,7 +1,11 @@
 import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostsService } from '../posts/posts.service';
+import { CreditService } from '../billing/credit.service';
 import { PostType } from '@prisma/client';
+
+const REVIEW_REWARD_CR = 3;
+const MIN_REVIEW_LENGTH = 20;
 
 @Injectable()
 export class ReviewsService {
@@ -10,6 +14,7 @@ export class ReviewsService {
   constructor(
     private prisma: PrismaService,
     private postsService: PostsService,
+    private creditService: CreditService,
   ) {}
 
   async create(userId: string, data: { workId: string; content: string }) {
@@ -37,9 +42,63 @@ export class ReviewsService {
         content: `『${title}』にレビューを投稿しました\n\n${excerpt}${data.content.length > 100 ? '...' : ''}`,
         workId: data.workId,
       }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
+
+      // Grant Cr reward for new review (minimum length required)
+      if (data.content.length >= MIN_REVIEW_LENGTH) {
+        this.grantReviewReward(userId, data.workId).catch((e) =>
+          this.logger.warn(`Review reward failed: ${e}`),
+        );
+      }
     }
 
     return review;
+  }
+
+  /**
+   * Grant Cr reward for writing a review.
+   * Immediate grant — spam detection is done asynchronously (future).
+   */
+  private async grantReviewReward(userId: string, workId: string) {
+    try {
+      // Check if already rewarded for this work (prevent double-grant on edge cases)
+      const existingTx = await this.prisma.creditTransaction.findFirst({
+        where: {
+          userId,
+          type: 'REVIEW_REWARD',
+          description: { contains: workId },
+        },
+      });
+      if (existingTx) return;
+
+      // Ensure credit balance exists
+      await this.creditService.ensureCreditBalance(userId);
+
+      // Grant credits
+      await this.prisma.$transaction(async (tx) => {
+        await tx.creditBalance.update({
+          where: { userId },
+          data: {
+            balance: { increment: REVIEW_REWARD_CR },
+            purchasedBalance: { increment: REVIEW_REWARD_CR }, // Review rewards don't expire
+          },
+        });
+
+        await tx.creditTransaction.create({
+          data: {
+            userId,
+            amount: REVIEW_REWARD_CR,
+            type: 'REVIEW_REWARD',
+            status: 'confirmed',
+            balance: 0, // Will be overwritten by actual balance
+            description: `レビュー報酬 (${workId})`,
+          },
+        });
+      });
+
+      this.logger.log(`Granted ${REVIEW_REWARD_CR}Cr review reward to user ${userId} for work ${workId}`);
+    } catch (e) {
+      this.logger.error(`Failed to grant review reward: ${e}`);
+    }
   }
 
   async findByWork(workId: string) {

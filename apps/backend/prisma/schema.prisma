@@ -71,6 +71,9 @@ model User {
   // Editor Mode
   editorModeJobs EditorModeJob[]
 
+  // Episode Reactions
+  episodeReactions EpisodeReaction[]
+
   @@index([email])
   @@index([role])
 }
@@ -180,6 +183,9 @@ model Work {
   // Editor Mode
   editorModeJob  EditorModeJob?
 
+  // Episode Reactions
+  episodeReactions EpisodeReaction[]
+
   // Denormalized stats
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
@@ -229,6 +235,7 @@ model Episode {
   scenes          StoryScene[]
   aiAnalysis      EpisodeAnalysis?
   posts           Post[]
+  reactions       EpisodeReaction[]
 
   @@unique([workId, orderIndex])
   @@index([workId])
@@ -1186,6 +1193,8 @@ enum CreditTxType {
   ADMIN_REVOKE
   REFUND
   PLAN_CHANGE_ADJUST
+  REVIEW_REWARD
+  REFERRAL_REWARD
 }
 
 model CreditPurchase {
@@ -1225,4 +1234,28 @@ model EditorModeJob {
   user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
+}
+
+// ============================================================
+// Engagement Loop
+// ============================================================
+
+model EpisodeReaction {
+  id        String   @id @default(cuid())
+  userId    String
+  episodeId String
+  workId    String
+  claps     Int      @default(1)
+  emotion   String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user    User    @relation(fields: [userId], references: [id], onDelete: Cascade)
+  episode Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  work    Work    @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, episodeId])
+  @@index([workId])
+  @@index([episodeId])
+  @@index([createdAt])
 }

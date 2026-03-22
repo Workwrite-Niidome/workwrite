@@ -37,6 +37,7 @@ import { StoryStructureModule } from './story-structure/story-structure.module';
 import { PostsModule } from './posts/posts.module';
 import { TimelineModule } from './timeline/timeline.module';
 import { BillingModule } from './billing/billing.module';
+import { ReactionsModule } from './reactions/reactions.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -82,6 +83,7 @@ import { HealthController } from './health.controller';
     StoryStructureModule,
     PostsModule,
     TimelineModule,
+    ReactionsModule,
   ],
   controllers: [HealthController],
 })

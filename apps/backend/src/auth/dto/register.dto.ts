@@ -23,6 +23,11 @@ export class RegisterDto {
   @IsString()
   @MaxLength(50)
   displayName?: string;
+
+  @ApiPropertyOptional({ description: '招待者のユーザーID（招待リンクから自動設定）' })
+  @IsOptional()
+  @IsString()
+  referrerId?: string;
 }
 
 export class LoginDto {
