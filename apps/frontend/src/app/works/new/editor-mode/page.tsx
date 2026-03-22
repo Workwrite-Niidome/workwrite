@@ -580,7 +580,6 @@ function EditorModeDesignContent() {
           <h1 className="text-sm font-medium">編集者モード - 設計対話</h1>
         </div>
         <div className="flex items-center gap-3">
-          <ModeSelector aiMode={aiMode} onModeChange={setAiMode} />
           <CreditDisplay consumed={creditsConsumed} remaining={creditsRemaining} />
         </div>
       </div>
