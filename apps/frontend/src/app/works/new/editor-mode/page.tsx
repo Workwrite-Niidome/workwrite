@@ -59,8 +59,13 @@ function normalizeDesignUpdate(raw: any): Partial<DesignData> {
       ? { name: raw.protagonist, role: '', personality: '', speechStyle: '' }
       : raw.protagonist;
   }
-  if (raw.characters && raw.characters !== 'null' && Array.isArray(raw.characters)) {
-    d.characters = raw.characters;
+  if (raw.characters && raw.characters !== 'null') {
+    if (Array.isArray(raw.characters)) {
+      d.characters = raw.characters;
+    } else if (typeof raw.characters === 'string') {
+      // AI returned characters as a text description — store as-is for checklist display
+      d.characters = raw.characters as any;
+    }
   }
   if (str(raw.world || raw.worldBuilding)) d.worldBuilding = str(raw.world || raw.worldBuilding);
   if (str(raw.conflict)) d.conflict = str(raw.conflict);
@@ -136,15 +141,35 @@ function EditorModeDesignContent() {
           })));
         }
         if (job?.creditsConsumed) setCreditConsumed(job.creditsConsumed);
-        // Try to extract design from chat history
+        // Merge ALL __DESIGN_UPDATE__ blocks from chat history (oldest to newest)
         if (job?.designChatHistory) {
-          for (let i = (job.designChatHistory as any[]).length - 1; i >= 0; i--) {
-            const msg = job.designChatHistory[i];
+          let merged: Partial<DesignData> = {};
+          for (const msg of (job.designChatHistory as any[])) {
             if (msg.role !== 'assistant') continue;
-            const match = msg.content.match(/__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/);
-            if (match) {
-              try { setDesign(normalizeDesignUpdate(JSON.parse(match[1]))); break; } catch { /* skip */ }
+            // Try multiple patterns
+            const patterns = [
+              /__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/,
+              /__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```/,
+              /__DESIGN_UPDATE__\s*(\{[\s\S]*?\})\s*$/,
+            ];
+            for (const pattern of patterns) {
+              const match = msg.content.match(pattern);
+              if (match) {
+                try {
+                  const parsed = normalizeDesignUpdate(JSON.parse(match[1]));
+                  // Only merge non-null values
+                  for (const [k, v] of Object.entries(parsed)) {
+                    if (v !== undefined && v !== null) {
+                      (merged as any)[k] = v;
+                    }
+                  }
+                } catch { /* skip */ }
+                break;
+              }
             }
+          }
+          if (Object.keys(merged).length > 0) {
+            setDesign(merged);
           }
         }
       })

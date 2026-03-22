@@ -79,26 +79,53 @@ export class EditorModeService {
     const history: { role: string; content: string }[] = (job.designChatHistory as any[]) || [];
     history.push({ role: 'user', content: message });
 
+    // Extract current design state to inform AI about what's already decided
+    const currentDesign = this.extractLatestDesignUpdate(history);
+    const filledItems: string[] = [];
+    const missingItems: string[] = [];
+    const checkItems = [
+      { key: 'genre_setting', label: 'ジャンル・舞台' },
+      { key: 'theme', label: 'テーマ・コアメッセージ' },
+      { key: 'emotion', label: '読者に届けたい感情・読後感' },
+      { key: 'protagonist', label: '主人公' },
+      { key: 'characters', label: '主要キャラクター' },
+      { key: 'world', label: '世界観・ルール' },
+      { key: 'conflict', label: '中心的な葛藤' },
+      { key: 'plot', label: 'プロット概要' },
+      { key: 'tone', label: 'トーン・文体' },
+      { key: 'scope', label: '話数・文字数' },
+    ];
+    for (const item of checkItems) {
+      if (currentDesign && currentDesign[item.key] && currentDesign[item.key] !== 'null') {
+        filledItems.push(`${item.label}: ${currentDesign[item.key]}`);
+      } else {
+        missingItems.push(item.label);
+      }
+    }
+
     const systemPrompt = `あなたは小説の設計を手伝うベテラン編集者です。ユーザーとの対話を通じて物語の設計書を構築します。
 
 ユーザーの発言から以下の設計要素を抽出してください:
 - genre_setting: ジャンル・舞台
 - theme: テーマ・コアメッセージ
 - emotion: 読者に届けたい感情・読後感
-- protagonist: 主人公
-- characters: 主要キャラクター
+- protagonist: 主人公（名前と簡単な説明）
+- characters: 主要キャラクター（名前と簡単な説明。文字列で記述。例: "佐藤彰一（犯罪心理学者）、織田由美（警察官）"）
 - world: 世界観・ルール
 - conflict: 中心的な葛藤
 - plot: プロット概要
 - tone: トーン・文体
-- scope: 話数・文字数
+- scope: 話数・文字数（例: "10話 × 3000字"）
 
-各発言の末尾に必ず以下の形式でJSONブロックを出力してください:
+${filledItems.length > 0 ? `【確定済みの項目】\n${filledItems.join('\n')}\n` : ''}
+${missingItems.length > 0 ? `【まだ決まっていない項目】\n${missingItems.join('、')}\nこれらの項目について自然に質問してください。` : '全項目が確定しています。「設計が完成しました。レビューに進みましょう」と伝えてください。'}
+
+各発言の末尾に必ず以下の形式でJSONブロックを出力してください（確定した値のみ更新。未確定はnull）:
 __DESIGN_UPDATE__
-{"genre_setting": "抽出した値 or null", "theme": "...", ...}
+{"genre_setting": "値 or null", "theme": "値 or null", "emotion": "値 or null", "protagonist": "値 or null", "characters": "値 or null", "world": "値 or null", "conflict": "値 or null", "plot": "値 or null", "tone": "値 or null", "scope": "値 or null"}
 __END_UPDATE__
 
-対話は自然に進め、未確定の項目について質問してください。`;
+対話は自然に進めてください。`;
 
     let transactionId: string | null = null;
     let contentDelivered = false;
