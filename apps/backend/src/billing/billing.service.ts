@@ -65,6 +65,7 @@ export class BillingService {
 
     const user = await this.prisma.user.findFirst({
       where: { stripeCustomerId: customerId },
+      select: { id: true },
     });
     if (!user) {
       this.logger.warn(`No user found for Stripe customer ${customerId}`);
@@ -206,6 +207,7 @@ export class BillingService {
 
     const user = await this.prisma.user.findFirst({
       where: { stripeCustomerId: customerId },
+      select: { id: true },
     });
     if (!user) return;
 

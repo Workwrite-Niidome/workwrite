@@ -72,7 +72,7 @@ export class AdminService {
   }
 
   async updateUserRole(adminId: string, userId: string, role: string) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!user) throw new NotFoundException('User not found');
     if (adminId === userId) throw new ForbiddenException('Cannot modify your own role');
 
@@ -84,7 +84,7 @@ export class AdminService {
   }
 
   async banUser(adminId: string, userId: string, isBanned: boolean) {
-    const user = await this.prisma.user.findUnique({ where: { id: userId } });
+    const user = await this.prisma.user.findUnique({ where: { id: userId }, select: { id: true } });
     if (!user) throw new NotFoundException('User not found');
     if (adminId === userId) throw new ForbiddenException('Cannot ban yourself');
 

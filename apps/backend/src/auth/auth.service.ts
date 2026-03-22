@@ -27,6 +27,7 @@ export class AuthService {
   async register(dto: RegisterDto): Promise<AuthResponseDto> {
     const existing = await this.prisma.user.findUnique({
       where: { email: dto.email },
+      select: { id: true },
     });
     if (existing) {
       throw new ConflictException('Email already registered');
@@ -39,6 +40,14 @@ export class AuthService {
         passwordHash,
         name: dto.name,
         displayName: dto.displayName || dto.name,
+      },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        displayName: true,
+        role: true,
+        avatarUrl: true,
       },
     });
 
@@ -98,6 +107,14 @@ export class AuthService {
 
       const user = await this.prisma.user.findUnique({
         where: { id: payload.sub },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          displayName: true,
+          role: true,
+          avatarUrl: true,
+        },
       });
       if (!user) {
         throw new UnauthorizedException('User not found');
@@ -124,7 +141,18 @@ export class AuthService {
           providerId: profile.providerId,
         },
       },
-      include: { user: true },
+      include: {
+        user: {
+          select: {
+            id: true,
+            email: true,
+            name: true,
+            displayName: true,
+            role: true,
+            avatarUrl: true,
+          },
+        },
+      },
     });
 
     if (oauthAccount) {
@@ -134,6 +162,14 @@ export class AuthService {
     // Check if user with this email exists
     let user = await this.prisma.user.findUnique({
       where: { email: profile.email },
+      select: {
+        id: true,
+        email: true,
+        name: true,
+        displayName: true,
+        role: true,
+        avatarUrl: true,
+      },
     });
 
     if (!user) {
@@ -144,6 +180,14 @@ export class AuthService {
           displayName: profile.name,
           avatarUrl: profile.avatarUrl,
           emailVerified: true,
+        },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          displayName: true,
+          role: true,
+          avatarUrl: true,
         },
       });
       await this.prisma.pointAccount.create({
@@ -199,7 +243,7 @@ export class AuthService {
       for (let i = 0; i < 6; i++) {
         code += chars[Math.floor(Math.random() * chars.length)];
       }
-      const existing = await this.prisma.user.findUnique({ where: { referralCode: code } });
+      const existing = await this.prisma.user.findUnique({ where: { referralCode: code }, select: { id: true } });
       if (!existing) break;
       attempts++;
     } while (attempts < 10);
@@ -235,7 +279,10 @@ export class AuthService {
    */
   private async grantReferralReward(referralCode: string, newUserId: string) {
     // Look up referrer by referral code
-    const referrer = await this.prisma.user.findUnique({ where: { referralCode } });
+    const referrer = await this.prisma.user.findUnique({
+      where: { referralCode },
+      select: { id: true, referralCount: true },
+    });
     if (!referrer) return;
 
     // Prevent self-referral

@@ -7,7 +7,7 @@ export class FollowsService {
 
   async follow(followerId: string, followingId: string) {
     if (followerId === followingId) throw new BadRequestException('Cannot follow yourself');
-    const user = await this.prisma.user.findUnique({ where: { id: followingId } });
+    const user = await this.prisma.user.findUnique({ where: { id: followingId }, select: { id: true } });
     if (!user) throw new NotFoundException('User not found');
     return this.prisma.follow.upsert({
       where: { followerId_followingId: { followerId, followingId } },
