@@ -62,6 +62,38 @@ describe('designToWizard', () => {
     expect(result.characters).toEqual([]);
   });
 
+  it('prepends protagonist object to characters if not already included', () => {
+    const prot = { name: '主人公A', role: '勇者', personality: '勇敢', speechStyle: '力強い' };
+    const chars = [{ name: '仲間B', role: 'サポート' }];
+    const result = designToWizard({ protagonist: prot, characters: chars });
+    expect(result.characters).toHaveLength(2);
+    expect(result.characters[0].name).toBe('主人公A');
+    expect(result.characters[0].role).toBe('勇者');
+    expect(result.characters[1].name).toBe('仲間B');
+  });
+
+  it('does NOT duplicate protagonist if already in characters array', () => {
+    const prot = { name: '太郎', role: '主人公', personality: '', speechStyle: '' };
+    const chars = [{ name: '太郎', role: '主人公' }, { name: '花子', role: 'ヒロイン' }];
+    const result = designToWizard({ protagonist: prot, characters: chars });
+    expect(result.characters).toHaveLength(2);
+    expect(result.characters[0].name).toBe('太郎');
+    expect(result.characters[1].name).toBe('花子');
+  });
+
+  it('ignores string protagonist (no prepend)', () => {
+    const result = designToWizard({ protagonist: '太郎' as any, characters: [{ name: '花子' }] });
+    expect(result.characters).toHaveLength(1);
+    expect(result.characters[0].name).toBe('花子');
+  });
+
+  it('handles worldBuilding as string (legacy), wrapping into history field', () => {
+    const result = designToWizard({ worldBuilding: '中世ファンタジーの世界' as any });
+    expect(result.worldBuilding.history).toBe('中世ファンタジーの世界');
+    expect(result.worldBuilding.basics.era).toBe('');
+    expect(result.worldBuilding.rules).toEqual([]);
+  });
+
   it('converts worldBuilding object', () => {
     const result = designToWizard({ worldBuilding: fullWorldBuilding });
     expect(result.worldBuilding).toEqual(fullWorldBuilding);

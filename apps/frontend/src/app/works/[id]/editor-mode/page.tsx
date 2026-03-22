@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Play, Pause, Check, ChevronRight, ChevronDown, Loader2, RefreshCw,
-  Send, Bot, Crown, Eye, CheckCircle2, Edit3, Wand2, RotateCcw, Globe,
+  Send, Crown, CheckCircle2, Edit3, Wand2, RotateCcw, Globe,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -49,9 +49,13 @@ export default function EditorModeGenerationPage() {
   const [isRevising, setIsRevising] = useState(false);
   const [reviseResult, setReviseResult] = useState('');
 
-  // Generation state
-  const [aiMode, setAiMode] = useState<'normal' | 'premium'>('premium');
+  // Generation state — always Opus
+  const aiMode = 'premium' as const;
   const [generationMode, setGenerationMode] = useState<'confirm' | 'batch'>('batch');
+
+  // First episode auto-generation state
+  const [generatingFirst, setGeneratingFirst] = useState(false);
+  const [generatingFirstText, setGeneratingFirstText] = useState('');
 
   // Episode review state
   const [expandedEpisode, setExpandedEpisode] = useState<string | null>(null);
@@ -69,7 +73,6 @@ export default function EditorModeGenerationPage() {
       const res: any = await api.editorModeStatus(workId);
       const jobData = res.data || res;
       setJob(jobData);
-      if (jobData.aiMode) setAiMode(jobData.aiMode === 'premium' ? 'premium' : 'normal');
       if (jobData.generationMode) setGenerationMode(jobData.generationMode === 'confirm' ? 'confirm' : 'batch');
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to load status');
@@ -81,6 +84,52 @@ export default function EditorModeGenerationPage() {
   useEffect(() => {
     fetchStatus();
   }, [fetchStatus]);
+
+  // Auto-generate first episode when taste_check + 0 episodes
+  const firstGenTriggered = useRef(false);
+  useEffect(() => {
+    if (!job || job.status !== 'taste_check') return;
+    const episodes = job.episodes || [];
+    const hasContent = episodes.length > 0 && episodes[0]?.content;
+    if (hasContent || firstGenTriggered.current || generatingFirst) return;
+
+    firstGenTriggered.current = true;
+    setGeneratingFirst(true);
+    setGeneratingFirstText('');
+
+    (async () => {
+      try {
+        const token = api.getToken();
+        const url = await api.editorModeGenerateFirst(workId);
+
+        const res = await fetch(url, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            ...(token ? { Authorization: `Bearer ${token}` } : {}),
+          },
+          body: JSON.stringify({ aiMode }),
+        });
+
+        if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+        let accumulated = '';
+        await consumeSSEStream(res, (parsed) => {
+          if (parsed.text) {
+            accumulated += parsed.text;
+            setGeneratingFirstText(accumulated);
+          }
+        });
+
+        // Refresh status to get the episode with content
+        await fetchStatus();
+      } catch (err: unknown) {
+        setError(err instanceof Error ? err.message : 'Failed to generate first episode');
+      } finally {
+        setGeneratingFirst(false);
+      }
+    })();
+  }, [job, workId, fetchStatus, generatingFirst, aiMode]);
 
   // Poll when generating
   useEffect(() => {
@@ -330,6 +379,9 @@ export default function EditorModeGenerationPage() {
   const approvedCount = episodes.filter(ep => ep.status === 'approved').length;
   const allApproved = episodes.length > 0 && approvedCount === episodes.length;
 
+  // Determine if first episode is ready for taste check
+  const firstEpisodeReady = episodes.length > 0 && !!episodes[0]?.content;
+
   return (
     <div className="px-4 py-8 max-w-4xl mx-auto space-y-6">
       {/* Top bar */}
@@ -340,7 +392,9 @@ export default function EditorModeGenerationPage() {
           {(job.status === 'reviewing' || job.status === 'completed') && 'エピソードレビュー'}
         </h1>
         <div className="flex items-center gap-3">
-          <ModeToggle aiMode={aiMode} onChange={setAiMode} />
+          <Badge variant="outline" className="text-[10px]">
+            <Crown className="h-2.5 w-2.5 mr-0.5" /> Opus
+          </Badge>
           <div className="text-xs text-muted-foreground">
             {job.creditsConsumed}cr消費済み
           </div>
@@ -354,88 +408,112 @@ export default function EditorModeGenerationPage() {
       {/* Phase 3: Taste Check */}
       {job.status === 'taste_check' && (
         <div className="space-y-6">
-          {episodes[0] && (
+          {/* Generating first episode state */}
+          {!firstEpisodeReady && (generatingFirst || !firstGenTriggered.current) && (
             <Card>
-              <CardHeader>
-                <CardTitle className="text-sm">第1話: {episodes[0].title}</CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[60vh] overflow-y-auto">
-                  {reviseResult || episodes[0].content}
-                </div>
-                {isRevising && (
-                  <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
-                    <Loader2 className="h-4 w-4 animate-spin" /> 修正中...
+              <CardContent className="pt-6">
+                <div className="flex flex-col items-center gap-4 py-8">
+                  <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
+                  <div className="text-center space-y-1">
+                    <p className="text-sm font-medium">第1話を生成中...</p>
+                    <p className="text-xs text-muted-foreground">AIが物語のテイストを作成しています</p>
                   </div>
-                )}
+                  {generatingFirstText && (
+                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[40vh] overflow-y-auto w-full mt-4 p-4 bg-muted/30 rounded-lg">
+                      {generatingFirstText}
+                    </div>
+                  )}
+                </div>
               </CardContent>
             </Card>
           )}
 
-          <div className="space-y-3">
-            <div className="flex flex-wrap gap-2">
-              <Button onClick={handleTasteOk} className="gap-2">
-                <Check className="h-4 w-4" /> このテイストでOK
-              </Button>
-              <Button variant="outline" onClick={handleBackToDesign} className="gap-2">
-                <RotateCcw className="h-4 w-4" /> 設計に戻る
-              </Button>
-            </div>
+          {/* Episode content display (top) */}
+          {firstEpisodeReady && (
+            <>
+              <Card>
+                <CardHeader>
+                  <CardTitle className="text-sm">第1話: {episodes[0].title}</CardTitle>
+                </CardHeader>
+                <CardContent>
+                  <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[60vh] overflow-y-auto">
+                    {reviseResult || episodes[0].content}
+                  </div>
+                  {isRevising && (
+                    <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
+                      <Loader2 className="h-4 w-4 animate-spin" /> 修正中...
+                    </div>
+                  )}
+                </CardContent>
+              </Card>
 
-            {/* Revision input */}
-            <div className="space-y-2">
-              <p className="text-sm font-medium">修正指示</p>
-              <div className="flex gap-2">
-                <Textarea
-                  value={reviseInstruction}
-                  onChange={(e) => setReviseInstruction(e.target.value)}
-                  placeholder="テイストの修正指示を入力..."
-                  rows={2}
-                  className="flex-1 resize-none"
-                />
-                <Button
-                  onClick={handleReviseFirstEpisode}
-                  disabled={!reviseInstruction.trim() || isRevising}
-                  className="self-end"
-                >
-                  {isRevising ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                </Button>
-              </div>
-            </div>
-
-            {/* Mode selection for after taste check */}
-            <Card className="border-indigo-400/30">
-              <CardContent className="pt-4 space-y-3">
-                <p className="text-sm font-medium">OKの場合の生成モード</p>
-                <div className="grid grid-cols-2 gap-3">
-                  <button
-                    onClick={() => setGenerationMode('confirm')}
-                    className={cn(
-                      'p-3 rounded-lg border text-left text-sm transition-colors',
-                      generationMode === 'confirm'
-                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
-                        : 'border-border hover:border-indigo-500/50',
-                    )}
-                  >
-                    <p className="font-medium">確認モード</p>
-                    <p className="text-xs text-muted-foreground mt-1">1話ごとに確認してから次へ</p>
-                  </button>
-                  <button
-                    onClick={() => setGenerationMode('batch')}
-                    className={cn(
-                      'p-3 rounded-lg border text-left text-sm transition-colors',
-                      generationMode === 'batch'
-                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
-                        : 'border-border hover:border-indigo-500/50',
-                    )}
-                  >
-                    <p className="font-medium">一括モード</p>
-                    <p className="text-xs text-muted-foreground mt-1">全話を一気にバッチ生成</p>
-                  </button>
+              <div className="space-y-3">
+                {/* Revision input */}
+                <div className="space-y-2">
+                  <p className="text-sm font-medium">修正指示</p>
+                  <div className="flex gap-2">
+                    <Textarea
+                      value={reviseInstruction}
+                      onChange={(e) => setReviseInstruction(e.target.value)}
+                      placeholder="テイストの修正指示を入力..."
+                      rows={2}
+                      className="flex-1 resize-none"
+                    />
+                    <Button
+                      onClick={handleReviseFirstEpisode}
+                      disabled={!reviseInstruction.trim() || isRevising}
+                      className="self-end"
+                    >
+                      {isRevising ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                    </Button>
+                  </div>
                 </div>
-              </CardContent>
-            </Card>
-          </div>
+
+                {/* Mode selection for after taste check */}
+                <Card className="border-indigo-400/30">
+                  <CardContent className="pt-4 space-y-3">
+                    <p className="text-sm font-medium">OKの場合の生成モード</p>
+                    <div className="grid grid-cols-2 gap-3">
+                      <button
+                        onClick={() => setGenerationMode('confirm')}
+                        className={cn(
+                          'p-3 rounded-lg border text-left text-sm transition-colors',
+                          generationMode === 'confirm'
+                            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
+                            : 'border-border hover:border-indigo-500/50',
+                        )}
+                      >
+                        <p className="font-medium">確認モード</p>
+                        <p className="text-xs text-muted-foreground mt-1">1話ごとに確認してから次へ</p>
+                      </button>
+                      <button
+                        onClick={() => setGenerationMode('batch')}
+                        className={cn(
+                          'p-3 rounded-lg border text-left text-sm transition-colors',
+                          generationMode === 'batch'
+                            ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
+                            : 'border-border hover:border-indigo-500/50',
+                        )}
+                      >
+                        <p className="font-medium">一括モード</p>
+                        <p className="text-xs text-muted-foreground mt-1">全話を一気にバッチ生成</p>
+                      </button>
+                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Action buttons (bottom) */}
+                <div className="flex flex-wrap gap-2">
+                  <Button onClick={handleTasteOk} className="gap-2">
+                    <Check className="h-4 w-4" /> このテイストでOK
+                  </Button>
+                  <Button variant="outline" onClick={handleBackToDesign} className="gap-2">
+                    <RotateCcw className="h-4 w-4" /> 設計に戻る
+                  </Button>
+                </div>
+              </div>
+            </>
+          )}
         </div>
       )}
 
@@ -644,36 +722,6 @@ export default function EditorModeGenerationPage() {
           </div>
         </div>
       )}
-    </div>
-  );
-}
-
-function ModeToggle({ aiMode, onChange }: { aiMode: 'normal' | 'premium'; onChange: (m: 'normal' | 'premium') => void }) {
-  return (
-    <div className="flex items-center gap-1">
-      <button
-        onClick={() => onChange('normal')}
-        className={cn(
-          'flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors',
-          aiMode === 'normal'
-            ? 'bg-primary/10 border-primary/30 text-primary'
-            : 'border-border text-muted-foreground hover:border-primary/30',
-        )}
-      >
-        通常 <span className="opacity-60">1cr</span>
-      </button>
-      <button
-        onClick={() => onChange('premium')}
-        className={cn(
-          'flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors',
-          aiMode === 'premium'
-            ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
-            : 'border-border text-muted-foreground hover:border-amber-500/30',
-        )}
-      >
-        <Crown className="h-2.5 w-2.5" />
-        高精度 <span className="opacity-60">5cr</span>
-      </button>
     </div>
   );
 }

@@ -586,6 +586,19 @@ function EditorModeDesignContent() {
           </div>
         </div>
 
+        {/* Desktop: Floating button to reopen chat when closed */}
+        {!chatOpen && (
+          <div className="hidden lg:flex items-center">
+            <button
+              onClick={() => setChatOpen(true)}
+              className="fixed right-6 bottom-6 z-40 h-12 w-12 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg flex items-center justify-center transition-colors"
+              title="チャットを開く"
+            >
+              <MessageSquare className="h-5 w-5" />
+            </button>
+          </div>
+        )}
+
         {/* Desktop: Chat panel (right 40%) — only visible after user opens it */}
         {chatOpen && (
           <div className="hidden lg:flex lg:flex-[2] flex-col min-h-0">

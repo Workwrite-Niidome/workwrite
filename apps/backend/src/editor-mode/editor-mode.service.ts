@@ -756,6 +756,7 @@ ${episode.content}
       select: {
         id: true,
         title: true,
+        content: true,
         orderIndex: true,
         wordCount: true,
         publishedAt: true,
@@ -776,6 +777,7 @@ ${episode.content}
       episodes: episodes.map((ep) => ({
         id: ep.id,
         title: ep.title,
+        content: ep.content,
         orderIndex: ep.orderIndex,
         wordCount: ep.wordCount,
         approved: !!ep.publishedAt,
