@@ -1080,6 +1080,27 @@ class ApiClient {
     return this.request<{ data: { cleared: boolean } }>(`/ai/companion/${workId}`, { method: 'DELETE' });
   }
 
+  // Character Talk
+  async getCharacterTalkCharacters(workId: string) {
+    return this.request<{ data: TalkableCharacter[] }>(`/ai/character-talk/${workId}/characters`);
+  }
+
+  async getCharacterTalkConversations(workId: string) {
+    return this.request<{ data: ConversationSummary[] }>(`/ai/character-talk/${workId}/conversations`);
+  }
+
+  async getCharacterTalkHistory(workId: string, characterId?: string) {
+    return this.request<{ data: CompanionMessage[] }>(`/ai/character-talk/${workId}/history${characterId ? `/${characterId}` : ''}`);
+  }
+
+  async clearCharacterTalkConversation(workId: string, characterId?: string) {
+    return this.request<{ data: { cleared: boolean } }>(`/ai/character-talk/${workId}/conversation${characterId ? `/${characterId}` : ''}`, { method: 'DELETE' });
+  }
+
+  async getCharacterTalkEarnings() {
+    return this.request<{ data: CharacterTalkEarnings }>('/ai/character-talk/earnings');
+  }
+
   // AI Highlight Explanation
   async explainHighlight(highlightId: string) {
     return this.request<{ data: { explanation: string } }>(`/reading/highlights/${highlightId}/ai-explain`, { method: 'POST' });
@@ -1587,6 +1608,30 @@ export interface CompanionMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+}
+
+export interface TalkableCharacter {
+  id: string;
+  name: string;
+  role: string;
+  personality?: string;
+  speechStyle?: string;
+}
+
+export interface ConversationSummary {
+  mode: string;
+  characterId: string | null;
+  characterName?: string;
+  messageCount: number;
+  updatedAt: string;
+}
+
+export interface CharacterTalkEarnings {
+  totalRevenue: number;
+  monthlyRevenue: number;
+  totalSessions: number;
+  monthlySessions: number;
+  platformCutRate: number;
 }
 
 export interface EpisodeSnapshot {

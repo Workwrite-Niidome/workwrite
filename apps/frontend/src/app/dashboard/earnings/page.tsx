@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
-import { DollarSign, TrendingUp, Mail, Info, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { DollarSign, TrendingUp, Mail, MessageCircle, Info, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
 
 interface Earnings {
   totalLetters: number;
@@ -25,11 +25,20 @@ interface ConnectStatus {
   detailsSubmitted: boolean;
 }
 
+interface TalkEarnings {
+  totalRevenue: number;
+  monthlyRevenue: number;
+  totalSessions: number;
+  monthlySessions: number;
+  platformCutRate: number;
+}
+
 function EarningsPageContent() {
   const searchParams = useSearchParams();
   const connectResult = searchParams.get('connect');
 
   const [earnings, setEarnings] = useState<Earnings | null>(null);
+  const [talkEarnings, setTalkEarnings] = useState<TalkEarnings | null>(null);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
   const [loading, setLoading] = useState(true);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
@@ -38,6 +47,9 @@ function EarningsPageContent() {
     Promise.all([
       api.getLetterEarnings()
         .then((res) => setEarnings((res as any).data || null))
+        .catch(() => {}),
+      api.getCharacterTalkEarnings()
+        .then((res) => setTalkEarnings((res as any).data || (res as any) || null))
         .catch(() => {}),
       api.getConnectStatus()
         .then((res) => setConnectStatus((res as any).data || null))
@@ -222,6 +234,55 @@ function EarningsPageContent() {
             </Card>
           </div>
 
+          {/* Character Talk earnings */}
+          {talkEarnings && (talkEarnings.totalRevenue > 0 || talkEarnings.totalSessions > 0) && (
+            <>
+              <h2 className="text-lg font-semibold mt-8 mb-3">キャラクタートーク収益</h2>
+              <div className="grid grid-cols-2 gap-3 mb-6">
+                <Card>
+                  <CardContent className="py-4 px-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <DollarSign className="h-4 w-4 text-green-600" />
+                      <p className="text-xs text-muted-foreground">累計収益</p>
+                    </div>
+                    <p className="text-2xl font-bold text-green-600">
+                      ¥{talkEarnings.totalRevenue.toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="py-4 px-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <TrendingUp className="h-4 w-4 text-blue-600" />
+                      <p className="text-xs text-muted-foreground">今月の収益</p>
+                    </div>
+                    <p className="text-2xl font-bold text-blue-600">
+                      ¥{talkEarnings.monthlyRevenue.toLocaleString()}
+                    </p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="py-4 px-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">累計セッション</p>
+                    </div>
+                    <p className="text-2xl font-bold">{talkEarnings.totalSessions}</p>
+                  </CardContent>
+                </Card>
+                <Card>
+                  <CardContent className="py-4 px-4">
+                    <div className="flex items-center gap-2 mb-1">
+                      <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                      <p className="text-xs text-muted-foreground">今月のセッション</p>
+                    </div>
+                    <p className="text-2xl font-bold">{talkEarnings.monthlySessions}</p>
+                  </CardContent>
+                </Card>
+              </div>
+            </>
+          )}
+
           {/* Platform fee explanation */}
           <Card>
             <CardContent className="py-4 px-4">
@@ -231,6 +292,7 @@ function EarningsPageContent() {
                   <p className="font-medium text-foreground text-sm">プラットフォーム手数料について</p>
                   <p>
                     レター収益からプラットフォーム手数料として{Math.round(earnings.platformCutRate * 100)}%が差し引かれます。
+                    キャラクタートークでは、有償クレジット消費額の40%が作家に還元されます。
                     表示されている収益は手数料控除後の金額です。
                   </p>
                   <p>
