@@ -22,6 +22,18 @@ export class EditorModeService {
 
   // ─── Job management ────────────────────────────────────────
 
+  async createWorkForEditorMode(userId: string) {
+    const work = await this.prisma.work.create({
+      data: {
+        authorId: userId,
+        title: '編集者モード — 設計中',
+        isAiGenerated: true,
+      },
+    });
+    await this.createJob(userId, work.id);
+    return work;
+  }
+
   async createJob(userId: string, workId: string) {
     return this.prisma.editorModeJob.upsert({
       where: { workId },

@@ -33,12 +33,20 @@ export class EditorModeController {
   @ApiOperation({ summary: 'Design chat with AI editor (SSE stream)' })
   async chat(
     @CurrentUser('id') userId: string,
-    @Param('workId') workId: string,
+    @Param('workId') workIdParam: string,
     @Body() dto: EditorModeChatDto,
     @Res() res: Response,
   ) {
     const keepAlive = this.setSSEHeaders(res);
     try {
+      // Auto-create work if workId is '_new'
+      let workId = workIdParam;
+      if (workId === '_new') {
+        const work = await this.editorModeService.createWorkForEditorMode(userId);
+        workId = work.id;
+        res.write(`data: ${JSON.stringify({ workId })}\n\n`);
+      }
+
       const stream = this.editorModeService.streamDesignChat(
         userId, workId, dto.message, dto.aiMode || 'normal',
       );
