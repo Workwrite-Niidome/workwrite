@@ -122,94 +122,10 @@ export default function Home() {
           <h1 className="text-2xl sm:text-3xl font-serif font-normal leading-relaxed tracking-wide">
             読書で、変わる。
           </h1>
-          <p className="mt-4 text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
-            AIスコアリングと感情タグで、<br className="sm:hidden" />
-            あなたの心に響く次の一冊を。
+          <p className="mt-4 text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
+            AIスコアリングと感情タグで、あなたの心に響く次の一冊を。
           </p>
-          <form onSubmit={handleSearch} className="mt-10 flex gap-2 max-w-sm mx-auto">
-            <div className="relative flex-1" ref={autocompleteRef}>
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-              <Input
-                value={searchQuery}
-                onChange={(e) => handleSearchInput(e.target.value)}
-                onFocus={() => autocompleteResults.length > 0 && setShowAutocomplete(true)}
-                placeholder="作品を検索"
-                className="pl-9"
-              />
-              {showAutocomplete && (
-                <div className="absolute top-full left-0 right-0 mt-1 bg-card border border-border rounded-lg shadow-lg z-50 overflow-hidden">
-                  {autocompleteResults.map((item) => (
-                    <Link
-                      key={item.id}
-                      href={`/works/${item.id}`}
-                      onClick={() => setShowAutocomplete(false)}
-                      className="block px-4 py-2.5 hover:bg-muted/50 transition-colors"
-                    >
-                      <p className="text-sm font-medium">{item.title}</p>
-                      <p className="text-xs text-muted-foreground">
-                        {item.author.displayName || item.author.name}
-                      </p>
-                    </Link>
-                  ))}
-                </div>
-              )}
-            </div>
-            <Button type="submit" aria-label="検索">
-              <Search className="h-4 w-4" />
-            </Button>
-          </form>
-        </div>
-      </section>
-
-      <div className="px-4 md:px-6 py-12 space-y-16">
-        {/* Continue Reading */}
-        {isAuthenticated && continueReading.length > 0 && (
-          <section>
-            <h2 className="text-sm font-medium mb-4">続きを読む</h2>
-            <div className="space-y-1">
-              {continueReading.map((item) => (
-                <Link
-                  key={item.workId}
-                  href={item.currentEpisode ? `/read/${item.currentEpisode.id}` : `/works/${item.workId}`}
-                  className="group block"
-                >
-                  <div className="flex items-center gap-4 py-3 border-b border-border last:border-b-0 -mx-2 px-2 rounded hover:bg-secondary/30 transition-colors">
-                    <div className="flex-1 min-w-0">
-                      <p className="text-sm font-medium truncate">{item.work.title}</p>
-                      <p className="text-xs text-muted-foreground mt-0.5">
-                        {item.work.author.displayName || item.work.author.name}
-                        {item.currentEpisode && (
-                          <span className="ml-2">
-                            第{item.currentEpisode.orderIndex + 1}話
-                          </span>
-                        )}
-                      </p>
-                    </div>
-                    <div className="flex items-center gap-3 flex-shrink-0">
-                      <div className="w-20 h-1.5 bg-muted rounded-full overflow-hidden">
-                        <div
-                          className="h-full bg-primary rounded-full transition-all"
-                          style={{ width: `${Math.round(item.progressPct * 100)}%` }}
-                        />
-                      </div>
-                      <span className="text-xs text-muted-foreground w-8 text-right">
-                        {Math.round(item.progressPct * 100)}%
-                      </span>
-                    </div>
-                  </div>
-                </Link>
-              ))}
-            </div>
-          </section>
-        )}
-
-        {/* Following feed */}
-        {isAuthenticated && <FollowingFeedSection />}
-
-        {/* Mood Discovery */}
-        <section>
-          <h2 className="text-sm font-medium mb-6">今の気分で探す</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
+          <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-md mx-auto">
             {MOOD_CARDS.map((card) => (
               <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
                 <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
@@ -218,7 +134,17 @@ export default function Home() {
               </Link>
             ))}
           </div>
-        </section>
+          <div className="mt-3">
+            <Link href="/discover" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+              すべての作品を探す →
+            </Link>
+          </div>
+        </div>
+      </section>
+
+      <div className="px-4 md:px-6 py-12 space-y-16">
+        {/* Following feed */}
+        {isAuthenticated && <FollowingFeedSection />}
 
         {/* Popular */}
         <section>
