@@ -50,40 +50,26 @@ const CHECKLIST_ITEMS = [
 /** Normalize AI's __DESIGN_UPDATE__ output to match our DesignData shape */
 function normalizeDesignUpdate(raw: any): Partial<DesignData> {
   const d: Partial<DesignData> = {};
-  // Genre
-  const genre = raw.genre_setting || raw.genre;
-  if (genre && genre !== 'null') d.genre = genre;
-  // Theme
-  if (raw.theme && raw.theme !== 'null') d.theme = raw.theme;
-  // Emotion / afterReading
-  const emotion = raw.emotion || raw.afterReading;
-  if (emotion && emotion !== 'null') d.afterReading = emotion;
-  // Protagonist
+  const str = (v: any) => v && v !== 'null' ? String(v) : undefined;
+  if (str(raw.genre_setting || raw.genre)) d.genre = str(raw.genre_setting || raw.genre);
+  if (str(raw.theme)) d.theme = str(raw.theme);
+  if (str(raw.emotion || raw.afterReading)) d.afterReading = str(raw.emotion || raw.afterReading);
   if (raw.protagonist && raw.protagonist !== 'null') {
     d.protagonist = typeof raw.protagonist === 'string'
       ? { name: raw.protagonist, role: '', personality: '', speechStyle: '' }
       : raw.protagonist;
   }
-  // Characters — must be array, not string
-  if (raw.characters && raw.characters !== 'null') {
-    if (Array.isArray(raw.characters)) d.characters = raw.characters;
-    // If string, don't set — wait for structured data
+  if (raw.characters && raw.characters !== 'null' && Array.isArray(raw.characters)) {
+    d.characters = raw.characters;
   }
-  // World
-  const world = raw.world || raw.worldBuilding;
-  if (world && world !== 'null') d.worldBuilding = world;
-  // Conflict
-  if (raw.conflict && raw.conflict !== 'null') d.conflict = raw.conflict;
-  // Plot
-  const plot = raw.plot || raw.plotOutline;
-  if (plot && plot !== 'null') d.plotOutline = plot;
-  // Tone
-  if (raw.tone && raw.tone !== 'null') d.tone = raw.tone;
-  // Scope
+  if (str(raw.world || raw.worldBuilding)) d.worldBuilding = str(raw.world || raw.worldBuilding);
+  if (str(raw.conflict)) d.conflict = str(raw.conflict);
+  if (str(raw.plot || raw.plotOutline)) d.plotOutline = str(raw.plot || raw.plotOutline);
+  if (str(raw.tone)) d.tone = str(raw.tone);
   const scope = raw.scope || raw.episodeCount;
   if (scope && scope !== 'null') {
-    const match = String(scope).match(/(\d+)/);
-    if (match) d.episodeCount = parseInt(match[1], 10);
+    const m = String(scope).match(/(\d+)/);
+    if (m) d.episodeCount = parseInt(m[1], 10);
   }
   return d;
 }
@@ -1000,8 +986,8 @@ function getDesignValueForKey(design: DesignData, key: string): string | null {
       const chars = design.characters;
       if (!chars) return null;
       if (typeof chars === 'string') return chars;
-      if (!Array.isArray(chars) || chars.length < 2) return null;
-      return chars.map((c) => typeof c === 'string' ? c : `${c.name}（${c.role || ''}）`).join('、');
+      if (!Array.isArray(chars) || chars.length === 0) return null;
+      return chars.map((c: any) => typeof c === 'string' ? c : `${c.name}（${c.role || ''}）`).join('、');
     }
     case 'worldBuilding': return design.worldBuilding || null;
     case 'conflict': return design.conflict || null;

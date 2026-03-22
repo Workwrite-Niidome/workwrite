@@ -242,49 +242,14 @@ export default function DashboardPage() {
 
       {/* Editor Mode Works in Progress */}
       {editorModeWorks.length > 0 && (
-        <div className="space-y-3 mb-8">
-          <h2 className="text-lg font-semibold flex items-center gap-2">
-            <Bot className="h-5 w-5 text-indigo-500" />
-            編集者モード — 作成中
-          </h2>
-          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-            {editorModeWorks.map((work) => {
-              const job = work.editorModeJob;
-              const statusLabels: Record<string, string> = {
-                designing: '設計中',
-                taste_check: 'テイスト確認',
-                generating: '生成中',
-                paused: '一時停止',
-                reviewing: 'レビュー中',
-                completed: '完了',
-              };
-              const statusLabel = statusLabels[job?.status || ''] || job?.status || '';
-              const href = job?.status === 'designing'
-                ? `/works/new/editor-mode?resume=${work.id}`
-                : `/works/${work.id}/editor-mode`;
-              return (
-                <Link key={work.id} href={href}>
-                  <Card className="hover:shadow-md transition-shadow border-t-2 border-t-indigo-400">
-                    <CardContent className="pt-5 pb-4">
-                      <div className="flex items-start justify-between">
-                        <div className="min-w-0 flex-1">
-                          <p className="font-medium text-sm truncate">{work.title}</p>
-                          <p className="text-xs text-muted-foreground mt-1">
-                            {job?.completedEpisodes || 0}/{job?.totalEpisodes || '?'} 話 · {job?.creditsConsumed || 0}cr消費
-                          </p>
-                          <p className="text-xs text-muted-foreground mt-0.5">
-                            {new Date(work.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
-                          </p>
-                        </div>
-                        <Badge variant="outline" className="text-[10px] shrink-0">{statusLabel}</Badge>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </Link>
-              );
-            })}
-          </div>
-        </div>
+        <EditorModeSection
+          works={editorModeWorks}
+          onDelete={(id) => {
+            api.deleteWork(id).then(() => {
+              setEditorModeWorks((prev) => prev.filter((w) => w.id !== id));
+            }).catch(() => {});
+          }}
+        />
       )}
 
       {/* Works List */}
@@ -420,6 +385,98 @@ function ReactionFeed() {
           </div>
         </CardContent>
       </Card>
+    </div>
+  );
+}
+
+function EditorModeSection({
+  works,
+  onDelete,
+}: {
+  works: EditorModeWork[];
+  onDelete: (id: string) => void;
+}) {
+  const [showAll, setShowAll] = useState(false);
+  const [confirmDeleteId, setConfirmDeleteId] = useState<string | null>(null);
+
+  const sorted = [...works].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const displayed = showAll ? sorted : sorted.slice(0, 3);
+
+  const statusLabels: Record<string, string> = {
+    designing: '設計中',
+    taste_check: 'テイスト確認',
+    generating: '生成中',
+    paused: '一時停止',
+    reviewing: 'レビュー中',
+    completed: '完了',
+  };
+
+  return (
+    <div className="space-y-3 mb-8">
+      <h2 className="text-lg font-semibold flex items-center gap-2">
+        <Bot className="h-5 w-5 text-indigo-500" />
+        編集者モード — 作成中
+        <span className="text-sm font-normal text-muted-foreground">({works.length}件)</span>
+      </h2>
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+        {displayed.map((work) => {
+          const job = work.editorModeJob;
+          const statusLabel = statusLabels[job?.status || ''] || job?.status || '';
+          const href = job?.status === 'designing'
+            ? `/works/new/editor-mode?resume=${work.id}`
+            : `/works/${work.id}/editor-mode`;
+          return (
+            <Card key={work.id} className="group relative hover:shadow-md transition-shadow border-t-2 border-t-indigo-400">
+              <Link href={href} className="block">
+                <CardContent className="pt-5 pb-4">
+                  <div className="flex items-start justify-between">
+                    <div className="min-w-0 flex-1">
+                      <p className="font-medium text-sm truncate">{work.title}</p>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {job?.completedEpisodes || 0}/{job?.totalEpisodes || '?'} 話 · {job?.creditsConsumed || 0}cr消費
+                      </p>
+                      <p className="text-xs text-muted-foreground mt-0.5">
+                        {new Date(work.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                      </p>
+                    </div>
+                    <Badge variant="outline" className="text-[10px] shrink-0">{statusLabel}</Badge>
+                  </div>
+                </CardContent>
+              </Link>
+              <button
+                onClick={(e) => { e.preventDefault(); e.stopPropagation(); setConfirmDeleteId(work.id); }}
+                className="absolute top-2 right-2 text-muted-foreground hover:text-destructive opacity-0 group-hover:opacity-100 transition-opacity p-1"
+                title="削除"
+              >
+                <Trash2 className="h-3.5 w-3.5" />
+              </button>
+            </Card>
+          );
+        })}
+      </div>
+      {works.length > 3 && !showAll && (
+        <Button variant="ghost" size="sm" onClick={() => setShowAll(true)} className="text-xs">
+          他 {works.length - 3} 件を表示
+        </Button>
+      )}
+      {showAll && works.length > 3 && (
+        <Button variant="ghost" size="sm" onClick={() => setShowAll(false)} className="text-xs">
+          折りたたむ
+        </Button>
+      )}
+      <ConfirmDialog
+        open={!!confirmDeleteId}
+        onOpenChange={(open) => { if (!open) setConfirmDeleteId(null); }}
+        title="編集者モード作品を削除"
+        message="この作品と設計データを削除します。この操作は取り消せません。"
+        variant="destructive"
+        onConfirm={() => {
+          if (confirmDeleteId) {
+            onDelete(confirmDeleteId);
+            setConfirmDeleteId(null);
+          }
+        }}
+      />
     </div>
   );
 }

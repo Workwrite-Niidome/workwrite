@@ -438,6 +438,10 @@ class ApiClient {
     return this.request<{ data: { deleted: boolean } }>(`/reading/bookshelf/${workId}`, { method: 'DELETE' });
   }
 
+  async getBookshelfHistory() {
+    return this.request<{ data: Work[] }>('/reading/bookshelf/history');
+  }
+
   // Highlights
   async createHighlight(data: { episodeId: string; startPos: number; endPos: number; color?: string; memo?: string }) {
     return this.request<{ data: Highlight }>('/reading/highlights', {

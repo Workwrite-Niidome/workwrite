@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { BookOpen, Trash2, BarChart3, BookMarked, Heart, CheckCircle2 } from 'lucide-react';
+import { BookOpen, Trash2, BarChart3, BookMarked, Heart, CheckCircle2, History } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
@@ -12,15 +12,16 @@ import { Tabs } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
 import { useAuth } from '@/lib/auth-context';
-import { api, type BookshelfEntry } from '@/lib/api';
+import { api, type BookshelfEntry, type Work } from '@/lib/api';
 
-type Tab = 'READING' | 'WANT_TO_READ' | 'COMPLETED';
+type Tab = 'READING' | 'WANT_TO_READ' | 'COMPLETED' | 'HISTORY';
 type SortKey = 'updatedAt' | 'title' | 'score' | 'progress';
 
 const TABS = [
   { key: 'READING', label: '読書中' },
   { key: 'WANT_TO_READ', label: '読みたい' },
   { key: 'COMPLETED', label: '読了' },
+  { key: 'HISTORY', label: '履歴' },
 ];
 
 const SORT_OPTIONS: { value: SortKey; label: string }[] = [
@@ -50,6 +51,7 @@ export default function BookshelfPage() {
   const { isAuthenticated, isLoading: authLoading } = useAuth();
   const [activeTab, setActiveTab] = useState<Tab>('READING');
   const [entries, setEntries] = useState<BookshelfEntry[]>([]);
+  const [historyWorks, setHistoryWorks] = useState<Work[]>([]);
   const [loading, setLoading] = useState(true);
   const [sortKey, setSortKey] = useState<SortKey>('updatedAt');
   const [confirmRemoveWorkId, setConfirmRemoveWorkId] = useState<string | null>(null);
@@ -63,10 +65,17 @@ export default function BookshelfPage() {
   useEffect(() => {
     if (!isAuthenticated) return;
     setLoading(true);
-    api.getBookshelf(activeTab)
-      .then((res) => setEntries(res.data))
-      .catch(() => setEntries([]))
-      .finally(() => setLoading(false));
+    if (activeTab === 'HISTORY') {
+      api.getBookshelfHistory()
+        .then((res) => setHistoryWorks(res.data))
+        .catch(() => setHistoryWorks([]))
+        .finally(() => setLoading(false));
+    } else {
+      api.getBookshelf(activeTab)
+        .then((res) => setEntries(res.data))
+        .catch(() => setEntries([]))
+        .finally(() => setLoading(false));
+    }
   }, [activeTab, isAuthenticated]);
 
   async function handleRemove(workId: string) {
@@ -77,7 +86,7 @@ export default function BookshelfPage() {
     setConfirmRemoveWorkId(null);
   }
 
-  async function handleStatusChange(workId: string, status: Tab) {
+  async function handleStatusChange(workId: string, status: 'READING' | 'WANT_TO_READ' | 'COMPLETED') {
     try {
       await api.updateBookshelfStatus(workId, status);
       setEntries((prev) => prev.filter((e) => e.workId !== workId));
@@ -97,7 +106,7 @@ export default function BookshelfPage() {
     );
   }
 
-  const sorted = sortEntries(entries, sortKey);
+  const sorted = activeTab !== 'HISTORY' ? sortEntries(entries, sortKey) : [];
 
   return (
     <div className="px-4 py-8">
@@ -117,19 +126,21 @@ export default function BookshelfPage() {
         className="mb-4"
       />
 
-      {/* Sort selector */}
-      <div className="flex justify-end mb-4">
-        <select
-          value={sortKey}
-          onChange={(e) => setSortKey(e.target.value as SortKey)}
-          className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
-          aria-label="並べ替え"
-        >
-          {SORT_OPTIONS.map((o) => (
-            <option key={o.value} value={o.value}>{o.label}</option>
-          ))}
-        </select>
-      </div>
+      {/* Sort selector (not shown for history tab) */}
+      {activeTab !== 'HISTORY' && (
+        <div className="flex justify-end mb-4">
+          <select
+            value={sortKey}
+            onChange={(e) => setSortKey(e.target.value as SortKey)}
+            className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
+            aria-label="並べ替え"
+          >
+            {SORT_OPTIONS.map((o) => (
+              <option key={o.value} value={o.value}>{o.label}</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {loading ? (
         <div className="grid gap-4 md:grid-cols-2">
@@ -137,6 +148,47 @@ export default function BookshelfPage() {
             <Skeleton key={i} className="h-32" />
           ))}
         </div>
+      ) : activeTab === 'HISTORY' ? (
+        historyWorks.length === 0 ? (
+          <EmptyState
+            icon={History}
+            title="まだ閲覧履歴はありません"
+            description="作品を読むと閲覧履歴に記録されます"
+            action={{ label: '作品を探す', href: '/' }}
+          />
+        ) : (
+          <div className="grid gap-4 md:grid-cols-2">
+            {historyWorks.map((work) => (
+              <Card key={work.id} className="overflow-hidden">
+                <CardContent className="p-5">
+                  <div className="flex justify-between items-start gap-3">
+                    <div className="flex-1 min-w-0">
+                      <Link
+                        href={`/works/${work.id}`}
+                        className="text-sm font-medium hover:text-primary line-clamp-2"
+                      >
+                        {work.title}
+                      </Link>
+                      <p className="text-xs text-muted-foreground mt-1">
+                        {work.author.displayName || work.author.name}
+                      </p>
+                      {work.genre && (
+                        <Badge variant="outline" className="mt-2 text-xs">
+                          {work.genre}
+                        </Badge>
+                      )}
+                    </div>
+                    {work.qualityScore && (
+                      <Badge variant="secondary" className="text-xs shrink-0">
+                        スコア {Math.round(work.qualityScore.overall)}
+                      </Badge>
+                    )}
+                  </div>
+                </CardContent>
+              </Card>
+            ))}
+          </div>
+        )
       ) : sorted.length === 0 ? (
         <EmptyState
           icon={activeTab === 'READING' ? BookMarked : activeTab === 'WANT_TO_READ' ? Heart : CheckCircle2}

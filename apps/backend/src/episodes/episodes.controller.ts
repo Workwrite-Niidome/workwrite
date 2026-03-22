@@ -10,6 +10,7 @@ import { CreationWizardService } from '../creation-wizard/creation-wizard.servic
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 import { PostsService } from '../posts/posts.service';
 import { WorksService } from '../works/works.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 import { PostType, Episode } from '@prisma/client';
 
 interface EpisodeWithWork extends Episode {
@@ -27,6 +28,7 @@ export class EpisodesController {
     private episodeAnalysis: EpisodeAnalysisService,
     private postsService: PostsService,
     private worksService: WorksService,
+    private prisma: PrismaService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -127,6 +129,8 @@ export class EpisodesController {
     this.worksService.autoProcessWork(episode.workId).catch((e) =>
       this.logger.warn(`Auto-process on episode publish failed: ${e}`),
     );
+    // Notify bookshelf users about new episode
+    this.notifyBookshelfUsers(episode.workId, episode).catch(() => {});
     return result;
   }
 
@@ -240,6 +244,36 @@ export class EpisodesController {
     this.worksService.calculateAndFlagAiGenerated(workId).catch((e) => {
       this.logger.warn(`Failed to check originality for work ${workId}: ${e.message}`);
     });
+  }
+
+  /** Notify bookshelf users about a newly published episode */
+  private async notifyBookshelfUsers(workId: string, episode: any) {
+    // Get all users who have this work in their bookshelf (READING or WANT_TO_READ)
+    const entries = await this.prisma.bookshelfEntry.findMany({
+      where: { workId, status: { in: ['READING', 'WANT_TO_READ'] } },
+      select: { userId: true },
+    });
+
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { title: true, authorId: true },
+    });
+    if (!work || entries.length === 0) return;
+
+    // Create notifications (skip the author themselves)
+    const notifications = entries
+      .filter(e => e.userId !== work.authorId)
+      .map(e => ({
+        userId: e.userId,
+        type: 'new_episode',
+        title: `『${work.title}』の新しいエピソードが公開されました`,
+        body: `第${(episode.orderIndex ?? 0) + 1}話「${episode.title || ''}」`,
+        data: { workId, episodeId: episode.id },
+      }));
+
+    if (notifications.length > 0) {
+      await this.prisma.notification.createMany({ data: notifications });
+    }
   }
 
   /** Create auto-post when episode is published */
