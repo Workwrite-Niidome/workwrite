@@ -37,7 +37,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [tier, setTier] = useState<{
     plan: string; canUseAi: boolean; canUseThinking: boolean; canUseOpus?: boolean; remainingFreeUses: number | null;
   } | null>(null);
-  const [aiMode, setAiMode] = useState<AiMode>('normal');
+  const [aiMode, setAiMode] = useState<AiMode>('thinking');
   const [charCount, setCharCount] = useState(1000);
   const [customPrompt, setCustomPrompt] = useState('');
   const [freePrompt, setFreePrompt] = useState('');
@@ -166,7 +166,13 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   function buildContextVars(): Record<string, string> {
     const vars: Record<string, string> = { content: selectedText || currentContent };
     if (workId) vars.workId = workId;
-    if (currentEpisodeOrder != null) vars.episodeOrder = String(currentEpisodeOrder);
+    // episodeOrder: 1-based for display in prompts
+    if (currentEpisodeOrder != null) {
+      vars.episodeOrder = String(currentEpisodeOrder + 1);
+    } else {
+      // New episode: next after existing episodes
+      vars.episodeOrder = String(episodes.length + 1);
+    }
     const contextParts: string[] = [];
 
     if (currentTitle) contextParts.push(`現在執筆中の章: 「${currentTitle}」`);
@@ -460,7 +466,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                     : 'border-border text-muted-foreground hover:border-primary/30'
                 }`}
               >
-                通常
+                簡易
                 <span className="opacity-60">1cr</span>
               </button>
               {tier.canUseThinking && (
@@ -468,12 +474,11 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   onClick={() => setAiMode('thinking')}
                   className={`flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors ${
                     aiMode === 'thinking'
-                      ? 'bg-purple-500/10 border-purple-500/30 text-purple-600'
-                      : 'border-border text-muted-foreground hover:border-purple-500/30'
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/30'
                   }`}
                 >
-                  <Sparkles className="h-2.5 w-2.5" />
-                  じっくり
+                  通常
                   <span className="opacity-60">2cr</span>
                 </button>
               )}
@@ -698,7 +703,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   {isStreaming && (
                     <span className="flex items-center gap-1.5 text-[10px] text-muted-foreground">
                       <Loader2 className="h-3 w-3 animate-spin" />
-                      {aiMode === 'premium' ? '高精度生成中' : aiMode === 'thinking' ? 'じっくり思考中' : '生成中'}
+                      {aiMode === 'premium' ? '高精度生成中' : aiMode === 'thinking' ? '生成中' : '簡易生成中'}
                     </span>
                   )}
                 </div>
@@ -706,13 +711,23 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 {/* Action buttons — always visible when there's any result */}
                 {result && (
                   <div className="flex gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => { onInsert(result); commitResult(); }} className="flex-1 text-xs">
-                      <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
-                    </Button>
-                    {selectedText && onReplace && (
-                      <Button size="sm" variant="outline" onClick={() => { onReplace(result); commitResult(); }} className="flex-1 text-xs">
-                        <Replace className="h-3 w-3 mr-1" /> 置換
-                      </Button>
+                    {currentSlug === 'proofread' && onReplace ? (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => { onReplace(result); commitResult(); }} className="flex-1 text-xs">
+                          <Replace className="h-3 w-3 mr-1" /> 差し替え
+                        </Button>
+                      </>
+                    ) : (
+                      <>
+                        <Button size="sm" variant="outline" onClick={() => { onInsert(result); commitResult(); }} className="flex-1 text-xs">
+                          <ArrowDownToLine className="h-3 w-3 mr-1" /> 挿入
+                        </Button>
+                        {selectedText && onReplace && (
+                          <Button size="sm" variant="outline" onClick={() => { onReplace(result); commitResult(); }} className="flex-1 text-xs">
+                            <Replace className="h-3 w-3 mr-1" /> 置換
+                          </Button>
+                        )}
+                      </>
                     )}
                     <Button size="sm" variant="outline" onClick={() => { handleCopy(); commitResult(); }} className="flex-1 text-xs">
                       <Copy className="h-3 w-3 mr-1" /> {copied ? 'コピー済み' : 'コピー'}
@@ -800,7 +815,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   </Button>
                 </div>
                 <p className="text-[10px] text-muted-foreground">
-                  {aiMode === 'premium' ? '5' : aiMode === 'thinking' ? '2' : '1'}cr/回 — 打ち返し回数無制限
+                  {aiMode === 'premium' ? '5' : aiMode === 'thinking' ? '2' : '1'}cr/回
                 </p>
               </div>
             )}

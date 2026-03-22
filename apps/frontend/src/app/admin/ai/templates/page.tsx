@@ -78,7 +78,8 @@ export default function AdminTemplatesPage() {
           variables: form.variables,
         });
       } else if (editing) {
-        await api.updateTemplate(editing, form);
+        const { slug, ...updateData } = form;
+      await api.updateTemplate(editing, updateData);
       }
       setEditing(null);
       await loadTemplates();
