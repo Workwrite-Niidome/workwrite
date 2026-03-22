@@ -1,5 +1,6 @@
 'use client';
 
+import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
@@ -19,6 +20,7 @@ import {
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
 
 interface NavItem {
   href: string;
@@ -44,6 +46,17 @@ export function Sidebar() {
   const pathname = usePathname();
   const router = useRouter();
   const { isAuthenticated } = useAuth();
+  const [newEpisodeCount, setNewEpisodeCount] = useState(0);
+
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.getNotifications(true)
+      .then((res) => {
+        const count = res.data.filter((n) => n.type === 'new_episode').length;
+        setNewEpisodeCount(count);
+      })
+      .catch(() => {});
+  }, [isAuthenticated]);
 
   const visibleItems = NAV_ITEMS.filter(
     (item) => !item.authRequired || isAuthenticated,
@@ -58,6 +71,7 @@ export function Sidebar() {
               ? pathname === '/'
               : pathname.startsWith(item.href);
           const Icon = item.icon;
+          const showBadge = item.href === '/bookshelf' && newEpisodeCount > 0;
 
           return (
             <Link
@@ -71,7 +85,12 @@ export function Sidebar() {
               )}
             >
               <Icon className="h-4.5 w-4.5 shrink-0" strokeWidth={isActive ? 2.5 : 2} />
-              {item.label}
+              <span className="flex-1">{item.label}</span>
+              {showBadge && (
+                <span className="inline-flex items-center justify-center h-5 min-w-[20px] px-1 rounded-full bg-primary text-primary-foreground text-[10px] font-bold">
+                  {newEpisodeCount > 99 ? '99+' : newEpisodeCount}
+                </span>
+              )}
             </Link>
           );
         })}
