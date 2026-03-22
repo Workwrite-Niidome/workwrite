@@ -153,8 +153,10 @@ export class SearchService implements OnModuleInit {
     }
 
     let orderBy: any = { publishedAt: 'desc' };
+    let scoreSort = false;
     if (options?.sort === 'score') {
       orderBy = { qualityScore: { overall: 'desc' } };
+      scoreSort = true;
     } else if (options?.sort === 'newest') {
       orderBy = { publishedAt: 'desc' };
     }
@@ -175,8 +177,17 @@ export class SearchService implements OnModuleInit {
       this.prisma.work.count({ where }),
     ]);
 
+    // When sorting by score, push works without scores to the end
+    const sorted = scoreSort
+      ? [...works].sort((a, b) => {
+          const sa = a.qualityScore?.overall ?? -1;
+          const sb = b.qualityScore?.overall ?? -1;
+          return sb - sa;
+        })
+      : works;
+
     return {
-      hits: works.map((w) => ({
+      hits: sorted.map((w) => ({
         ...w,
         authorName: w.author?.displayName || w.author?.name || '',
         publishedAt: w.publishedAt?.getTime() || 0,

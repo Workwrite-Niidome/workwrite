@@ -187,6 +187,20 @@ async function main() {
     console.log(`Created ADMIN: ${adminEmail} (password: admin-change-me-immediately)`);
     console.log('IMPORTANT: Change this password immediately after first login!');
   }
+
+  // Fix: Publish all episodes of published works that have no publishedAt
+  const fixedEpisodes = await prisma.episode.updateMany({
+    where: {
+      publishedAt: null,
+      work: { status: 'PUBLISHED' },
+    },
+    data: {
+      publishedAt: new Date(),
+    },
+  });
+  if (fixedEpisodes.count > 0) {
+    console.log(`Fixed ${fixedEpisodes.count} unpublished episodes in published works.`);
+  }
 }
 
 main()
