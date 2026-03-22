@@ -194,16 +194,23 @@ export function DesignDisplay({ design, onChange, onRequestRevision, highlighted
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {design.characters.map((char: any, i: number) => (
                 <div key={i} className="border rounded-lg p-3 space-y-1.5 bg-background">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <span className="text-sm font-medium">{char.name || `キャラ${i + 1}`}</span>
                     {char.role && (
                       <span className="text-[10px] px-1.5 py-0.5 rounded-full bg-indigo-500/10 text-indigo-600 dark:text-indigo-400">
                         {char.role}
                       </span>
                     )}
+                    {(char.gender || char.age) && (
+                      <span className="text-[10px] text-muted-foreground">
+                        {[char.gender, char.age].filter(Boolean).join(' / ')}
+                      </span>
+                    )}
                   </div>
+                  {char.appearance && <p className="text-xs text-muted-foreground">外見: {char.appearance}</p>}
                   {char.personality && <p className="text-xs text-muted-foreground">性格: {char.personality}</p>}
                   {char.speechStyle && <p className="text-xs text-muted-foreground">口調: {char.speechStyle}</p>}
+                  {char.firstPerson && <p className="text-xs text-muted-foreground">一人称: {char.firstPerson}</p>}
                   {char.motivation && <p className="text-xs text-muted-foreground">動機: {char.motivation}</p>}
                   {char.background && <p className="text-xs text-muted-foreground">背景: {char.background}</p>}
                 </div>

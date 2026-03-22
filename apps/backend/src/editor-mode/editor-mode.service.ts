@@ -118,8 +118,8 @@ __DESIGN_UPDATE__
   "synopsis": "3-5行のあらすじ（必須）",
   "scope": "X話 × Y字（必須。ブリーフに指定があればそれを、なければ10話 × 3000字を推奨）",
   "characters": [
-    {"name": "名前", "role": "役割", "personality": "性格（2-3文）", "speechStyle": "口調の特徴と例文", "firstPerson": "一人称（俺/私/僕/わたし等）", "motivation": "行動の動機", "background": "背景・過去"},
-    （最低3人、理想4-5人。全員に明確な口調の差をつける）
+    {"name": "フルネーム", "role": "役割", "gender": "性別（男性/女性/その他）", "age": "年齢（数字または「10代後半」等）", "appearance": "外見の特徴（髪型・体格・服装・印象的な特徴を2-3文）", "personality": "性格（2-3文）", "speechStyle": "口調の特徴と例文", "firstPerson": "一人称（俺/私/僕/わたし等）", "motivation": "行動の動機", "background": "背景・過去"},
+    （最低3人、理想4-5人。全員に明確な口調の差をつける。年齢・性別・外見は必須）
   ],
   "worldBuilding": {
     "basics": {"era": "時代設定（必須）", "setting": "舞台の具体的な場所（必須）", "civilizationLevel": "文明・技術レベル（必須）"},
