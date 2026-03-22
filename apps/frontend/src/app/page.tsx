@@ -117,7 +117,7 @@ export default function Home() {
     <div className="min-h-screen">
       {/* Hero */}
       <section className="border-b border-border">
-        <div className="mx-auto max-w-4xl px-4 md:px-6 py-16 sm:py-28 text-center">
+        <div className="mx-auto max-w-4xl px-4 md:px-6 py-12 sm:py-20 text-center">
           <p className="text-xs tracking-[0.3em] uppercase text-muted-foreground mb-6">Novel Platform</p>
           <h1 className="text-2xl sm:text-3xl font-serif font-normal leading-relaxed tracking-wide">
             読書で、変わる。
@@ -125,16 +125,16 @@ export default function Home() {
           <p className="mt-4 text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
             AIスコアリングと感情タグで、あなたの心に響く次の一冊を。
           </p>
-          <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-md mx-auto">
+          <div className="mt-8 grid grid-cols-3 gap-2 max-w-sm mx-auto">
             {MOOD_CARDS.map((card) => (
               <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
-                <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
+                <div className="border border-border rounded-lg px-3 py-3 text-center text-xs sm:text-sm whitespace-nowrap transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
                   {card.label}
                 </div>
               </Link>
             ))}
           </div>
-          <div className="mt-3">
+          <div className="mt-2">
             <Link href="/discover" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               すべての作品を探す →
             </Link>
@@ -201,6 +201,9 @@ export default function Home() {
           </div>
         </section>
 
+        {/* AI Generated Works */}
+        <AiWorksSection />
+
         {/* Tags */}
         {data?.trendingTags && data.trendingTags.length > 0 && (
           <section>
@@ -239,5 +242,38 @@ export default function Home() {
         </section>
       </div>
     </div>
+  );
+}
+
+function AiWorksSection() {
+  const [works, setWorks] = useState<Work[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    api.searchWorks('', { aiGenerated: true } as any)
+      .then((res: any) => {
+        const hits = res?.data?.hits || res?.hits || [];
+        setWorks(Array.isArray(hits) ? hits.slice(0, 6) : []);
+      })
+      .catch(() => {})
+      .finally(() => setLoading(false));
+  }, []);
+
+  if (!loading && works.length === 0) return null;
+
+  return (
+    <section>
+      <div className="flex justify-between items-center mb-4">
+        <h2 className="text-sm font-medium">AI作品</h2>
+        <Link href="/discover" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+          すべて見る →
+        </Link>
+      </div>
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+        {loading
+          ? Array.from({ length: 3 }).map((_, i) => <WorkCardSkeleton key={i} />)
+          : works.map((work) => <WorkCard key={work.id} work={work} />)}
+      </div>
+    </section>
   );
 }

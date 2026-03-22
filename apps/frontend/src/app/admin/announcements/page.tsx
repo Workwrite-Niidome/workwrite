@@ -191,21 +191,21 @@ export default function AdminAnnouncementsPage() {
                       {new Date(a.createdAt).toLocaleDateString('ja-JP')}
                     </td>
                     <td className="px-4 py-3">
-                      <div className="flex items-center gap-1">
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleEdit(a)} title="編集">
-                          <Pencil className="h-3.5 w-3.5" />
+                      <div className="flex items-center gap-1.5 flex-nowrap">
+                        <Button variant="ghost" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => handleEdit(a)}>
+                          <Pencil className="h-3 w-3" /> 編集
                         </Button>
                         {a.isPublished ? (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handleUnpublish(a.id)} title="非公開にする">
-                            <EyeOff className="h-3.5 w-3.5" />
+                          <Button variant="outline" size="sm" className="h-7 px-2 text-xs gap-1" onClick={() => handleUnpublish(a.id)}>
+                            <EyeOff className="h-3 w-3" /> 非公開
                           </Button>
                         ) : (
-                          <Button variant="ghost" size="sm" className="h-7 w-7 p-0" onClick={() => handlePublish(a.id)} title="公開する">
-                            <Eye className="h-3.5 w-3.5" />
+                          <Button size="sm" className="h-7 px-3 text-xs gap-1" onClick={() => handlePublish(a.id)}>
+                            <Eye className="h-3 w-3" /> 公開
                           </Button>
                         )}
-                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(a)} title="削除">
-                          <Trash2 className="h-3.5 w-3.5" />
+                        <Button variant="ghost" size="sm" className="h-7 w-7 p-0 text-destructive" onClick={() => setDeleteTarget(a)}>
+                          <Trash2 className="h-3 w-3" />
                         </Button>
                       </div>
                     </td>
