@@ -886,13 +886,10 @@ ${episode.content}
         const systemPrompt = this.buildEpisodeGenerationPrompt(designData, plan, episodeSummaries, episodeNumber, job.totalEpisodes);
         const userPrompt = `第${episodeNumber}話を執筆してください。`;
 
-        // Generate (non-streaming for background loop)
-        let fullOutput = '';
-        for await (const chunk of this.streamFromClaude(
+        // Generate (non-streaming for background loop — faster & more reliable)
+        const fullOutput = await this.callClaudeNonStreaming(
           apiKey, model, systemPrompt, userPrompt, userId, 'editor_mode_generate', creditCost,
-        )) {
-          fullOutput += chunk;
-        }
+        );
 
         // Save episode
         await this.prisma.episode.upsert({
@@ -1168,5 +1165,82 @@ ${episode.content}
     parts.push(`\n現在: 第${currentEpisodeNumber}話 / 全${totalEpisodes}話`);
 
     return parts.join('\n');
+  }
+
+  // ─── Non-streaming Claude call (for background generation) ──
+
+  private async callClaudeNonStreaming(
+    apiKey: string,
+    model: string,
+    systemPrompt: string,
+    userPrompt: string,
+    userId: string,
+    feature: string,
+    creditCost: number,
+  ): Promise<string> {
+    const startTime = Date.now();
+    let transactionId: string | null = null;
+
+    try {
+      if (creditCost > 0) {
+        const result = await this.creditService.consumeCredits(userId, creditCost, feature, model);
+        transactionId = result.transactionId;
+      }
+
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+        signal: abortController.signal,
+      }).finally(() => clearTimeout(timeout));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Claude API error (non-streaming): ${response.status} ${errorText}`);
+        if (transactionId) {
+          await this.creditService.refundTransaction(transactionId);
+        }
+        throw new ServiceUnavailableException(`AI service error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.content?.[0]?.text || '';
+      const inputTokens = data.usage?.input_tokens || 0;
+      const outputTokens = data.usage?.output_tokens || 0;
+
+      const durationMs = Date.now() - startTime;
+      this.logger.log(`Non-streaming generation: ${inputTokens} in / ${outputTokens} out / ${durationMs}ms / ${model}`);
+
+      await this.prisma.aiUsageLog
+        .create({
+          data: { userId, feature, inputTokens, outputTokens, model, durationMs },
+        })
+        .catch((e) => this.logger.error('Failed to log AI usage', e));
+
+      if (transactionId && content) {
+        await this.creditService.confirmTransaction(transactionId).catch((e) => this.logger.error('Credit confirm failed', e));
+      } else if (transactionId) {
+        await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error('Credit refund failed', e));
+      }
+
+      return content;
+    } catch (error) {
+      if (transactionId) {
+        await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error('Credit refund failed', e));
+      }
+      throw error;
+    }
   }
 }

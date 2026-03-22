@@ -1,0 +1,113 @@
+const TOKEN = process.argv[2];
+const API = 'https://backend-production-db434.up.railway.app/api/v1';
+const WID = 'cmn1r2vps0011nl01oulug48w';
+
+const chars = [
+  { name: 'シノ（東雲花）', role: 'PROTAGONIST', gender: 'FEMALE', age: '16→19歳', firstPerson: 'わたし',
+    personality: '静かで観察的。芯が強い。「足りない子供」——全部ほしいのに全部は手に入らないと知り、それでも手を伸ばす。美しいものに息を呑む。甘いもので目を閉じる。褒められると耳が赤い。危機時に声が低くなる。',
+    speechStyle: '短く正確。感情は沈黙に出る。「見えた」「きれい」「足りない」「全部ほしい」。千本目「わたしは足りない子供です」。',
+    appearance: '165cm。黒髪。灰色の瞳（元の世界では黒）。片刃を腰に。日焼け。笑うと年相応にかわいい。',
+    background: '高校生・東雲花。横断歩道で美咲を庇い交通事故→脳挫傷→昏睡。異世界で接ぎ手(SHN-0041)として目覚め二千本の傷を縫う。記憶ブリードLevel1-5。',
+    motivation: '全部ほしい。足りないから手を伸ばし続ける。月に手を伸ばす。届かない。でも伸ばす。',
+    arc: '何もない子供→静眼のシノ→千本目「足りない子供」→二千本目→「ここにいる自分が一番本物」→最終話：また明日。' },
+  { name: 'ユイ', role: 'HEROINE', gender: 'FEMALE', age: '18歳', firstPerson: 'わたし',
+    personality: '温かく世話焼き。芯が強い。千本目で泣くまいと唇を噛む。お母さんの前で声が出なくなる。',
+    speechStyle: '「大丈夫、わたしがいるから」「だめ。今日は休むの」「ずっと」「お預かりしています」。',
+    appearance: '160cm。栗色の三つ編み。琥珀色の目。治癒師の使い込まれた手。',
+    background: '辺境の村・ヒナタ出身治癒師。草原で倒れたシノを最初に見つけ手を握った人。',
+    motivation: '隣にいること。手を離さないこと。', arc: '保護者→パートナー→シノの心臓。' },
+  { name: 'トウカ', role: 'PARTY_MEMBER', gender: 'FEMALE', age: '24歳', firstPerson: '私',
+    personality: '寡黙、厳格。11人を失った痛み。照れると「黙れ」で耳が赤い。三年で笑えるように。',
+    speechStyle: '「甘い」「生き残れ」「……悪くない」「黙れ」。ep188は頷くだけ。',
+    appearance: '175cm。銀白色短髪。青い目。頬の刀傷。長剣。',
+    background: '元王国軍小隊長。11人全滅の唯一の生還者。後に復興顧問。',
+    motivation: '二度と失わない。食卓の席を確保する。', arc: '凍った剣士→柱→笑える人→復興顧問。' },
+  { name: 'ルカ', role: 'PARTY_MEMBER', gender: 'MALE', age: '17→19歳', firstPerson: '俺',
+    personality: '明るく気さく。鋭い観察眼。弦を弾く癖。核心を突く一言を言い覚えていない。',
+    speechStyle: '「走ってるだけだ」「手放すのと届けるのは違う」「足だけは速いんだ」。ep188は弦をピン一回。',
+    appearance: '170→175cm。茶髪くせっ毛。緑の目。弓を背に。',
+    background: '孤児。行商人に育てられた。パーティ暁が初めての家族。シノと千日以上走った。',
+    motivation: '居場所。シノと走ること。', arc: '風来坊→居場所→ノアの弓の師。' },
+  { name: 'シオン', role: 'PARTY_MEMBER', gender: 'FEMALE', age: '16歳', firstPerson: 'わたし',
+    personality: '内向的。知的好奇心の塊。ノート14冊。母は天文学者。ルカと同じ結論で「若干不本意」。',
+    speechStyle: '丁寧語。「データ上は…」「きれいですね」（感情溢れた時）。ep188でノートに書けず空を見る。',
+    appearance: '155cm。濃紺の髪。紫の瞳。眼鏡。ノート常備。',
+    background: '王都魔術学院特待生。白霧研究。論文「二つの世界の接続理論」著者。',
+    motivation: '世界を記録。ハクアの後を継ぐ。', arc: '観察者→論文著者→後継者。' },
+  { name: 'ノア', role: 'SUPPORTING', gender: 'OTHER', age: '800歳以上', firstPerson: 'わたし',
+    personality: '静か。透明。美しいもの探しの達人。お母さんに「子供みたいな目」。手が冷たかった→温かくなった。',
+    speechStyle: '穏やか。「八百年で初めて」「隣に人がいるだけで報われる」。ep188は沈黙。',
+    appearance: '年齢不詳。透明な目。温かくなった手。',
+    background: '八百年前の接ぎ手(SHN-0001)。ルシアを失い孤独に。三百本で止まった。',
+    motivation: '隣に人がいること。', arc: '八百年の孤独→温かい手→「終わった」。' },
+  { name: 'ベル', role: 'SUPPORTING', gender: 'MALE', age: '50代', firstPerson: 'わし',
+    personality: '無骨。片腕。意地で作る。椀が足りなければ鍋から直飲み。「大好き」で三秒固まる。',
+    speechStyle: '「食え」「当然だ」「うるさい」。ep188は「当然だ」を言わない——言葉を失う瞬間が最も重い。',
+    appearance: '片腕。エプロン。台所の匂い。三十年鍋を振った手。',
+    background: '星降り亭主人。味噌を一年寝かせ傑作に。お母さんと同じ匂い。レシピ交換。',
+    motivation: '食わせる相手がいること。', arc: '料理人→全員の錨→「料理人のお母さん」。' },
+  { name: 'ジーク', role: 'SUPPORTING', gender: 'MALE', age: '60代', firstPerson: 'わし',
+    personality: '豪快で繊細。味覚十割。蜂蜜酒。四つ目の心「帰る心」。ep188で栓が開けられない→ヒナが開ける。',
+    speechStyle: '「味覚は人生だ」「飲め。体が空っぽだろう」「毎朝起きたことが祝いだ」。',
+    appearance: '大柄。皺の目。蜂蜜酒常備。',
+    background: '元銀ランク。味覚完全回復。ヒナの師匠。ロサンデ=ベルの四番目の香草。',
+    motivation: '弟子を育てること。', arc: '引退老兵→師匠→「帰る心」を教える。' },
+  { name: 'サラ', role: 'SUPPORTING', gender: 'FEMALE', age: '10→12歳', firstPerson: 'わたし',
+    personality: '真面目。学者気質。声変わり中の低音。体が先に動く人間。ハクアを「師匠」と呼ぶ。',
+    speechStyle: '「師匠の教えです」「歌える。準備はできてる」「言われなくてもわかった」。',
+    appearance: '成長期で5cm伸びた。灰色の目。',
+    background: 'ハクアの弟子。裏返しの歌を三日で覚えた。論文第一著者予定。',
+    motivation: 'シノのために歌うこと。', arc: '弟子→唱詠師→ep188で自分の判断で歌い始める。' },
+  { name: 'ヒナ', role: 'SUPPORTING', gender: 'FEMALE', age: '9→10歳', firstPerson: 'わたし',
+    personality: '元気。まっすぐ。ep188では泣きも笑いもせず走る。ジークの栓を開ける師弟逆転。',
+    speechStyle: '「シノおねえちゃん！」「おかわり！」「銅ランクです！」「困ってる仲間を助けるのは当然」。',
+    appearance: '大きな目。銅の札。走る体。',
+    background: 'ジークの弟子。八割五分。五つ目の罠。ノアを足跡で追い詰めた。',
+    motivation: 'パーティ暁の斥候。', arc: '子供→銅ランク→「帰る心」の体現者。' },
+  { name: 'ハクア', role: 'SUPPORTING', gender: 'MALE', age: '70代', firstPerson: 'わし',
+    personality: '学者の頑固さ。五十年の研究。ep188で目を閉じて「五十年分が見える」。',
+    speechStyle: '「聞ける人がいるうちに聞け」「泣くな。データが滲む」「閉じたか。なら泣いていい」。',
+    appearance: '白髪。杖二本。目が若い。',
+    background: '白霧研究者50年。シオン・サラの師匠。東方の森の碑文を読む。',
+    motivation: '見届けること。', arc: '孤独な研究者→師匠→見届ける人。' },
+  { name: 'お母さん', role: 'SUPPORTING', gender: 'FEMALE', age: '40代', firstPerson: 'わたし',
+    personality: '台所の匂いの母。二年半毎日病院に通った。編み物は泣かないため。ハンバーグ二百回。味噌汁がしょっぱいのは亡き夫の好み。',
+    speechStyle: '「花」と呼ぶ。「大きくなったね」「泣いたら見えなくなる」「花が選んだ人は認めます。勝手に」。',
+    appearance: '黒い目。白髪が増えた。ベルと同じ台所の匂い。',
+    background: '夫を亡くしている。百合の花を毎日。手紙全文ep166。',
+    motivation: '花が帰ること。ハンバーグ。', arc: '待つ人→手紙→門を通る→ベルと握手。' },
+  { name: '美咲', role: 'SUPPORTING', gender: 'FEMALE', age: '16→19歳', firstPerson: 'あたし',
+    personality: '八重歯。泣き虫。矯正やめた（しののめが起きた時わかるように）。教育学部。シチュー四杯。',
+    speechStyle: '「しののめ」「やばくない？」「ばか。二年半も」。',
+    appearance: '短い髪。八重歯。丸い顔。',
+    background: '横断歩道でシノに庇われた親友。毎週水曜に病室通い。',
+    motivation: 'しののめの隣。', arc: '待つ友→再会→門を通る→シチュー四杯→「おかえり」。' },
+  { name: 'アリシア', role: 'SUPPORTING', gender: 'FEMALE', age: '20代前半', firstPerson: 'わたし',
+    personality: '第一王女。政治家。「ベルのシチューは外交ツールとして最強」。シチュー三杯→四杯。',
+    speechStyle: '「いい場所ですね」「成長しました（食べる量の）」。',
+    appearance: '栗色の髪。青い目。',
+    background: '停止派鎮圧。シロナミキの苗。シオンの報告書を政治に活用。',
+    motivation: '復興政策。', arc: '手紙→鎮圧→訪問→北方同行→裏返しに立ち会う。' },
+  { name: 'ロイス公爵', role: 'SUPPORTING', gender: 'MALE', age: '40代後半', firstPerson: '私',
+    personality: '亡き妻リーラの森。泣かない。ピクニックの約束。',
+    speechStyle: '「ロイスと呼んでください。リーラの夫として」。',
+    appearance: '白髪交じり。鋭い目。疲れた顔。',
+    background: '結界計画推進→延期→撤回。リーラの森が緑に戻る。',
+    motivation: 'ピクニック。', arc: '結界推進→撤回→森が緑→ピクニックの約束。' }
+];
+
+async function main() {
+  let ok = 0;
+  for (const c of chars) {
+    const r = await fetch(API + '/works/' + WID + '/characters', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json; charset=utf-8', 'Authorization': 'Bearer ' + TOKEN },
+      body: JSON.stringify(c)
+    });
+    if (r.ok) { ok++; console.log('OK: ' + c.name); }
+    else { console.log('FAIL: ' + c.name + ' ' + r.status + ' ' + (await r.text()).substring(0,100)); }
+    await new Promise(r => setTimeout(r, 200));
+  }
+  console.log('Done: ' + ok + '/' + chars.length);
+}
+main();
