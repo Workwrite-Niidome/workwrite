@@ -4,7 +4,7 @@ import { PostsService } from '../posts/posts.service';
 import { CreditService } from '../billing/credit.service';
 import { PostType } from '@prisma/client';
 
-const REVIEW_REWARD_CR = 3;
+const REVIEW_REWARD_CR = 5;
 const MIN_REVIEW_LENGTH = 20;
 
 @Injectable()

@@ -1,9 +1,17 @@
-import { Injectable } from '@nestjs/common';
+import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CreditService } from '../billing/credit.service';
+
+const EMOTION_TAG_REWARD_CR = 1;
 
 @Injectable()
 export class EmotionsService {
-  constructor(private prisma: PrismaService) {}
+  private readonly logger = new Logger(EmotionsService.name);
+
+  constructor(
+    private prisma: PrismaService,
+    private creditService: CreditService,
+  ) {}
 
   async getAllTags() {
     return this.prisma.emotionTagMaster.findMany({
@@ -35,7 +43,34 @@ export class EmotionsService {
     const results = await Promise.all(
       tags.map((t) => this.addEmotionTag(userId, { workId, tagId: t.tagId, intensity: t.intensity })),
     );
+
+    // Grant 1Cr for emotion tagging (1 per work, fire-and-forget)
+    if (tags.length > 0) {
+      this.grantEmotionTagReward(userId, workId).catch((e) =>
+        this.logger.warn(`Emotion tag reward failed: ${e}`),
+      );
+    }
+
     return results;
+  }
+
+  private async grantEmotionTagReward(userId: string, workId: string) {
+    await this.creditService.ensureCreditBalance(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', userId);
+      const existing = await tx.creditTransaction.findFirst({
+        where: { userId, type: 'REVIEW_REWARD', description: `感情タグ報酬 (${workId})` },
+      });
+      if (existing) return;
+      const balance = await tx.creditBalance.update({
+        where: { userId },
+        data: { balance: { increment: EMOTION_TAG_REWARD_CR }, purchasedBalance: { increment: EMOTION_TAG_REWARD_CR } },
+      });
+      await tx.creditTransaction.create({
+        data: { userId, amount: EMOTION_TAG_REWARD_CR, type: 'REVIEW_REWARD', status: 'confirmed', balance: balance.balance, description: `感情タグ報酬 (${workId})` },
+      });
+    });
+    this.logger.log(`Granted ${EMOTION_TAG_REWARD_CR}Cr emotion tag reward to ${userId} for work ${workId}`);
   }
 
   async getEmotionTagsForWork(workId: string) {

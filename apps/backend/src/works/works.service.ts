@@ -164,6 +164,11 @@ export class WorksService {
         }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
         // Auto-scoring, search indexing, emotion tag generation
         this.autoProcessWork(id).catch((e) => this.logger.warn(`Auto-process failed: ${e}`));
+
+        // First publish reward: 10Cr (one-time per user)
+        this.grantFirstPublishReward(userId).catch((e) =>
+          this.logger.warn(`First publish reward failed: ${e}`),
+        );
       }
     }
 
@@ -585,5 +590,37 @@ export class WorksService {
         avgIntensity: re.avgIntensity,
       })),
     };
+  }
+
+  /** Grant 10Cr for first ever published work (one-time per user) */
+  private async grantFirstPublishReward(userId: string) {
+    const FIRST_PUBLISH_CR = 10;
+    // Check if user has published before (more than 1 work = not first)
+    const publishedCount = await this.prisma.work.count({
+      where: { authorId: userId, status: 'PUBLISHED' },
+    });
+    if (publishedCount > 1) return; // Already published before
+
+    // Check for duplicate reward
+    const existing = await this.prisma.creditTransaction.findFirst({
+      where: { userId, type: 'ADMIN_GRANT', description: '初公開報酬' },
+    });
+    if (existing) return;
+
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', userId);
+      const dup = await tx.creditTransaction.findFirst({
+        where: { userId, type: 'ADMIN_GRANT', description: '初公開報酬' },
+      });
+      if (dup) return;
+      const balance = await tx.creditBalance.update({
+        where: { userId },
+        data: { balance: { increment: FIRST_PUBLISH_CR }, purchasedBalance: { increment: FIRST_PUBLISH_CR } },
+      });
+      await tx.creditTransaction.create({
+        data: { userId, amount: FIRST_PUBLISH_CR, type: 'ADMIN_GRANT', status: 'confirmed', balance: balance.balance, description: '初公開報酬' },
+      });
+    });
+    this.logger.log(`Granted ${FIRST_PUBLISH_CR}Cr first-publish reward to ${userId}`);
   }
 }

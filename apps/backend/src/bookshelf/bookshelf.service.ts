@@ -2,6 +2,9 @@ import { Injectable, Logger } from '@nestjs/common';
 import { BookshelfStatus, PostType } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostsService } from '../posts/posts.service';
+import { CreditService } from '../billing/credit.service';
+
+const COMPLETION_REWARD_CR = 1;
 
 @Injectable()
 export class BookshelfService {
@@ -10,6 +13,7 @@ export class BookshelfService {
   constructor(
     private prisma: PrismaService,
     private postsService: PostsService,
+    private creditService: CreditService,
   ) {}
 
   async getBookshelf(userId: string, status?: BookshelfStatus) {
@@ -80,7 +84,7 @@ export class BookshelfService {
       create: { userId, workId, status },
     });
 
-    // Auto-post on reading completion
+    // Auto-post + Cr reward on reading completion
     if (status === 'COMPLETED' && prev?.status !== 'COMPLETED') {
       const work = await this.prisma.work.findUnique({
         where: { id: workId },
@@ -92,9 +96,33 @@ export class BookshelfService {
           workId,
         }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
       }
+
+      // Grant 1Cr for reading completion
+      this.grantCompletionReward(userId, workId).catch((e) =>
+        this.logger.warn(`Completion reward failed: ${e}`),
+      );
     }
 
     return entry;
+  }
+
+  private async grantCompletionReward(userId: string, workId: string) {
+    await this.creditService.ensureCreditBalance(userId);
+    await this.prisma.$transaction(async (tx) => {
+      await tx.$queryRawUnsafe('SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', userId);
+      const existing = await tx.creditTransaction.findFirst({
+        where: { userId, type: 'REVIEW_REWARD', description: `読了報酬 (${workId})` },
+      });
+      if (existing) return;
+      const balance = await tx.creditBalance.update({
+        where: { userId },
+        data: { balance: { increment: COMPLETION_REWARD_CR }, purchasedBalance: { increment: COMPLETION_REWARD_CR } },
+      });
+      await tx.creditTransaction.create({
+        data: { userId, amount: COMPLETION_REWARD_CR, type: 'REVIEW_REWARD', status: 'confirmed', balance: balance.balance, description: `読了報酬 (${workId})` },
+      });
+    });
+    this.logger.log(`Granted ${COMPLETION_REWARD_CR}Cr completion reward to ${userId} for work ${workId}`);
   }
 
   async removeFromBookshelf(userId: string, workId: string) {
