@@ -115,6 +115,7 @@ export class WorkImportService {
             content: ch.content,
             orderIndex: i,
             wordCount: ch.content.length,
+            publishedAt: new Date(), // インポートしたエピソードは即公開
           },
         });
       }
@@ -225,6 +226,7 @@ export class WorkImportService {
             content: ep.content,
             orderIndex: i,
             wordCount: ep.content.length,
+            publishedAt: new Date(), // インポートしたエピソードは即公開
           },
         });
       }

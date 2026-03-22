@@ -1,10 +1,25 @@
-import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException } from '@nestjs/common';
+import { Controller, Get, Post, Param, Body, UseGuards, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { ReactionsService } from './reactions.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreateReactionDto } from './dto/reaction.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+
+// In-memory rate limiter for reaction POST: 30 per minute per user
+const reactionRateMap = new Map<string, number[]>();
+const RATE_LIMIT_WINDOW_MS = 60_000;
+const RATE_LIMIT_MAX = 30;
+
+function checkReactionRateLimit(userId: string): boolean {
+  const now = Date.now();
+  const timestamps = reactionRateMap.get(userId) || [];
+  const recent = timestamps.filter((t) => now - t < RATE_LIMIT_WINDOW_MS);
+  if (recent.length >= RATE_LIMIT_MAX) return false;
+  recent.push(now);
+  reactionRateMap.set(userId, recent);
+  return true;
+}
 
 @ApiTags('Reactions')
 @Controller()
@@ -22,6 +37,9 @@ export class ReactionsController {
     @CurrentUser('id') userId: string,
     @Body() dto: CreateReactionDto,
   ) {
+    if (!checkReactionRateLimit(userId)) {
+      throw new ServiceUnavailableException('リアクションの送信回数が多すぎます。しばらくお待ちください。');
+    }
     const episode = await this.prisma.episode.findUnique({
       where: { id: episodeId },
       select: { workId: true },

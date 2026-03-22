@@ -60,26 +60,27 @@ export class ReviewsService {
    */
   private async grantReviewReward(userId: string, workId: string) {
     try {
-      // Check if already rewarded for this work (prevent double-grant on edge cases)
-      const existingTx = await this.prisma.creditTransaction.findFirst({
-        where: {
-          userId,
-          type: 'REVIEW_REWARD',
-          description: { contains: workId },
-        },
-      });
-      if (existingTx) return;
-
       // Ensure credit balance exists
       await this.creditService.ensureCreditBalance(userId);
 
-      // Grant credits
+      // Atomic: lock + check + grant inside single transaction
       await this.prisma.$transaction(async (tx) => {
-        await tx.creditBalance.update({
+        // Lock the balance row to prevent concurrent grants
+        await tx.$queryRawUnsafe(
+          'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', userId,
+        );
+
+        // Check if already rewarded (inside transaction = race-safe)
+        const existingTx = await tx.creditTransaction.findFirst({
+          where: { userId, type: 'REVIEW_REWARD', description: `レビュー報酬 (${workId})` },
+        });
+        if (existingTx) return;
+
+        const balance = await tx.creditBalance.update({
           where: { userId },
           data: {
             balance: { increment: REVIEW_REWARD_CR },
-            purchasedBalance: { increment: REVIEW_REWARD_CR }, // Review rewards don't expire
+            purchasedBalance: { increment: REVIEW_REWARD_CR },
           },
         });
 
@@ -89,7 +90,7 @@ export class ReviewsService {
             amount: REVIEW_REWARD_CR,
             type: 'REVIEW_REWARD',
             status: 'confirmed',
-            balance: 0, // Will be overwritten by actual balance
+            balance: balance.balance,
             description: `レビュー報酬 (${workId})`,
           },
         });

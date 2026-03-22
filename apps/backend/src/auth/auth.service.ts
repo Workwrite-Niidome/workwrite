@@ -173,39 +173,47 @@ export class AuthService {
    * Grant Cr reward to the referrer when a new user registers via invite link.
    */
   private async grantReferralReward(referrerId: string, newUserId: string) {
+    // Prevent self-referral
+    if (referrerId === newUserId) return;
+
     // Verify referrer exists
     const referrer = await this.prisma.user.findUnique({ where: { id: referrerId } });
     if (!referrer) return;
 
-    // Check for duplicate (prevent double-grant)
-    const existing = await this.prisma.creditTransaction.findFirst({
-      where: { userId: referrerId, type: 'REFERRAL_REWARD', description: { contains: newUserId } },
-    });
-    if (existing) return;
-
     // Ensure credit balance exists
-    const balance = await this.prisma.creditBalance.upsert({
+    await this.prisma.creditBalance.upsert({
       where: { userId: referrerId },
       update: {},
       create: { userId: referrerId, balance: 20, monthlyBalance: 20, purchasedBalance: 0, monthlyGranted: 20, lastGrantedAt: new Date() },
     });
 
-    // Grant credits
+    // Atomic: lock + check + grant inside single transaction
     await this.prisma.$transaction(async (tx) => {
-      await tx.creditBalance.update({
+      await tx.$queryRawUnsafe(
+        'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', referrerId,
+      );
+
+      // Check for duplicate (inside transaction = race-safe)
+      const existing = await tx.creditTransaction.findFirst({
+        where: { userId: referrerId, type: 'REFERRAL_REWARD', description: `招待報酬 (${newUserId})` },
+      });
+      if (existing) return;
+
+      const balance = await tx.creditBalance.update({
         where: { userId: referrerId },
         data: {
           balance: { increment: REFERRAL_REWARD_CR },
           purchasedBalance: { increment: REFERRAL_REWARD_CR },
         },
       });
+
       await tx.creditTransaction.create({
         data: {
           userId: referrerId,
           amount: REFERRAL_REWARD_CR,
           type: 'REFERRAL_REWARD',
           status: 'confirmed',
-          balance: balance.balance + REFERRAL_REWARD_CR,
+          balance: balance.balance,
           description: `招待報酬 (${newUserId})`,
         },
       });

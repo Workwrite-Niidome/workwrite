@@ -1,4 +1,4 @@
-import { IsEmail, IsString, MinLength, MaxLength, IsOptional } from 'class-validator';
+import { IsEmail, IsString, MinLength, MaxLength, IsOptional, Matches } from 'class-validator';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
 export class RegisterDto {
@@ -27,6 +27,7 @@ export class RegisterDto {
   @ApiPropertyOptional({ description: '招待者のユーザーID（招待リンクから自動設定）' })
   @IsOptional()
   @IsString()
+  @Matches(/^[a-z0-9]{20,30}$/, { message: '無効な招待コードです' })
   referrerId?: string;
 }
 
