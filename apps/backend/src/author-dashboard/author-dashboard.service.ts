@@ -8,6 +8,7 @@ export class AuthorDashboardService {
   async getOverview(authorId: string) {
     const works = await this.prisma.work.findMany({
       where: { authorId },
+      orderBy: { updatedAt: 'desc' },
       include: {
         qualityScore: { select: { overall: true } },
         _count: { select: { reviews: true, episodes: true } },
