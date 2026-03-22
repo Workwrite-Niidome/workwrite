@@ -171,6 +171,12 @@ function EditorModeDesignContent() {
         }
         if (parsed.workId) {
           setWorkId(parsed.workId);
+          // Update URL so page refresh can resume
+          const url = new URL(window.location.href);
+          if (!url.searchParams.has('resume')) {
+            url.searchParams.set('resume', parsed.workId);
+            window.history.replaceState({}, '', url.toString());
+          }
         }
         if (parsed.creditsConsumed !== undefined) {
           setCreditConsumed(parsed.creditsConsumed);
@@ -216,6 +222,25 @@ function EditorModeDesignContent() {
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
     } finally {
       setIsStreaming(false);
+      // Refresh credit balance and consumed count after each message
+      api.getAiStatus()
+        .then((res: any) => {
+          if (res.data?.tier?.credits?.total !== undefined) {
+            setCreditsRemaining(res.data.tier.credits.total);
+          }
+        })
+        .catch(() => {});
+      // Also refresh consumed credits from server
+      if (workId) {
+        api.editorModeStatus(workId)
+          .then((res: any) => {
+            const job = res?.data || res;
+            if (job?.creditsConsumed !== undefined) {
+              setCreditConsumed(job.creditsConsumed);
+            }
+          })
+          .catch(() => {});
+      }
     }
   }, [inputValue, isStreaming, messages, aiMode, workId, applyDesignUpdate]);
 
