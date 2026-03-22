@@ -1211,6 +1211,13 @@ class ApiClient {
     return this.request(`/works/${workId}/editor-mode/episodes/${episodeId}/approve`, { method: 'POST' });
   }
 
+  async editorModeUpdateEpisodeContent(workId: string, episodeId: string, content: string) {
+    return this.request(`/works/${workId}/editor-mode/episodes/${episodeId}/content`, {
+      method: 'PATCH',
+      body: JSON.stringify({ content }),
+    });
+  }
+
   // Health check
   async checkHealth(): Promise<{ ok: boolean; db: boolean }> {
     try {

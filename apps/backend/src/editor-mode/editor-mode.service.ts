@@ -392,7 +392,7 @@ __END_UPDATE__
     for (let i = 1; i <= dto.totalEpisodes; i++) {
       episodePlan.push({
         episodeNumber: i,
-        title: `第${i}話`,
+        title: this.getEpisodeTitleFromDesign(designData, i),
         summary: '',
       });
     }
@@ -440,17 +440,18 @@ __END_UPDATE__
     // Save episode
     const work = await this.prisma.work.findUnique({ where: { id: workId } });
     if (work) {
+      const firstEpisodeTitle = this.getEpisodeTitleFromDesign(designData, 1);
       await this.prisma.episode.upsert({
         where: { workId_orderIndex: { workId, orderIndex: 0 } },
         update: {
           content: fullOutput,
-          title: `第1話`,
+          title: firstEpisodeTitle,
           wordCount: fullOutput.length,
         },
         create: {
           workId,
           authorId: userId,
-          title: `第1話`,
+          title: firstEpisodeTitle,
           content: fullOutput,
           orderIndex: 0,
           wordCount: fullOutput.length,
@@ -756,6 +757,26 @@ ${episode.content}
     return { approved: true, episodeId };
   }
 
+  // ─── Update Episode Content ──────────────────────────────
+
+  async updateEpisodeContent(userId: string, workId: string, episodeId: string, content: string) {
+    await this.getJobWithOwnerCheck(workId, userId);
+
+    const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
+    if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.workId !== workId) throw new NotFoundException('Episode not found');
+
+    const updated = await this.prisma.episode.update({
+      where: { id: episodeId },
+      data: {
+        content,
+        wordCount: content.length,
+      },
+    });
+
+    return { updated: true, episodeId, wordCount: updated.wordCount };
+  }
+
   // ─── Get Status ───────────────────────────────────────────
 
   async getStatus(userId: string, workId: string) {
@@ -892,17 +913,18 @@ ${episode.content}
         );
 
         // Save episode
+        const episodeTitle = this.getEpisodeTitleFromDesign(designData, episodeNumber);
         await this.prisma.episode.upsert({
           where: { workId_orderIndex: { workId, orderIndex: nextEpisodeIndex } },
           update: {
             content: fullOutput,
-            title: `第${episodeNumber}話`,
+            title: episodeTitle,
             wordCount: fullOutput.length,
           },
           create: {
             workId,
             authorId: userId,
-            title: `第${episodeNumber}話`,
+            title: episodeTitle,
             content: fullOutput,
             orderIndex: nextEpisodeIndex,
             wordCount: fullOutput.length,
@@ -1089,6 +1111,27 @@ ${episode.content}
     const creditCost = this.aiTier.getCreditCost(feature, false, false, aiMode);
 
     return { apiKey, model: modelConfig.model, creditCost };
+  }
+
+  /**
+   * Flatten all episodes from actGroups and find the title for a given episode number (1-based).
+   */
+  private getEpisodeTitleFromDesign(designData: any, episodeNumber: number): string {
+    const fallback = `第${episodeNumber}話`;
+    if (!designData?.actGroups || !Array.isArray(designData.actGroups)) return fallback;
+
+    let index = 0;
+    for (const group of designData.actGroups) {
+      if (!Array.isArray(group.episodes)) continue;
+      for (const ep of group.episodes) {
+        index++;
+        if (index === episodeNumber) {
+          // ep.title is like "第1話: サブタイトル" — use as-is
+          return ep.title || fallback;
+        }
+      }
+    }
+    return fallback;
   }
 
   private extractLatestDesignUpdate(chatHistory: { role: string; content: string }[]): any | null {

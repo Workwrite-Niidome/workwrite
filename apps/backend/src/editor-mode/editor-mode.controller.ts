@@ -2,6 +2,7 @@ import {
   Controller,
   Post,
   Get,
+  Patch,
   Param,
   Body,
   Res,
@@ -247,6 +248,19 @@ export class EditorModeController {
     @Param('episodeId') episodeId: string,
   ) {
     return this.editorModeService.approveEpisode(userId, workId, episodeId);
+  }
+
+  // ─── Update Episode Content ─────────────────────────────────
+
+  @Patch('works/:workId/editor-mode/episodes/:episodeId/content')
+  @ApiOperation({ summary: 'Update episode content manually' })
+  async updateEpisodeContent(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Param('episodeId') episodeId: string,
+    @Body() body: { content: string },
+  ) {
+    return this.editorModeService.updateEpisodeContent(userId, workId, episodeId, body.content);
   }
 
   // ─── Status ───────────────────────────────────────────────

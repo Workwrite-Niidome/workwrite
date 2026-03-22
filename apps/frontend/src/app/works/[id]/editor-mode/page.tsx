@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Play, Pause, Check, ChevronRight, ChevronDown, Loader2, RefreshCw,
-  Send, Crown, CheckCircle2, Edit3, Wand2, RotateCcw, Globe,
+  Send, Crown, CheckCircle2, Edit3, Wand2, RotateCcw, Globe, Pencil, Save,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -64,6 +64,10 @@ export default function EditorModeGenerationPage() {
   const [episodeStreaming, setEpisodeStreaming] = useState<string | null>(null);
   const [episodeStreamResult, setEpisodeStreamResult] = useState('');
   const [publishing, setPublishing] = useState(false);
+  const [bulkApproving, setBulkApproving] = useState(false);
+  const [editingEpisodeId, setEditingEpisodeId] = useState<string | null>(null);
+  const [editingContent, setEditingContent] = useState('');
+  const [savingEdit, setSavingEdit] = useState(false);
 
   // Poll interval ref
   const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -229,6 +233,42 @@ export default function EditorModeGenerationPage() {
       fetchStatus();
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'Failed to approve');
+    }
+  };
+
+  const handleBulkApprove = async () => {
+    const currentEpisodes = job?.episodes || [];
+    const unapproved = currentEpisodes.filter(ep => ep.status !== 'approved');
+    if (unapproved.length === 0) return;
+    setBulkApproving(true);
+    try {
+      for (const ep of unapproved) {
+        await api.editorModeApproveEpisode(workId, ep.id);
+      }
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to bulk approve');
+    } finally {
+      setBulkApproving(false);
+    }
+  };
+
+  const handleStartEditing = (ep: EditorEpisode) => {
+    setEditingEpisodeId(ep.id);
+    setEditingContent(ep.content);
+  };
+
+  const handleSaveEdit = async (episodeId: string) => {
+    setSavingEdit(true);
+    try {
+      await api.editorModeUpdateEpisodeContent(workId, episodeId, editingContent);
+      setEditingEpisodeId(null);
+      setEditingContent('');
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to save edit');
+    } finally {
+      setSavingEdit(false);
     }
   };
 
@@ -593,14 +633,25 @@ export default function EditorModeGenerationPage() {
             <p className="text-sm text-muted-foreground">
               承認済み: {approvedCount} / {episodes.length}話
             </p>
-            <Button
-              onClick={handlePublish}
-              disabled={!allApproved || publishing}
-              className="gap-2"
-            >
-              {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
-              公開
-            </Button>
+            <div className="flex items-center gap-2">
+              <Button
+                onClick={handleBulkApprove}
+                disabled={allApproved || bulkApproving}
+                variant="outline"
+                className="gap-1"
+              >
+                {bulkApproving ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <CheckCircle2 className="h-3.5 w-3.5" />}
+                一括承認
+              </Button>
+              <Button
+                onClick={handlePublish}
+                disabled={!allApproved || publishing}
+                className="gap-2"
+              >
+                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+                公開
+              </Button>
+            </div>
           </div>
 
           {/* Episode list */}
@@ -632,11 +683,43 @@ export default function EditorModeGenerationPage() {
                 {expandedEpisode === ep.id && (
                   <CardContent className="border-t space-y-4">
                     {/* Episode content */}
-                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[50vh] overflow-y-auto">
-                      {episodeStreaming === ep.id && episodeStreamResult
-                        ? episodeStreamResult
-                        : ep.content}
-                    </div>
+                    {editingEpisodeId === ep.id ? (
+                      <div className="space-y-2">
+                        <Textarea
+                          value={editingContent}
+                          onChange={(e) => setEditingContent(e.target.value)}
+                          rows={20}
+                          className="w-full text-sm font-mono leading-relaxed resize-y"
+                        />
+                        <div className="flex items-center gap-2">
+                          <Button
+                            size="sm"
+                            onClick={() => handleSaveEdit(ep.id)}
+                            disabled={savingEdit}
+                            className="gap-1"
+                          >
+                            {savingEdit ? <Loader2 className="h-3.5 w-3.5 animate-spin" /> : <Save className="h-3.5 w-3.5" />}
+                            保存
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => { setEditingEpisodeId(null); setEditingContent(''); }}
+                          >
+                            取消
+                          </Button>
+                          <span className="text-xs text-muted-foreground ml-auto">
+                            {editingContent.length.toLocaleString()}字
+                          </span>
+                        </div>
+                      </div>
+                    ) : (
+                      <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[50vh] overflow-y-auto">
+                        {episodeStreaming === ep.id && episodeStreamResult
+                          ? episodeStreamResult
+                          : ep.content}
+                      </div>
+                    )}
 
                     {episodeStreaming === ep.id && (
                       <div className="flex items-center gap-2 text-sm text-muted-foreground">
@@ -645,7 +728,7 @@ export default function EditorModeGenerationPage() {
                     )}
 
                     {/* Actions */}
-                    {episodeStreaming !== ep.id && (
+                    {episodeStreaming !== ep.id && editingEpisodeId !== ep.id && (
                       <div className="flex flex-wrap gap-2 border-t pt-3">
                         <Button
                           size="sm"
@@ -656,6 +739,14 @@ export default function EditorModeGenerationPage() {
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
                           {ep.status === 'approved' ? '承認済み' : '承認'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleStartEditing(ep)}
+                          className="gap-1"
+                        >
+                          <Pencil className="h-3.5 w-3.5" /> 編集
                         </Button>
                         <Button
                           size="sm"
