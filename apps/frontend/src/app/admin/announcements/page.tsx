@@ -104,14 +104,18 @@ export default function AdminAnnouncementsPage() {
     try {
       await api.publishAnnouncement(id);
       fetchAnnouncements();
-    } catch {}
+    } catch (e) {
+      alert(`公開に失敗しました: ${e instanceof Error ? e.message : '不明なエラー'}`);
+    }
   }
 
   async function handleUnpublish(id: string) {
     try {
       await api.unpublishAnnouncement(id);
       fetchAnnouncements();
-    } catch {}
+    } catch (e) {
+      alert(`非公開にできませんでした: ${e instanceof Error ? e.message : '不明なエラー'}`);
+    }
   }
 
   async function handleDelete() {
@@ -173,10 +177,8 @@ export default function AdminAnnouncementsPage() {
                         <span className="font-medium truncate max-w-[200px]">{a.title}</span>
                       </div>
                     </td>
-                    <td className="px-4 py-3">
-                      <span className={`inline-flex items-center rounded-full px-2 py-0.5 text-xs font-medium ${CATEGORY_COLORS[a.category] || ''}`}>
-                        {CATEGORY_LABELS[a.category] || a.category}
-                      </span>
+                    <td className="px-4 py-3 text-xs text-muted-foreground whitespace-nowrap">
+                      {CATEGORY_LABELS[a.category] || a.category}
                     </td>
                     <td className="px-4 py-3">
                       {a.isPublished ? (
