@@ -446,7 +446,10 @@ function EditorModeDesignContent() {
                 />
               )}
               {/* Other characters */}
-              {design.characters?.map((char, idx) => (
+              {typeof design.characters === 'string' && (
+                <div className="p-2 bg-muted/50 rounded text-xs text-muted-foreground">{design.characters}</div>
+              )}
+              {Array.isArray(design.characters) && design.characters.map((char, idx) => (
                 <CharacterCard
                   key={idx}
                   character={char}
@@ -748,10 +751,10 @@ function EditorModeDesignContent() {
               {design.protagonist?.name && (
                 <div className="text-xs"><span className="font-medium">主人公:</span> {design.protagonist.name}</div>
               )}
-              {(design.characters?.length ?? 0) > 0 && (
+              {design.characters && (
                 <div className="text-xs">
                   <span className="font-medium">キャラ:</span>{' '}
-                  {design.characters?.map(c => c.name).filter(Boolean).join(', ')}
+                  {typeof design.characters === 'string' ? design.characters : Array.isArray(design.characters) ? design.characters.map((c: any) => c.name).filter(Boolean).join(', ') : ''}
                 </div>
               )}
               {design.tone && (
