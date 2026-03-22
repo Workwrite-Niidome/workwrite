@@ -87,6 +87,9 @@ export function Header() {
               <Link href="/notifications" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
                 通知
               </Link>
+              <Link href="/announcements" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
+                お知らせ
+              </Link>
               <Link href="/dashboard" className="text-sm text-muted-foreground hover:text-foreground py-2" onClick={() => setMobileOpen(false)}>
                 執筆ダッシュボード
               </Link>

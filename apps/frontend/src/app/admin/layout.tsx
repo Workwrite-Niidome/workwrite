@@ -4,7 +4,7 @@ import { useEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
-import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText } from 'lucide-react';
+import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -12,6 +12,7 @@ const NAV_ITEMS = [
   { href: '/admin/users', label: 'ユーザー', icon: Users },
   { href: '/admin/works', label: '作品', icon: BookOpen },
   { href: '/admin/reviews', label: 'レビュー', icon: MessageSquare },
+  { href: '/admin/announcements', label: 'お知らせ', icon: Megaphone },
   { href: '/admin/ai', label: 'AI設定', icon: Sparkles },
   { href: '/admin/ai/templates', label: 'テンプレート', icon: FileText },
 ];

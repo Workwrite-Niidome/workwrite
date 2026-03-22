@@ -525,6 +525,22 @@ class ApiClient {
     });
   }
 
+  // Episode Reactions
+  async sendReaction(episodeId: string, data: { claps: number; emotion?: string }) {
+    return this.request<{ data: { id: string; claps: number; emotion: string | null } }>(`/reactions/episode/${episodeId}`, {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async getEpisodeReactions(episodeId: string) {
+    return this.request<{ data: { totalClaps: number; reactionCount: number; emotions: Record<string, number>; myReaction: { claps: number; emotion: string | null } | null } }>(`/reactions/episode/${episodeId}`);
+  }
+
+  async getWorkReactions(workId: string) {
+    return this.request<{ data: { byEpisode: { episodeId: string; title: string; orderIndex: number; totalClaps: number; topEmotion: string | null }[]; totalClaps: number; totalReactions: number; emotions: Record<string, number> } }>(`/reactions/work/${workId}`);
+  }
+
   // Reviews
   async createReview(data: { workId: string; content: string }) {
     return this.request<{ data: Review }>('/reviews', {
@@ -860,6 +876,51 @@ class ApiClient {
 
   async deleteReviewAsAdmin(reviewId: string) {
     return this.request<{ data: { id: string } }>(`/admin/reviews/${reviewId}`, { method: 'DELETE' });
+  }
+
+  // Admin Announcements
+  async getAdminAnnouncements(params?: { isPublished?: string; category?: string }) {
+    const qs = new URLSearchParams();
+    if (params?.isPublished) qs.set('isPublished', params.isPublished);
+    if (params?.category) qs.set('category', params.category);
+    return this.request<{ data: Announcement[] }>(`/admin/announcements?${qs.toString()}`);
+  }
+
+  async createAnnouncement(data: { title: string; content: string; category?: string; notifyAll?: boolean; isPinned?: boolean }) {
+    return this.request<{ data: Announcement }>('/admin/announcements', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async updateAnnouncement(id: string, data: Partial<{ title: string; content: string; category: string; isPinned: boolean; notifyAll: boolean }>) {
+    return this.request<{ data: Announcement }>(`/admin/announcements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
+    });
+  }
+
+  async deleteAnnouncement(id: string) {
+    return this.request<{ data: { id: string } }>(`/admin/announcements/${id}`, { method: 'DELETE' });
+  }
+
+  async publishAnnouncement(id: string) {
+    return this.request<{ data: Announcement }>(`/admin/announcements/${id}/publish`, { method: 'POST' });
+  }
+
+  async unpublishAnnouncement(id: string) {
+    return this.request<{ data: Announcement }>(`/admin/announcements/${id}/unpublish`, { method: 'POST' });
+  }
+
+  // Announcements (public)
+  async getAnnouncements(limit?: number) {
+    const qs = new URLSearchParams();
+    if (limit) qs.set('limit', String(limit));
+    return this.request<{ data: Announcement[]; nextCursor: string | null }>(`/announcements?${qs.toString()}`);
+  }
+
+  async getAnnouncement(id: string) {
+    return this.request<{ data: Announcement }>(`/announcements/${id}`);
   }
 
   // AI Status & Assist
@@ -1421,6 +1482,21 @@ export interface AdminReview {
   user: { id: string; name: string; displayName: string | null };
   work: { id: string; title: string };
   _count: { helpfuls: number };
+}
+
+export interface Announcement {
+  id: string;
+  title: string;
+  content: string;
+  category: string;
+  isPublished: boolean;
+  isPinned: boolean;
+  notifyAll: boolean;
+  notifiedAt: string | null;
+  createdBy: string;
+  createdAt: string;
+  updatedAt: string;
+  creator: { id: string; name: string; displayName: string | null };
 }
 
 export interface TopPageData {
