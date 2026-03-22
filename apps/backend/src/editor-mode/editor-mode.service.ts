@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { CreditService } from '../billing/credit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   FinalizeDesignDto,
   StartGenerationDto,
@@ -18,6 +19,7 @@ export class EditorModeService {
     private aiSettings: AiSettingsService,
     private aiTier: AiTierService,
     private creditService: CreditService,
+    private notifications: NotificationsService,
   ) {}
 
   // ─── Ownership check helper ──────────────────────────────
@@ -831,6 +833,15 @@ ${episode.content}
           data: { status: 'reviewing' },
         });
         this.logger.log(`Generation complete for work ${workId}`);
+
+        // Notify user
+        const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { title: true } });
+        await this.notifications.createNotification(userId, {
+          type: 'editor_mode',
+          title: '全話の生成が完了しました',
+          body: `「${work?.title || '作品'}」の全${job.totalEpisodes}話が生成されました。レビューして公開しましょう。`,
+          data: { workId },
+        }).catch(() => {});
         break;
       }
 
@@ -847,6 +858,12 @@ ${episode.content}
             where: { workId },
             data: { status: 'paused' },
           });
+          await this.notifications.createNotification(userId, {
+            type: 'editor_mode',
+            title: 'クレジット不足で生成が停止しました',
+            body: `第${nextEpisodeIndex + 1}話以降の生成にはクレジットの追加が必要です。`,
+            data: { workId },
+          }).catch(() => {});
           break;
         }
 
@@ -919,6 +936,14 @@ ${episode.content}
         await this.prisma.editorModeJob.update({
           where: { workId },
           data: { status: 'paused' },
+        }).catch(() => {});
+
+        // Notify user of error
+        await this.notifications.createNotification(userId, {
+          type: 'editor_mode',
+          title: '生成が停止しました',
+          body: `第${nextEpisodeIndex + 1}話の生成中にエラーが発生しました。「続きから生成」で再開できます。`,
+          data: { workId },
         }).catch(() => {});
         break;
       }
