@@ -129,9 +129,6 @@ export default function DashboardPage() {
         <Link href="/dashboard/earnings">
           <Button variant="outline" size="sm"><DollarSign className="h-4 w-4 mr-1.5" /> 収益</Button>
         </Link>
-        <Link href="/dashboard/referral">
-          <Button variant="outline" size="sm"><Users className="h-4 w-4 mr-1.5" /> 招待</Button>
-        </Link>
       </div>
 
       {/* Stats Grid */}
