@@ -59,21 +59,19 @@ function EditorModeDesignContent() {
   }, []);
 
   // Resume: load existing design + jump to review
+  // Only load REFINEMENT messages (skip the first user+assistant pair = initial brief)
   useEffect(() => {
     if (!resumeWorkId) return;
     api.editorModeStatus(resumeWorkId)
       .then((res: any) => {
         const job = res?.data || res;
-        if (job?.designChatHistory && Array.isArray(job.designChatHistory)) {
-          setMessages(job.designChatHistory.filter((m: any) => m.role && m.content).map((m: any) => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
-          })));
-        }
         if (job?.creditsConsumed) setCreditConsumed(job.creditsConsumed);
-        if (job?.designChatHistory) {
+        if (job?.designChatHistory && Array.isArray(job.designChatHistory)) {
+          const history = job.designChatHistory as any[];
+
+          // Extract design from ALL assistant messages
           let merged: Partial<DesignData> = {};
-          for (const msg of (job.designChatHistory as any[])) {
+          for (const msg of history) {
             if (msg.role !== 'assistant') continue;
             const patterns = [
               /__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/,
@@ -98,6 +96,18 @@ function EditorModeDesignContent() {
           if (Object.keys(merged).length > 0) {
             setDesign(merged);
           }
+
+          // For chat display: skip the first user+assistant pair (initial brief)
+          // Only show refinement messages (from the 3rd message onward)
+          const refinementMessages = history
+            .slice(2) // skip first user msg + first assistant response
+            .filter((m: any) => m.role && m.content)
+            .map((m: any) => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
+            }))
+            .filter((m: ChatMessage) => m.content.length > 0);
+          setMessages(refinementMessages);
         }
         setPhase('review');
       })

@@ -94,12 +94,12 @@ export class EditorModeService {
 
     if (isFirstMessage) {
       // ─── First message: complete design generation from user's brief ───
-      maxTokens = 8000;
+      maxTokens = 16000;
       systemPrompt = `あなたはベストセラー作家です。編集者（ユーザー）からブリーフを受け取り、完全な小説の設計書を作成してください。
 
 【絶対ルール】以下の全フィールドを**一つ残らず**埋めてください。情報が足りなければ類推・創作して埋めてください。空欄は許されません。
 
-まず設計の概要を自然な言葉で3-5段落で説明してください。その後、末尾に必ず以下の形式でJSONブロックを出力してください:
+設計の概要を2-3段落で簡潔に説明した後、末尾に必ず以下の形式でJSONブロックを出力してください。JSONが最重要です。説明文は短くてよいのでJSONを完全に出力してください:
 
 __DESIGN_UPDATE__
 {
