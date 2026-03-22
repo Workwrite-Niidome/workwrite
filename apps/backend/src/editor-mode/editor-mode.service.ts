@@ -61,10 +61,11 @@ export class EditorModeService {
     userId: string,
     workId: string,
     message: string,
-    aiMode: 'normal' | 'premium' = 'normal',
+    _aiMode: 'normal' | 'premium' = 'premium',
     designState?: any,
   ): AsyncGenerator<string> {
-    const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_chat', aiMode);
+    // Always use premium (Opus) for editor mode
+    const { apiKey, model } = await this.getApiConfigForMode(userId, 'editor_mode_chat', 'premium');
 
     // Load existing job or create
     let job: Awaited<ReturnType<typeof this.prisma.editorModeJob.findUnique>>;
@@ -78,104 +79,160 @@ export class EditorModeService {
 
     // Build chat history
     const history: { role: string; content: string }[] = (job.designChatHistory as any[]) || [];
+
+    // Detect if this is the first message (no assistant messages yet)
+    const isFirstMessage = !history.some(h => h.role === 'assistant');
+    const creditCost = isFirstMessage ? 10 : 5;
+
     history.push({ role: 'user', content: message });
 
     // Build comprehensive design context from both chat history and tab edits
     const ds = designState || this.extractLatestDesignUpdate(history) || {};
 
-    // Build current design summary for the AI
-    const designSections: string[] = [];
+    let systemPrompt: string;
+    let maxTokens: number;
 
-    // Genre & Theme
-    if (ds.genre) designSections.push(`ジャンル: ${ds.genre}${ds.subGenres?.length ? ` (${ds.subGenres.join('、')})` : ''}`);
-    if (ds.coreMessage || ds.theme) designSections.push(`テーマ: ${ds.coreMessage || ds.theme}`);
-    if (ds.targetEmotions || ds.afterReading) designSections.push(`読後感: ${ds.targetEmotions || ds.afterReading}`);
-    if (ds.readerJourney) designSections.push(`読者の旅路: ${ds.readerJourney}`);
-    if (ds.tone) designSections.push(`トーン: ${ds.tone}`);
+    if (isFirstMessage) {
+      // ─── First message: complete design generation from user's brief ───
+      maxTokens = 8000;
+      systemPrompt = `あなたはベストセラー作家を何人も育ててきた伝説的な編集者です。ユーザーの簡単なブリーフから、完全な小説の設計書を一括生成してください。
 
-    // Characters
-    if (Array.isArray(ds.characters) && ds.characters.length > 0) {
-      const charLines = ds.characters.map((c: any) => {
-        const parts = [`${c.name || '(未定)'}（${c.role || ''}）`];
-        if (c.personality) parts.push(`性格: ${c.personality}`);
-        if (c.speechStyle) parts.push(`口調: ${c.speechStyle}`);
-        if (c.motivation) parts.push(`動機: ${c.motivation}`);
-        if (c.background) parts.push(`背景: ${c.background}`);
-        return parts.join(' / ');
-      });
-      designSections.push(`キャラクター:\n${charLines.join('\n')}`);
-    } else if (ds.protagonist) {
-      const p = typeof ds.protagonist === 'string' ? ds.protagonist : `${ds.protagonist.name}（${ds.protagonist.role || '主人公'}）`;
-      designSections.push(`主人公: ${p}`);
-    }
+ユーザーのブリーフを受け取ったら、以下の要素を**すべて**生成してください:
 
-    // World Building
-    if (ds.worldBuilding) {
-      if (typeof ds.worldBuilding === 'string') {
-        designSections.push(`世界観: ${ds.worldBuilding}`);
-      } else {
-        const wb = ds.worldBuilding;
-        const wbParts: string[] = [];
-        if (wb.basics?.era) wbParts.push(`時代: ${wb.basics.era}`);
-        if (wb.basics?.setting) wbParts.push(`舞台: ${wb.basics.setting}`);
-        if (wb.rules?.length) wbParts.push(`ルール: ${wb.rules.map((r: any) => r.name).filter(Boolean).join('、')}`);
-        if (wb.terminology?.length) wbParts.push(`用語: ${wb.terminology.map((t: any) => t.term).filter(Boolean).join('、')}`);
-        if (wbParts.length > 0) designSections.push(`世界観:\n${wbParts.join('\n')}`);
+1. **タイトル** — 読者の目を引く魅力的なタイトル
+2. **ジャンル・サブジャンル** — メインジャンルとサブジャンル
+3. **テーマ・コアメッセージ** — 物語が伝えたい核心
+4. **トーン・文体** — 文章の雰囲気、語り口
+5. **感情設計** — 読者にどんな感情の旅を提供するか（targetEmotions, readerJourney, readerOneLiner）
+6. **キャラクター** — 主要キャラクター3-5人（名前、役割、性格、口調、動機、背景）
+7. **世界観** — 舞台設定（時代、場所、文明レベル）、ルール、用語、歴史、重要アイテム
+8. **プロット構成** — 構成テンプレート（起承転結/三幕構成等）、幕ごとのエピソード分け、各エピソードのタイトル・概要・感情ターゲット
+9. **話数・文字数** — 推奨話数と1話あたりの文字数
+10. **あらすじ** — 3-5行の読者向けあらすじ
+
+生成した設計書を自然な対話形式で説明した後（各セクションについて簡潔に紹介）、末尾に必ず以下の形式でJSONブロックを出力してください:
+
+__DESIGN_UPDATE__
+{
+  "title": "タイトル",
+  "genre_setting": "メインジャンル",
+  "theme": "テーマ",
+  "coreMessage": "コアメッセージ",
+  "tone": "トーン・文体の説明",
+  "targetEmotions": "読者に届けたい感情",
+  "readerJourney": "感情の旅路の説明",
+  "readerOneLiner": "一言で表す読後感",
+  "characters": [
+    {"name": "名前", "role": "役割", "personality": "性格", "speechStyle": "口調", "motivation": "動機", "background": "背景"},
+    ...
+  ],
+  "worldBuilding": {
+    "basics": {"era": "時代", "setting": "舞台", "civilizationLevel": "文明レベル"},
+    "rules": [{"name": "ルール名", "description": "説明"}],
+    "terminology": [{"term": "用語", "definition": "定義"}],
+    "history": "歴史・背景",
+    "infoAsymmetry": {"commonKnowledge": "一般に知られていること", "hiddenTruths": "隠された真実"},
+    "items": [{"name": "アイテム名", "description": "説明"}]
+  },
+  "structureTemplate": "kishotenketsu or three_act",
+  "actGroups": [
+    {"label": "幕名", "episodes": [{"title": "話タイトル", "summary": "概要", "emotionTarget": "感情"}]}
+  ],
+  "synopsis": "あらすじ",
+  "scope": "X話 × Y字"
+}
+__END_UPDATE__
+
+【重要】
+- ブリーフが短くても、創造力を発揮して豊かな設計書を生成してください
+- キャラクターは最低3人、理想的には4-5人生成してください
+- プロットは具体的なエピソード分けまで行ってください（推奨8-12話）
+- 世界観は独自性のある設定を心がけてください
+- 対話部分は熱意を持って、編集者として「この物語は面白くなる！」という姿勢で書いてください`;
+    } else {
+      // ─── Subsequent messages: refinement with current design state ───
+      maxTokens = 4000;
+
+      // Build current design summary for the AI
+      const designSections: string[] = [];
+
+      // Genre & Theme
+      if (ds.genre) designSections.push(`ジャンル: ${ds.genre}${ds.subGenres?.length ? ` (${ds.subGenres.join('、')})` : ''}`);
+      if (ds.coreMessage || ds.theme) designSections.push(`テーマ: ${ds.coreMessage || ds.theme}`);
+      if (ds.targetEmotions || ds.afterReading) designSections.push(`読後感: ${ds.targetEmotions || ds.afterReading}`);
+      if (ds.readerJourney) designSections.push(`読者の旅路: ${ds.readerJourney}`);
+      if (ds.tone) designSections.push(`トーン: ${ds.tone}`);
+
+      // Characters
+      if (Array.isArray(ds.characters) && ds.characters.length > 0) {
+        const charLines = ds.characters.map((c: any) => {
+          const parts = [`${c.name || '(未定)'}（${c.role || ''}）`];
+          if (c.personality) parts.push(`性格: ${c.personality}`);
+          if (c.speechStyle) parts.push(`口調: ${c.speechStyle}`);
+          if (c.motivation) parts.push(`動機: ${c.motivation}`);
+          if (c.background) parts.push(`背景: ${c.background}`);
+          return parts.join(' / ');
+        });
+        designSections.push(`キャラクター:\n${charLines.join('\n')}`);
+      } else if (ds.protagonist) {
+        const p = typeof ds.protagonist === 'string' ? ds.protagonist : `${ds.protagonist.name}（${ds.protagonist.role || '主人公'}）`;
+        designSections.push(`主人公: ${p}`);
       }
-    }
 
-    // Plot
-    if (ds.actGroups?.length > 0) {
-      const plotParts = ds.actGroups.map((g: any) => {
-        const eps = (g.episodes || []).map((ep: any) => ep.title || '(未定)').join('→');
-        return `${g.label}: ${eps}`;
-      });
-      designSections.push(`プロット構成 (${ds.structureTemplate || '自由'}):\n${plotParts.join('\n')}`);
-    } else if (ds.conflict || ds.plotOutline) {
-      if (ds.conflict) designSections.push(`中心的な葛藤: ${ds.conflict}`);
-      if (ds.plotOutline) designSections.push(`プロット概要: ${ds.plotOutline}`);
-    }
+      // World Building
+      if (ds.worldBuilding) {
+        if (typeof ds.worldBuilding === 'string') {
+          designSections.push(`世界観: ${ds.worldBuilding}`);
+        } else {
+          const wb = ds.worldBuilding;
+          const wbParts: string[] = [];
+          if (wb.basics?.era) wbParts.push(`時代: ${wb.basics.era}`);
+          if (wb.basics?.setting) wbParts.push(`舞台: ${wb.basics.setting}`);
+          if (wb.rules?.length) wbParts.push(`ルール: ${wb.rules.map((r: any) => r.name).filter(Boolean).join('、')}`);
+          if (wb.terminology?.length) wbParts.push(`用語: ${wb.terminology.map((t: any) => t.term).filter(Boolean).join('、')}`);
+          if (wbParts.length > 0) designSections.push(`世界観:\n${wbParts.join('\n')}`);
+        }
+      }
 
-    // Scope
-    if (ds.episodeCount) designSections.push(`話数: ${ds.episodeCount}話${ds.charCountPerEpisode ? ` × ${ds.charCountPerEpisode}字` : ''}`);
-    if (ds.title) designSections.push(`タイトル: ${ds.title}`);
-    if (ds.synopsis) designSections.push(`あらすじ: ${ds.synopsis}`);
+      // Plot
+      if (ds.actGroups?.length > 0) {
+        const plotParts = ds.actGroups.map((g: any) => {
+          const eps = (g.episodes || []).map((ep: any) => ep.title || '(未定)').join('→');
+          return `${g.label}: ${eps}`;
+        });
+        designSections.push(`プロット構成 (${ds.structureTemplate || '自由'}):\n${plotParts.join('\n')}`);
+      } else if (ds.conflict || ds.plotOutline) {
+        if (ds.conflict) designSections.push(`中心的な葛藤: ${ds.conflict}`);
+        if (ds.plotOutline) designSections.push(`プロット概要: ${ds.plotOutline}`);
+      }
 
-    // Identify what's missing
-    const missing: string[] = [];
-    if (!ds.genre) missing.push('ジャンル・舞台');
-    if (!ds.coreMessage && !ds.theme) missing.push('テーマ・コアメッセージ');
-    if (!ds.targetEmotions && !ds.afterReading) missing.push('読者に届けたい感情');
-    if ((!Array.isArray(ds.characters) || ds.characters.length === 0) && !ds.protagonist) missing.push('キャラクター');
-    if (!ds.worldBuilding) missing.push('世界観');
-    if (!ds.actGroups?.length && !ds.conflict && !ds.plotOutline) missing.push('プロット');
-    if (!ds.tone) missing.push('トーン・文体');
-    if (!ds.episodeCount) missing.push('話数');
+      // Scope
+      if (ds.episodeCount) designSections.push(`話数: ${ds.episodeCount}話${ds.charCountPerEpisode ? ` × ${ds.charCountPerEpisode}字` : ''}`);
+      if (ds.title) designSections.push(`タイトル: ${ds.title}`);
+      if (ds.synopsis) designSections.push(`あらすじ: ${ds.synopsis}`);
 
-    const systemPrompt = `あなたは小説家を育ててきたベテラン編集者です。ユーザーと対話しながら、最高の物語の設計書を一緒に作り上げます。
+      systemPrompt = `あなたは小説家を育ててきたベテラン編集者です。ユーザーの修正指示に基づいて、設計書を改善してください。
+
+【現在の設計状態】
+${designSections.join('\n\n')}
 
 あなたの役割:
-- ユーザーのビジョンを引き出し、具体化する
-- 設定の矛盾や弱点を見つけたら、それを指摘するのではなく「こうするともっと面白くなりませんか？」と提案する
-- キャラクターの魅力を最大化するアイデアを出す
-- 世界観に奥行きを加える質問をする
-- プロットの緩急や伏線のアイデアを提案する
-
-${designSections.length > 0 ? `【現在の設計状態】\n${designSections.join('\n\n')}\n` : ''}
-${missing.length > 0 ? `【まだ決まっていない要素】\n${missing.join('、')}\n\nユーザーの次の発言に応答しつつ、まだ決まっていない要素について自然に深掘りしてください。一度に全部聞かず、会話の流れで1-2個ずつ。` : '【全要素が揃っています】\n設計が十分に揃いました。「設計プレビュー」タブから設計を確定して執筆に進めることを伝えてください。ただし、ユーザーがさらに深掘りしたい場合はそれに応じてください。'}
+- ユーザーの修正指示を正確に理解し、該当部分を改善する
+- 修正が他の要素に影響する場合は、整合性を保つよう連動して修正する
+- 修正の理由と改善ポイントを簡潔に説明する
 
 【重要ルール】
-- ユーザーが右側のタブで直接設定を編集している場合があります。その内容を踏まえた上で対話してください
-- キャラクターについて話すときは、必ず名前を使ってください（設定済みの場合）
-- 「〇〇はどうですか？」ではなく「〇〇の動機は何でしょう？彼/彼女が最も恐れていることは？」のように具体的に深掘りしてください
-- 既に設定されている内容を改めて聞き直さないでください
+- ユーザーの指示に直接対応する変更を行ってください
+- キャラクターについて話すときは、必ず名前を使ってください
+- 変更していない要素はJSONに含めないでください（変更した要素のみ）
 
-各発言の末尾に必ず以下の形式でJSONブロックを出力してください（対話で新たに確定した値のみ。既存の値は含めない）:
+修正内容を説明した後、末尾に必ず以下の形式で**変更した要素のみ**のJSONブロックを出力してください:
 __DESIGN_UPDATE__
-{"genre_setting": "値 or null", "theme": "値 or null", "emotion": "値 or null", "protagonist": "値 or null", "characters": "値 or null", "world": "値 or null", "conflict": "値 or null", "plot": "値 or null", "tone": "値 or null", "scope": "値 or null"}
+{変更した要素のみをJSON形式で。characterやworldBuildingは構造化オブジェクトで。}
 __END_UPDATE__
 
 対話は自然に、編集者としての経験に基づいた具体的な提案を交えて進めてください。`;
+    }
 
     let transactionId: string | null = null;
     let contentDelivered = false;
@@ -203,7 +260,7 @@ __END_UPDATE__
         },
         body: JSON.stringify({
           model,
-          max_tokens: 4000,
+          max_tokens: maxTokens,
           stream: true,
           system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
           messages,

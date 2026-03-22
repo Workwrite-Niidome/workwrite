@@ -21,6 +21,15 @@ export function normalizeDesignUpdate(raw: any): Partial<DesignData> {
   if (str(raw.theme)) d.theme = str(raw.theme);
   if (str(raw.emotion || raw.afterReading)) d.afterReading = str(raw.emotion || raw.afterReading);
 
+  // New pass-through fields
+  if (str(raw.coreMessage)) d.coreMessage = str(raw.coreMessage);
+  if (str(raw.targetEmotions)) d.targetEmotions = str(raw.targetEmotions);
+  if (str(raw.readerJourney)) d.readerJourney = str(raw.readerJourney);
+  if (str(raw.readerOneLiner)) d.readerOneLiner = str(raw.readerOneLiner);
+  if (str(raw.title)) d.title = str(raw.title);
+  if (str(raw.synopsis)) d.synopsis = str(raw.synopsis);
+  if (str(raw.structureTemplate)) d.structureTemplate = str(raw.structureTemplate);
+
   if (raw.protagonist && raw.protagonist !== 'null') {
     d.protagonist = typeof raw.protagonist === 'string'
       ? { name: raw.protagonist, role: '', personality: '', speechStyle: '' }
@@ -35,17 +44,35 @@ export function normalizeDesignUpdate(raw: any): Partial<DesignData> {
     }
   }
 
-  const worldStr = str(raw.world || raw.worldBuilding);
-  if (worldStr) {
-    // AI sends worldBuilding as a free-text string; wrap it into structured WorldBuildingData
+  // Structured worldBuilding (object with basics, rules, terminology, etc.)
+  if (raw.worldBuilding && typeof raw.worldBuilding === 'object' && raw.worldBuilding !== null) {
+    const wb = raw.worldBuilding;
     d.worldBuilding = {
-      basics: { era: '', setting: '', civilizationLevel: '' },
-      rules: [],
-      terminology: [],
-      history: worldStr,
-      infoAsymmetry: { commonKnowledge: '', hiddenTruths: '' },
-      items: [],
+      basics: wb.basics || { era: '', setting: '', civilizationLevel: '' },
+      rules: Array.isArray(wb.rules) ? wb.rules : [],
+      terminology: Array.isArray(wb.terminology) ? wb.terminology : [],
+      history: wb.history || '',
+      infoAsymmetry: wb.infoAsymmetry || { commonKnowledge: '', hiddenTruths: '' },
+      items: Array.isArray(wb.items) ? wb.items : [],
     };
+  } else {
+    // Legacy: world as a free-text string
+    const worldStr = str(raw.world || raw.worldBuilding);
+    if (worldStr) {
+      d.worldBuilding = {
+        basics: { era: '', setting: '', civilizationLevel: '' },
+        rules: [],
+        terminology: [],
+        history: worldStr,
+        infoAsymmetry: { commonKnowledge: '', hiddenTruths: '' },
+        items: [],
+      };
+    }
+  }
+
+  // Structured actGroups
+  if (Array.isArray(raw.actGroups) && raw.actGroups.length > 0) {
+    d.actGroups = raw.actGroups;
   }
 
   if (str(raw.conflict)) d.conflict = str(raw.conflict);
@@ -64,6 +91,10 @@ export function normalizeDesignUpdate(raw: any): Partial<DesignData> {
       if (numMatch) d.episodeCount = parseInt(numMatch[1], 10);
     }
   }
+
+  // Direct numeric episodeCount / charCountPerEpisode
+  if (typeof raw.episodeCount === 'number') d.episodeCount = raw.episodeCount;
+  if (typeof raw.charCountPerEpisode === 'number') d.charCountPerEpisode = raw.charCountPerEpisode;
 
   return d;
 }
