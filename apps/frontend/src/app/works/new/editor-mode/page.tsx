@@ -94,9 +94,12 @@ export default function EditorModeDesignPage() {
       .catch(() => {});
   }, []);
 
-  // Auto-scroll chat
+  // Auto-scroll chat (only within the chat container, not the whole page)
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
+    }
   }, [messages, isStreaming]);
 
   const filledCount = CHECKLIST_ITEMS.filter(item => isChecklistItemFilled(design, item.key)).length;
@@ -536,7 +539,7 @@ export default function EditorModeDesignPage() {
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
         {/* Left: Chat */}
         <div className="flex-1 flex flex-col min-h-0 lg:border-r">
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
             {messages.length === 0 && (
               <div className="flex items-start gap-3">
                 <div className="h-8 w-8 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
