@@ -145,4 +145,82 @@ export class SampleExtractorService {
     const content = episode.content;
     return label + content.slice(Math.max(0, content.length - size));
   }
+
+  /**
+   * Distributed sampling for long works (>150K chars).
+   * Instead of reading only the first N episodes, samples from across the entire work:
+   * - Opening (ep1)
+   * - Early arc turning point (~15%)
+   * - First quarter (~25%)
+   * - Midpoint (~50%)
+   * - Third quarter (~75%)
+   * - Climax region (~85-90%)
+   * - Ending (last episode)
+   *
+   * Returns 7 samples plus a list of sampled episode indices for transparency.
+   */
+  extractDistributed(episodes: EpisodeInput[]): DistributedSamples {
+    if (episodes.length === 0) {
+      return {
+        samples: [],
+        sampledEpisodeIndices: [],
+      };
+    }
+
+    const sorted = [...episodes].sort((a, b) => a.orderIndex - b.orderIndex);
+    const totalChars = sorted.reduce((s, ep) => s + ep.content.length, 0);
+    const size = this.getSampleSize(totalChars);
+    const len = sorted.length;
+
+    // Pick 7 strategic positions across the work
+    const positions = [
+      { label: '冒頭', idx: 0 },
+      { label: '序盤の転換点', idx: Math.floor(len * 0.15) },
+      { label: '第一四半', idx: Math.floor(len * 0.25) },
+      { label: '中盤', idx: Math.floor(len * 0.5) },
+      { label: '第三四半', idx: Math.floor(len * 0.75) },
+      { label: 'クライマックス付近', idx: Math.min(Math.floor(len * 0.88), len - 2) },
+      { label: '結末', idx: len - 1 },
+    ];
+
+    // Deduplicate indices (for short works some might overlap)
+    const seen = new Set<number>();
+    const uniquePositions = positions.filter((p) => {
+      const idx = Math.max(0, Math.min(p.idx, len - 1));
+      if (seen.has(idx)) return false;
+      seen.add(idx);
+      return true;
+    });
+
+    const samples: { label: string; episodeTitle: string; content: string }[] = [];
+    const sampledIndices: number[] = [];
+
+    for (const pos of uniquePositions) {
+      const idx = Math.max(0, Math.min(pos.idx, len - 1));
+      const ep = sorted[idx];
+      sampledIndices.push(idx);
+
+      let content: string;
+      if (pos.label === '冒頭') {
+        content = this.sampleStart(ep, size);
+      } else if (pos.label === '結末') {
+        content = this.sampleEnd(ep, size);
+      } else {
+        content = this.sampleBestSection(ep, size);
+      }
+
+      samples.push({
+        label: pos.label,
+        episodeTitle: ep.title,
+        content,
+      });
+    }
+
+    return { samples, sampledEpisodeIndices: sampledIndices };
+  }
+}
+
+export interface DistributedSamples {
+  samples: { label: string; episodeTitle: string; content: string }[];
+  sampledEpisodeIndices: number[];
 }

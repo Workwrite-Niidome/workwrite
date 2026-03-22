@@ -91,6 +91,12 @@ export interface ScoringInput {
   isImported: boolean;
   metrics: ProgrammaticMetrics;
   structure: StructuralProfile;
+  /** True when total chars exceed MAX_SCORING_CHARS and distributed sampling is used */
+  isLongWork?: boolean;
+  /** Total episode count (may differ from metrics.episodeCount when sampling) */
+  totalEpisodeCount?: number;
+  /** Total character count of the full work (before sampling) */
+  totalCharCount?: number;
 }
 
 export interface ScoringResult {

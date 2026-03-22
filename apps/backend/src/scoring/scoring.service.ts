@@ -69,7 +69,12 @@ export class ScoringService {
       const MAX_SCORING_CHARS = 150_000;
       let episodes = allEpisodes;
       const totalChars = allEpisodes.reduce((s, ep) => s + ep.content.length, 0);
-      if (totalChars > MAX_SCORING_CHARS) {
+      const isLongWork = totalChars > MAX_SCORING_CHARS;
+
+      if (isLongWork) {
+        // Long work mode: use distributed sampling across the entire work
+        // instead of truncating to only the first N episodes.
+        // We still limit total chars sent to the LLM, but sample from all parts.
         let charCount = 0;
         const limited: typeof allEpisodes = [];
         for (const ep of allEpisodes) {
@@ -78,8 +83,9 @@ export class ScoringService {
           charCount += ep.content.length;
         }
         this.logger.log(
-          `Work ${workId}: ${totalChars} chars exceeds ${MAX_SCORING_CHARS} limit, ` +
-          `scoring first ${limited.length}/${allEpisodes.length} episodes (${charCount} chars)`,
+          `Work ${workId}: ${totalChars} chars exceeds ${MAX_SCORING_CHARS} limit. ` +
+          `Long work mode: metrics from first ${limited.length}/${allEpisodes.length} episodes, ` +
+          `but text samples distributed across all ${allEpisodes.length} episodes.`,
         );
         episodes = limited;
       }
@@ -105,6 +111,22 @@ export class ScoringService {
         this.structuralDataBuilder.build(workId, episodes),
       ]);
 
+      // For long works, override text samples with distributed sampling
+      if (isLongWork) {
+        const distributed = this.sampleExtractor.extractDistributed(allEpisodes);
+        // Replace the 4-sample structure with distributed samples in the structure
+        // We pack distributed samples into the existing textSamples format for compatibility
+        const distSamples = distributed.samples;
+        structure.textSamples = {
+          opening: distSamples.find((s) => s.label === '冒頭')?.content || structure.textSamples.opening,
+          midpoint: distSamples.filter((s) => ['序盤の転換点', '第一四半', '中盤'].includes(s.label))
+            .map((s) => `\n--- ${s.label}（${s.episodeTitle}）---\n${s.content}`).join('\n') || structure.textSamples.midpoint,
+          climaxRegion: distSamples.filter((s) => ['第三四半', 'クライマックス付近'].includes(s.label))
+            .map((s) => `\n--- ${s.label}（${s.episodeTitle}）---\n${s.content}`).join('\n') || structure.textSamples.climaxRegion,
+          ending: distSamples.find((s) => s.label === '結末')?.content || structure.textSamples.ending,
+        };
+      }
+
       const scoringInput: ScoringInput = {
         title: work.title,
         genre: (work as any).genre || null,
@@ -112,6 +134,9 @@ export class ScoringService {
         isImported,
         metrics,
         structure,
+        isLongWork,
+        totalEpisodeCount: isLongWork ? allEpisodes.length : undefined,
+        totalCharCount: isLongWork ? totalChars : undefined,
       };
 
       this.logger.log(
