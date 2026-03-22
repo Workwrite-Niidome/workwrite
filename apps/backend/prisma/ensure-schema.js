@@ -63,6 +63,11 @@ async function ensureSchema() {
         ON "CharacterTalkRevenue"("workId");
     `);
 
+    // Fix: make all existing StoryCharacters public (added 2026-03-23)
+    await prisma.$executeRawUnsafe(`
+      UPDATE "StoryCharacter" SET "isPublic" = true WHERE "isPublic" = false;
+    `);
+
     console.log('[ensure-schema] Schema verified successfully');
   } catch (error) {
     console.error('[ensure-schema] ERROR:', error.message);

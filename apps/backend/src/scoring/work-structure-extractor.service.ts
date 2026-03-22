@@ -234,6 +234,7 @@ ${fullText}`;
               speechStyle: c.speechStyle,
               firstPerson: c.firstPerson,
               appearance: c.description,
+              isPublic: true,
             })),
             skipDuplicates: true,
           });
