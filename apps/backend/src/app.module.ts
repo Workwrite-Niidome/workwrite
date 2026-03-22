@@ -28,6 +28,7 @@ import { AiAssistModule } from './ai-assist/ai-assist.module';
 import { AiInsightsModule } from './ai-insights/ai-insights.module';
 import { AiRecommendationsModule } from './ai-recommendations/ai-recommendations.module';
 import { AiCompanionModule } from './ai-companion/ai-companion.module';
+import { CharacterTalkModule } from './character-talk/character-talk.module';
 import { WorkImportModule } from './work-import/work-import.module';
 import { FollowsModule } from './follows/follows.module';
 import { LettersModule } from './letters/letters.module';
@@ -76,6 +77,7 @@ import { HealthController } from './health.controller';
     AiInsightsModule,
     AiRecommendationsModule,
     AiCompanionModule,
+    CharacterTalkModule,
     WorkImportModule,
     FollowsModule,
     LettersModule,

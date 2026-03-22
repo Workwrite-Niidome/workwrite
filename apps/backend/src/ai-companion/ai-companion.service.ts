@@ -39,8 +39,8 @@ export class AiCompanionService {
     const model = modelConfig.model;
 
     // Load or create conversation
-    let conversation = await this.prisma.aiConversation.findUnique({
-      where: { userId_workId: { userId, workId } },
+    let conversation = await this.prisma.aiConversation.findFirst({
+      where: { userId, workId, mode: 'companion', characterId: null },
     });
 
     const existingMessages: ChatMessage[] = conversation
@@ -244,11 +244,16 @@ ${workText}`;
         { role: 'assistant', content: assistantResponse },
       ];
 
-      await this.prisma.aiConversation.upsert({
-        where: { userId_workId: { userId, workId } },
-        update: { messages: updatedMessages as any },
-        create: { userId, workId, messages: updatedMessages as any },
-      }).catch((e) => this.logger.error('Failed to save conversation', e));
+      if (conversation) {
+        await this.prisma.aiConversation.update({
+          where: { id: conversation.id },
+          data: { messages: updatedMessages as any, messageCount: updatedMessages.length },
+        }).catch((e) => this.logger.error('Failed to save conversation', e));
+      } else {
+        await this.prisma.aiConversation.create({
+          data: { userId, workId, mode: 'companion', messages: updatedMessages as any, messageCount: updatedMessages.length },
+        }).catch((e) => this.logger.error('Failed to save conversation', e));
+      }
 
       // Log usage
       const durationMs = Date.now() - startTime;
@@ -266,8 +271,8 @@ ${workText}`;
   }
 
   async getHistory(userId: string, workId: string) {
-    const conversation = await this.prisma.aiConversation.findUnique({
-      where: { userId_workId: { userId, workId } },
+    const conversation = await this.prisma.aiConversation.findFirst({
+      where: { userId, workId, mode: 'companion', characterId: null },
     });
     return { messages: conversation?.messages || [] };
   }

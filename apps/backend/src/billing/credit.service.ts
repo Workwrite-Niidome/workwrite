@@ -53,7 +53,7 @@ export class CreditService {
     amount: number,
     feature: string,
     model?: string,
-  ): Promise<{ transactionId: string; newBalance: number }> {
+  ): Promise<{ transactionId: string; newBalance: number; purchasedDeducted: number }> {
     return this.prisma.$transaction(async (tx) => {
       // Lock the row for update
       await tx.$queryRawUnsafe(
@@ -94,7 +94,7 @@ export class CreditService {
         },
       });
 
-      return { transactionId: txRecord.id, newBalance: bal.balance - amount };
+      return { transactionId: txRecord.id, newBalance: bal.balance - amount, purchasedDeducted: purchasedDeduct };
     });
   }
 

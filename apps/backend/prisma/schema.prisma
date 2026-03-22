@@ -741,14 +741,37 @@ model WorkEmbedding {
 }
 
 model AiConversation {
-  id        String   @id @default(cuid())
-  userId    String
-  workId    String
-  messages  Json
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
-  @@unique([userId, workId])
+  id           String   @id @default(cuid())
+  userId       String
+  workId       String
+  characterId  String?
+  mode         String   @default("companion") // "companion" | "character"
+  messages     Json
+  messageCount Int      @default(0)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+  @@unique([userId, workId, mode, characterId])
   @@index([userId])
+  @@index([userId, workId])
+}
+
+// ============================================================
+// Character Talk Revenue
+// ============================================================
+
+model CharacterTalkRevenue {
+  id            String   @id @default(cuid())
+  authorId      String
+  readerId      String
+  workId        String
+  characterId   String?
+  mode          String   @default("character")
+  creditAmount  Int
+  revenueYen    Int
+  creditTxId    String?
+  createdAt     DateTime @default(now())
+  @@index([authorId, createdAt])
+  @@index([workId])
 }
 
 // ============================================================
