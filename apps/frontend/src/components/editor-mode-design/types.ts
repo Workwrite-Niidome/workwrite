@@ -113,6 +113,27 @@ const EMPTY_WORLD_BUILDING: WorldBuildingData = {
 
 /** Convert DesignData to WizardData for passing to wizard step components */
 export function designToWizard(design: DesignData): WizardData {
+  // Ensure characters is always a proper array of objects (never a string)
+  let characters: any[] = [];
+  if (Array.isArray(design.characters)) {
+    characters = design.characters;
+  }
+  // If protagonist is an object and not in characters, prepend it
+  if (design.protagonist && typeof design.protagonist === 'object' && 'name' in design.protagonist) {
+    const protName = design.protagonist.name;
+    if (protName && !characters.some((c: any) => c.name === protName)) {
+      characters = [{ ...design.protagonist, role: design.protagonist.role || '主人公', aiSuggested: false, customFieldValues: {} }, ...characters];
+    }
+  }
+
+  // Ensure worldBuilding is always a proper object (never a string)
+  let worldBuilding: WorldBuildingData = EMPTY_WORLD_BUILDING;
+  if (design.worldBuilding && typeof design.worldBuilding === 'object') {
+    worldBuilding = { ...EMPTY_WORLD_BUILDING, ...design.worldBuilding };
+  } else if (typeof design.worldBuilding === 'string') {
+    worldBuilding = { ...EMPTY_WORLD_BUILDING, history: design.worldBuilding as string };
+  }
+
   return {
     genre: design.genre || '',
     subGenres: design.subGenres || [],
@@ -123,9 +144,9 @@ export function designToWizard(design: DesignData): WizardData {
     readerJourney: design.readerJourney || '',
     inspiration: design.inspiration || '',
     readerOneLiner: design.readerOneLiner || '',
-    characters: design.characters || [],
+    characters,
     customFieldDefinitions: design.customFieldDefinitions || [],
-    worldBuilding: design.worldBuilding || EMPTY_WORLD_BUILDING,
+    worldBuilding,
     structureTemplate: design.structureTemplate || 'kishotenketsu',
     actGroups: design.actGroups || [],
     plotOutline: null,
