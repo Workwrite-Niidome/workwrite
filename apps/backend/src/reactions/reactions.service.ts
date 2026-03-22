@@ -94,6 +94,36 @@ export class ReactionsService {
     }));
   }
 
+  /** Get trending works (most reactions in last 24h) */
+  async getTrendingWorks(limit = 5) {
+    const since = new Date(Date.now() - 24 * 60 * 60 * 1000);
+    const reactions = await this.prisma.episodeReaction.groupBy({
+      by: ['workId'],
+      where: { createdAt: { gte: since } },
+      _count: true,
+      _sum: { claps: true },
+      orderBy: { _count: { workId: 'desc' } },
+      take: limit,
+    });
+
+    if (reactions.length === 0) return [];
+
+    const workIds = reactions.map(r => r.workId);
+    const works = await this.prisma.work.findMany({
+      where: { id: { in: workIds }, status: 'PUBLISHED' },
+      select: { id: true, title: true, genre: true, author: { select: { displayName: true, name: true } } },
+    });
+    const workMap = new Map(works.map(w => [w.id, w]));
+
+    return reactions
+      .filter(r => workMap.has(r.workId))
+      .map(r => ({
+        work: workMap.get(r.workId)!,
+        reactionCount: r._count,
+        totalClaps: r._sum.claps || 0,
+      }));
+  }
+
   /** Get reaction feed across ALL works by a specific author */
   async getAuthorReactionFeed(authorId: string, limit = 20) {
     const works = await this.prisma.work.findMany({

@@ -52,4 +52,9 @@ export class ReactionsController {
   async getMyReactionFeed(@CurrentUser('id') userId: string) {
     return this.reactionsService.getAuthorReactionFeed(userId);
   }
+
+  @Get('reactions/trending')
+  async getTrendingWorks() {
+    return this.reactionsService.getTrendingWorks();
+  }
 }

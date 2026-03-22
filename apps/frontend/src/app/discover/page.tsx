@@ -178,6 +178,9 @@ export default function DiscoverPage() {
       )}
 
       {activeTab === 'works' && <>
+      {/* Trending Reactions */}
+      <TrendingReactionsSection />
+
       {/* Mood Discovery */}
       <section>
         <h2 className="text-sm font-medium mb-4">今の気分で探す</h2>
@@ -278,5 +281,39 @@ export default function DiscoverPage() {
       )}
       </>}
     </div>
+  );
+}
+
+function TrendingReactionsSection() {
+  const [trending, setTrending] = useState<{ work: { id: string; title: string; genre: string; author: { displayName: string | null; name: string } }; reactionCount: number; totalClaps: number }[]>([]);
+
+  useEffect(() => {
+    api.getTrendingReactions()
+      .then((res) => setTrending(res.data || []))
+      .catch(() => {});
+  }, []);
+
+  if (trending.length === 0) return null;
+
+  return (
+    <section>
+      <h2 className="text-sm font-medium mb-4">いま拍手が集まっている作品</h2>
+      <div className="space-y-2">
+        {trending.map((item) => (
+          <Link key={item.work.id} href={`/works/${item.work.id}`} className="block group">
+            <div className="flex items-center gap-3 px-4 py-3 rounded-lg border border-border hover:border-primary/20 hover:bg-muted/30 transition-all">
+              <div className="flex-1 min-w-0">
+                <p className="text-sm font-medium truncate group-hover:text-primary transition-colors">{item.work.title}</p>
+                <p className="text-xs text-muted-foreground">{item.work.author.displayName || item.work.author.name}</p>
+              </div>
+              <div className="text-right shrink-0">
+                <p className="text-sm font-medium">拍手 {item.totalClaps}</p>
+                <p className="text-[10px] text-muted-foreground">直近24時間</p>
+              </div>
+            </div>
+          </Link>
+        ))}
+      </div>
+    </section>
   );
 }
