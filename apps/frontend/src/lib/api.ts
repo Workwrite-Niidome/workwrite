@@ -541,6 +541,10 @@ class ApiClient {
     return this.request<{ data: { byEpisode: { episodeId: string; title: string; orderIndex: number; totalClaps: number; topEmotion: string | null }[]; totalClaps: number; totalReactions: number; emotions: Record<string, number> } }>(`/reactions/work/${workId}`);
   }
 
+  async getWorkReactionFeed(workId: string) {
+    return this.request<{ data: { id: string; userDisplayName: string; episodeTitle: string; episodeOrderIndex: number; claps: number; emotion: string | null; createdAt: string }[] }>(`/reactions/work/${workId}/feed`);
+  }
+
   async getMyReactionFeed() {
     return this.request<{ data: { id: string; type: string; userDisplayName: string; workTitle: string; episodeTitle: string; claps: number; emotion: string | null; createdAt: string }[] }>('/reactions/my/feed');
   }
