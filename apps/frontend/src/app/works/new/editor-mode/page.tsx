@@ -289,11 +289,14 @@ function EditorModeDesignContent() {
   const handleRequestRevision = useCallback((sectionLabel: string, _context: string) => {
     const prefix = `【${sectionLabel}について】`;
     setInputValue(prefix + ' ');
-    // Desktop: open chat panel
-    setChatOpen(true);
-    // Mobile: open the bottom sheet
-    setChatSheetOpen(true);
-    // Focus the input after panel/sheet opens
+    // Desktop (lg+): open side panel only
+    // Mobile: open bottom sheet only
+    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+    if (isDesktop) {
+      setChatOpen(true);
+    } else {
+      setChatSheetOpen(true);
+    }
     setTimeout(() => inputRef.current?.focus(), 350);
   }, []);
 
