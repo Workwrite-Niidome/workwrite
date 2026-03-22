@@ -100,9 +100,21 @@ Phase 1: 設計対話 → Phase 2: 設計レビュー → Phase 3: 第1話テイ
 
 **目的:** 全話生成後に「テイストが違う」となると全クレジットが無駄になる。第1話で確認することで手戻りを防ぐ。
 
-### Phase 4: 全話生成（バックグラウンド）
+### Phase 4: 全話生成
 
 **トリガー:** 第1話テイスト承認後
+
+**生成モード選択（第1話承認後に選択）:**
+- **確認モード** — 1話生成するごとに一時停止し、ユーザーが確認してから次の話へ
+  - 各話ごとに「OK → 次へ」「修正指示」「再生成」が可能
+  - じっくり品質を追い込みたい人向け
+- **一括モード** — 残り全話を一気にバックグラウンド生成
+  - 後からまとめてPhase 5でレビュー
+  - 時間を節約したい人向け
+
+**生成中の切り替え:**
+- 一括モード中に「確認モードに切り替え」→ 現在生成中の話が完了したら停止、次の話から確認モードに
+- 確認モード中に「残りを一括生成」→ 以降は一括モードで生成
 
 **生成プロセス:**
 1. 第2話以降を順番に生成（第1話の承認済みテイストを踏襲）
@@ -114,7 +126,7 @@ Phase 1: 設計対話 → Phase 2: 設計レビュー → Phase 3: 第1話テイ
 - 「停止」ボタンで生成を中断
 - 完了分のクレジットのみ消費済み（未生成分は課金されない）
 - 残クレジット不足で自動停止 → メッセージ表示
-- 「続きから生成」ボタンで未生成の話から再開
+- 「続きから生成」ボタン → 再開時にモード再選択（確認モード or 一括モード）
 - 設計書・完了済みエピソードはDBに保存済みなので品質は落ちない
 
 **生成品質（briefの学びを反映）:**
@@ -184,18 +196,19 @@ Phase 1: 設計対話 → Phase 2: 設計レビュー → Phase 3: 第1話テイ
 ### 新規テーブル: EditorModeJob
 ```
 model EditorModeJob {
-  id              String   @id @default(cuid())
-  workId          String   @unique
-  userId          String
-  status          String   @default("designing") // designing / generating / paused / reviewing / completed
-  aiMode          String   @default("normal")    // normal / premium
-  totalEpisodes   Int
-  completedEpisodes Int    @default(0)
-  creditsConsumed Int      @default(0)
-  designChatHistory Json?  // 設計対話の履歴
-  episodePlan     Json?    // 各話の概要（タイトル、要約、文字数目安）
-  createdAt       DateTime @default(now())
-  updatedAt       DateTime @updatedAt
+  id                String   @id @default(cuid())
+  workId            String   @unique
+  userId            String
+  status            String   @default("designing") // designing / taste_check / generating / paused / reviewing / completed
+  aiMode            String   @default("normal")    // normal / premium
+  generationMode    String   @default("batch")     // batch（一括） / confirm（確認）
+  totalEpisodes     Int
+  completedEpisodes Int      @default(0)
+  creditsConsumed   Int      @default(0)
+  designChatHistory Json?    // 設計対話の履歴
+  episodePlan       Json?    // 各話の概要（タイトル、要約、文字数目安）
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
 
   work Work @relation(fields: [workId], references: [id])
   user User @relation(fields: [userId], references: [id])
