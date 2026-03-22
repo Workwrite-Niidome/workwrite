@@ -174,6 +174,9 @@ export default function DashboardPage() {
         </Card>
       </div>
 
+      {/* Cr Earning Guide */}
+      <CrEarningGuide />
+
       {/* Reaction Feed */}
       <ReactionFeed />
 
@@ -477,6 +480,37 @@ function EditorModeSection({
           }
         }}
       />
+    </div>
+  );
+}
+
+function CrEarningGuide() {
+  const ACTIONS = [
+    { label: '作品を読了する', cr: 1, href: '/', description: '作品を最後まで読む' },
+    { label: 'レビューを書く', cr: 5, href: '/', description: '20文字以上のレビューを投稿' },
+    { label: '感情タグをつける', cr: 1, href: '/', description: '読んだ作品に感情を記録' },
+    { label: '友達を招待する', cr: 20, href: '/settings', description: '招待リンクから登録' },
+    { label: '初めて作品を公開する', cr: 10, href: '/works/new', description: '作家デビュー（1回限り）' },
+  ];
+
+  return (
+    <div className="mb-8">
+      <h2 className="text-sm font-medium mb-3">Crを獲得する</h2>
+      <div className="grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
+        {ACTIONS.map((action) => (
+          <Link key={action.label} href={action.href}>
+            <Card className="hover:shadow-sm hover:border-primary/20 transition-all h-full">
+              <CardContent className="p-4">
+                <div className="flex items-center justify-between mb-1">
+                  <span className="text-sm font-medium">{action.label}</span>
+                  <span className="text-xs text-primary font-medium">+{action.cr}Cr</span>
+                </div>
+                <p className="text-[11px] text-muted-foreground">{action.description}</p>
+              </CardContent>
+            </Card>
+          </Link>
+        ))}
+      </div>
     </div>
   );
 }

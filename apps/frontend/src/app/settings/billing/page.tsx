@@ -43,6 +43,8 @@ const TX_TYPE_LABELS: Record<string, string> = {
   ADMIN_REVOKE: '\u7BA1\u7406\u8005\u5263\u596A',
   REFUND: '\u8FD4\u91D1',
   PLAN_CHANGE_ADJUST: '\u30D7\u30E9\u30F3\u5909\u66F4\u8ABF\u6574',
+  REVIEW_REWARD: '報酬',
+  REFERRAL_REWARD: '招待報酬',
 };
 
 export default function BillingPage() {

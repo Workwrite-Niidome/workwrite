@@ -238,7 +238,7 @@ export default function AfterwordPage() {
                 className="w-full flex items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
               >
                 <span className="flex items-center gap-1.5"><PenLine className="h-3.5 w-3.5" /> レビューを書く</span>
-                <span className="text-xs text-primary">3Cr</span>
+                <span className="text-xs text-primary">5Cr</span>
               </button>
               {showReview && (
                 <div className="space-y-2 animate-in fade-in duration-200">
@@ -250,13 +250,13 @@ export default function AfterwordPage() {
                     className="text-sm font-serif"
                   />
                   <Button onClick={handleSubmitReview} disabled={reviewText.length < 20} className="w-full">
-                    {reviewText.length < 20 ? `あと${20 - reviewText.length}文字` : 'レビューを投稿して3Cr獲得'}
+                    {reviewText.length < 20 ? `あと${20 - reviewText.length}文字` : 'レビューを投稿して5Cr獲得'}
                   </Button>
                 </div>
               )}
             </div>
           ) : (
-            <p className="text-xs text-center text-primary">レビューを投稿しました（3Cr獲得）</p>
+            <p className="text-xs text-center text-primary">レビューを投稿しました（5Cr獲得）</p>
           )}
         </div>
 
