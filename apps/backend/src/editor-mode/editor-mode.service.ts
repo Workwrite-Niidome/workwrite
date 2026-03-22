@@ -62,6 +62,7 @@ export class EditorModeService {
     workId: string,
     message: string,
     aiMode: 'normal' | 'premium' = 'normal',
+    designState?: any,
   ): AsyncGenerator<string> {
     const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_chat', aiMode);
 
@@ -79,53 +80,102 @@ export class EditorModeService {
     const history: { role: string; content: string }[] = (job.designChatHistory as any[]) || [];
     history.push({ role: 'user', content: message });
 
-    // Extract current design state to inform AI about what's already decided
-    const currentDesign = this.extractLatestDesignUpdate(history);
-    const filledItems: string[] = [];
-    const missingItems: string[] = [];
-    const checkItems = [
-      { key: 'genre_setting', label: 'ジャンル・舞台' },
-      { key: 'theme', label: 'テーマ・コアメッセージ' },
-      { key: 'emotion', label: '読者に届けたい感情・読後感' },
-      { key: 'protagonist', label: '主人公' },
-      { key: 'characters', label: '主要キャラクター' },
-      { key: 'world', label: '世界観・ルール' },
-      { key: 'conflict', label: '中心的な葛藤' },
-      { key: 'plot', label: 'プロット概要' },
-      { key: 'tone', label: 'トーン・文体' },
-      { key: 'scope', label: '話数・文字数' },
-    ];
-    for (const item of checkItems) {
-      if (currentDesign && currentDesign[item.key] && currentDesign[item.key] !== 'null') {
-        filledItems.push(`${item.label}: ${currentDesign[item.key]}`);
+    // Build comprehensive design context from both chat history and tab edits
+    const ds = designState || this.extractLatestDesignUpdate(history) || {};
+
+    // Build current design summary for the AI
+    const designSections: string[] = [];
+
+    // Genre & Theme
+    if (ds.genre) designSections.push(`ジャンル: ${ds.genre}${ds.subGenres?.length ? ` (${ds.subGenres.join('、')})` : ''}`);
+    if (ds.coreMessage || ds.theme) designSections.push(`テーマ: ${ds.coreMessage || ds.theme}`);
+    if (ds.targetEmotions || ds.afterReading) designSections.push(`読後感: ${ds.targetEmotions || ds.afterReading}`);
+    if (ds.readerJourney) designSections.push(`読者の旅路: ${ds.readerJourney}`);
+    if (ds.tone) designSections.push(`トーン: ${ds.tone}`);
+
+    // Characters
+    if (Array.isArray(ds.characters) && ds.characters.length > 0) {
+      const charLines = ds.characters.map((c: any) => {
+        const parts = [`${c.name || '(未定)'}（${c.role || ''}）`];
+        if (c.personality) parts.push(`性格: ${c.personality}`);
+        if (c.speechStyle) parts.push(`口調: ${c.speechStyle}`);
+        if (c.motivation) parts.push(`動機: ${c.motivation}`);
+        if (c.background) parts.push(`背景: ${c.background}`);
+        return parts.join(' / ');
+      });
+      designSections.push(`キャラクター:\n${charLines.join('\n')}`);
+    } else if (ds.protagonist) {
+      const p = typeof ds.protagonist === 'string' ? ds.protagonist : `${ds.protagonist.name}（${ds.protagonist.role || '主人公'}）`;
+      designSections.push(`主人公: ${p}`);
+    }
+
+    // World Building
+    if (ds.worldBuilding) {
+      if (typeof ds.worldBuilding === 'string') {
+        designSections.push(`世界観: ${ds.worldBuilding}`);
       } else {
-        missingItems.push(item.label);
+        const wb = ds.worldBuilding;
+        const wbParts: string[] = [];
+        if (wb.basics?.era) wbParts.push(`時代: ${wb.basics.era}`);
+        if (wb.basics?.setting) wbParts.push(`舞台: ${wb.basics.setting}`);
+        if (wb.rules?.length) wbParts.push(`ルール: ${wb.rules.map((r: any) => r.name).filter(Boolean).join('、')}`);
+        if (wb.terminology?.length) wbParts.push(`用語: ${wb.terminology.map((t: any) => t.term).filter(Boolean).join('、')}`);
+        if (wbParts.length > 0) designSections.push(`世界観:\n${wbParts.join('\n')}`);
       }
     }
 
-    const systemPrompt = `あなたは小説の設計を手伝うベテラン編集者です。ユーザーとの対話を通じて物語の設計書を構築します。
+    // Plot
+    if (ds.actGroups?.length > 0) {
+      const plotParts = ds.actGroups.map((g: any) => {
+        const eps = (g.episodes || []).map((ep: any) => ep.title || '(未定)').join('→');
+        return `${g.label}: ${eps}`;
+      });
+      designSections.push(`プロット構成 (${ds.structureTemplate || '自由'}):\n${plotParts.join('\n')}`);
+    } else if (ds.conflict || ds.plotOutline) {
+      if (ds.conflict) designSections.push(`中心的な葛藤: ${ds.conflict}`);
+      if (ds.plotOutline) designSections.push(`プロット概要: ${ds.plotOutline}`);
+    }
 
-ユーザーの発言から以下の設計要素を抽出してください:
-- genre_setting: ジャンル・舞台
-- theme: テーマ・コアメッセージ
-- emotion: 読者に届けたい感情・読後感
-- protagonist: 主人公（名前と簡単な説明）
-- characters: 主要キャラクター（名前と簡単な説明。文字列で記述。例: "佐藤彰一（犯罪心理学者）、織田由美（警察官）"）
-- world: 世界観・ルール
-- conflict: 中心的な葛藤
-- plot: プロット概要
-- tone: トーン・文体
-- scope: 話数・文字数（例: "10話 × 3000字"）
+    // Scope
+    if (ds.episodeCount) designSections.push(`話数: ${ds.episodeCount}話${ds.charCountPerEpisode ? ` × ${ds.charCountPerEpisode}字` : ''}`);
+    if (ds.title) designSections.push(`タイトル: ${ds.title}`);
+    if (ds.synopsis) designSections.push(`あらすじ: ${ds.synopsis}`);
 
-${filledItems.length > 0 ? `【確定済みの項目】\n${filledItems.join('\n')}\n` : ''}
-${missingItems.length > 0 ? `【まだ決まっていない項目】\n${missingItems.join('、')}\nこれらの項目について自然に質問してください。` : '全項目が確定しています。「設計が完成しました。レビューに進みましょう」と伝えてください。'}
+    // Identify what's missing
+    const missing: string[] = [];
+    if (!ds.genre) missing.push('ジャンル・舞台');
+    if (!ds.coreMessage && !ds.theme) missing.push('テーマ・コアメッセージ');
+    if (!ds.targetEmotions && !ds.afterReading) missing.push('読者に届けたい感情');
+    if ((!Array.isArray(ds.characters) || ds.characters.length === 0) && !ds.protagonist) missing.push('キャラクター');
+    if (!ds.worldBuilding) missing.push('世界観');
+    if (!ds.actGroups?.length && !ds.conflict && !ds.plotOutline) missing.push('プロット');
+    if (!ds.tone) missing.push('トーン・文体');
+    if (!ds.episodeCount) missing.push('話数');
 
-各発言の末尾に必ず以下の形式でJSONブロックを出力してください（確定した値のみ更新。未確定はnull）:
+    const systemPrompt = `あなたは小説家を育ててきたベテラン編集者です。ユーザーと対話しながら、最高の物語の設計書を一緒に作り上げます。
+
+あなたの役割:
+- ユーザーのビジョンを引き出し、具体化する
+- 設定の矛盾や弱点を見つけたら、それを指摘するのではなく「こうするともっと面白くなりませんか？」と提案する
+- キャラクターの魅力を最大化するアイデアを出す
+- 世界観に奥行きを加える質問をする
+- プロットの緩急や伏線のアイデアを提案する
+
+${designSections.length > 0 ? `【現在の設計状態】\n${designSections.join('\n\n')}\n` : ''}
+${missing.length > 0 ? `【まだ決まっていない要素】\n${missing.join('、')}\n\nユーザーの次の発言に応答しつつ、まだ決まっていない要素について自然に深掘りしてください。一度に全部聞かず、会話の流れで1-2個ずつ。` : '【全要素が揃っています】\n設計が十分に揃いました。「設計プレビュー」タブから設計を確定して執筆に進めることを伝えてください。ただし、ユーザーがさらに深掘りしたい場合はそれに応じてください。'}
+
+【重要ルール】
+- ユーザーが右側のタブで直接設定を編集している場合があります。その内容を踏まえた上で対話してください
+- キャラクターについて話すときは、必ず名前を使ってください（設定済みの場合）
+- 「〇〇はどうですか？」ではなく「〇〇の動機は何でしょう？彼/彼女が最も恐れていることは？」のように具体的に深掘りしてください
+- 既に設定されている内容を改めて聞き直さないでください
+
+各発言の末尾に必ず以下の形式でJSONブロックを出力してください（対話で新たに確定した値のみ。既存の値は含めない）:
 __DESIGN_UPDATE__
 {"genre_setting": "値 or null", "theme": "値 or null", "emotion": "値 or null", "protagonist": "値 or null", "characters": "値 or null", "world": "値 or null", "conflict": "値 or null", "plot": "値 or null", "tone": "値 or null", "scope": "値 or null"}
 __END_UPDATE__
 
-対話は自然に進めてください。`;
+対話は自然に、編集者としての経験に基づいた具体的な提案を交えて進めてください。`;
 
     let transactionId: string | null = null;
     let contentDelivered = false;

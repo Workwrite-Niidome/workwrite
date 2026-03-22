@@ -48,7 +48,7 @@ export class EditorModeController {
       }
 
       const stream = this.editorModeService.streamDesignChat(
-        userId, workId, dto.message, dto.aiMode || 'normal',
+        userId, workId, dto.message, dto.aiMode || 'normal', dto.designState,
       );
       for await (const chunk of stream) {
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);

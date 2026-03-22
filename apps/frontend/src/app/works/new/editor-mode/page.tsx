@@ -150,7 +150,7 @@ function EditorModeDesignContent() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message, aiMode }),
+        body: JSON.stringify({ message, aiMode, designState: design }),
         signal: controller.signal,
       });
 

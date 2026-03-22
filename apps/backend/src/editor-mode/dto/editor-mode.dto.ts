@@ -7,6 +7,10 @@ export class EditorModeChatDto {
   @IsOptional()
   @IsIn(['normal', 'premium'])
   aiMode?: 'normal' | 'premium' = 'normal';
+
+  @ApiProperty({ required: false, description: 'Current design state from tabs' })
+  @IsOptional()
+  designState?: any;
 }
 
 export class FinalizeDesignDto {
