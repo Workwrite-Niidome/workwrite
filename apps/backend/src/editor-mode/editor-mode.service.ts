@@ -618,6 +618,7 @@ ${episode.content}
       completedEpisodes: job.completedEpisodes,
       creditsConsumed: job.creditsConsumed,
       episodePlan: job.episodePlan,
+      designChatHistory: job.designChatHistory,
       episodes: episodes.map((ep) => ({
         id: ep.id,
         title: ep.title,

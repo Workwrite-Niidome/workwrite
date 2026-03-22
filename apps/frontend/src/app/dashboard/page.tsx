@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
@@ -12,6 +12,18 @@ import { ScoreBadge } from '@/components/scoring/score-badge';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work } from '@/lib/api';
 import { loadDrafts, deleteDraft, type WizardDraft } from '@/lib/wizard-drafts';
+
+interface EditorModeWork {
+  id: string;
+  title: string;
+  createdAt: string;
+  editorModeJob?: {
+    status: string;
+    completedEpisodes: number;
+    totalEpisodes: number;
+    creditsConsumed: number;
+  };
+}
 
 interface DashboardOverview {
   totalWorks: number;
@@ -33,10 +45,27 @@ export default function DashboardPage() {
   const [overview, setOverview] = useState<DashboardOverview | null>(null);
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<WizardDraft[]>([]);
+  const [editorModeWorks, setEditorModeWorks] = useState<EditorModeWork[]>([]);
   const [confirmDeleteDraftId, setConfirmDeleteDraftId] = useState<string | null>(null);
 
   useEffect(() => {
     setDrafts(loadDrafts());
+    // Load editor mode works in progress
+    api.getMyWorks()
+      .then((res) => {
+        const edWorks = (res.data || []).filter(
+          (w: any) => w.isAiGenerated && w.status === 'DRAFT' && w.title?.includes('編集者モード')
+        );
+        // For each, fetch editor mode status
+        Promise.all(
+          edWorks.map((w: any) =>
+            api.editorModeStatus(w.id)
+              .then((statusRes: any) => ({ ...w, editorModeJob: (statusRes as any)?.data || statusRes }))
+              .catch(() => ({ ...w, editorModeJob: null }))
+          )
+        ).then((results) => setEditorModeWorks(results.filter((w: any) => w.editorModeJob)));
+      })
+      .catch(() => {});
   }, []);
 
   function handleDeleteDraft() {
@@ -207,6 +236,53 @@ export default function DashboardPage() {
                 </button>
               </Card>
             ))}
+          </div>
+        </div>
+      )}
+
+      {/* Editor Mode Works in Progress */}
+      {editorModeWorks.length > 0 && (
+        <div className="space-y-3 mb-8">
+          <h2 className="text-lg font-semibold flex items-center gap-2">
+            <Bot className="h-5 w-5 text-indigo-500" />
+            編集者モード — 作成中
+          </h2>
+          <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
+            {editorModeWorks.map((work) => {
+              const job = work.editorModeJob;
+              const statusLabels: Record<string, string> = {
+                designing: '設計中',
+                taste_check: 'テイスト確認',
+                generating: '生成中',
+                paused: '一時停止',
+                reviewing: 'レビュー中',
+                completed: '完了',
+              };
+              const statusLabel = statusLabels[job?.status || ''] || job?.status || '';
+              const href = job?.status === 'designing'
+                ? `/works/new/editor-mode?resume=${work.id}`
+                : `/works/${work.id}/editor-mode`;
+              return (
+                <Link key={work.id} href={href}>
+                  <Card className="hover:shadow-md transition-shadow border-t-2 border-t-indigo-400">
+                    <CardContent className="pt-5 pb-4">
+                      <div className="flex items-start justify-between">
+                        <div className="min-w-0 flex-1">
+                          <p className="font-medium text-sm truncate">{work.title}</p>
+                          <p className="text-xs text-muted-foreground mt-1">
+                            {job?.completedEpisodes || 0}/{job?.totalEpisodes || '?'} 話 · {job?.creditsConsumed || 0}cr消費
+                          </p>
+                          <p className="text-xs text-muted-foreground mt-0.5">
+                            {new Date(work.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
+                          </p>
+                        </div>
+                        <Badge variant="outline" className="text-[10px] shrink-0">{statusLabel}</Badge>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </Link>
+              );
+            })}
           </div>
         </div>
       )}

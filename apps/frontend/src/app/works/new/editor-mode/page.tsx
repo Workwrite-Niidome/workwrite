@@ -1,7 +1,7 @@
 'use client';
 
-import { useState, useRef, useEffect, useCallback } from 'react';
-import { useRouter } from 'next/navigation';
+import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
+import { useRouter, useSearchParams } from 'next/navigation';
 import {
   Send, Crown, Sparkles, Check, Loader2, ChevronRight,
   Edit3, Bot, ArrowLeft, Plus, Trash2, MessageSquare,
@@ -63,8 +63,10 @@ function isChecklistItemFilled(design: DesignData, key: string): boolean {
   }
 }
 
-export default function EditorModeDesignPage() {
+function EditorModeDesignContent() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const resumeWorkId = searchParams.get('resume');
   const [phase, setPhase] = useState<'designing' | 'reviewing'>('designing');
   const [aiMode, setAiMode] = useState<'normal' | 'premium'>('normal');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
@@ -73,7 +75,7 @@ export default function EditorModeDesignPage() {
   const [design, setDesign] = useState<DesignData>({});
   const [creditsConsumed, setCreditConsumed] = useState(0);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
-  const [workId, setWorkId] = useState<string | null>(null);
+  const [workId, setWorkId] = useState<string | null>(resumeWorkId);
   const [error, setError] = useState<string | null>(null);
   const [reviseField, setReviseField] = useState<string | null>(null);
   const [reviseInstruction, setReviseInstruction] = useState('');
@@ -93,6 +95,34 @@ export default function EditorModeDesignPage() {
       })
       .catch(() => {});
   }, []);
+
+  // Resume: load existing chat history
+  useEffect(() => {
+    if (!resumeWorkId) return;
+    api.editorModeStatus(resumeWorkId)
+      .then((res: any) => {
+        const job = res?.data || res;
+        if (job?.designChatHistory && Array.isArray(job.designChatHistory)) {
+          setMessages(job.designChatHistory.filter((m: any) => m.role && m.content).map((m: any) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
+          })));
+        }
+        if (job?.creditsConsumed) setCreditConsumed(job.creditsConsumed);
+        // Try to extract design from chat history
+        if (job?.designChatHistory) {
+          for (let i = (job.designChatHistory as any[]).length - 1; i >= 0; i--) {
+            const msg = job.designChatHistory[i];
+            if (msg.role !== 'assistant') continue;
+            const match = msg.content.match(/__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/);
+            if (match) {
+              try { setDesign(JSON.parse(match[1])); break; } catch { /* skip */ }
+            }
+          }
+        }
+      })
+      .catch(() => {});
+  }, [resumeWorkId]);
 
   // Auto-scroll chat (only within the chat container, not the whole page)
   const chatContainerRef = useRef<HTMLDivElement>(null);
@@ -926,5 +956,14 @@ function CharacterCard({
         </div>
       </div>
     </div>
+  );
+}
+
+
+export default function EditorModeDesignPage() {
+  return (
+    <Suspense fallback={<div className="flex items-center justify-center min-h-[70vh]" />}>
+      <EditorModeDesignContent />
+    </Suspense>
   );
 }
