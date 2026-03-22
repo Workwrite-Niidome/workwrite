@@ -63,7 +63,7 @@ export class AiCompanionService {
         select: { episodeId: true, completed: true, progressPct: true },
       }),
       this.prisma.storyCharacter.findMany({
-        where: { workId, isPublic: true },
+        where: { workId },
         select: { name: true, role: true, personality: true, motivation: true, speechStyle: true },
         orderBy: { sortOrder: 'asc' },
       }),

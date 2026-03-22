@@ -100,7 +100,7 @@ export class CharacterTalkService {
         select: { episodeId: true, completed: true, progressPct: true },
       }),
       this.prisma.storyCharacter.findMany({
-        where: { workId, isPublic: true },
+        where: { workId },
         select: { id: true, name: true, role: true, personality: true, motivation: true, speechStyle: true, firstPerson: true, background: true },
         orderBy: { sortOrder: 'asc' },
       }),
@@ -407,7 +407,7 @@ ${workText}`;
         select: { episodes: { select: { id: true, orderIndex: true } } },
       }),
       this.prisma.storyCharacter.findMany({
-        where: { workId, isPublic: true },
+        where: { workId },
         select: { id: true, name: true, role: true, personality: true, speechStyle: true },
         orderBy: { sortOrder: 'asc' },
       }),
