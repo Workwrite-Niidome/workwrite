@@ -68,6 +68,9 @@ model User {
   // AI Generation History
   aiGenerations AiGenerationHistory[]
 
+  // Editor Mode
+  editorModeJobs EditorModeJob[]
+
   @@index([email])
   @@index([role])
 }
@@ -174,6 +177,9 @@ model Work {
   // AI-generated content flag
   isAiGenerated  Boolean @default(false)
 
+  // Editor Mode
+  editorModeJob  EditorModeJob?
+
   // Denormalized stats
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
@@ -183,6 +189,7 @@ model Work {
   @@index([genre])
   @@index([publishedAt])
   @@index([totalViews])
+  @@index([status, isAiGenerated])
 }
 
 enum WorkStatus {
@@ -1191,6 +1198,31 @@ model CreditPurchase {
   createdAt             DateTime @default(now())
 
   user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+}
+
+// ============================================================
+// Editor Mode (AI全話自動生成)
+// ============================================================
+
+model EditorModeJob {
+  id                String   @id @default(cuid())
+  workId            String   @unique
+  userId            String
+  status            String   @default("designing")   // designing / taste_check / generating / paused / reviewing / completed
+  aiMode            String   @default("normal")       // normal / premium
+  generationMode    String   @default("batch")        // batch / confirm
+  totalEpisodes     Int      @default(0)
+  completedEpisodes Int      @default(0)
+  creditsConsumed   Int      @default(0)
+  designChatHistory Json?
+  episodePlan       Json?
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+  user User @relation(fields: [userId], references: [id])
 
   @@index([userId])
 }

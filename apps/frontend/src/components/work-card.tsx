@@ -5,6 +5,7 @@ import { ScoreBadge } from '@/components/scoring/score-badge';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GENRE_LABELS } from '@/lib/constants';
+import { cn } from '@/lib/utils';
 import type { Work } from '@/lib/api';
 
 interface WorkCardProps {
@@ -18,7 +19,10 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
 
   return (
     <Link href={`/works/${work.id}`} className="group block">
-      <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
+      <Card className={cn(
+        "h-full hover:shadow-md hover:border-primary/20 transition-all",
+        work.isAiGenerated && "border-t-2 border-t-indigo-400 bg-purple-50/20 dark:bg-purple-950/10"
+      )}>
         <CardContent className="p-5 space-y-2.5">
           <div className="flex items-start justify-between gap-2">
             {work.genre && (

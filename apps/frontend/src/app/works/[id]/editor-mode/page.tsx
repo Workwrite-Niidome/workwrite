@@ -1,0 +1,758 @@
+'use client';
+
+import { useState, useEffect, useRef, useCallback } from 'react';
+import { useParams, useRouter } from 'next/navigation';
+import {
+  Play, Pause, Check, ChevronRight, ChevronDown, Loader2, RefreshCw,
+  Send, Bot, Crown, Eye, CheckCircle2, Edit3, Wand2, RotateCcw, Globe,
+} from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { api } from '@/lib/api';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
+import { cn } from '@/lib/utils';
+
+interface EditorModeJob {
+  id: string;
+  workId: string;
+  status: 'designing' | 'taste_check' | 'generating' | 'paused' | 'reviewing' | 'completed';
+  aiMode: string;
+  generationMode: string;
+  totalEpisodes: number;
+  completedEpisodes: number;
+  creditsConsumed: number;
+  episodes?: EditorEpisode[];
+}
+
+interface EditorEpisode {
+  id: string;
+  title: string;
+  content: string;
+  orderIndex: number;
+  status: 'pending' | 'generated' | 'approved' | 'revised';
+  wordCount: number;
+}
+
+export default function EditorModeGenerationPage() {
+  const params = useParams();
+  const router = useRouter();
+  const workId = params.id as string;
+
+  const [job, setJob] = useState<EditorModeJob | null>(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+
+  // Taste check state
+  const [reviseInstruction, setReviseInstruction] = useState('');
+  const [isRevising, setIsRevising] = useState(false);
+  const [reviseResult, setReviseResult] = useState('');
+
+  // Generation state
+  const [aiMode, setAiMode] = useState<'normal' | 'premium'>('premium');
+  const [generationMode, setGenerationMode] = useState<'confirm' | 'batch'>('batch');
+
+  // Episode review state
+  const [expandedEpisode, setExpandedEpisode] = useState<string | null>(null);
+  const [episodeReviseId, setEpisodeReviseId] = useState<string | null>(null);
+  const [episodeReviseInstruction, setEpisodeReviseInstruction] = useState('');
+  const [episodeStreaming, setEpisodeStreaming] = useState<string | null>(null);
+  const [episodeStreamResult, setEpisodeStreamResult] = useState('');
+  const [publishing, setPublishing] = useState(false);
+
+  // Poll interval ref
+  const pollRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
+  const fetchStatus = useCallback(async () => {
+    try {
+      const res: any = await api.editorModeStatus(workId);
+      const jobData = res.data || res;
+      setJob(jobData);
+      if (jobData.aiMode) setAiMode(jobData.aiMode === 'premium' ? 'premium' : 'normal');
+      if (jobData.generationMode) setGenerationMode(jobData.generationMode === 'confirm' ? 'confirm' : 'batch');
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to load status');
+    } finally {
+      setLoading(false);
+    }
+  }, [workId]);
+
+  useEffect(() => {
+    fetchStatus();
+  }, [fetchStatus]);
+
+  // Poll when generating
+  useEffect(() => {
+    if (job?.status === 'generating') {
+      pollRef.current = setInterval(fetchStatus, 3000);
+      return () => {
+        if (pollRef.current) clearInterval(pollRef.current);
+      };
+    } else {
+      if (pollRef.current) clearInterval(pollRef.current);
+    }
+  }, [job?.status, fetchStatus]);
+
+  const handleTasteOk = async () => {
+    setError(null);
+    try {
+      await api.editorModeStart(workId, { aiMode, generationMode });
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to start');
+    }
+  };
+
+  const handleReviseFirstEpisode = async () => {
+    if (!reviseInstruction.trim() || isRevising) return;
+    setIsRevising(true);
+    setReviseResult('');
+    setError(null);
+
+    try {
+      const firstEpisode = job?.episodes?.[0];
+      if (!firstEpisode) return;
+
+      const token = api.getToken();
+      const url = await api.editorModeReviseEpisode(workId, firstEpisode.id);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ instruction: reviseInstruction, aiMode }),
+      });
+
+      if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+      let accumulated = '';
+      await consumeSSEStream(res, (parsed) => {
+        if (parsed.text) {
+          accumulated += parsed.text;
+          setReviseResult(accumulated);
+        }
+      });
+
+      setReviseInstruction('');
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to revise');
+    } finally {
+      setIsRevising(false);
+    }
+  };
+
+  const handleBackToDesign = () => {
+    router.push(`/works/new/editor-mode`);
+  };
+
+  const handlePause = async () => {
+    try {
+      await api.editorModePause(workId);
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to pause');
+    }
+  };
+
+  const handleResume = async () => {
+    try {
+      await api.editorModeResume(workId, { aiMode, generationMode });
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to resume');
+    }
+  };
+
+  const handleChangeMode = async (newMode: 'confirm' | 'batch') => {
+    setGenerationMode(newMode);
+    try {
+      await api.editorModeChangeMode(workId, { generationMode: newMode });
+    } catch { /* ignore */ }
+  };
+
+  const handleApproveEpisode = async (episodeId: string) => {
+    try {
+      await api.editorModeApproveEpisode(workId, episodeId);
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to approve');
+    }
+  };
+
+  const handleReviseEpisode = async (episodeId: string) => {
+    if (!episodeReviseInstruction.trim()) return;
+    setEpisodeStreaming(episodeId);
+    setEpisodeStreamResult('');
+    setError(null);
+
+    try {
+      const token = api.getToken();
+      const url = await api.editorModeReviseEpisode(workId, episodeId);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ instruction: episodeReviseInstruction, aiMode }),
+      });
+
+      if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+      let accumulated = '';
+      await consumeSSEStream(res, (parsed) => {
+        if (parsed.text) {
+          accumulated += parsed.text;
+          setEpisodeStreamResult(accumulated);
+        }
+      });
+
+      setEpisodeReviseId(null);
+      setEpisodeReviseInstruction('');
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to revise');
+    } finally {
+      setEpisodeStreaming(null);
+    }
+  };
+
+  const handleAutoFix = async (episodeId: string) => {
+    setEpisodeStreaming(episodeId);
+    setEpisodeStreamResult('');
+    setError(null);
+
+    try {
+      const token = api.getToken();
+      const url = await api.editorModeAutoFix(workId, episodeId);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ aiMode }),
+      });
+
+      if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+      let accumulated = '';
+      await consumeSSEStream(res, (parsed) => {
+        if (parsed.text) {
+          accumulated += parsed.text;
+          setEpisodeStreamResult(accumulated);
+        }
+      });
+
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to auto-fix');
+    } finally {
+      setEpisodeStreaming(null);
+    }
+  };
+
+  const handleRegenerate = async (episodeId: string) => {
+    setEpisodeStreaming(episodeId);
+    setEpisodeStreamResult('');
+    setError(null);
+
+    try {
+      const token = api.getToken();
+      const url = await api.editorModeRegenerateEpisode(workId, episodeId);
+
+      const res = await fetch(url, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({ aiMode }),
+      });
+
+      if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+      let accumulated = '';
+      await consumeSSEStream(res, (parsed) => {
+        if (parsed.text) {
+          accumulated += parsed.text;
+          setEpisodeStreamResult(accumulated);
+        }
+      });
+
+      fetchStatus();
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to regenerate');
+    } finally {
+      setEpisodeStreaming(null);
+    }
+  };
+
+  const handlePublish = async () => {
+    setPublishing(true);
+    setError(null);
+    try {
+      await api.updateWork(workId, { status: 'PUBLISHED' } as any);
+      router.push(`/works/${workId}`);
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Failed to publish');
+    } finally {
+      setPublishing(false);
+    }
+  };
+
+  if (loading) {
+    return (
+      <div className="flex items-center justify-center py-20">
+        <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+      </div>
+    );
+  }
+
+  if (!job) {
+    return (
+      <div className="px-4 py-12 text-center text-muted-foreground">
+        <p>編集者モードのジョブが見つかりません。</p>
+        <Button variant="link" onClick={() => router.push('/works/new/editor-mode')}>
+          新規作成に戻る
+        </Button>
+      </div>
+    );
+  }
+
+  const episodes = job.episodes || [];
+  const approvedCount = episodes.filter(ep => ep.status === 'approved').length;
+  const allApproved = episodes.length > 0 && approvedCount === episodes.length;
+
+  return (
+    <div className="px-4 py-8 max-w-4xl mx-auto space-y-6">
+      {/* Top bar */}
+      <div className="flex items-center justify-between">
+        <h1 className="text-xl font-bold">
+          {job.status === 'taste_check' && '第1話 テイスト確認'}
+          {(job.status === 'generating' || job.status === 'paused') && '生成中'}
+          {(job.status === 'reviewing' || job.status === 'completed') && 'エピソードレビュー'}
+        </h1>
+        <div className="flex items-center gap-3">
+          <ModeToggle aiMode={aiMode} onChange={setAiMode} />
+          <div className="text-xs text-muted-foreground">
+            {job.creditsConsumed}cr消費済み
+          </div>
+        </div>
+      </div>
+
+      {error && (
+        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>
+      )}
+
+      {/* Phase 3: Taste Check */}
+      {job.status === 'taste_check' && (
+        <div className="space-y-6">
+          {episodes[0] && (
+            <Card>
+              <CardHeader>
+                <CardTitle className="text-sm">第1話: {episodes[0].title}</CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[60vh] overflow-y-auto">
+                  {reviseResult || episodes[0].content}
+                </div>
+                {isRevising && (
+                  <div className="flex items-center gap-2 mt-3 text-sm text-muted-foreground">
+                    <Loader2 className="h-4 w-4 animate-spin" /> 修正中...
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          <div className="space-y-3">
+            <div className="flex flex-wrap gap-2">
+              <Button onClick={handleTasteOk} className="gap-2">
+                <Check className="h-4 w-4" /> このテイストでOK
+              </Button>
+              <Button variant="outline" onClick={handleBackToDesign} className="gap-2">
+                <RotateCcw className="h-4 w-4" /> 設計に戻る
+              </Button>
+            </div>
+
+            {/* Revision input */}
+            <div className="space-y-2">
+              <p className="text-sm font-medium">修正指示</p>
+              <div className="flex gap-2">
+                <Textarea
+                  value={reviseInstruction}
+                  onChange={(e) => setReviseInstruction(e.target.value)}
+                  placeholder="テイストの修正指示を入力..."
+                  rows={2}
+                  className="flex-1 resize-none"
+                />
+                <Button
+                  onClick={handleReviseFirstEpisode}
+                  disabled={!reviseInstruction.trim() || isRevising}
+                  className="self-end"
+                >
+                  {isRevising ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                </Button>
+              </div>
+            </div>
+
+            {/* Mode selection for after taste check */}
+            <Card className="border-indigo-400/30">
+              <CardContent className="pt-4 space-y-3">
+                <p className="text-sm font-medium">OKの場合の生成モード</p>
+                <div className="grid grid-cols-2 gap-3">
+                  <button
+                    onClick={() => setGenerationMode('confirm')}
+                    className={cn(
+                      'p-3 rounded-lg border text-left text-sm transition-colors',
+                      generationMode === 'confirm'
+                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'border-border hover:border-indigo-500/50',
+                    )}
+                  >
+                    <p className="font-medium">確認モード</p>
+                    <p className="text-xs text-muted-foreground mt-1">1話ごとに確認してから次へ</p>
+                  </button>
+                  <button
+                    onClick={() => setGenerationMode('batch')}
+                    className={cn(
+                      'p-3 rounded-lg border text-left text-sm transition-colors',
+                      generationMode === 'batch'
+                        ? 'border-indigo-500 bg-indigo-50/50 dark:bg-indigo-950/20'
+                        : 'border-border hover:border-indigo-500/50',
+                    )}
+                  >
+                    <p className="font-medium">一括モード</p>
+                    <p className="text-xs text-muted-foreground mt-1">全話を一気にバッチ生成</p>
+                  </button>
+                </div>
+              </CardContent>
+            </Card>
+          </div>
+        </div>
+      )}
+
+      {/* Phase 4: Generation Progress */}
+      {(job.status === 'generating' || job.status === 'paused') && (
+        <div className="space-y-6">
+          {/* Progress */}
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div className="flex items-center justify-between">
+                <p className="text-sm font-medium">
+                  第{job.completedEpisodes}話 / 全{job.totalEpisodes}話
+                  {job.status === 'generating' ? ' 生成中...' : ' 停止中'}
+                </p>
+                <Badge variant={job.status === 'generating' ? 'default' : 'secondary'}>
+                  {job.status === 'generating' ? '生成中' : '停止中'}
+                </Badge>
+              </div>
+              <div className="w-full h-2 rounded-full bg-muted overflow-hidden">
+                <div
+                  className={cn(
+                    'h-full rounded-full transition-all duration-500',
+                    job.status === 'generating' ? 'bg-indigo-500 animate-pulse' : 'bg-indigo-500',
+                  )}
+                  style={{ width: `${(job.completedEpisodes / job.totalEpisodes) * 100}%` }}
+                />
+              </div>
+              <p className="text-xs text-muted-foreground">
+                {job.creditsConsumed}cr消費済み
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Controls */}
+          <div className="flex flex-wrap gap-2">
+            {job.status === 'generating' ? (
+              <Button variant="outline" onClick={handlePause} className="gap-2">
+                <Pause className="h-4 w-4" /> 停止
+              </Button>
+            ) : (
+              <Button onClick={handleResume} className="gap-2">
+                <Play className="h-4 w-4" /> 続きから生成
+              </Button>
+            )}
+            <Button
+              variant="ghost"
+              onClick={() => handleChangeMode(generationMode === 'confirm' ? 'batch' : 'confirm')}
+              className="gap-2 text-sm"
+            >
+              {generationMode === 'confirm' ? '一括モードに切り替え' : '確認モードに切り替え'}
+            </Button>
+          </div>
+
+          {/* Confirm mode: show current episode */}
+          {generationMode === 'confirm' && job.status === 'paused' && episodes.length > 0 && (
+            <ConfirmModeEpisode
+              episode={episodes[episodes.length - 1]}
+              onApprove={() => {
+                handleApproveEpisode(episodes[episodes.length - 1].id).then(() => handleResume());
+              }}
+              onRevise={(instruction) => {
+                setEpisodeReviseInstruction(instruction);
+                handleReviseEpisode(episodes[episodes.length - 1].id);
+              }}
+              onRegenerate={() => handleRegenerate(episodes[episodes.length - 1].id)}
+              isStreaming={episodeStreaming === episodes[episodes.length - 1].id}
+              streamResult={episodeStreamResult}
+            />
+          )}
+        </div>
+      )}
+
+      {/* Phase 5: Review */}
+      {(job.status === 'reviewing' || job.status === 'completed') && (
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <p className="text-sm text-muted-foreground">
+              承認済み: {approvedCount} / {episodes.length}話
+            </p>
+            <Button
+              onClick={handlePublish}
+              disabled={!allApproved || publishing}
+              className="gap-2"
+            >
+              {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
+              公開
+            </Button>
+          </div>
+
+          {/* Episode list */}
+          <div className="space-y-2">
+            {episodes.map((ep) => (
+              <Card key={ep.id} className={cn(
+                ep.status === 'approved' && 'border-green-500/30',
+              )}>
+                <button
+                  onClick={() => setExpandedEpisode(expandedEpisode === ep.id ? null : ep.id)}
+                  className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-muted/30 transition-colors"
+                >
+                  <div className="flex items-center gap-2">
+                    {expandedEpisode === ep.id ? (
+                      <ChevronDown className="h-4 w-4 text-muted-foreground" />
+                    ) : (
+                      <ChevronRight className="h-4 w-4 text-muted-foreground" />
+                    )}
+                    <span className="text-sm font-medium">
+                      第{ep.orderIndex + 1}話: {ep.title}
+                    </span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-xs text-muted-foreground">{ep.wordCount?.toLocaleString()}字</span>
+                    <EpisodeStatusBadge status={ep.status} />
+                  </div>
+                </button>
+
+                {expandedEpisode === ep.id && (
+                  <CardContent className="border-t space-y-4">
+                    {/* Episode content */}
+                    <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[50vh] overflow-y-auto">
+                      {episodeStreaming === ep.id && episodeStreamResult
+                        ? episodeStreamResult
+                        : ep.content}
+                    </div>
+
+                    {episodeStreaming === ep.id && (
+                      <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                        <Loader2 className="h-4 w-4 animate-spin" /> 処理中...
+                      </div>
+                    )}
+
+                    {/* Actions */}
+                    {episodeStreaming !== ep.id && (
+                      <div className="flex flex-wrap gap-2 border-t pt-3">
+                        <Button
+                          size="sm"
+                          variant={ep.status === 'approved' ? 'secondary' : 'default'}
+                          onClick={() => handleApproveEpisode(ep.id)}
+                          disabled={ep.status === 'approved'}
+                          className="gap-1"
+                        >
+                          <CheckCircle2 className="h-3.5 w-3.5" />
+                          {ep.status === 'approved' ? '承認済み' : '承認'}
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => {
+                            setEpisodeReviseId(ep.id);
+                            setEpisodeReviseInstruction('');
+                          }}
+                          className="gap-1"
+                        >
+                          <Edit3 className="h-3.5 w-3.5" /> 修正指示
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleAutoFix(ep.id)}
+                          className="gap-1"
+                        >
+                          <Wand2 className="h-3.5 w-3.5" /> AI自動修正
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          onClick={() => handleRegenerate(ep.id)}
+                          className="gap-1"
+                        >
+                          <RefreshCw className="h-3.5 w-3.5" /> 再生成
+                        </Button>
+                      </div>
+                    )}
+
+                    {/* Revise input */}
+                    {episodeReviseId === ep.id && (
+                      <div className="flex gap-2 items-end">
+                        <Textarea
+                          value={episodeReviseInstruction}
+                          onChange={(e) => setEpisodeReviseInstruction(e.target.value)}
+                          placeholder="修正指示を入力..."
+                          rows={2}
+                          className="flex-1 resize-none text-sm"
+                        />
+                        <div className="flex flex-col gap-1">
+                          <Button
+                            size="sm"
+                            onClick={() => handleReviseEpisode(ep.id)}
+                            disabled={!episodeReviseInstruction.trim() || !!episodeStreaming}
+                          >
+                            <Send className="h-3.5 w-3.5" />
+                          </Button>
+                          <Button
+                            size="sm"
+                            variant="ghost"
+                            onClick={() => setEpisodeReviseId(null)}
+                          >
+                            取消
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+                  </CardContent>
+                )}
+              </Card>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+function ModeToggle({ aiMode, onChange }: { aiMode: 'normal' | 'premium'; onChange: (m: 'normal' | 'premium') => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onChange('normal')}
+        className={cn(
+          'flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors',
+          aiMode === 'normal'
+            ? 'bg-primary/10 border-primary/30 text-primary'
+            : 'border-border text-muted-foreground hover:border-primary/30',
+        )}
+      >
+        通常 <span className="opacity-60">1cr</span>
+      </button>
+      <button
+        onClick={() => onChange('premium')}
+        className={cn(
+          'flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors',
+          aiMode === 'premium'
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+            : 'border-border text-muted-foreground hover:border-amber-500/30',
+        )}
+      >
+        <Crown className="h-2.5 w-2.5" />
+        高精度 <span className="opacity-60">5cr</span>
+      </button>
+    </div>
+  );
+}
+
+function EpisodeStatusBadge({ status }: { status: string }) {
+  switch (status) {
+    case 'approved':
+      return <Badge className="bg-green-500 text-white text-[10px]">承認済み</Badge>;
+    case 'revised':
+      return <Badge variant="secondary" className="text-[10px]">修正済み</Badge>;
+    case 'generated':
+      return <Badge variant="outline" className="text-[10px]">生成済み</Badge>;
+    default:
+      return <Badge variant="outline" className="text-[10px] text-muted-foreground">未生成</Badge>;
+  }
+}
+
+function ConfirmModeEpisode({
+  episode,
+  onApprove,
+  onRevise,
+  onRegenerate,
+  isStreaming,
+  streamResult,
+}: {
+  episode: EditorEpisode;
+  onApprove: () => void;
+  onRevise: (instruction: string) => void;
+  onRegenerate: () => void;
+  isStreaming: boolean;
+  streamResult: string;
+}) {
+  const [instruction, setInstruction] = useState('');
+
+  return (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-sm">第{episode.orderIndex + 1}話: {episode.title}</CardTitle>
+      </CardHeader>
+      <CardContent className="space-y-4">
+        <div className="prose prose-sm max-w-none dark:prose-invert whitespace-pre-wrap leading-relaxed text-sm max-h-[50vh] overflow-y-auto">
+          {isStreaming && streamResult ? streamResult : episode.content}
+        </div>
+
+        {isStreaming && (
+          <div className="flex items-center gap-2 text-sm text-muted-foreground">
+            <Loader2 className="h-4 w-4 animate-spin" /> 処理中...
+          </div>
+        )}
+
+        {!isStreaming && (
+          <div className="space-y-3 border-t pt-3">
+            <div className="flex flex-wrap gap-2">
+              <Button size="sm" onClick={onApprove} className="gap-1">
+                <Check className="h-3.5 w-3.5" /> OK → 次へ
+              </Button>
+              <Button size="sm" variant="outline" onClick={onRegenerate} className="gap-1">
+                <RefreshCw className="h-3.5 w-3.5" /> 再生成
+              </Button>
+            </div>
+            <div className="flex gap-2 items-end">
+              <Textarea
+                value={instruction}
+                onChange={(e) => setInstruction(e.target.value)}
+                placeholder="修正指示..."
+                rows={2}
+                className="flex-1 resize-none text-sm"
+              />
+              <Button
+                size="sm"
+                onClick={() => { onRevise(instruction); setInstruction(''); }}
+                disabled={!instruction.trim()}
+              >
+                <Send className="h-3.5 w-3.5" />
+              </Button>
+            </div>
+          </div>
+        )}
+      </CardContent>
+    </Card>
+  );
+}

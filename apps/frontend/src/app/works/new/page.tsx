@@ -2,7 +2,7 @@
 
 import { Suspense, useState } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Wand2, Zap, Sparkles, Users, GitBranch, Brain } from 'lucide-react';
+import { Wand2, Zap, Sparkles, Users, GitBranch, Brain, Bot, Crown, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -31,6 +31,7 @@ export default function NewWorkPage() {
 
 function NewWorkPageInner() {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const urlMode = searchParams.get('mode');
   const urlDraft = searchParams.get('draft');
   const [mode, setMode] = useState<'choose' | 'quick' | 'wizard'>(
@@ -52,7 +53,7 @@ function NewWorkPageInner() {
         あなたの物語を始めましょう
       </p>
 
-      <div className="grid gap-6 sm:grid-cols-2">
+      <div className="grid gap-6 sm:grid-cols-2 lg:grid-cols-3">
         <button
           onClick={() => setMode('wizard')}
           className="group relative p-6 rounded-xl border-2 border-primary/30 hover:border-primary transition-colors text-left space-y-4 bg-primary/[0.02]"
@@ -102,6 +103,33 @@ function NewWorkPageInner() {
             <p className="text-[10px] text-muted-foreground/60 mt-2">
               ※ AI支援の精度は設計モードより限定的です
             </p>
+          </div>
+        </button>
+
+        <button
+          onClick={() => router.push('/works/new/editor-mode')}
+          className="group relative p-6 rounded-xl border-2 border-indigo-400/30 hover:border-indigo-500 transition-colors text-left space-y-4 bg-gradient-to-br from-indigo-50/30 to-purple-50/30 dark:from-indigo-950/20 dark:to-purple-950/20 sm:col-span-2 lg:col-span-1"
+        >
+          <div className="absolute -top-2.5 right-4 px-2 py-0.5 bg-indigo-500 text-white text-[10px] font-medium rounded-full flex items-center gap-1">
+            <Crown className="h-3 w-3" />
+            高精度モード（Opus）推奨
+          </div>
+          <div className="h-10 w-10 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover:bg-indigo-500/20 transition-colors">
+            <Bot className="h-5 w-5 text-indigo-500" />
+          </div>
+          <div>
+            <h2 className="font-semibold mb-1.5">編集者モード</h2>
+            <p className="text-xs text-muted-foreground leading-relaxed mb-3">
+              AIが全話を執筆、あなたは編集者として品質を追い込む
+            </p>
+            <div className="p-2.5 rounded-lg bg-amber-500/5 border border-amber-500/20">
+              <div className="flex items-start gap-1.5 text-[11px] text-amber-700 dark:text-amber-400">
+                <AlertTriangle className="h-3.5 w-3.5 flex-shrink-0 mt-0.5" />
+                <span className="leading-relaxed">
+                  AIが全話を自動生成します。生成された作品にはAI Generatedバッジが付与されます。全自動生成では話の間に齟齬が生じる可能性があります。
+                </span>
+              </div>
+            </div>
           </div>
         </button>
       </div>

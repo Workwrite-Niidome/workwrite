@@ -119,7 +119,7 @@ export default function WorkDetailPage() {
             <div className="flex flex-wrap items-center gap-2 text-muted-foreground">
               <Link href={`/users/${work.author.id}`} className="flex items-center gap-1 shrink-0 hover:text-foreground transition-colors">
                 <User className="h-4 w-4" />
-                {work.author.displayName || work.author.name}
+                {work.isAiGenerated ? '編集者: ' : ''}{work.author.displayName || work.author.name}
               </Link>
               {isAuthenticated && (
                 <Button
@@ -159,7 +159,14 @@ export default function WorkDetailPage() {
                   )}
                 </Button>
               )}
-              {work.isAiGenerated && <AiGeneratedBadge size="md" />}
+              {work.isAiGenerated && (
+                <>
+                  <AiGeneratedBadge size="md" />
+                  <span className="text-xs text-muted-foreground">
+                    この作品はAIが執筆し、{work.author.displayName || work.author.name}が編集しました
+                  </span>
+                </>
+              )}
               {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
               {(work as any).completionStatus === 'COMPLETED' && (
                 <Badge variant="default" className="shrink-0 bg-green-600">完結</Badge>

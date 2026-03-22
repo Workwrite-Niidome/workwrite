@@ -3,11 +3,12 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight } from 'lucide-react';
+import { Search, ArrowRight, Bot } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { api, type Work, type TopPageData } from '@/lib/api';
+import { cn } from '@/lib/utils';
 import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
 import { GENRE_LABELS } from '@/lib/constants';
 
@@ -32,6 +33,9 @@ export default function DiscoverPage() {
   const router = useRouter();
   const [data, setData] = useState<TopPageData | null>(null);
   const [loading, setLoading] = useState(true);
+  const [activeTab, setActiveTab] = useState<'works' | 'ai-works'>('works');
+  const [aiWorks, setAiWorks] = useState<Work[]>([]);
+  const [aiWorksLoading, setAiWorksLoading] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [autocompleteResults, setAutocompleteResults] = useState<{ id: string; title: string; author: { name: string; displayName: string | null } }[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
@@ -124,6 +128,56 @@ export default function DiscoverPage() {
         </form>
       </div>
 
+      {/* Tab Bar */}
+      <div className="border-b border-border">
+        <div className="flex gap-4">
+          <button
+            onClick={() => setActiveTab('works')}
+            className={cn(
+              'pb-2 text-sm font-medium border-b-2 transition-colors',
+              activeTab === 'works' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            作品
+          </button>
+          <button
+            onClick={() => {
+              setActiveTab('ai-works');
+              if (aiWorks.length === 0 && !aiWorksLoading) {
+                setAiWorksLoading(true);
+                api.searchWorks('', { aiGenerated: true })
+                  .then((res: any) => setAiWorks(res.data?.hits || []))
+                  .catch(() => {})
+                  .finally(() => setAiWorksLoading(false));
+              }
+            }}
+            className={cn(
+              'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+              activeTab === 'ai-works' ? 'border-indigo-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Bot className="h-3.5 w-3.5" /> AI作品
+          </button>
+        </div>
+      </div>
+
+      {activeTab === 'ai-works' && (
+        <section>
+          <h2 className="text-sm font-medium mb-4">AI生成作品</h2>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {aiWorksLoading
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : aiWorks.map((work) => <WorkCard key={work.id} work={work} />)}
+            {!aiWorksLoading && aiWorks.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
+                AI作品はまだありません
+              </p>
+            )}
+          </div>
+        </section>
+      )}
+
+      {activeTab === 'works' && <>
       {/* Mood Discovery */}
       <section>
         <h2 className="text-sm font-medium mb-4">今の気分で探す</h2>
@@ -222,6 +276,7 @@ export default function DiscoverPage() {
           </div>
         </section>
       )}
+      </>}
     </div>
   );
 }

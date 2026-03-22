@@ -490,13 +490,14 @@ class ApiClient {
   }
 
   // Discover
-  async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string }) {
+  async searchWorks(q: string, options?: { genre?: string; emotionTags?: string[]; limit?: number; offset?: number; sort?: string; aiGenerated?: boolean }) {
     const qs = new URLSearchParams({ q });
     if (options?.genre) qs.set('genre', options.genre);
     if (options?.emotionTags?.length) qs.set('emotionTags', options.emotionTags.join(','));
     if (options?.limit) qs.set('limit', String(options.limit));
     if (options?.offset) qs.set('offset', String(options.offset));
     if (options?.sort) qs.set('sort', options.sort);
+    if (options?.aiGenerated !== undefined) qs.set('aiGenerated', String(options.aiGenerated));
     return this.request<{ data: { hits: Work[]; total: number } }>(`/discover/search?${qs.toString()}`);
   }
 
@@ -1055,6 +1056,55 @@ class ApiClient {
   // AI Onboarding Profile
   async getAiProfile() {
     return this.request<{ data: { personality: string; recommendedGenres: string[]; recommendedThemes: string[] } | null }>('/users/me/onboarding/ai-profile');
+  }
+
+  // Editor Mode
+  async editorModeStatus(workId: string) {
+    return this.request(`/works/${workId}/editor-mode/status`);
+  }
+
+  async editorModeChat(workId: string) {
+    return `${API_BASE}/works/${workId}/editor-mode/chat`;
+  }
+
+  async editorModeFinalizeDesign(workId: string, data: { totalEpisodes: number; charCountPerEpisode: number; aiMode?: string }) {
+    return this.request(`/works/${workId}/editor-mode/finalize`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async editorModeGenerateFirst(workId: string) {
+    return `${API_BASE}/works/${workId}/editor-mode/generate-first`;
+  }
+
+  async editorModeStart(workId: string, data: { aiMode: string; generationMode: string }) {
+    return this.request(`/works/${workId}/editor-mode/start`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async editorModePause(workId: string) {
+    return this.request(`/works/${workId}/editor-mode/pause`, { method: 'POST' });
+  }
+
+  async editorModeResume(workId: string, data: { aiMode: string; generationMode: string }) {
+    return this.request(`/works/${workId}/editor-mode/resume`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async editorModeChangeMode(workId: string, data: { generationMode: string }) {
+    return this.request(`/works/${workId}/editor-mode/mode`, { method: 'POST', body: JSON.stringify(data) });
+  }
+
+  async editorModeReviseEpisode(workId: string, episodeId: string) {
+    return `${API_BASE}/works/${workId}/editor-mode/episodes/${episodeId}/revise`;
+  }
+
+  async editorModeRegenerateEpisode(workId: string, episodeId: string) {
+    return `${API_BASE}/works/${workId}/editor-mode/episodes/${episodeId}/regenerate`;
+  }
+
+  async editorModeAutoFix(workId: string, episodeId: string) {
+    return `${API_BASE}/works/${workId}/editor-mode/episodes/${episodeId}/auto-fix`;
+  }
+
+  async editorModeApproveEpisode(workId: string, episodeId: string) {
+    return this.request(`/works/${workId}/editor-mode/episodes/${episodeId}/approve`, { method: 'POST' });
   }
 
   // Health check

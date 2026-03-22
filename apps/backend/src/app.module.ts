@@ -32,6 +32,7 @@ import { WorkImportModule } from './work-import/work-import.module';
 import { FollowsModule } from './follows/follows.module';
 import { LettersModule } from './letters/letters.module';
 import { CreationWizardModule } from './creation-wizard/creation-wizard.module';
+import { EditorModeModule } from './editor-mode/editor-mode.module';
 import { StoryStructureModule } from './story-structure/story-structure.module';
 import { PostsModule } from './posts/posts.module';
 import { TimelineModule } from './timeline/timeline.module';
@@ -77,6 +78,7 @@ import { HealthController } from './health.controller';
     FollowsModule,
     LettersModule,
     CreationWizardModule,
+    EditorModeModule,
     StoryStructureModule,
     PostsModule,
     TimelineModule,
