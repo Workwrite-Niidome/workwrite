@@ -1,5 +1,6 @@
 import { PrismaClient } from '@prisma/client';
 import * as bcrypt from 'bcrypt';
+import * as cheerio from 'cheerio';
 
 const prisma = new PrismaClient();
 
@@ -200,6 +201,102 @@ async function main() {
   });
   if (fixedEpisodes.count > 0) {
     console.log(`Fixed ${fixedEpisodes.count} unpublished episodes in published works.`);
+  }
+
+  // Fix: Re-scrape contaminated narou episodes (one-time)
+  await fixContaminatedEpisodes();
+}
+
+async function fixContaminatedEpisodes() {
+  // Find episodes with contamination markers
+  const contaminated = await prisma.episode.findMany({
+    where: {
+      content: { contains: 'googletagmanager' },
+    },
+    select: { id: true, workId: true, orderIndex: true, title: true },
+    orderBy: { orderIndex: 'asc' },
+  });
+
+  if (contaminated.length === 0) {
+    console.log('No contaminated episodes found.');
+    return;
+  }
+
+  console.log(`Found ${contaminated.length} contaminated episodes. Re-scraping...`);
+
+  // Group by workId
+  const byWork = new Map<string, typeof contaminated>();
+  for (const ep of contaminated) {
+    if (!byWork.has(ep.workId)) byWork.set(ep.workId, []);
+    byWork.get(ep.workId)!.push(ep);
+  }
+
+  for (const [workId, episodes] of byWork) {
+    // Find source URL from WorkImport
+    const importRecord = await prisma.workImport.findFirst({
+      where: { workId, status: 'COMPLETED' },
+      select: { sourceUrl: true },
+    });
+
+    if (!importRecord?.sourceUrl) {
+      // Try to find ncode from work title via narou API
+      const work = await prisma.work.findUnique({ where: { id: workId }, select: { title: true } });
+      if (!work) continue;
+
+      console.log(`  Work "${work.title?.slice(0, 25)}" has no sourceUrl, trying narou API...`);
+      try {
+        const searchRes = await fetch(
+          `https://api.syosetu.com/novelapi/api/?of=n&title=${encodeURIComponent(work.title.slice(0, 30))}&out=json&lim=1`,
+          { headers: { 'User-Agent': 'Workwrite/1.0' } },
+        );
+        const data = await searchRes.json();
+        const ncode = data[1]?.ncode?.toLowerCase();
+        if (!ncode) { console.log(`    Could not find ncode, skipping`); continue; }
+
+        await rescrapeEpisodes(workId, ncode, episodes);
+      } catch (e) {
+        console.log(`    Error: ${e}`);
+      }
+      continue;
+    }
+
+    // Extract ncode from sourceUrl
+    const ncodeMatch = importRecord.sourceUrl.match(/ncode\.syosetu\.com\/(n\w+)/i);
+    if (!ncodeMatch) { console.log(`  Unknown URL format: ${importRecord.sourceUrl}`); continue; }
+
+    await rescrapeEpisodes(workId, ncodeMatch[1], episodes);
+  }
+}
+
+async function rescrapeEpisodes(workId: string, ncode: string, episodes: { id: string; orderIndex: number; title: string }[]) {
+  console.log(`  Re-scraping ${episodes.length} episodes for ncode=${ncode}...`);
+
+  for (const ep of episodes) {
+    const url = `https://ncode.syosetu.com/${ncode}/${ep.orderIndex + 1}/`;
+    try {
+      await new Promise(r => setTimeout(r, 1500)); // Rate limit
+
+      const res = await fetch(url, { headers: { 'User-Agent': 'Workwrite/1.0' } });
+      if (!res.ok) { console.log(`    ep${ep.orderIndex + 1}: fetch failed ${res.status}`); continue; }
+
+      const html = await res.text();
+      const $ = cheerio.load(html);
+
+      // Use new selectors
+      let content = $('.p-novel__body .js-novel-text').text().trim();
+      if (!content) content = $('.p-novel__body').text().trim();
+      if (!content) content = $('#novel_honbun').text().trim();
+
+      if (!content || content.length < 50) { console.log(`    ep${ep.orderIndex + 1}: content too short`); continue; }
+
+      await prisma.episode.update({
+        where: { id: ep.id },
+        data: { content, wordCount: content.length },
+      });
+      console.log(`    ep${ep.orderIndex + 1}: fixed (${content.length} chars)`);
+    } catch (e) {
+      console.log(`    ep${ep.orderIndex + 1}: error ${e}`);
+    }
   }
 }
 
