@@ -125,10 +125,10 @@ export default function Home() {
           <p className="mt-4 text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
             AIスコアリングと感情タグで、あなたの心に響く次の一冊を。
           </p>
-          <div className="mt-8 grid grid-cols-3 gap-2 max-w-sm mx-auto">
+          <div className="mt-8 grid grid-cols-3 gap-2 max-w-lg mx-auto">
             {MOOD_CARDS.map((card) => (
               <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
-                <div className="border border-border rounded-lg px-3 py-3 text-center text-xs sm:text-sm whitespace-nowrap transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
+                <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
                   {card.label}
                 </div>
               </Link>

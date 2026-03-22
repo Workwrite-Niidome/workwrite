@@ -123,8 +123,8 @@ export class NarouScraperService {
     const $ = cheerio.load(html);
     const episodes: { title: string; url: string }[] = [];
 
-    // ncode.syosetu.com uses .novel_sublist2 for episode links
-    $('.novel_sublist2 a').each((_, el) => {
+    // Current layout (2025+): .p-eplist__subtitle a
+    $('.p-eplist__subtitle a').each((_, el) => {
       const $el = $(el);
       const href = $el.attr('href');
       const title = $el.text().trim();
@@ -134,7 +134,20 @@ export class NarouScraperService {
       }
     });
 
-    // Alternative selector for newer layout
+    // Legacy layout: .novel_sublist2 a
+    if (episodes.length === 0) {
+      $('.novel_sublist2 a').each((_, el) => {
+        const $el = $(el);
+        const href = $el.attr('href');
+        const title = $el.text().trim();
+        if (href && title) {
+          const fullUrl = href.startsWith('http') ? href : `https://ncode.syosetu.com${href}`;
+          episodes.push({ title, url: fullUrl });
+        }
+      });
+    }
+
+    // Fallback: match links by ncode pattern
     if (episodes.length === 0) {
       $('a[href*="/' + ncode + '/"]').each((_, el) => {
         const $el = $(el);
@@ -159,13 +172,24 @@ export class NarouScraperService {
     const html = await res.text();
     const $ = cheerio.load(html);
 
-    // Main content area
-    const content = $('#novel_honbun').text().trim();
-    if (content) return content;
+    // Current layout (2025+): .p-novel__body or .js-novel-text
+    const newLayout = $('.p-novel__body .js-novel-text').text().trim();
+    if (newLayout) return newLayout;
 
-    // Fallback selectors
+    const novelBody = $('.p-novel__body').text().trim();
+    if (novelBody) return novelBody;
+
+    // Legacy layout: #novel_honbun
+    const legacy = $('#novel_honbun').text().trim();
+    if (legacy) return legacy;
+
+    // Fallback: .novel_view
     const alt = $('.novel_view').text().trim();
     if (alt) return alt;
+
+    // Last resort: extract text from main content area only (avoid nav/footer)
+    const main = $('main').text().trim() || $('#container').text().trim();
+    if (main) return main.slice(0, 50000);
 
     return $('body').text().trim().slice(0, 50000);
   }
