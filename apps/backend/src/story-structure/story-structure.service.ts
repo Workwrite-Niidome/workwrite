@@ -362,8 +362,8 @@ export class StoryStructureService {
     // CRITICAL: Never expose infoAsymmetry.hiddenTruths (spoiler data)
     return {
       basics: wb.basics || null,
-      rules: wb.rules || [],
-      terminology: wb.terminology || [],
+      rules: Array.isArray(wb.rules) ? wb.rules : [],
+      terminology: Array.isArray(wb.terminology) ? wb.terminology : [],
       history: wb.history || null,
       items: (wb.items || []).map((item: any) => ({
         name: item.name,
@@ -475,10 +475,10 @@ export class StoryStructureService {
         const wbLines: string[] = [];
         if (wb.basics?.era) wbLines.push(`時代: ${wb.basics.era}`);
         if (wb.basics?.setting) wbLines.push(`舞台: ${wb.basics.setting}`);
-        for (const rule of wb.rules || []) {
+        for (const rule of Array.isArray(wb.rules) ? wb.rules : []) {
           if (rule.name) wbLines.push(`ルール「${rule.name}」: ${rule.description}${rule.constraints ? `（制約: ${rule.constraints}）` : ''}`);
         }
-        for (const term of wb.terminology || []) {
+        for (const term of Array.isArray(wb.terminology) ? wb.terminology : []) {
           if (term.term) wbLines.push(`${term.term}${term.reading ? `（${term.reading}）` : ''}: ${term.definition}`);
         }
         if (wbLines.length > 0) parts.push(`【世界観設定（厳守）】\n${wbLines.join('\n')}`);

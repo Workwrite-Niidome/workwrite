@@ -610,10 +610,10 @@ ${dto.existingData ? `【既存の世界観設定】\n${JSON.stringify(dto.exist
       const wbParts: string[] = [];
       if (wb.basics?.era) wbParts.push(`時代: ${wb.basics.era}`);
       if (wb.basics?.setting) wbParts.push(`舞台: ${wb.basics.setting}`);
-      for (const rule of wb.rules || []) {
+      for (const rule of Array.isArray(wb.rules) ? wb.rules : []) {
         if (rule.name) wbParts.push(`ルール「${rule.name}」: ${rule.description}${rule.constraints ? `（制約: ${rule.constraints}）` : ''}`);
       }
-      for (const term of wb.terminology || []) {
+      for (const term of Array.isArray(wb.terminology) ? wb.terminology : []) {
         if (term.term) wbParts.push(`${term.term}${term.reading ? `（${term.reading}）` : ''}: ${term.definition}`);
       }
       if (wbParts.length > 0) contextParts.push(`【世界観設定】\n${wbParts.join('\n')}`);
@@ -728,12 +728,12 @@ ${episodeContent.slice(0, 5000)}`;
       if (wb.basics?.civilizationLevel) {
         entries.push({ category: 'technology', name: '文明レベル', description: wb.basics.civilizationLevel });
       }
-      for (const rule of wb.rules || []) {
+      for (const rule of Array.isArray(wb.rules) ? wb.rules : []) {
         if (rule.name && rule.description) {
           entries.push({ category: 'magic', name: rule.name, description: `${rule.description}${rule.constraints ? `\n制約: ${rule.constraints}` : ''}` });
         }
       }
-      for (const term of wb.terminology || []) {
+      for (const term of Array.isArray(wb.terminology) ? wb.terminology : []) {
         if (term.term && term.definition) {
           entries.push({ category: 'culture', name: term.term, description: `${term.reading ? `（${term.reading}）` : ''}${term.definition}` });
         }

@@ -123,7 +123,7 @@ export class AiCompanionService {
       const wbLines: string[] = [];
       if (wb.basics?.era) wbLines.push(`時代: ${wb.basics.era}`);
       if (wb.basics?.setting) wbLines.push(`舞台: ${wb.basics.setting}`);
-      for (const term of (wb.terminology || []).slice(0, 10)) {
+      for (const term of (Array.isArray(wb.terminology) ? wb.terminology : []).slice(0, 10)) {
         if (term.term) wbLines.push(`${term.term}: ${term.definition}`);
       }
       if (wbLines.length > 0) structuredParts.push(`【世界観】\n${wbLines.join('\n')}`);

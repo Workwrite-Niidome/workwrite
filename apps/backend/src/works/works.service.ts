@@ -389,7 +389,7 @@ export class WorksService {
       if (wb) {
         if (wb.basics?.era) worldKeywords.push(wb.basics.era);
         if (wb.basics?.setting) worldKeywords.push(wb.basics.setting);
-        for (const term of (wb.terminology || []).slice(0, 10)) {
+        for (const term of (Array.isArray(wb.terminology) ? wb.terminology : []).slice(0, 10)) {
           if (term.term) worldKeywords.push(term.term);
         }
       }
