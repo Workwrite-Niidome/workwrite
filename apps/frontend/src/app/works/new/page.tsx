@@ -116,7 +116,7 @@ function NewWorkPageInner() {
           <div>
             <h2 className="font-semibold mb-1.5">編集者モード</h2>
             <p className="text-xs text-muted-foreground leading-relaxed mb-2">
-              AIが全話を執筆、あなたは編集者として品質を追い込む
+              AIが全話を執筆、あなたは編集者としてAIと協創する
             </p>
             <p className="text-[10px] text-muted-foreground/60 mb-2">
               高精度モード推奨
