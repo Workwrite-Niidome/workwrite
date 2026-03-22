@@ -16,6 +16,7 @@ import {
   Settings,
   Feather,
   Crown,
+  Megaphone,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
@@ -36,6 +37,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/bookshelf', label: '本棚', icon: BookOpen, authRequired: true },
   { href: '/bookmarks', label: 'しおり', icon: Bookmark, authRequired: true },
   { href: '/notifications', label: '通知', icon: Bell, authRequired: true },
+  { href: '/announcements', label: 'お知らせ', icon: Megaphone },
   { href: '/stats', label: '統計', icon: BarChart3, authRequired: true },
   { href: '/dashboard', label: '執筆', icon: Feather, authRequired: true },
   { href: '/profile', label: 'マイページ', icon: User, authRequired: true },

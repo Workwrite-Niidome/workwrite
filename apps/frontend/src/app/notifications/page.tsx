@@ -6,13 +6,18 @@ import { useAuth } from '@/lib/auth-context';
 import { api, type NotificationItem } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bell, Check, MessageSquare, Star, BarChart3 } from 'lucide-react';
+import { Bell, Check, MessageSquare, Star, BarChart3, Hand, BookOpen, Mail, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const ICON_MAP: Record<string, React.ElementType> = {
   comment: MessageSquare,
   review: Star,
   score_ready: BarChart3,
+  reaction: Hand,
+  new_episode: BookOpen,
+  letter: Mail,
+  digest: Bell,
+  announcement: Megaphone,
 };
 
 function NotificationIcon({ type }: { type: string }) {
@@ -20,15 +25,41 @@ function NotificationIcon({ type }: { type: string }) {
   return <Icon className="h-4 w-4 flex-shrink-0" />;
 }
 
+function getNotificationLink(n: NotificationItem): string | null {
+  const data = n.data || {};
+  switch (n.type) {
+    case 'comment':
+      return data.episodeId ? `/read/${data.episodeId}` : data.workId ? `/works/${data.workId}` : null;
+    case 'review':
+      return data.workId ? `/works/${data.workId}` : null;
+    case 'score_ready':
+      return data.workId ? `/dashboard/works/${data.workId}` : null;
+    case 'reaction':
+      return data.workId ? `/dashboard/works/${data.workId}` : null;
+    case 'new_episode':
+      return data.episodeId ? `/read/${data.episodeId}` : data.workId ? `/works/${data.workId}` : null;
+    case 'letter':
+      return '/dashboard/letters/received';
+    case 'digest':
+      return '/';
+    case 'announcement':
+      return '/announcements';
+    default:
+      if (data.workId) return `/works/${data.workId}`;
+      if (data.episodeId) return `/read/${data.episodeId}`;
+      return null;
+  }
+}
+
 function timeAgo(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime();
   const mins = Math.floor(diff / 60000);
-  if (mins < 1) return 'just now';
-  if (mins < 60) return `${mins}m ago`;
+  if (mins < 1) return 'たった今';
+  if (mins < 60) return `${mins}分前`;
   const hours = Math.floor(mins / 60);
-  if (hours < 24) return `${hours}h ago`;
+  if (hours < 24) return `${hours}時間前`;
   const days = Math.floor(hours / 24);
-  if (days < 30) return `${days}d ago`;
+  if (days < 30) return `${days}日前`;
   return new Date(dateStr).toLocaleDateString('ja-JP');
 }
 
@@ -69,16 +100,22 @@ export default function NotificationsPage() {
     } catch {}
   }
 
+  function handleClick(n: NotificationItem) {
+    if (!n.read) handleMarkAsRead(n.id);
+    const link = getNotificationLink(n);
+    if (link) router.push(link);
+  }
+
   const unreadCount = notifications.filter((n) => !n.read).length;
 
   return (
     <div className="px-4 md:px-6 py-8">
       <div className="flex items-center justify-between mb-6">
-        <h1 className="text-lg font-semibold tracking-wide">Notifications</h1>
+        <h1 className="text-lg font-semibold tracking-wide">通知</h1>
         {unreadCount > 0 && (
           <Button variant="ghost" size="sm" className="text-xs h-8" onClick={handleMarkAllAsRead}>
             <Check className="h-3.5 w-3.5 mr-1" />
-            Mark all as read
+            すべて既読にする
           </Button>
         )}
       </div>
@@ -90,7 +127,7 @@ export default function NotificationsPage() {
           className="text-xs h-8"
           onClick={() => setFilter('all')}
         >
-          All
+          すべて
         </Button>
         <Button
           variant={filter === 'unread' ? 'default' : 'ghost'}
@@ -98,7 +135,7 @@ export default function NotificationsPage() {
           className="text-xs h-8"
           onClick={() => setFilter('unread')}
         >
-          Unread
+          未読
         </Button>
       </div>
 
@@ -117,38 +154,42 @@ export default function NotificationsPage() {
           <div className="text-center py-16">
             <Bell className="h-8 w-8 text-muted-foreground mx-auto mb-3" />
             <p className="text-sm text-muted-foreground">
-              {filter === 'unread' ? 'No unread notifications' : 'No notifications yet'}
+              {filter === 'unread' ? '未読の通知はありません' : 'まだ通知はありません'}
             </p>
           </div>
         ) : (
-          notifications.map((n) => (
-            <button
-              key={n.id}
-              onClick={() => !n.read && handleMarkAsRead(n.id)}
-              className={cn(
-                'w-full text-left flex gap-3 p-4 rounded-lg transition-colors',
-                n.read
-                  ? 'text-muted-foreground'
-                  : 'bg-secondary/40 hover:bg-secondary/60',
-              )}
-            >
-              <div className={cn('mt-0.5', !n.read && 'text-foreground')}>
-                <NotificationIcon type={n.type} />
-              </div>
-              <div className="flex-1 min-w-0">
-                <p className={cn('text-sm leading-snug', !n.read && 'font-medium text-foreground')}>
-                  {n.title}
-                </p>
-                {n.body && (
-                  <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>
+          notifications.map((n) => {
+            const link = getNotificationLink(n);
+            return (
+              <button
+                key={n.id}
+                onClick={() => handleClick(n)}
+                className={cn(
+                  'w-full text-left flex gap-3 p-4 rounded-lg transition-colors',
+                  link && 'cursor-pointer',
+                  n.read
+                    ? 'text-muted-foreground hover:bg-muted/30'
+                    : 'bg-secondary/40 hover:bg-secondary/60',
                 )}
-                <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.createdAt)}</p>
-              </div>
-              {!n.read && (
-                <div className="mt-1.5 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
-              )}
-            </button>
-          ))
+              >
+                <div className={cn('mt-0.5', !n.read && 'text-foreground')}>
+                  <NotificationIcon type={n.type} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className={cn('text-sm leading-snug', !n.read && 'font-medium text-foreground')}>
+                    {n.title}
+                  </p>
+                  {n.body && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>
+                  )}
+                  <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.createdAt)}</p>
+                </div>
+                {!n.read && (
+                  <div className="mt-1.5 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                )}
+              </button>
+            );
+          })
         )}
       </div>
     </div>
