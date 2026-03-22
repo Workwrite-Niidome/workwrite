@@ -36,6 +36,7 @@ export default function WorkDetailPage() {
   const [activeTab, setActiveTab] = useState<'overview' | 'world' | 'characters'>('overview');
   const [emotionProfile, setEmotionProfile] = useState<any>(null);
   const [hasWorldData, setHasWorldData] = useState(false);
+  const [workReactions, setWorkReactions] = useState<{ byEpisode: { episodeId: string; title: string; orderIndex: number; totalClaps: number; topEmotion: string | null }[]; totalClaps: number; totalReactions: number; emotions: Record<string, number> } | null>(null);
 
   useEffect(() => {
     api.getWork(workId)
@@ -71,6 +72,11 @@ export default function WorkDetailPage() {
     // Check if world data exists
     api.getWorldData(workId)
       .then((res) => { if (res) setHasWorldData(true); })
+      .catch(() => {});
+
+    // Fetch episode reactions
+    api.getWorkReactions(workId)
+      .then((res) => setWorkReactions(res.data))
       .catch(() => {});
   }, [workId, router, isAuthenticated, user?.id]);
 
@@ -244,6 +250,55 @@ export default function WorkDetailPage() {
               <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
                 {work.synopsis}
               </p>
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Reader Reactions Summary */}
+        {workReactions && workReactions.totalReactions >= 3 && (
+          <Card>
+            <CardContent className="pt-6">
+              <h2 className="text-sm font-medium mb-3">読者の声</h2>
+              <div className="space-y-3">
+                <div className="flex items-center gap-3 text-sm text-muted-foreground">
+                  <span>{work.readerCounts?.COMPLETED ?? 0}人が読了</span>
+                  <span className="text-border">·</span>
+                  <span>拍手 {workReactions.totalClaps.toLocaleString()}</span>
+                </div>
+                {Object.keys(workReactions.emotions).length > 0 && (
+                  <div className="flex flex-wrap gap-2">
+                    {Object.entries(workReactions.emotions)
+                      .sort(([, a], [, b]) => b - a)
+                      .map(([emotion, count]) => {
+                        const labels: Record<string, string> = { moved: '泣いた', warm: '温かい', surprised: '驚いた', fired_up: '燃えた', thoughtful: '深い' };
+                        return (
+                          <span key={emotion} className="text-xs text-muted-foreground bg-muted/50 px-2.5 py-1 rounded-full">
+                            {labels[emotion] || emotion} ({count})
+                          </span>
+                        );
+                      })}
+                  </div>
+                )}
+                {/* Episode reaction highlights */}
+                {workReactions.byEpisode.filter(e => e.totalClaps > 0).length > 0 && (
+                  <div className="space-y-1 pt-1">
+                    <p className="text-xs text-muted-foreground">話ごとの反応</p>
+                    {workReactions.byEpisode
+                      .filter(e => e.totalClaps > 0)
+                      .sort((a, b) => a.orderIndex - b.orderIndex)
+                      .map((ep) => {
+                        const labels: Record<string, string> = { moved: '泣いた', warm: '温かい', surprised: '驚いた', fired_up: '燃えた', thoughtful: '深い' };
+                        return (
+                          <div key={ep.episodeId} className="flex items-center gap-2 text-xs text-muted-foreground">
+                            <span className="truncate max-w-[180px]">第{ep.orderIndex + 1}話「{ep.title}」</span>
+                            <span className="text-foreground/60">拍手 {ep.totalClaps}</span>
+                            {ep.topEmotion && <span>· {labels[ep.topEmotion] || ep.topEmotion}</span>}
+                          </div>
+                        );
+                      })}
+                  </div>
+                )}
+              </div>
             </CardContent>
           </Card>
         )}
