@@ -161,17 +161,37 @@ export default function EditorModeDesignPage() {
         }
       });
 
-      // Check for __DESIGN_UPDATE__ block in accumulated text
-      const designMatch = accumulated.match(/__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```/);
-      if (designMatch) {
-        try {
-          const designUpdate = JSON.parse(designMatch[1]);
-          setDesign(prev => ({ ...prev, ...designUpdate }));
-          // Remove the design update block from the displayed message
-          const cleanContent = accumulated.replace(/__DESIGN_UPDATE__\s*```json\s*[\s\S]*?```/, '').trim();
-          setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
-        } catch {
-          // Failed to parse design update, keep the original message
+      // Check for __DESIGN_UPDATE__ block in accumulated text (multiple formats)
+      // Format 1: __DESIGN_UPDATE__ ```json {...} ```
+      // Format 2: __DESIGN_UPDATE__ {...} __END_UPDATE__
+      // Format 3: __DESIGN_UPDATE__\n{...}\n__END_UPDATE__
+      const patterns = [
+        /__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```\s*(__END_UPDATE__)?/,
+        /__DESIGN_UPDATE__\s*(\{[\s\S]*?\})\s*__END_UPDATE__/,
+        /__DESIGN_UPDATE__\s*(\{[\s\S]*?\})\s*$/,
+      ];
+      for (const pattern of patterns) {
+        const designMatch = accumulated.match(pattern);
+        if (designMatch) {
+          try {
+            const designUpdate = JSON.parse(designMatch[1]);
+            setDesign(prev => ({ ...prev, ...designUpdate }));
+            // Remove the entire design update block from displayed message
+            const cleanContent = accumulated
+              .replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/, '')
+              .replace(/\s*---\s*$/, '')
+              .trim();
+            setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
+          } catch {
+            // Failed to parse, try removing the raw block anyway
+            const cleanContent = accumulated
+              .replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/, '')
+              .trim();
+            if (cleanContent !== accumulated) {
+              setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
+            }
+          }
+          break;
         }
       }
     } catch (err: unknown) {
