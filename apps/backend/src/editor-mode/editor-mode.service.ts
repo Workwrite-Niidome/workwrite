@@ -1,4 +1,4 @@
-import { Injectable, Logger, ServiceUnavailableException, NotFoundException, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, ServiceUnavailableException, NotFoundException, BadRequestException, ForbiddenException, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
@@ -19,6 +19,15 @@ export class EditorModeService {
     private aiTier: AiTierService,
     private creditService: CreditService,
   ) {}
+
+  // ─── Ownership check helper ──────────────────────────────
+
+  private async getJobWithOwnerCheck(workId: string, userId: string) {
+    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
+    if (!job) throw new NotFoundException('Editor mode job not found');
+    if (job.userId !== userId) throw new ForbiddenException('Not authorized');
+    return job;
+  }
 
   // ─── Job management ────────────────────────────────────────
 
@@ -57,9 +66,13 @@ export class EditorModeService {
     const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_chat', aiMode);
 
     // Load existing job or create
-    let job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) {
+    let job: Awaited<ReturnType<typeof this.prisma.editorModeJob.findUnique>>;
+    const existing = await this.prisma.editorModeJob.findUnique({ where: { workId } });
+    if (!existing) {
       job = await this.createJob(userId, workId);
+    } else {
+      if (existing.userId !== userId) throw new ForbiddenException('Not authorized');
+      job = existing;
     }
 
     // Build chat history
@@ -90,6 +103,7 @@ __END_UPDATE__
     let transactionId: string | null = null;
     let contentDelivered = false;
     let fullOutput = '';
+    const startTime = Date.now();
 
     try {
       if (creditCost > 0) {
@@ -178,10 +192,10 @@ __END_UPDATE__
       } finally {
         reader.releaseLock();
 
-        const durationMs = Date.now();
+        const durationMs = Date.now() - startTime;
         await this.prisma.aiUsageLog
           .create({
-            data: { userId, feature: 'editor_mode_chat', inputTokens, outputTokens, model, durationMs: 0 },
+            data: { userId, feature: 'editor_mode_chat', inputTokens, outputTokens, model, durationMs },
           })
           .catch((e) => this.logger.error('Failed to log AI usage', e));
 
@@ -213,8 +227,7 @@ __END_UPDATE__
   // ─── Finalize Design ──────────────────────────────────────
 
   async finalizeDesign(userId: string, workId: string, dto: FinalizeDesignDto) {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+    const job = await this.getJobWithOwnerCheck(workId, userId);
 
     // Extract design from chat history's last __DESIGN_UPDATE__ block
     const chatHistory = (job.designChatHistory as any[]) || [];
@@ -267,8 +280,7 @@ __END_UPDATE__
     workId: string,
     aiMode: 'normal' | 'premium' = 'normal',
   ): AsyncGenerator<string> {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+    const job = await this.getJobWithOwnerCheck(workId, userId);
 
     const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_generate', aiMode);
 
@@ -321,17 +333,17 @@ __END_UPDATE__
   // ─── Start Generation ─────────────────────────────────────
 
   async startGeneration(userId: string, workId: string, dto: StartGenerationDto) {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+    await this.getJobWithOwnerCheck(workId, userId);
 
-    await this.prisma.editorModeJob.update({
-      where: { workId },
+    const updated = await this.prisma.editorModeJob.updateMany({
+      where: { workId, status: { not: 'generating' } },
       data: {
         status: 'generating',
         aiMode: dto.aiMode,
         generationMode: dto.generationMode,
       },
     });
+    if (updated.count === 0) throw new ConflictException('Generation already in progress');
 
     // Fire-and-forget: start the generation loop
     this.runGenerationLoop(workId, userId).catch((e) =>
@@ -343,9 +355,8 @@ __END_UPDATE__
 
   // ─── Pause Generation ─────────────────────────────────────
 
-  async pauseGeneration(workId: string) {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+  async pauseGeneration(userId: string, workId: string) {
+    await this.getJobWithOwnerCheck(workId, userId);
 
     await this.prisma.editorModeJob.update({
       where: { workId },
@@ -358,17 +369,17 @@ __END_UPDATE__
   // ─── Resume Generation ────────────────────────────────────
 
   async resumeGeneration(userId: string, workId: string, dto: StartGenerationDto) {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+    await this.getJobWithOwnerCheck(workId, userId);
 
-    await this.prisma.editorModeJob.update({
-      where: { workId },
+    const updated = await this.prisma.editorModeJob.updateMany({
+      where: { workId, status: { not: 'generating' } },
       data: {
         status: 'generating',
         aiMode: dto.aiMode,
         generationMode: dto.generationMode,
       },
     });
+    if (updated.count === 0) throw new ConflictException('Generation already in progress');
 
     this.runGenerationLoop(workId, userId).catch((e) =>
       this.logger.error(`Generation loop error for work ${workId}`, e),
@@ -386,8 +397,11 @@ __END_UPDATE__
     instruction: string,
     aiMode: 'normal' | 'premium' = 'normal',
   ): AsyncGenerator<string> {
+    await this.getJobWithOwnerCheck(workId, userId);
+
     const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
     if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.workId !== workId) throw new NotFoundException('Episode not found');
 
     const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_revise', aiMode);
 
@@ -430,11 +444,11 @@ ${instruction}
     episodeId: string,
     aiMode: 'normal' | 'premium' = 'normal',
   ): AsyncGenerator<string> {
+    const job = await this.getJobWithOwnerCheck(workId, userId);
+
     const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
     if (!episode) throw new NotFoundException('Episode not found');
-
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+    if (episode.workId !== workId) throw new NotFoundException('Episode not found');
 
     const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_generate', aiMode);
 
@@ -484,13 +498,15 @@ ${instruction}
     episodeId: string,
     aiMode: 'normal' | 'premium' = 'normal',
   ): AsyncGenerator<string> {
+    const job = await this.getJobWithOwnerCheck(workId, userId);
+
     const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
     if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.workId !== workId) throw new NotFoundException('Episode not found');
 
     const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_revise', aiMode);
 
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    const designData = job ? this.extractLatestDesignUpdate((job.designChatHistory as any[]) || []) : null;
+    const designData = this.extractLatestDesignUpdate((job.designChatHistory as any[]) || []);
 
     // Get surrounding episodes (prev 2 + next 2)
     const surroundingEpisodes = await this.prisma.episode.findMany({
@@ -577,9 +593,12 @@ ${episode.content}
 
   // ─── Approve Episode ──────────────────────────────────────
 
-  async approveEpisode(workId: string, episodeId: string) {
+  async approveEpisode(userId: string, workId: string, episodeId: string) {
+    await this.getJobWithOwnerCheck(workId, userId);
+
     const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
     if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.workId !== workId) throw new NotFoundException('Episode not found');
 
     // We don't have a separate approval field on Episode, so we publish it
     await this.prisma.episode.update({
@@ -592,9 +611,8 @@ ${episode.content}
 
   // ─── Get Status ───────────────────────────────────────────
 
-  async getStatus(workId: string) {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+  async getStatus(userId: string, workId: string) {
+    const job = await this.getJobWithOwnerCheck(workId, userId);
 
     const episodes = await this.prisma.episode.findMany({
       where: { workId },
@@ -634,9 +652,8 @@ ${episode.content}
 
   // ─── Change Generation Mode ───────────────────────────────
 
-  async changeGenerationMode(workId: string, dto: ChangeGenerationModeDto) {
-    const job = await this.prisma.editorModeJob.findUnique({ where: { workId } });
-    if (!job) throw new NotFoundException('Editor mode job not found');
+  async changeGenerationMode(userId: string, workId: string, dto: ChangeGenerationModeDto) {
+    await this.getJobWithOwnerCheck(workId, userId);
 
     await this.prisma.editorModeJob.update({
       where: { workId },
@@ -667,15 +684,6 @@ ${episode.content}
           data: { status: 'reviewing' },
         });
         this.logger.log(`Generation complete for work ${workId}`);
-        break;
-      }
-
-      // Check if we should pause (confirm mode: pause after each episode)
-      if (job.generationMode === 'confirm' && nextEpisodeIndex > job.completedEpisodes) {
-        await this.prisma.editorModeJob.update({
-          where: { workId },
-          data: { status: 'paused' },
-        });
         break;
       }
 

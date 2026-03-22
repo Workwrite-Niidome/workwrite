@@ -119,8 +119,11 @@ export class EditorModeController {
 
   @Post('works/:workId/editor-mode/pause')
   @ApiOperation({ summary: 'Pause generation' })
-  async pause(@Param('workId') workId: string) {
-    return this.editorModeService.pauseGeneration(workId);
+  async pause(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    return this.editorModeService.pauseGeneration(userId, workId);
   }
 
   // ─── Resume ───────────────────────────────────────────────
@@ -140,10 +143,11 @@ export class EditorModeController {
   @Post('works/:workId/editor-mode/mode')
   @ApiOperation({ summary: 'Change generation mode (batch/confirm)' })
   async changeMode(
+    @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
     @Body() dto: ChangeGenerationModeDto,
   ) {
-    return this.editorModeService.changeGenerationMode(workId, dto);
+    return this.editorModeService.changeGenerationMode(userId, workId, dto);
   }
 
   // ─── Revise Episode (SSE) ─────────────────────────────────
@@ -238,18 +242,22 @@ export class EditorModeController {
   @Post('works/:workId/editor-mode/episodes/:episodeId/approve')
   @ApiOperation({ summary: 'Approve episode' })
   async approve(
+    @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
     @Param('episodeId') episodeId: string,
   ) {
-    return this.editorModeService.approveEpisode(workId, episodeId);
+    return this.editorModeService.approveEpisode(userId, workId, episodeId);
   }
 
   // ─── Status ───────────────────────────────────────────────
 
   @Get('works/:workId/editor-mode/status')
   @ApiOperation({ summary: 'Get editor mode job status' })
-  async status(@Param('workId') workId: string) {
-    return this.editorModeService.getStatus(workId);
+  async status(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    return this.editorModeService.getStatus(userId, workId);
   }
 
   // ─── Helpers ──────────────────────────────────────────────

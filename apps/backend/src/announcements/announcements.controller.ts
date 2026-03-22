@@ -103,7 +103,7 @@ export class PublicAnnouncementsController {
   @Get(':id')
   @ApiOperation({ summary: 'Get single published announcement' })
   async findOne(@Param('id') id: string) {
-    const data = await this.announcementsService.findOne(id);
+    const data = await this.announcementsService.findOne(id, true);
     return { data };
   }
 }

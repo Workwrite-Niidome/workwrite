@@ -59,29 +59,37 @@ export class AnnouncementsService {
   }
 
   async findPublished(limit = 20, cursor?: string) {
+    const safeLimit = Math.min(Math.max(Number.isFinite(limit) ? limit : 20, 1), 100);
     const where: Record<string, unknown> = { isPublished: true };
-    const take = limit + 1;
+    const take = safeLimit + 1;
+
+    if (cursor) {
+      const cursorRecord = await this.prisma.announcement.findUnique({ where: { id: cursor } });
+      if (!cursorRecord) throw new NotFoundException('Invalid cursor');
+      where.createdAt = { lt: cursorRecord.createdAt };
+    }
 
     const items = await this.prisma.announcement.findMany({
-      where: cursor ? { ...where, createdAt: { lt: (await this.prisma.announcement.findUnique({ where: { id: cursor } }))?.createdAt } } : where,
+      where,
       orderBy: [{ isPinned: 'desc' }, { createdAt: 'desc' }],
       take,
       include: { creator: { select: { id: true, name: true, displayName: true } } },
     });
 
-    const hasMore = items.length > limit;
-    const data = hasMore ? items.slice(0, limit) : items;
+    const hasMore = items.length > safeLimit;
+    const data = hasMore ? items.slice(0, safeLimit) : items;
     const nextCursor = hasMore ? data[data.length - 1].id : null;
 
     return { data, nextCursor };
   }
 
-  async findOne(id: string) {
+  async findOne(id: string, requirePublished = false) {
     const announcement = await this.prisma.announcement.findUnique({
       where: { id },
       include: { creator: { select: { id: true, name: true, displayName: true } } },
     });
     if (!announcement) throw new NotFoundException('Announcement not found');
+    if (requirePublished && !announcement.isPublished) throw new NotFoundException('Announcement not found');
     return announcement;
   }
 

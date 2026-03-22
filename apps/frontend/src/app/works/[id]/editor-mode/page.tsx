@@ -146,7 +146,7 @@ export default function EditorModeGenerationPage() {
   };
 
   const handleBackToDesign = () => {
-    router.push(`/works/new/editor-mode`);
+    router.push(`/works/new/editor-mode?resume=${workId}`);
   };
 
   const handlePause = async () => {

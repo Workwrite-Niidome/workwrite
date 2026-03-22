@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsNumber, IsIn } from 'class-validator';
+import { IsString, IsOptional, IsNumber, IsIn, Min, Max, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export class EditorModeChatDto {
@@ -10,8 +10,8 @@ export class EditorModeChatDto {
 }
 
 export class FinalizeDesignDto {
-  @ApiProperty() @IsNumber() totalEpisodes: number;
-  @ApiProperty() @IsNumber() charCountPerEpisode: number;
+  @ApiProperty() @IsNumber() @Min(1) @Max(100) totalEpisodes: number;
+  @ApiProperty() @IsNumber() @Min(500) @Max(20000) charCountPerEpisode: number;
   @ApiProperty({ required: false, enum: ['normal', 'premium'] })
   @IsOptional()
   @IsIn(['normal', 'premium'])
@@ -29,7 +29,7 @@ export class StartGenerationDto {
 }
 
 export class ReviseEpisodeDto {
-  @ApiProperty() @IsString() instruction: string;
+  @ApiProperty() @IsString() @MaxLength(2000) instruction: string;
   @ApiProperty({ required: false, enum: ['normal', 'premium'] })
   @IsOptional()
   @IsIn(['normal', 'premium'])
