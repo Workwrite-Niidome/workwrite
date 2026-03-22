@@ -28,8 +28,10 @@ function TwitterCallbackContent() {
         if (typeof window !== 'undefined') {
           localStorage.setItem('refreshToken', data.refreshToken);
         }
-        const redirect = sessionStorage.getItem('auth_redirect') || '/';
+        const raw = sessionStorage.getItem('auth_redirect') || '/';
         sessionStorage.removeItem('auth_redirect');
+        // Only allow relative paths on this origin to prevent open redirect
+        const redirect = raw.startsWith('/') && !raw.startsWith('//') ? raw : '/';
         window.location.href = redirect;
       })
       .catch((err: any) => {

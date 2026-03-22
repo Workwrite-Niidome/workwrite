@@ -1,4 +1,4 @@
-import { Injectable, Logger, BadRequestException } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException, NotFoundException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { ScoringService } from '../scoring/scoring.service';
 import { CreditService } from '../billing/credit.service';
@@ -294,10 +294,14 @@ export class WorkImportService {
     }
   }
 
-  async getImportStatus(importId: string) {
-    return this.prisma.workImport.findUnique({
+  async getImportStatus(importId: string, userId: string) {
+    const record = await this.prisma.workImport.findUnique({
       where: { id: importId },
     });
+    if (!record || record.userId !== userId) {
+      throw new NotFoundException('Import not found');
+    }
+    return record;
   }
 
   async getImportHistory(userId: string) {

@@ -222,7 +222,15 @@ export class EpisodesService {
     });
   }
 
-  async getSnapshots(episodeId: string) {
+  async getSnapshots(episodeId: string, userId: string) {
+    // Verify user owns the work this episode belongs to
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      select: { work: { select: { authorId: true } } },
+    });
+    if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.work.authorId !== userId) throw new ForbiddenException();
+
     return this.prisma.episodeSnapshot.findMany({
       where: { episodeId },
       orderBy: { createdAt: 'desc' },
@@ -236,11 +244,19 @@ export class EpisodesService {
     });
   }
 
-  async getSnapshotContent(snapshotId: string) {
+  async getSnapshotContent(snapshotId: string, userId: string) {
     const snapshot = await this.prisma.episodeSnapshot.findUnique({
       where: { id: snapshotId },
     });
     if (!snapshot) throw new NotFoundException('Snapshot not found');
+
+    // Verify ownership via episode -> work
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: snapshot.episodeId },
+      select: { work: { select: { authorId: true } } },
+    });
+    if (!episode || episode.work.authorId !== userId) throw new ForbiddenException();
+
     return snapshot;
   }
 

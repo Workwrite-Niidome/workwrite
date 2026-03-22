@@ -1,4 +1,4 @@
-import { IsString, IsOptional, MaxLength } from 'class-validator';
+import { IsString, IsOptional, MaxLength, IsUrl } from 'class-validator';
 import { ApiPropertyOptional } from '@nestjs/swagger';
 
 export class UpdateProfileDto {
@@ -22,6 +22,6 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsString()
+  @IsUrl({ require_tld: true, protocols: ['https'] }, { message: 'avatarUrl must be a valid HTTPS URL' })
   avatarUrl?: string;
 }

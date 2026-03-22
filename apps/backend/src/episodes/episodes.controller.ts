@@ -168,15 +168,19 @@ export class EpisodesController {
   }
 
   @Get('episodes/:id/snapshots')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'List episode snapshots' })
-  getSnapshots(@Param('id') id: string) {
-    return this.episodesService.getSnapshots(id);
+  getSnapshots(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    return this.episodesService.getSnapshots(id, userId);
   }
 
   @Get('episodes/snapshots/:snapshotId')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get snapshot content' })
-  getSnapshotContent(@Param('snapshotId') snapshotId: string) {
-    return this.episodesService.getSnapshotContent(snapshotId);
+  getSnapshotContent(@Param('snapshotId') snapshotId: string, @CurrentUser('id') userId: string) {
+    return this.episodesService.getSnapshotContent(snapshotId, userId);
   }
 
   @Post('episodes/snapshots/:snapshotId/restore')
