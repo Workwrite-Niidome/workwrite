@@ -482,9 +482,14 @@ __END_UPDATE__
     if (updated.count === 0) throw new ConflictException('Generation already in progress');
 
     // Fire-and-forget: start the generation loop
-    this.runGenerationLoop(workId, userId).catch((e) =>
-      this.logger.error(`Generation loop error for work ${workId}`, e),
-    );
+    this.runGenerationLoop(workId, userId).catch(async (e) => {
+      this.logger.error(`Generation loop error for work ${workId}`, e);
+      // Ensure job is paused on unhandled error
+      await this.prisma.editorModeJob.update({
+        where: { workId },
+        data: { status: 'paused' },
+      }).catch(() => {});
+    });
 
     return { status: 'generating' };
   }
@@ -517,9 +522,13 @@ __END_UPDATE__
     });
     if (updated.count === 0) throw new ConflictException('Generation already in progress');
 
-    this.runGenerationLoop(workId, userId).catch((e) =>
-      this.logger.error(`Generation loop error for work ${workId}`, e),
-    );
+    this.runGenerationLoop(workId, userId).catch(async (e) => {
+      this.logger.error(`Generation loop error for work ${workId}`, e);
+      await this.prisma.editorModeJob.update({
+        where: { workId },
+        data: { status: 'paused' },
+      }).catch(() => {});
+    });
 
     return { status: 'generating' };
   }
@@ -939,6 +948,10 @@ ${episode.content}
         transactionId = result.transactionId;
       }
 
+      // 5-minute timeout for Claude API calls
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -954,7 +967,8 @@ ${episode.content}
           system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: userPrompt }],
         }),
-      });
+        signal: abortController.signal,
+      }).finally(() => clearTimeout(timeout));
 
       if (!response.ok) {
         const errorText = await response.text();
