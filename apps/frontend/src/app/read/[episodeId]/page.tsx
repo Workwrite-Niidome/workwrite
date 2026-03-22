@@ -12,6 +12,7 @@ import {
   X,
   Mail,
   Sparkles,
+  MessageCircle,
   Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -686,6 +687,17 @@ export default function ReaderPage() {
         )}
       </nav>
 
+      {/* Floating character talk button -- desktop only, always visible */}
+      {!isMobile && !showCompanion && !immersiveMode && (
+        <button
+          onClick={toggleCompanion}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+        >
+          <MessageCircle className="h-5 w-5" />
+          <span className="text-sm font-medium">キャラクターと話す</span>
+        </button>
+      )}
+
       {/* Mobile bottom navigation bar */}
       {isMobile && !immersiveMode && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border flex justify-around py-2 px-4">
@@ -698,8 +710,8 @@ export default function ReaderPage() {
             <span className="text-[10px]">レター</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
-            <Sparkles className="h-4 w-4" />
-            <span className="text-[10px]">AI</span>
+            <MessageCircle className="h-4 w-4" />
+            <span className="text-[10px]">キャラ</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={navigateNext} disabled={!nextEp} className="flex-col gap-0.5 h-auto py-1">
             <ChevronRight className="h-4 w-4" />

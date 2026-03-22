@@ -420,13 +420,22 @@ ${workText}`;
 
     if (!work) throw new NotFoundException('Work not found');
 
-    const currentEpisodeIndex = Math.max(
-      ...progress.map((p) => {
-        const ep = work.episodes.find((e) => e.id === p.episodeId);
-        return ep ? ep.orderIndex : 0;
-      }),
-      0,
-    );
+    // If no episode analyses exist, return all public characters
+    // (analysis data may not have been generated yet)
+    if (episodeAnalyses.length === 0) {
+      return publicCharacters;
+    }
+
+    // If user has no reading progress, assume they are reading episode 1
+    const currentEpisodeIndex = progress.length > 0
+      ? Math.max(
+          ...progress.map((p) => {
+            const ep = work.episodes.find((e) => e.id === p.episodeId);
+            return ep ? ep.orderIndex : 0;
+          }),
+          0,
+        )
+      : 0;
 
     // Collect character names that appeared in read episodes
     const appearedCharNames = new Set<string>();
@@ -436,6 +445,11 @@ ${workText}`;
           if (c.name) appearedCharNames.add(c.name);
         }
       }
+    }
+
+    // If no characters matched (e.g. analysis exists but no character data), return all
+    if (appearedCharNames.size === 0) {
+      return publicCharacters;
     }
 
     return publicCharacters.filter((c) => appearedCharNames.has(c.name));
