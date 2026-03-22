@@ -66,7 +66,7 @@ function isChecklistItemFilled(design: DesignData, key: string): boolean {
 export default function EditorModeDesignPage() {
   const router = useRouter();
   const [phase, setPhase] = useState<'designing' | 'reviewing'>('designing');
-  const [aiMode, setAiMode] = useState<'normal' | 'premium'>('premium');
+  const [aiMode, setAiMode] = useState<'normal' | 'premium'>('normal');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
   const [isStreaming, setIsStreaming] = useState(false);

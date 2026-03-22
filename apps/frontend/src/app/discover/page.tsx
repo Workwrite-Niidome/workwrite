@@ -146,7 +146,10 @@ export default function DiscoverPage() {
               if (aiWorks.length === 0 && !aiWorksLoading) {
                 setAiWorksLoading(true);
                 api.searchWorks('', { aiGenerated: true })
-                  .then((res: any) => setAiWorks(res.data?.hits || []))
+                  .then((res: any) => {
+                    const hits = res?.data?.hits || res?.hits || [];
+                    setAiWorks(Array.isArray(hits) ? hits : []);
+                  })
                   .catch(() => {})
                   .finally(() => setAiWorksLoading(false));
               }
