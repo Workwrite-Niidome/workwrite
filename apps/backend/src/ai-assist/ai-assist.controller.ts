@@ -186,6 +186,24 @@ export class AiAssistController {
     return result;
   }
 
+  @Post('admin/analyze-work/:workId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Analyze all episodes of a specific work (admin only)' })
+  async adminAnalyzeWork(
+    @Param('workId') workId: string,
+    @Query('force') force?: string,
+  ) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { id: true, title: true },
+    });
+    if (!work) return { error: 'Work not found' };
+    const result = await this.episodeAnalysis.analyzeAllEpisodes(workId, force === 'true');
+    return { workId, title: work.title, ...result };
+  }
+
   @Post('admin/analyze-all-published')
   @UseGuards(JwtAuthGuard, RolesGuard)
   @Roles('ADMIN')
