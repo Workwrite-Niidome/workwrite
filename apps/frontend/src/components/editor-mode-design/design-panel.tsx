@@ -31,16 +31,17 @@ export function DesignPanel({
 }: Props) {
   const [activeTab, setActiveTab] = useState<DesignTab>('overview');
   const filledCount = getFilledCount(design);
+  const maxCount = 17; // total trackable fields
 
   return (
     <div className="flex flex-col h-full">
       {/* Progress */}
       <div className="px-4 pt-3 pb-1">
-        <p className="text-xs text-muted-foreground">{filledCount} / 10 完了</p>
+        <p className="text-xs text-muted-foreground">{filledCount} 項目設定済み</p>
         <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mt-1">
           <div
             className="h-full rounded-full bg-indigo-500 transition-all duration-500"
-            style={{ width: `${(filledCount / 10) * 100}%` }}
+            style={{ width: `${Math.min((filledCount / maxCount) * 100, 100)}%` }}
           />
         </div>
       </div>

@@ -23,23 +23,42 @@ function SummaryRow({ label, value }: { label: string; value: string | undefined
   );
 }
 
-function formatProtagonist(p: DesignData['protagonist']): string | null {
-  if (!p) return null;
-  if (typeof p === 'string') return p;
-  return p.name ? `${p.name}${p.role ? ` (${p.role})` : ''}${p.personality ? ` -- ${p.personality}` : ''}` : null;
+function formatCharacters(c: DesignData['characters']): string | null {
+  if (!c || !Array.isArray(c) || c.length === 0) return null;
+  return c.map((ch: any) => {
+    const name = ch.name || '(unnamed)';
+    const role = ch.role ? ` (${ch.role})` : '';
+    return `${name}${role}`;
+  }).join(', ');
 }
 
-function formatCharacters(c: DesignData['characters']): string | null {
-  if (!c) return null;
-  if (typeof c === 'string') return c;
-  if (Array.isArray(c) && c.length > 0) {
-    return c.map(ch => ch.name || '(unnamed)').join(', ');
+function formatWorldBuilding(wb: DesignData['worldBuilding']): string | null {
+  if (!wb) return null;
+  if (typeof wb === 'string') return wb;
+  const parts: string[] = [];
+  if (wb.basics?.era) parts.push(`時代: ${wb.basics.era}`);
+  if (wb.basics?.setting) parts.push(`舞台: ${wb.basics.setting}`);
+  if (wb.rules?.length) parts.push(`ルール: ${wb.rules.length}件`);
+  if (wb.terminology?.length) parts.push(`用語: ${wb.terminology.length}件`);
+  if (wb.items?.length) parts.push(`アイテム: ${wb.items.length}件`);
+  return parts.length > 0 ? parts.join(' / ') : null;
+}
+
+function formatPlot(design: DesignData): string | null {
+  if (design.actGroups && design.actGroups.length > 0) {
+    const totalEps = design.actGroups.reduce((sum, g) => sum + g.episodes.length, 0);
+    const template = design.structureTemplate || '?';
+    return `${template} (${design.actGroups.length}パート, ${totalEps}エピソード)`;
   }
+  if (design.plotOutline) return design.plotOutline;
   return null;
 }
 
 export function PreviewTab({ design, onFinalize, finalizing, creditsRemaining, creditsConsumed }: Props) {
-  const hasContent = !!(design.genre || design.theme || design.protagonist || design.plotOutline);
+  const hasContent = !!(
+    design.genre || design.title || design.coreMessage || design.theme ||
+    design.characters?.length || design.actGroups?.length || design.plotOutline
+  );
 
   if (!hasContent) {
     return (
@@ -59,7 +78,7 @@ export function PreviewTab({ design, onFinalize, finalizing, creditsRemaining, c
 
   return (
     <div className="p-4 space-y-4">
-      {/* Finalize button — top for visibility */}
+      {/* Finalize button */}
       <Button
         onClick={onFinalize}
         disabled={!design.episodeCount || finalizing}
@@ -102,15 +121,19 @@ export function PreviewTab({ design, onFinalize, finalizing, creditsRemaining, c
       <Card>
         <CardContent className="pt-5 space-y-2">
           <h3 className="text-sm font-medium mb-2">設計サマリー</h3>
+          <SummaryRow label="タイトル" value={design.title} />
           <SummaryRow label="ジャンル" value={design.genre} />
-          <SummaryRow label="テーマ" value={design.theme} />
-          <SummaryRow label="読後感" value={design.afterReading} />
-          <SummaryRow label="主人公" value={formatProtagonist(design.protagonist)} />
+          <SummaryRow label="サブジャンル" value={design.subGenres?.join(', ')} />
+          <SummaryRow label="テーマ/メッセージ" value={design.coreMessage || design.theme} />
+          <SummaryRow label="読者の感情" value={design.targetEmotions || design.afterReading} />
+          <SummaryRow label="読者の旅路" value={design.readerJourney} />
+          <SummaryRow label="インスピレーション" value={design.inspiration} />
           <SummaryRow label="キャラクター" value={formatCharacters(design.characters)} />
-          <SummaryRow label="世界観" value={design.worldBuilding} />
-          <SummaryRow label="葛藤" value={design.conflict} />
-          <SummaryRow label="プロット" value={design.plotOutline} />
+          <SummaryRow label="世界観" value={formatWorldBuilding(design.worldBuilding)} />
+          <SummaryRow label="プロット" value={formatPlot(design)} />
+          <SummaryRow label="あらすじ" value={design.synopsis} />
           <SummaryRow label="トーン" value={design.tone} />
+          <SummaryRow label="葛藤" value={design.conflict} />
           <SummaryRow
             label="スコープ"
             value={episodeCount ? `${episodeCount}話 x ${charCount || '?'}字` : undefined}

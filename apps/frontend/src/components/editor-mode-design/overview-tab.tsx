@@ -1,122 +1,90 @@
 'use client';
 
-import { Bot } from 'lucide-react';
 import { Input } from '@/components/ui/input';
-import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent } from '@/components/ui/card';
+import { StepGenreTags } from '@/components/creation-wizard/step-genre-tags';
+import { StepEmotionBlueprint } from '@/components/creation-wizard/step-emotion-blueprint';
+import { StepTitleSynopsis } from '@/components/creation-wizard/step-title-synopsis';
 import type { DesignData } from './types';
+import type { WizardData } from '@/components/creation-wizard/wizard-shell';
+import { designToWizard, wizardChangeToDesign } from './types';
 
 interface Props {
   design: DesignData;
   onChange: (d: Partial<DesignData>) => void;
 }
 
-function FieldLabel({ label }: { label: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <label className="text-sm font-medium">{label}</label>
-      <button
-        type="button"
-        className="text-[10px] text-muted-foreground hover:text-indigo-500 transition-colors flex items-center gap-0.5"
-      >
-        <Bot className="h-3 w-3" /> AIに修正させる
-      </button>
-    </div>
-  );
-}
-
 export function OverviewTab({ design, onChange }: Props) {
-  const hasContent = !!(design.genre || design.theme || design.afterReading || design.tone || design.episodeCount);
+  const wizardData = designToWizard(design);
 
-  if (!hasContent) {
-    return (
-      <div className="flex flex-col items-center justify-center py-12 text-center px-4">
-        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center mb-3">
-          <Bot className="h-5 w-5 text-muted-foreground" />
-        </div>
-        <p className="text-sm text-muted-foreground">
-          AIとの対話で概要が抽出されるとここに表示されます
-        </p>
-      </div>
-    );
+  function handleWizardChange(partial: Partial<WizardData>) {
+    onChange(wizardChangeToDesign(partial));
   }
 
   return (
-    <div className="p-4 space-y-4">
-      <Card>
-        <CardContent className="pt-5 space-y-4">
+    <div className="p-4 space-y-8">
+      {/* Genre & Tags */}
+      <StepGenreTags data={wizardData} onChange={handleWizardChange} />
+
+      {/* Divider */}
+      <div className="border-t border-border" />
+
+      {/* Emotion Blueprint */}
+      <StepEmotionBlueprint data={wizardData} onChange={handleWizardChange} />
+
+      {/* Divider */}
+      <div className="border-t border-border" />
+
+      {/* Title & Synopsis */}
+      <StepTitleSynopsis data={wizardData} onChange={handleWizardChange} />
+
+      {/* Divider */}
+      <div className="border-t border-border" />
+
+      {/* Editor-mode specific: episode count and char count */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-lg font-semibold mb-1">執筆設定</h2>
+          <p className="text-sm text-muted-foreground">話数や文字数の目安を設定します。</p>
+        </div>
+        <div className="grid grid-cols-2 gap-4">
           <div className="space-y-1.5">
-            <FieldLabel label="ジャンル" />
+            <label className="text-sm font-medium">話数</label>
             <Input
-              value={design.genre || ''}
-              onChange={(e) => onChange({ genre: e.target.value })}
-              placeholder="例: ダークファンタジー"
+              type="number"
+              min={1}
+              max={100}
+              value={design.episodeCount || ''}
+              onChange={(e) => onChange({ episodeCount: Number(e.target.value) || undefined })}
+              placeholder="例: 10"
               className="text-sm"
             />
           </div>
-
           <div className="space-y-1.5">
-            <FieldLabel label="テーマ" />
-            <Textarea
-              value={design.theme || ''}
-              onChange={(e) => onChange({ theme: e.target.value })}
-              placeholder="作品の中心テーマ"
-              rows={2}
-              className="text-sm resize-none"
+            <label className="text-sm font-medium">文字数目安（1話あたり）</label>
+            <Input
+              type="number"
+              min={500}
+              max={20000}
+              step={500}
+              value={design.charCountPerEpisode || ''}
+              onChange={(e) => onChange({ charCountPerEpisode: Number(e.target.value) || undefined })}
+              placeholder="例: 3000"
+              className="text-sm"
             />
           </div>
-
+        </div>
+        {design.tone !== undefined && design.tone !== '' && (
           <div className="space-y-1.5">
-            <FieldLabel label="読後感" />
-            <Textarea
-              value={design.afterReading || ''}
-              onChange={(e) => onChange({ afterReading: e.target.value })}
-              placeholder="読者に届けたい感情"
-              rows={2}
-              className="text-sm resize-none"
-            />
-          </div>
-
-          <div className="space-y-1.5">
-            <FieldLabel label="トーン" />
-            <Textarea
+            <label className="text-sm font-medium">トーン</label>
+            <Input
               value={design.tone || ''}
               onChange={(e) => onChange({ tone: e.target.value })}
               placeholder="文体・雰囲気"
-              rows={2}
-              className="text-sm resize-none"
+              className="text-sm"
             />
           </div>
-
-          <div className="grid grid-cols-2 gap-4">
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">話数</label>
-              <Input
-                type="number"
-                min={1}
-                max={100}
-                value={design.episodeCount || ''}
-                onChange={(e) => onChange({ episodeCount: Number(e.target.value) || undefined })}
-                placeholder="例: 10"
-                className="text-sm"
-              />
-            </div>
-            <div className="space-y-1.5">
-              <label className="text-sm font-medium">文字数目安</label>
-              <Input
-                type="number"
-                min={500}
-                max={20000}
-                step={500}
-                value={design.charCountPerEpisode || ''}
-                onChange={(e) => onChange({ charCountPerEpisode: Number(e.target.value) || undefined })}
-                placeholder="例: 3000"
-                className="text-sm"
-              />
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+        )}
+      </div>
     </div>
   );
 }

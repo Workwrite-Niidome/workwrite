@@ -34,7 +34,18 @@ function normalizeDesignUpdate(raw: any): Partial<DesignData> {
       d.characters = raw.characters as any;
     }
   }
-  if (str(raw.world || raw.worldBuilding)) d.worldBuilding = str(raw.world || raw.worldBuilding);
+  const worldStr = str(raw.world || raw.worldBuilding);
+  if (worldStr) {
+    // AI sends worldBuilding as a free-text string; wrap it into structured WorldBuildingData
+    d.worldBuilding = {
+      basics: { era: '', setting: '', civilizationLevel: '' },
+      rules: [],
+      terminology: [],
+      history: worldStr,
+      infoAsymmetry: { commonKnowledge: '', hiddenTruths: '' },
+      items: [],
+    };
+  }
   if (str(raw.conflict)) d.conflict = str(raw.conflict);
   if (str(raw.plot || raw.plotOutline)) d.plotOutline = str(raw.plot || raw.plotOutline);
   if (str(raw.tone)) d.tone = str(raw.tone);
