@@ -122,11 +122,10 @@ export default function Home() {
           <h1 className="text-2xl sm:text-3xl font-serif font-normal leading-relaxed tracking-wide">
             読書で、変わる。
           </h1>
-          <p className="mt-4 text-muted-foreground text-sm leading-relaxed max-w-sm mx-auto">
-            AIスコアリングと感情タグで、<br className="sm:hidden" />
-            あなたの心に響く次の一冊を。
+          <p className="mt-4 text-muted-foreground text-sm leading-relaxed max-w-md mx-auto">
+            AIスコアリングと感情タグで、あなたの心に響く次の一冊を。
           </p>
-          <div className="mt-10 grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-md mx-auto">
+          <div className="mt-8 grid grid-cols-2 sm:grid-cols-3 gap-2 max-w-md mx-auto">
             {MOOD_CARDS.map((card) => (
               <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
                 <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
@@ -135,7 +134,7 @@ export default function Home() {
               </Link>
             ))}
           </div>
-          <div className="mt-4">
+          <div className="mt-3">
             <Link href="/discover" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
               すべての作品を探す →
             </Link>
@@ -146,20 +145,6 @@ export default function Home() {
       <div className="px-4 md:px-6 py-12 space-y-16">
         {/* Following feed */}
         {isAuthenticated && <FollowingFeedSection />}
-
-        {/* Mood Discovery */}
-        <section>
-          <h2 className="text-sm font-medium mb-6">今の気分で探す</h2>
-          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-2">
-            {MOOD_CARDS.map((card) => (
-              <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
-                <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
-                  {card.label}
-                </div>
-              </Link>
-            ))}
-          </div>
-        </section>
 
         {/* Popular */}
         <section>

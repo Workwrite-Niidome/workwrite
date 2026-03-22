@@ -143,7 +143,7 @@ function EditorModeDesignContent() {
             if (msg.role !== 'assistant') continue;
             const match = msg.content.match(/__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/);
             if (match) {
-              try { setDesign(JSON.parse(match[1])); break; } catch { /* skip */ }
+              try { setDesign(normalizeDesignUpdate(JSON.parse(match[1]))); break; } catch { /* skip */ }
             }
           }
         }
@@ -214,7 +214,7 @@ function EditorModeDesignContent() {
           setCreditsRemaining(parsed.creditsRemaining);
         }
         if (parsed.designUpdate) {
-          setDesign(prev => ({ ...prev, ...parsed.designUpdate }));
+          setDesign(prev => ({ ...prev, ...normalizeDesignUpdate(parsed.designUpdate) }));
         }
       });
 
@@ -289,7 +289,7 @@ function EditorModeDesignContent() {
       await consumeSSEStream(res, (parsed) => {
         if (parsed.text) accumulated += parsed.text;
         if (parsed.designUpdate) {
-          setDesign(prev => ({ ...prev, ...parsed.designUpdate }));
+          setDesign(prev => ({ ...prev, ...normalizeDesignUpdate(parsed.designUpdate) }));
         }
         if (parsed.creditsConsumed !== undefined) setCreditConsumed(parsed.creditsConsumed);
         if (parsed.creditsRemaining !== undefined) setCreditsRemaining(parsed.creditsRemaining);
@@ -298,8 +298,7 @@ function EditorModeDesignContent() {
       const designMatch = accumulated.match(/__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```/);
       if (designMatch) {
         try {
-          const designUpdate = JSON.parse(designMatch[1]);
-          setDesign(prev => ({ ...prev, ...designUpdate }));
+          setDesign(prev => ({ ...prev, ...normalizeDesignUpdate(JSON.parse(designMatch[1])) }));
         } catch { /* ignore */ }
       }
     } catch (err: unknown) {
