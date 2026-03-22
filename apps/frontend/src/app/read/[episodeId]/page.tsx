@@ -656,26 +656,9 @@ export default function ReaderPage() {
       {/* Episode complete banner */}
       {showCompleteBanner && (
         <EpisodeCompleteBanner
+          episodeId={episodeId}
           nextEpisodeId={nextEp?.id}
           workId={episode.workId}
-          onReaction={(value) => {
-            const tagMapping: Record<string, string> = {
-              moved: 'tears',
-              warm: 'healing',
-              surprised: 'excitement',
-              fired_up: 'courage',
-              thoughtful: 'worldview',
-            };
-            const tagName = tagMapping[value];
-            if (tagName) {
-              api.getEmotionTags().then((res) => {
-                const tag = res.data.find((t: { name: string }) => t.name === tagName);
-                if (tag) {
-                  api.addEmotionTags(episode.workId, [{ tagId: tag.id }]).catch(() => {});
-                }
-              }).catch(() => {});
-            }
-          }}
         />
       )}
 

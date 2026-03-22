@@ -1,85 +1,158 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { Button } from '@/components/ui/button';
-import { Droplets, Heart, Zap, Flame, Brain } from 'lucide-react';
+import { Droplets, Heart, Zap, Flame, Brain, Hand } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
-const REACTIONS = [
+const EMOTIONS = [
   { icon: Droplets, label: '泣いた', value: 'moved' },
   { icon: Heart, label: '温かい', value: 'warm' },
   { icon: Zap, label: '驚いた', value: 'surprised' },
   { icon: Flame, label: '燃えた', value: 'fired_up' },
-  { icon: Brain, label: '考えた', value: 'thoughtful' },
+  { icon: Brain, label: '深い', value: 'thoughtful' },
 ];
 
 interface EpisodeCompleteBannerProps {
+  episodeId: string;
   nextEpisodeId?: string;
   workId: string;
-  onReaction?: (value: string) => void;
 }
 
-export function EpisodeCompleteBanner({ nextEpisodeId, workId, onReaction }: EpisodeCompleteBannerProps) {
-  const [selectedReactions, setSelectedReactions] = useState<Set<string>>(new Set());
+export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId }: EpisodeCompleteBannerProps) {
+  const { isAuthenticated } = useAuth();
+  const [claps, setClaps] = useState(0);
+  const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
+  const [showEmotions, setShowEmotions] = useState(false);
+  const [sent, setSent] = useState(false);
+  const [totalClaps, setTotalClaps] = useState(0);
+  const [reactionCount, setReactionCount] = useState(0);
 
-  function handleReaction(value: string) {
-    setSelectedReactions((prev) => {
-      const next = new Set(prev);
-      if (next.has(value)) {
-        next.delete(value);
-      } else {
-        next.add(value);
+  // Load existing reaction
+  useEffect(() => {
+    if (!isAuthenticated) return;
+    api.getEpisodeReactions(episodeId).then((res) => {
+      const data = res.data;
+      setTotalClaps(data.totalClaps);
+      setReactionCount(data.reactionCount);
+      if (data.myReaction) {
+        setClaps(data.myReaction.claps);
+        setSelectedEmotion(data.myReaction.emotion);
+        setSent(true);
+        setShowEmotions(true);
       }
-      return next;
-    });
-    onReaction?.(value);
+    }).catch(() => {});
+  }, [episodeId, isAuthenticated]);
+
+  // Debounced save
+  const saveReaction = useCallback(async (newClaps: number, emotion: string | null) => {
+    if (!isAuthenticated || newClaps === 0) return;
+    try {
+      await api.sendReaction(episodeId, { claps: newClaps, emotion: emotion || undefined });
+      setSent(true);
+    } catch { /* ignore */ }
+  }, [episodeId, isAuthenticated]);
+
+  function handleClap() {
+    if (!isAuthenticated) return;
+    const newClaps = Math.min(claps + 1, 5);
+    setClaps(newClaps);
+    if (newClaps === 1) {
+      // First clap: show emotions after a delay
+      setTimeout(() => setShowEmotions(true), 600);
+    }
+    // Save immediately on each clap
+    saveReaction(newClaps, selectedEmotion);
+  }
+
+  function handleEmotion(value: string) {
+    const newEmotion = selectedEmotion === value ? null : value;
+    setSelectedEmotion(newEmotion);
+    if (claps > 0) {
+      saveReaction(claps, newEmotion);
+    }
   }
 
   return (
     <div className="mx-auto max-w-2xl px-6 py-8 text-center space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
-      <div className="border-t border-border pt-8">
-        <p className="text-sm text-muted-foreground mb-4">この話はどうでしたか？</p>
-        <div className="flex justify-center gap-4">
-          {REACTIONS.map((r) => {
-            const selected = selectedReactions.has(r.value);
-            return (
-              <button
-                key={r.value}
-                onClick={() => handleReaction(r.value)}
-                className="flex flex-col items-center gap-1.5 group"
-              >
-                <div
-                  className={cn(
-                    'h-10 w-10 rounded-full border flex items-center justify-center transition-all group-active:scale-95',
-                    selected
-                      ? 'border-primary bg-primary/20 scale-110'
-                      : 'border-border group-hover:border-primary group-hover:bg-primary/10',
-                  )}
-                >
-                  <r.icon
-                    className={cn(
-                      'h-5 w-5 transition-colors',
-                      selected
-                        ? 'text-primary'
-                        : 'text-muted-foreground group-hover:text-primary',
-                    )}
-                  />
-                </div>
-                <span
-                  className={cn(
-                    'text-[10px] transition-colors',
-                    selected ? 'text-primary font-medium' : 'text-muted-foreground group-hover:text-foreground',
-                  )}
-                >
-                  {r.label}
-                </span>
-              </button>
-            );
-          })}
+      <div className="border-t border-border pt-8 space-y-5">
+        <p className="text-sm text-muted-foreground">この話はどうでしたか？</p>
+
+        {/* Clap button */}
+        <div className="flex flex-col items-center gap-2">
+          <button
+            onClick={handleClap}
+            disabled={claps >= 5 || !isAuthenticated}
+            className={cn(
+              'h-14 w-14 rounded-full border-2 flex items-center justify-center transition-all',
+              claps > 0
+                ? 'border-primary bg-primary/10 scale-105'
+                : 'border-border hover:border-primary hover:bg-primary/5',
+              claps >= 5 && 'opacity-60',
+            )}
+          >
+            <Hand className={cn(
+              'h-6 w-6 transition-colors',
+              claps > 0 ? 'text-primary' : 'text-muted-foreground',
+            )} />
+          </button>
+          <span className={cn(
+            'text-xs transition-colors',
+            claps > 0 ? 'text-primary font-medium' : 'text-muted-foreground',
+          )}>
+            {claps > 0 ? `${claps}/5 拍手` : '拍手する'}
+          </span>
+          {sent && claps > 0 && (
+            <p className="text-[10px] text-muted-foreground animate-in fade-in duration-300">
+              作者に届きました
+            </p>
+          )}
+          {!isAuthenticated && (
+            <p className="text-[10px] text-muted-foreground">
+              <Link href="/login" className="text-primary hover:underline">ログイン</Link>すると拍手できます
+            </p>
+          )}
         </div>
+
+        {/* Emotion labels (appear after first clap) */}
+        {showEmotions && claps > 0 && (
+          <div className="animate-in fade-in slide-in-from-bottom-2 duration-300">
+            <p className="text-xs text-muted-foreground mb-3">どんな気持ちでしたか？（任意）</p>
+            <div className="flex justify-center gap-3 flex-wrap">
+              {EMOTIONS.map((e) => {
+                const selected = selectedEmotion === e.value;
+                return (
+                  <button
+                    key={e.value}
+                    onClick={() => handleEmotion(e.value)}
+                    className={cn(
+                      'flex items-center gap-1.5 px-3 py-1.5 rounded-full border text-xs transition-all',
+                      selected
+                        ? 'border-primary bg-primary/15 text-primary font-medium'
+                        : 'border-border text-muted-foreground hover:border-primary/50 hover:text-foreground',
+                    )}
+                  >
+                    <e.icon className="h-3.5 w-3.5" />
+                    {e.label}
+                  </button>
+                );
+              })}
+            </div>
+          </div>
+        )}
+
+        {/* Reaction summary (if others have reacted) */}
+        {reactionCount > 1 && (
+          <p className="text-[10px] text-muted-foreground">
+            {reactionCount}人がこの話に拍手しています
+          </p>
+        )}
       </div>
 
+      {/* Navigation */}
       <div className="flex justify-center gap-3">
         {nextEpisodeId ? (
           <>
