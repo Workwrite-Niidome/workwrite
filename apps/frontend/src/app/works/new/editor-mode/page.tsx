@@ -125,7 +125,7 @@ export default function EditorModeDesignPage() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message, aiMode, workId }),
+        body: JSON.stringify({ message, aiMode }),
         signal: controller.signal,
       });
 
