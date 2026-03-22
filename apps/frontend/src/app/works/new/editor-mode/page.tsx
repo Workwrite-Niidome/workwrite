@@ -106,10 +106,12 @@ function EditorModeDesignContent() {
       });
   }, [resumeWorkId]);
 
-  // Auto-scroll chat
+  // Auto-scroll chat (only in review phase, not during initial generation)
   useEffect(() => {
-    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
-  }, [messages, isStreaming, streamingText]);
+    if (phase === 'review') {
+      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    }
+  }, [messages, phase]);
 
   /** Flash highlight on changed keys for 4 seconds */
   const flashHighlight = useCallback((keys: string[]) => {
@@ -126,13 +128,19 @@ function EditorModeDesignContent() {
     flashHighlight(keys);
   }, [flashHighlight]);
 
-  /** Core message sending logic */
-  const sendMessage = useCallback(async (message: string, existingMessages: ChatMessage[] = messages) => {
+  /**
+   * Core message sending logic.
+   * @param isInitial — true for the first brief submission (no chat UI, only generating screen)
+   */
+  const sendMessage = useCallback(async (message: string, existingMessages: ChatMessage[] = messages, isInitial = false) => {
     if (!message.trim() || isStreaming) return;
     setError(null);
 
-    const newMessages: ChatMessage[] = [...existingMessages, { role: 'user', content: message }];
-    setMessages(newMessages);
+    // For refinement messages, add to chat. For initial brief, don't show in chat.
+    const newMessages: ChatMessage[] = isInitial
+      ? existingMessages
+      : [...existingMessages, { role: 'user', content: message }];
+    if (!isInitial) setMessages(newMessages);
     setIsStreaming(true);
     setStreamingText('');
 
@@ -167,8 +175,12 @@ function EditorModeDesignContent() {
         if (parsed.text) {
           accumulated += parsed.text;
           const cleanForDisplay = accumulated.replace(/__DESIGN_UPDATE__[\s\S]*$/g, '').trim();
+          // During initial generation, only update streamingText (shown on generating screen)
+          // During refinement, update both streamingText and chat messages
           setStreamingText(cleanForDisplay);
-          setMessages([...newMessages, { role: 'assistant', content: cleanForDisplay }]);
+          if (!isInitial) {
+            setMessages([...newMessages, { role: 'assistant', content: cleanForDisplay }]);
+          }
         }
         if (parsed.workId) {
           setWorkId(parsed.workId);
@@ -201,18 +213,14 @@ function EditorModeDesignContent() {
           try {
             const raw = JSON.parse(designMatch[1]);
             applyDesignUpdate(raw);
+          } catch { /* skip */ }
+          // For refinement, store clean AI response in chat
+          if (!isInitial) {
             const cleanContent = accumulated
               .replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/, '')
               .replace(/\s*---\s*$/, '')
               .trim();
             setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
-          } catch {
-            const cleanContent = accumulated
-              .replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/, '')
-              .trim();
-            if (cleanContent !== accumulated) {
-              setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
-            }
           }
           break;
         }
@@ -251,7 +259,7 @@ function EditorModeDesignContent() {
     const fullMessage = genrePrefix + briefValue.trim();
     if (!fullMessage.trim()) return;
     setPhase('generating');
-    sendMessage(fullMessage, []);
+    sendMessage(fullMessage, [], true); // isInitial = true → no chat UI
   }, [briefValue, selectedGenres, sendMessage]);
 
   const handleRefinementSend = useCallback(() => {

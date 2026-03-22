@@ -95,60 +95,59 @@ export class EditorModeService {
     if (isFirstMessage) {
       // ─── First message: complete design generation from user's brief ───
       maxTokens = 8000;
-      systemPrompt = `あなたはベストセラー作家を何人も育ててきた伝説的な編集者です。ユーザーの簡単なブリーフから、完全な小説の設計書を一括生成してください。
+      systemPrompt = `あなたはベストセラー作家です。編集者（ユーザー）からブリーフを受け取り、完全な小説の設計書を作成してください。
 
-ユーザーのブリーフを受け取ったら、以下の要素を**すべて**生成してください:
+【絶対ルール】以下の全フィールドを**一つ残らず**埋めてください。情報が足りなければ類推・創作して埋めてください。空欄は許されません。
 
-1. **タイトル** — 読者の目を引く魅力的なタイトル
-2. **ジャンル・サブジャンル** — メインジャンルとサブジャンル
-3. **テーマ・コアメッセージ** — 物語が伝えたい核心
-4. **トーン・文体** — 文章の雰囲気、語り口
-5. **感情設計** — 読者にどんな感情の旅を提供するか（targetEmotions, readerJourney, readerOneLiner）
-6. **キャラクター** — 主要キャラクター3-5人（名前、役割、性格、口調、動機、背景）
-7. **世界観** — 舞台設定（時代、場所、文明レベル）、ルール、用語、歴史、重要アイテム
-8. **プロット構成** — 構成テンプレート（起承転結/三幕構成等）、幕ごとのエピソード分け、各エピソードのタイトル・概要・感情ターゲット
-9. **話数・文字数** — 推奨話数と1話あたりの文字数
-10. **あらすじ** — 3-5行の読者向けあらすじ
-
-生成した設計書を自然な対話形式で説明した後（各セクションについて簡潔に紹介）、末尾に必ず以下の形式でJSONブロックを出力してください:
+まず設計の概要を自然な言葉で3-5段落で説明してください。その後、末尾に必ず以下の形式でJSONブロックを出力してください:
 
 __DESIGN_UPDATE__
 {
-  "title": "タイトル",
-  "genre_setting": "メインジャンル",
-  "theme": "テーマ",
-  "coreMessage": "コアメッセージ",
-  "tone": "トーン・文体の説明",
-  "targetEmotions": "読者に届けたい感情",
-  "readerJourney": "感情の旅路の説明",
-  "readerOneLiner": "一言で表す読後感",
+  "title": "魅力的なタイトル（必須）",
+  "genre_setting": "メインジャンル（必須）",
+  "theme": "テーマ（必須）",
+  "coreMessage": "物語のコアメッセージ（必須）",
+  "tone": "トーン・文体の説明（必須）",
+  "targetEmotions": "読者に届けたい感情の流れ（必須）",
+  "readerJourney": "読者の感情の旅路（必須）",
+  "readerOneLiner": "一言で表す読後感（必須）",
+  "conflict": "中心的な葛藤（具体的に。「善vs悪」ではなく「主人公が〇〇を失う恐怖と〇〇を守る覚悟の間で揺れる」のように）（必須）",
+  "synopsis": "3-5行のあらすじ（必須）",
+  "scope": "X話 × Y字（必須。ブリーフに指定があればそれを、なければ10話 × 3000字を推奨）",
   "characters": [
-    {"name": "名前", "role": "役割", "personality": "性格", "speechStyle": "口調", "motivation": "動機", "background": "背景"},
-    ...
+    {"name": "名前", "role": "役割", "personality": "性格（2-3文）", "speechStyle": "口調の特徴と例文", "firstPerson": "一人称（俺/私/僕/わたし等）", "motivation": "行動の動機", "background": "背景・過去"},
+    （最低3人、理想4-5人。全員に明確な口調の差をつける）
   ],
   "worldBuilding": {
-    "basics": {"era": "時代", "setting": "舞台", "civilizationLevel": "文明レベル"},
-    "rules": [{"name": "ルール名", "description": "説明"}],
-    "terminology": [{"term": "用語", "definition": "定義"}],
-    "history": "歴史・背景",
-    "infoAsymmetry": {"commonKnowledge": "一般に知られていること", "hiddenTruths": "隠された真実"},
-    "items": [{"name": "アイテム名", "description": "説明"}]
+    "basics": {"era": "時代設定（必須）", "setting": "舞台の具体的な場所（必須）", "civilizationLevel": "文明・技術レベル（必須）"},
+    "rules": [{"id": "r1", "name": "ルール名", "description": "説明", "constraints": "制約"}（最低2つ）],
+    "terminology": [{"id": "t1", "term": "用語", "reading": "よみがな", "definition": "定義"}（最低3つ）],
+    "history": "世界の歴史・背景（3-5文）",
+    "infoAsymmetry": {"commonKnowledge": "登場人物・読者が知っている常識", "hiddenTruths": "物語で明かされる隠された真実"},
+    "items": [{"id": "i1", "name": "アイテム名", "appearance": "外見", "ability": "能力・効果", "constraints": "制約", "owner": "所有者", "narrativeMeaning": "物語上の意味"}]
   },
-  "structureTemplate": "kishotenketsu or three_act",
+  "structureTemplate": "kishotenketsu（または three-act, jo-ha-kyu）",
   "actGroups": [
-    {"label": "幕名", "episodes": [{"title": "話タイトル", "summary": "概要", "emotionTarget": "感情"}]}
-  ],
-  "synopsis": "あらすじ",
-  "scope": "X話 × Y字"
+    {
+      "id": "act1",
+      "label": "幕名（起/承/転/結 等）",
+      "description": "この幕の概要",
+      "episodes": [
+        {"id": "ep1", "title": "第1話: サブタイトル", "whatHappens": "何が起こるか（2-3文）", "whyItHappens": "なぜそれが起こるか", "characters": ["登場キャラ名"], "emotionTarget": "この話で読者に感じてほしい感情", "aiSuggested": true}
+      ]
+    }
+    （話数分のエピソードカードを全て作成すること）
+  ]
 }
 __END_UPDATE__
 
 【重要】
-- ブリーフが短くても、創造力を発揮して豊かな設計書を生成してください
-- キャラクターは最低3人、理想的には4-5人生成してください
-- プロットは具体的なエピソード分けまで行ってください（推奨8-12話）
-- 世界観は独自性のある設定を心がけてください
-- 対話部分は熱意を持って、編集者として「この物語は面白くなる！」という姿勢で書いてください`;
+- ブリーフがたった一行でも、プロとして想像力を発揮して完全な設計書を作り上げてください
+- JSON内の全フィールドに具体的な値を入れてください。nullや空文字は禁止
+- キャラクターは最低3人。各キャラに明確な口調の差（一人称・語尾・語彙）を持たせる
+- actGroupsのepisodesは話数分（scopeで指定した話数分）全て作成する
+- 世界観のrulesは最低2つ、terminologyは最低3つ
+- conflictは具体的に書く（抽象的な「善vs悪」は不可）`;
     } else {
       // ─── Subsequent messages: refinement with current design state ───
       maxTokens = 4000;

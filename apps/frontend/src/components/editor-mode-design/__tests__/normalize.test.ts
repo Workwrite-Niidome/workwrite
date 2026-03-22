@@ -403,7 +403,7 @@ describe('normalizeDesignUpdate — full AI response', () => {
     expect(result.conflict).toBe('リーナの記憶を取り戻すと世界の真実が明かされる恐怖');
     expect(result.episodeCount).toBe(10);
     expect(result.charCountPerEpisode).toBe(3000);
-    expect(result.protagonist?.name).toBe('リーナ');
+    expect(result.protagonist && typeof result.protagonist === 'object' && 'name' in result.protagonist ? result.protagonist.name : undefined).toBe('リーナ');
     expect(result.characters).toHaveLength(2);
     expect(result.actGroups).toHaveLength(1);
     expect(result.actGroups![0].label).toBe('起');
