@@ -50,10 +50,9 @@ async function ensureSchema() {
     // Episode extractedCharacters column (added 2026-03-23)
     await prisma.$executeRawUnsafe(`ALTER TABLE "Episode" ADD COLUMN IF NOT EXISTS "extractedCharacters" JSONB`);
 
-    // One-time clear: re-extract with improved prompt + priority (2026-03-23 v2)
-    // Safe to run multiple times — only clears non-null values
+    // One-time clear: re-extract with improved matching (2026-03-23 v3)
     const cleared = await prisma.$executeRawUnsafe(
-      `UPDATE "Episode" SET "extractedCharacters" = NULL WHERE "extractedCharacters" IS NOT NULL AND "updatedAt" < '2026-03-24'`
+      `UPDATE "Episode" SET "extractedCharacters" = NULL WHERE "extractedCharacters" IS NOT NULL AND "updatedAt" < '2026-03-25'`
     );
     if (cleared > 0) console.log(`[ensure-schema] Cleared ${cleared} old extractedCharacters for re-extraction`);
 
