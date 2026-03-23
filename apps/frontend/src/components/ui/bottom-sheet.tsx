@@ -23,6 +23,7 @@ export function BottomSheet({ open, onClose, children, title }: BottomSheetProps
     return () => { document.body.style.overflow = ''; };
   }, [open]);
 
+  // Swipe-to-close handlers — only for the drag handle area
   function handleTouchStart(e: React.TouchEvent) {
     startY.current = e.touches[0].clientY;
   }
@@ -60,16 +61,23 @@ export function BottomSheet({ open, onClose, children, title }: BottomSheetProps
       <div
         ref={sheetRef}
         className="absolute bottom-0 left-0 right-0 bg-card border-t border-border rounded-t-xl max-h-[85vh] flex flex-col animate-in slide-in-from-bottom duration-300"
-        onTouchStart={handleTouchStart}
-        onTouchMove={handleTouchMove}
-        onTouchEnd={handleTouchEnd}
       >
-        {/* Drag handle */}
-        <div className="flex justify-center py-2 cursor-grab">
+        {/* Drag handle — only this area triggers swipe-to-close */}
+        <div
+          className="flex justify-center py-3 cursor-grab"
+          onTouchStart={handleTouchStart}
+          onTouchMove={handleTouchMove}
+          onTouchEnd={handleTouchEnd}
+        >
           <div className="w-10 h-1 rounded-full bg-muted-foreground/30" />
         </div>
         {title && (
-          <div className="px-4 pb-2 border-b border-border">
+          <div
+            className="px-4 pb-2 border-b border-border"
+            onTouchStart={handleTouchStart}
+            onTouchMove={handleTouchMove}
+            onTouchEnd={handleTouchEnd}
+          >
             <span className="font-medium text-sm">{title}</span>
           </div>
         )}
