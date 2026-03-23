@@ -1189,10 +1189,12 @@ model PostBookmark {
 model CreditBalance {
   id               String    @id @default(cuid())
   userId           String    @unique
-  balance          Int       @default(0)       // 合計残高（monthlyBalance + purchasedBalance）
-  monthlyBalance   Int       @default(0)       // 月間付与分（期限あり）
+  balance          Int       @default(0)       // 合計残高（monthlyBalance + rewardBalance + purchasedBalance）
+  monthlyBalance   Int       @default(0)       // 月間付与分（月初失効）
+  rewardBalance    Int       @default(0)       // 報酬分（30日失効）
   purchasedBalance Int       @default(0)       // 購入分（無期限）
   monthlyGranted   Int       @default(0)       // 今月の付与量
+  rewardExpiresAt  DateTime?                   // 報酬クレジットの失効日時
   lastGrantedAt    DateTime?
   updatedAt        DateTime  @updatedAt
 

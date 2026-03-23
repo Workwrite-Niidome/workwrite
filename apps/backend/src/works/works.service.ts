@@ -615,7 +615,11 @@ export class WorksService {
       if (dup) return;
       const balance = await tx.creditBalance.update({
         where: { userId },
-        data: { balance: { increment: FIRST_PUBLISH_CR }, purchasedBalance: { increment: FIRST_PUBLISH_CR } },
+        data: {
+          balance: { increment: FIRST_PUBLISH_CR },
+          rewardBalance: { increment: FIRST_PUBLISH_CR },
+          rewardExpiresAt: new Date(Date.now() + 30 * 24 * 60 * 60 * 1000),
+        },
       });
       await tx.creditTransaction.create({
         data: { userId, amount: FIRST_PUBLISH_CR, type: 'ADMIN_GRANT', status: 'confirmed', balance: balance.balance, description: '初公開報酬' },

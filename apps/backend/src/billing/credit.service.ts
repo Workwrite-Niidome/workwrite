@@ -28,6 +28,7 @@ export class CreditService {
         userId,
         balance: 20,
         monthlyBalance: 20,
+        rewardBalance: 0,
         purchasedBalance: 0,
         monthlyGranted: 20,
         lastGrantedAt: new Date(),
@@ -41,13 +42,15 @@ export class CreditService {
     return {
       total: bal.balance,
       monthly: bal.monthlyBalance,
+      reward: bal.rewardBalance,
       purchased: bal.purchasedBalance,
     };
   }
 
   /**
    * Consume credits with PENDING status (two-phase commit).
-   * Uses SELECT FOR UPDATE to prevent race conditions.
+   * Consumption order: monthly → reward → purchased.
+   * Only purchasedDeducted counts toward author revenue.
    */
   async consumeCredits(
     userId: string,
@@ -70,15 +73,18 @@ export class CreditService {
         throw new InsufficientCreditsException(amount, bal.balance);
       }
 
-      // Consume monthly first, then purchased
+      // Consume order: monthly → reward → purchased
       const monthlyDeduct = Math.min(bal.monthlyBalance, amount);
-      const purchasedDeduct = amount - monthlyDeduct;
+      const remaining = amount - monthlyDeduct;
+      const rewardDeduct = Math.min(bal.rewardBalance, remaining);
+      const purchasedDeduct = remaining - rewardDeduct;
 
       await tx.creditBalance.update({
         where: { userId },
         data: {
           balance: { decrement: amount },
           monthlyBalance: { decrement: monthlyDeduct },
+          rewardBalance: { decrement: rewardDeduct },
           purchasedBalance: { decrement: purchasedDeduct },
         },
       });
@@ -134,7 +140,8 @@ export class CreditService {
         });
         if (!bal) return;
 
-        // Restore to monthly up to monthlyGranted cap, clamp to 0 to prevent negative
+        // Restore order: monthly (up to cap) → purchased (remaining)
+        // Reward credits are not restored on refund (conservative: small amounts, rare event)
         const monthlyRestore = Math.max(0, Math.min(
           refundAmount,
           bal.monthlyGranted - bal.monthlyBalance,
@@ -207,6 +214,7 @@ export class CreditService {
 
   /**
    * Grant monthly credits: expire old monthly balance, then grant new.
+   * rewardBalance and purchasedBalance are preserved.
    * @param stripeInvoiceId Optional Stripe invoice ID for idempotency tracking
    */
   async grantMonthlyCredits(
@@ -238,13 +246,14 @@ export class CreditService {
         });
       }
 
-      // Grant new monthly credits
+      // Grant new monthly credits (preserve reward + purchased)
       const newBalance = bal.balance - expired + amount;
       await tx.creditBalance.update({
         where: { userId },
         data: {
           balance: newBalance,
           monthlyBalance: amount,
+          // rewardBalance: unchanged
           purchasedBalance: bal.purchasedBalance,
           monthlyGranted: amount,
           lastGrantedAt: new Date(),
@@ -325,6 +334,144 @@ export class CreditService {
     this.logger.log(`addPurchasedCredits: SUCCESS — ${amount}cr added to user ${userId}`);
   }
 
+  /**
+   * Grant reward credits (rewardBalance — 30日失効, 作家還元対象外).
+   * Enforces per-category monthly count limits to prevent abuse.
+   * @param monthlyCountLimit Max times this reward category can be earned per month
+   * @param descriptionPrefix Prefix to match for counting (e.g. "レビュー報酬", "読了報酬")
+   * Returns true if granted, false if capped or duplicate.
+   */
+  async grantRewardCredits(
+    userId: string,
+    amount: number,
+    type: 'REVIEW_REWARD' | 'REFERRAL_REWARD',
+    description: string,
+    monthlyCountLimit: number,
+    descriptionPrefix: string,
+  ): Promise<boolean> {
+    return this.prisma.$transaction(async (tx) => {
+      // Lock the balance row
+      await tx.$queryRawUnsafe(
+        'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE',
+        userId,
+      );
+
+      // Duplicate check
+      const existing = await tx.creditTransaction.findFirst({
+        where: { userId, type, description },
+      });
+      if (existing) return false;
+
+      // Monthly count limit per reward category
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+
+      const monthlyCount = await tx.creditTransaction.count({
+        where: {
+          userId,
+          type,
+          status: 'confirmed',
+          description: { startsWith: descriptionPrefix },
+          createdAt: { gte: monthStart },
+        },
+      });
+
+      if (monthlyCount >= monthlyCountLimit) {
+        this.logger.log(`Monthly ${descriptionPrefix} limit reached for user ${userId} (${monthlyCount}/${monthlyCountLimit})`);
+        return false;
+      }
+
+      // Extend reward expiry to 30 days from now
+      const rewardExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
+
+      const bal = await tx.creditBalance.update({
+        where: { userId },
+        data: {
+          balance: { increment: amount },
+          rewardBalance: { increment: amount },
+          rewardExpiresAt,
+        },
+      });
+
+      await tx.creditTransaction.create({
+        data: {
+          userId,
+          amount,
+          type,
+          status: 'confirmed',
+          balance: bal.balance,
+          description,
+        },
+      });
+
+      return true;
+    });
+  }
+
+  /**
+   * Expire reward credits that have passed their 30-day expiry.
+   * Runs daily at 01:00.
+   */
+  @Cron('0 1 * * *')
+  async expireRewardCredits(): Promise<number> {
+    const now = new Date();
+    const expiredBalances = await this.prisma.creditBalance.findMany({
+      where: {
+        rewardBalance: { gt: 0 },
+        rewardExpiresAt: { lt: now },
+      },
+      select: { userId: true, balance: true, rewardBalance: true },
+    });
+
+    if (expiredBalances.length === 0) return 0;
+
+    this.logger.log(`Expiring reward credits for ${expiredBalances.length} users`);
+    let count = 0;
+    for (const bal of expiredBalances) {
+      try {
+        await this.prisma.$transaction(async (tx) => {
+          await tx.$queryRawUnsafe(
+            'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE',
+            bal.userId,
+          );
+
+          // Re-read under lock
+          const current = await tx.creditBalance.findUnique({ where: { userId: bal.userId } });
+          if (!current || current.rewardBalance <= 0) return;
+          if (current.rewardExpiresAt && current.rewardExpiresAt >= now) return;
+
+          const expireAmount = current.rewardBalance;
+
+          await tx.creditBalance.update({
+            where: { userId: bal.userId },
+            data: {
+              balance: { decrement: expireAmount },
+              rewardBalance: 0,
+              rewardExpiresAt: null,
+            },
+          });
+
+          await tx.creditTransaction.create({
+            data: {
+              userId: bal.userId,
+              amount: -expireAmount,
+              type: 'EXPIRE',
+              status: 'confirmed',
+              balance: current.balance - expireAmount,
+              description: `報酬クレジット失効 (${expireAmount}cr, 30日経過)`,
+            },
+          });
+        });
+        count++;
+      } catch (e) {
+        this.logger.error(`Failed to expire reward credits for user ${bal.userId}`, e);
+      }
+    }
+    this.logger.log(`Expired reward credits for ${count}/${expiredBalances.length} users`);
+    return count;
+  }
+
   /** Get transaction history with pagination */
   async getTransactionHistory(
     userId: string,
@@ -353,6 +500,7 @@ export class CreditService {
           userId,
           balance: 0,
           monthlyBalance: 0,
+          rewardBalance: 0,
           purchasedBalance: 0,
           monthlyGranted: 0,
         },

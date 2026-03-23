@@ -56,21 +56,17 @@ export class EmotionsService {
 
   private async grantEmotionTagReward(userId: string, workId: string) {
     await this.creditService.ensureCreditBalance(userId);
-    await this.prisma.$transaction(async (tx) => {
-      await tx.$queryRawUnsafe('SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', userId);
-      const existing = await tx.creditTransaction.findFirst({
-        where: { userId, type: 'REVIEW_REWARD', description: `感情タグ報酬 (${workId})` },
-      });
-      if (existing) return;
-      const balance = await tx.creditBalance.update({
-        where: { userId },
-        data: { balance: { increment: EMOTION_TAG_REWARD_CR }, purchasedBalance: { increment: EMOTION_TAG_REWARD_CR } },
-      });
-      await tx.creditTransaction.create({
-        data: { userId, amount: EMOTION_TAG_REWARD_CR, type: 'REVIEW_REWARD', status: 'confirmed', balance: balance.balance, description: `感情タグ報酬 (${workId})` },
-      });
-    });
-    this.logger.log(`Granted ${EMOTION_TAG_REWARD_CR}Cr emotion tag reward to ${userId} for work ${workId}`);
+    const granted = await this.creditService.grantRewardCredits(
+      userId,
+      EMOTION_TAG_REWARD_CR,
+      'REVIEW_REWARD',
+      `感情タグ報酬 (${workId})`,
+      5,              // 月5回まで
+      '感情タグ報酬',
+    );
+    if (granted) {
+      this.logger.log(`Granted ${EMOTION_TAG_REWARD_CR}Cr emotion tag reward to ${userId} for work ${workId}`);
+    }
   }
 
   async getEmotionTagsForWork(workId: string) {

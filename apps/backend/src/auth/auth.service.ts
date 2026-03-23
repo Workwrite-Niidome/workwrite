@@ -11,8 +11,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { RegisterDto, LoginDto, AuthResponseDto } from './dto/register.dto';
 
-const REFERRAL_REWARD_CR = 10;
-const MAX_REFERRALS = 5;
+const REFERRAL_REWARD_CR = 5;
+const MAX_REFERRALS = 10;
 
 @Injectable()
 export class AuthService {
@@ -298,10 +298,11 @@ export class AuthService {
     await this.prisma.creditBalance.upsert({
       where: { userId: referrer.id },
       update: {},
-      create: { userId: referrer.id, balance: 0, monthlyBalance: 0, purchasedBalance: 0, monthlyGranted: 0 },
+      create: { userId: referrer.id, balance: 0, monthlyBalance: 0, rewardBalance: 0, purchasedBalance: 0, monthlyGranted: 0 },
     });
 
-    // Atomic: lock + check + grant inside single transaction
+    // Monthly count limit (5 referrals/month) + atomic grant
+    const MONTHLY_REFERRAL_LIMIT = 5;
     await this.prisma.$transaction(async (tx) => {
       await tx.$queryRawUnsafe(
         'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', referrer.id,
@@ -313,11 +314,34 @@ export class AuthService {
       });
       if (existing) return;
 
+      // Monthly referral count limit
+      const monthStart = new Date();
+      monthStart.setDate(1);
+      monthStart.setHours(0, 0, 0, 0);
+      const monthlyCount = await tx.creditTransaction.count({
+        where: {
+          userId: referrer.id,
+          type: 'REFERRAL_REWARD',
+          status: 'confirmed',
+          description: { startsWith: '招待報酬' },
+          createdAt: { gte: monthStart },
+        },
+      });
+      if (monthlyCount >= MONTHLY_REFERRAL_LIMIT) {
+        // Still track referral stats even if capped
+        await tx.user.update({ where: { id: referrer.id }, data: { referralCount: { increment: 1 } } });
+        await tx.user.update({ where: { id: newUserId }, data: { referredBy: referrer.id } });
+        return;
+      }
+
+      // Grant to rewardBalance (30日失効, 作家還元対象外)
+      const rewardExpiresAt = new Date(Date.now() + 30 * 24 * 60 * 60 * 1000);
       const balance = await tx.creditBalance.update({
         where: { userId: referrer.id },
         data: {
           balance: { increment: REFERRAL_REWARD_CR },
-          purchasedBalance: { increment: REFERRAL_REWARD_CR },
+          rewardBalance: { increment: REFERRAL_REWARD_CR },
+          rewardExpiresAt,
         },
       });
 

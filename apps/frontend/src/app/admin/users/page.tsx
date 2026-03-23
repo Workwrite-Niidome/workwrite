@@ -168,7 +168,7 @@ export default function AdminUsersPage() {
                         <div className="text-xs">
                           <span className="font-medium">{user.creditBalance.balance}cr</span>
                           <span className="text-muted-foreground ml-1">
-                            (月{user.creditBalance.monthlyBalance} / 購入{user.creditBalance.purchasedBalance})
+                            (月{user.creditBalance.monthlyBalance} / 報酬{user.creditBalance.rewardBalance} / 購入{user.creditBalance.purchasedBalance})
                           </span>
                         </div>
                       ) : (

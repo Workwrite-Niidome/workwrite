@@ -56,47 +56,22 @@ export class ReviewsService {
 
   /**
    * Grant Cr reward for writing a review.
-   * Immediate grant — spam detection is done asynchronously (future).
+   * Uses monthlyBalance (expires monthly) with monthly cap via CreditService.
    */
   private async grantReviewReward(userId: string, workId: string) {
     try {
-      // Ensure credit balance exists
       await this.creditService.ensureCreditBalance(userId);
-
-      // Atomic: lock + check + grant inside single transaction
-      await this.prisma.$transaction(async (tx) => {
-        // Lock the balance row to prevent concurrent grants
-        await tx.$queryRawUnsafe(
-          'SELECT * FROM "CreditBalance" WHERE "userId" = $1 FOR UPDATE', userId,
-        );
-
-        // Check if already rewarded (inside transaction = race-safe)
-        const existingTx = await tx.creditTransaction.findFirst({
-          where: { userId, type: 'REVIEW_REWARD', description: `レビュー報酬 (${workId})` },
-        });
-        if (existingTx) return;
-
-        const balance = await tx.creditBalance.update({
-          where: { userId },
-          data: {
-            balance: { increment: REVIEW_REWARD_CR },
-            purchasedBalance: { increment: REVIEW_REWARD_CR },
-          },
-        });
-
-        await tx.creditTransaction.create({
-          data: {
-            userId,
-            amount: REVIEW_REWARD_CR,
-            type: 'REVIEW_REWARD',
-            status: 'confirmed',
-            balance: balance.balance,
-            description: `レビュー報酬 (${workId})`,
-          },
-        });
-      });
-
-      this.logger.log(`Granted ${REVIEW_REWARD_CR}Cr review reward to user ${userId} for work ${workId}`);
+      const granted = await this.creditService.grantRewardCredits(
+        userId,
+        REVIEW_REWARD_CR,
+        'REVIEW_REWARD',
+        `レビュー報酬 (${workId})`,
+        2,              // 月2回まで
+        'レビュー報酬',
+      );
+      if (granted) {
+        this.logger.log(`Granted ${REVIEW_REWARD_CR}Cr review reward to user ${userId} for work ${workId}`);
+      }
     } catch (e) {
       this.logger.error(`Failed to grant review reward: ${e}`);
     }

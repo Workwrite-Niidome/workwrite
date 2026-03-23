@@ -1520,7 +1520,7 @@ export interface AdminUser {
   createdAt: string;
   _count: { works: number; reviews: number };
   subscription?: { plan: string; status: string; grantedBy?: string | null } | null;
-  creditBalance?: { balance: number; monthlyBalance: number; purchasedBalance: number } | null;
+  creditBalance?: { balance: number; monthlyBalance: number; rewardBalance: number; purchasedBalance: number } | null;
 }
 
 export interface AdminWork {
