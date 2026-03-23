@@ -135,7 +135,7 @@ export class CharacterTalkService {
       0,
     );
 
-    // Spoiler prevention: collect character names up to reader's progress
+    // Collect character names from all episodes up to reader's progress
     const appearedCharNames = new Set<string>();
     for (const ea of episodeAnalyses) {
       if (ea.episode.orderIndex <= currentEpisodeIndex && Array.isArray(ea.characters)) {
@@ -197,10 +197,13 @@ export class CharacterTalkService {
         throw new NotFoundException('Character not found');
       }
 
-      // Verify character appeared in reader's read range
-      if (!appearedCharNames.has(character.name)) {
+      // Verify character appeared in reader's read range (fuzzy match)
+      const charAppeared = [...appearedCharNames].some((name) =>
+        character.name === name || character.name.includes(name) || name.includes(character.name),
+      );
+      if (!charAppeared) {
         await this.creditService.refundTransaction(transactionId);
-        throw new ForbiddenException('This character has not appeared in your read episodes yet');
+        throw new ForbiddenException('このキャラクターはまだ読んだエピソードに登場していません');
       }
 
       systemPrompt = `あなたは「${work.title}」に登場する${character.name}です。
