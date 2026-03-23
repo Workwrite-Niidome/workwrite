@@ -12,83 +12,83 @@ interface FAQItem {
 
 const FAQ_SECTIONS: { title: string; items: FAQItem[] }[] = [
   {
-    title: 'Getting Started',
+    title: 'はじめに',
     items: [
       {
-        q: 'How do I create an account?',
-        a: 'Click "Start Writing" or "Register" from the top page. Enter your nickname, email address, and password to create an account. After registration, you can optionally complete an onboarding quiz to receive personalized recommendations.',
+        q: 'アカウントの作成方法は？',
+        a: 'トップページの「書きはじめる」または「新規登録」をクリックしてください。ニックネーム、メールアドレス、パスワードを入力してアカウントを作成できます。登録後、オンボーディングクイズに回答すると、おすすめ作品のパーソナライズが可能です。',
       },
       {
-        q: 'What is the onboarding quiz?',
-        a: 'A short 5-question quiz about your reading preferences. Based on your answers, we generate a personalized emotion vector to recommend works that match your taste. You can skip it and complete it later.',
+        q: 'オンボーディングクイズとは？',
+        a: '読書の好みに関する5問の短いクイズです。回答をもとにパーソナライズされた感情ベクトルが生成され、あなたの好みに合った作品をおすすめします。スキップして後から回答することもできます。',
       },
       {
-        q: 'How do I find works to read?',
-        a: 'Use the search page to search by title or keyword. You can also browse by emotion tags from the home page, or explore "Hidden Gems" for underappreciated works with high AI scores.',
+        q: '読みたい作品を探すには？',
+        a: '検索ページからタイトルやキーワードで検索できます。また、トップページの感情タグから探したり、「Hidden Gems」でAIスコアが高いのにまだ注目されていない作品を発見することもできます。',
       },
     ],
   },
   {
-    title: 'Reading',
+    title: '読む',
     items: [
       {
-        q: 'How does the bookshelf work?',
-        a: 'Add works to your bookshelf with three statuses: "Want to Read", "Reading", and "Completed". Your reading progress is automatically saved as you read episodes.',
+        q: '本棚の使い方は？',
+        a: '作品を「読みたい」「読書中」「読了」の3つのステータスで本棚に追加できます。エピソードを読み進めると、読書の進捗は自動的に保存されます。',
       },
       {
-        q: 'Can I customize the reading experience?',
-        a: 'Yes. While reading, you can change the font size (small, medium, large, extra-large) and theme (light, dark, sepia). These preferences are saved automatically.',
+        q: '読書画面をカスタマイズできますか？',
+        a: 'はい。読書中にフォントサイズ（小・中・大・特大）とテーマ（ライト・ダーク・セピア）を変更できます。設定は自動的に保存されます。',
       },
       {
-        q: 'What is the afterword flow?',
-        a: 'After completing a work, you\'ll enter a reflection flow where you can tag your emotions, record how the work changed you, and write a review. This data builds your personal reading timeline.',
+        q: '読了後のフローとは？',
+        a: '作品を読み終えると、振り返りフローに進みます。感情タグの記録、作品によって自分がどう変わったかの記録、レビューの執筆ができます。このデータがあなたの読書タイムラインを構築します。',
       },
     ],
   },
   {
-    title: 'Writing',
+    title: '書く',
     items: [
       {
-        q: 'How do I publish a work?',
-        a: 'Go to the writing dashboard and click "New Work". Add a title, synopsis, and genre, then create episodes. When ready, change the work status to "Published".',
+        q: '作品を公開するには？',
+        a: '執筆ダッシュボードで「新しい作品」をクリックしてください。タイトル、あらすじ、ジャンルを設定し、エピソードを作成します。準備ができたら、作品のステータスを「公開」に変更してください。',
       },
       {
-        q: 'What is AI scoring?',
-        a: 'Our AI analyzes your work across four dimensions: Immersion, Transformation, Virality, and World Building. Each dimension is scored 0-100, with improvement tips provided. You can trigger re-scoring from the work analytics page.',
+        q: 'AIスコアリングとは？',
+        a: 'AIが作品を「没入感」「変容力」「拡散性」「世界構築力」の4つの軸で分析します。各軸は0〜100点で評価され、改善のヒントも提供されます。作品分析ページから再スコアリングをリクエストできます。',
       },
       {
-        q: 'Can I unpublish a work?',
-        a: 'Yes. From the work edit page, you can change the status to "Unpublished" at any time. Unpublished works are hidden from search and discovery but retain all their data.',
+        q: '作品を非公開にできますか？',
+        a: 'はい。作品編集ページからいつでもステータスを「非公開」に変更できます。非公開の作品は検索やおすすめからは表示されなくなりますが、すべてのデータは保持されます。',
       },
     ],
   },
   {
-    title: 'Account & Settings',
+    title: 'アカウント・設定',
     items: [
       {
-        q: 'How do I change my profile?',
-        a: 'Go to your profile page (accessible from the header or bottom navigation). You can update your nickname, display name, and bio.',
+        q: 'プロフィールを変更するには？',
+        a: 'プロフィールページ（ヘッダーまたはボトムナビゲーションからアクセス可能）に移動してください。ニックネーム、表示名、自己紹介を更新できます。',
       },
       {
-        q: 'How do I change my password?',
-        a: 'Go to Settings from your profile page. Under "Security", you can change your password by entering your current password and a new one.',
+        q: 'パスワードを変更するには？',
+        a: 'プロフィールページから「設定」に移動してください。「セキュリティ」セクションで、現在のパスワードと新しいパスワードを入力して変更できます。',
       },
       {
-        q: 'How do I delete my account?',
-        a: 'Go to Settings and scroll to the "Danger Zone" section. Account deletion is permanent and will remove all your works, reviews, and reading data.',
+        q: 'アカウントを削除するには？',
+        a: '「設定」に移動し、「危険な操作」セクションまでスクロールしてください。アカウントの削除は取り消せません。すべての作品、レビュー、読書データが削除されます。',
       },
     ],
   },
   {
-    title: 'Points & Timeline',
+    title: 'ポイント・タイムライン',
     items: [
       {
-        q: 'How do I earn points?',
-        a: 'You earn points by writing reviews, adding emotion tags, and recording state changes after reading. Points are displayed on your timeline page.',
+        q: 'ポイントを獲得するには？',
+        a: 'レビューの執筆、感情タグの記録、読了後の変化の記録でポイントを獲得できます。ポイントはタイムラインページに表示されます。',
       },
       {
-        q: 'What is the timeline?',
-        a: 'Your timeline tracks how reading has changed you over time. It shows emotion tags, state changes (e.g., confidence or worldview shifts), and reviews you\'ve written. It\'s a personal record of growth through reading.',
+        q: 'タイムラインとは？',
+        a: '読書を通じて自分がどう変わったかを時系列で記録する機能です。感情タグ、変化の記録（例：自信や世界観の変化）、レビューが表示されます。読書を通じた成長の個人記録です。',
       },
     ],
   },
@@ -119,15 +119,15 @@ function Accordion({ item }: { item: FAQItem }) {
 export default function HelpPage() {
   return (
     <div className="px-4 md:px-6 py-8">
-      <h1 className="text-lg font-semibold tracking-wide mb-2">Help</h1>
+      <h1 className="text-lg font-semibold tracking-wide mb-2">ヘルプ</h1>
       <p className="text-sm text-muted-foreground mb-8">
-        Frequently asked questions about Workwrite.
+        Workwriteについてよくある質問
       </p>
 
       <div className="space-y-10">
         {FAQ_SECTIONS.map((section) => (
           <section key={section.title}>
-            <h2 className="text-xs tracking-[0.15em] uppercase text-muted-foreground mb-3">{section.title}</h2>
+            <h2 className="text-xs tracking-[0.15em] text-muted-foreground mb-3">{section.title}</h2>
             <div>
               {section.items.map((item) => (
                 <Accordion key={item.q} item={item} />
@@ -138,10 +138,10 @@ export default function HelpPage() {
       </div>
 
       <div className="mt-12 pt-8 border-t border-border text-center">
-        <p className="text-sm text-muted-foreground mb-2">Still have questions?</p>
+        <p className="text-sm text-muted-foreground mb-2">他にご質問がありますか？</p>
         <p className="text-sm text-muted-foreground">
-          Check our <Link href="/guidelines" className="underline hover:text-foreground transition-colors">publishing guidelines</Link> or
-          contact us at <span className="text-foreground">support@workwrite.app</span>
+          <Link href="/guidelines" className="underline hover:text-foreground transition-colors">投稿ガイドライン</Link>をご覧いただくか、
+          お問い合わせ：<span className="text-foreground">support@workwrite.app</span>
         </p>
       </div>
     </div>
