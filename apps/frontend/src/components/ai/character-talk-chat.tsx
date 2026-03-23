@@ -271,19 +271,24 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
   return (
     <div className="flex flex-col h-full">
       {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-2">
-        <div className="flex items-center gap-2 min-w-0">
-          <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 shrink-0" title="戻る">
-            <ArrowLeft className="h-4 w-4" />
+      <div className="px-4 py-2 border-b border-border">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 shrink-0" title="戻る">
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+            <p className="text-sm font-medium">{chatTitle}</p>
+          </div>
+          <Button variant="ghost" size="icon" onClick={handleClear} className="h-8 w-8 shrink-0" title="会話をクリア">
+            <Trash2 className="h-4 w-4" />
           </Button>
-          <p className="text-sm font-medium truncate">{chatTitle}</p>
         </div>
-        <div className="flex items-center gap-1.5 shrink-0">
+        <div className="flex items-center gap-2 mt-1 ml-10">
           {credits && credits.purchased > 0 && (
             <Button
               variant={useOpus ? 'default' : 'outline'}
               size="sm"
-              className="h-7 text-xs gap-1"
+              className="h-6 text-[10px] gap-1"
               onClick={() => setUseOpus(!useOpus)}
             >
               <Crown className="h-3 w-3" />
@@ -291,13 +296,10 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
             </Button>
           )}
           {credits && (
-            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+            <span className="text-[11px] text-muted-foreground">
               {costPerMessage}cr/回 | 残{credits.total}
             </span>
           )}
-          <Button variant="ghost" size="icon" onClick={handleClear} className="h-8 w-8" title="会話をクリア">
-            <Trash2 className="h-4 w-4" />
-          </Button>
         </div>
       </div>
 
