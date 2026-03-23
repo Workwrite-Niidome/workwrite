@@ -245,10 +245,7 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
                         <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
                           <span className="text-sm font-bold">{char.name[0]}</span>
                         </div>
-                        <div className="flex-1 min-w-0">
-                          <span className="text-sm font-medium truncate block">{char.name}</span>
-                          <span className="text-xs text-muted-foreground">{char.role}</span>
-                        </div>
+                        <span className="text-sm font-medium truncate flex-1 min-w-0">{char.name}</span>
                         {count > 0 && (
                           <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
                             <MessageCircle className="h-3 w-3 mr-0.5" />
