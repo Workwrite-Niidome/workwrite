@@ -12,6 +12,18 @@ import { BillingService } from './billing.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import Stripe from 'stripe';
 
+// ─── Webhook event deduplication (in-memory, 24h TTL) ────────────────────────
+const processedEvents = new Map<string, number>();
+const EVENT_TTL_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Clean up expired entries every hour
+setInterval(() => {
+  const now = Date.now();
+  for (const [id, ts] of processedEvents) {
+    if (now - ts > EVENT_TTL_MS) processedEvents.delete(id);
+  }
+}, 60 * 60 * 1000);
+
 @Controller('billing')
 export class StripeWebhookController {
   private readonly logger = new Logger(StripeWebhookController.name);
@@ -44,6 +56,13 @@ export class StripeWebhookController {
     }
 
     this.logger.log(`Webhook received: ${event.type} (id: ${event.id})`);
+
+    // Deduplication: reject replayed events
+    if (processedEvents.has(event.id)) {
+      this.logger.warn(`Duplicate webhook event ignored: ${event.id}`);
+      return res.status(200).json({ received: true, duplicate: true });
+    }
+    processedEvents.set(event.id, Date.now());
 
     try {
       switch (event.type) {
@@ -83,7 +102,9 @@ export class StripeWebhookController {
       }
     } catch (err: any) {
       this.logger.error(`Webhook handler error: ${err.message}`, err.stack);
-      return res.status(500).json({ error: 'Webhook handler failed' });
+      // Return 200 to prevent Stripe retries that could cause duplicate processing.
+      // The event is already marked as processed in the dedup map.
+      return res.status(200).json({ received: true, error: err.message });
     }
 
     return res.status(200).json({ received: true });

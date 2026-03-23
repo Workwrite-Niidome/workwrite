@@ -19,6 +19,7 @@ const mockPrismaService = () => ({
   },
   foreshadowing: {
     findFirst: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     update: jest.fn(),
   },
@@ -31,6 +32,7 @@ const mockPrismaService = () => ({
   },
   storyCharacter: {
     findFirst: jest.fn(),
+    findMany: jest.fn().mockResolvedValue([]),
     update: jest.fn(),
   },
 });
@@ -345,6 +347,9 @@ describe('EpisodeAnalysisService', () => {
       );
       prisma.episodeAnalysis.upsert.mockResolvedValue({});
       prisma.foreshadowing.findFirst.mockResolvedValue({ id: 'f-open-1', status: 'open' });
+      prisma.foreshadowing.findMany.mockResolvedValue([
+        { id: 'f-open-1', description: '謎の手紙の伏線が回収された', status: 'open', plantedIn: 0 },
+      ]);
       prisma.foreshadowing.update.mockResolvedValue({});
 
       await service.analyzeEpisode('work-1', 'ep-2');

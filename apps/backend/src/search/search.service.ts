@@ -112,6 +112,7 @@ export class SearchService implements OnModuleInit {
       const sortMap: Record<string, string[]> = {
         newest: ['publishedAt:desc'],
         score: ['qualityScore:desc'],
+        popular: ['totalViews:desc'],
       };
 
       const result = await this.worksIndex!.search(query, {

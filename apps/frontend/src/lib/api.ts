@@ -1123,8 +1123,8 @@ class ApiClient {
 
   // Public profile
   async getPublicProfile(userId: string) {
-    const res = await this.request<{ id: string; name: string; displayName: string | null; bio: string | null; avatarUrl: string | null; role: string; createdAt: string; _count: { readingProgress: number; reviews: number; followers: number; following: number } }>(`/users/${userId}`);
-    return { data: res as any };
+    const res = await this.request<{ data: { id: string; name: string; displayName: string | null; bio: string | null; avatarUrl: string | null; role: string; createdAt: string; _count: { readingProgress: number; reviews: number; followers: number; following: number } } }>(`/users/${userId}`);
+    return res as any;
   }
 
   async getFollowers(userId: string) {

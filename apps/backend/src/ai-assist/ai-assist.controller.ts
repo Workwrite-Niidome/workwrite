@@ -63,6 +63,7 @@ export class AiAssistController {
         dto.aiMode,
       );
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         // Check for metadata (conversationId)
         if (chunk.startsWith('\n__CONVERSATION_ID__:')) {
           const convId = chunk.replace('\n__CONVERSATION_ID__:', '');
