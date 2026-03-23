@@ -6,6 +6,7 @@ import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 import { AiContextBuilderService } from './ai-context-builder.service';
+import { CreditService } from '../billing/credit.service';
 
 // ---------------------------------------------------------------------------
 // Mock factories
@@ -30,6 +31,8 @@ const mockAiTierService = () => ({
     thinking: false,
     budgetTokens: 0,
   }),
+  getCreditCost: jest.fn().mockReturnValue(1),
+  assertCanUseAi: jest.fn().mockResolvedValue(undefined),
 });
 
 const mockTemplatesService = () => ({
@@ -104,6 +107,11 @@ describe('AiAssistService — streamAssist structural context injection', () => 
         { provide: AiTierService, useValue: mockAiTierService() },
         { provide: PromptTemplatesService, useValue: mockTemplatesService() },
         { provide: AiContextBuilderService, useValue: contextBuilder },
+        { provide: CreditService, useValue: {
+          consumeCredits: jest.fn().mockResolvedValue({ transactionId: 'tx-1', newBalance: 19, purchasedDeducted: 0 }),
+          confirmTransaction: jest.fn().mockResolvedValue(undefined),
+          refundTransaction: jest.fn().mockResolvedValue(undefined),
+        } },
       ],
     }).compile();
 
@@ -258,6 +266,11 @@ describe('AiAssistService — streamAssist structural context injection', () => 
           { provide: AiTierService, useValue: mockAiTierService() },
           { provide: PromptTemplatesService, useValue: mockTemplatesService() },
           { provide: AiContextBuilderService, useValue: contextBuilder },
+          { provide: CreditService, useValue: {
+            consumeCredits: jest.fn().mockResolvedValue({ transactionId: 'tx-1', newBalance: 19, purchasedDeducted: 0 }),
+            confirmTransaction: jest.fn().mockResolvedValue(undefined),
+            refundTransaction: jest.fn().mockResolvedValue(undefined),
+          } },
         ],
       }).compile();
 
@@ -279,6 +292,11 @@ describe('AiAssistService — streamAssist structural context injection', () => 
           { provide: AiTierService, useValue: mockAiTierService() },
           { provide: PromptTemplatesService, useValue: mockTemplatesService() },
           { provide: AiContextBuilderService, useValue: contextBuilder },
+          { provide: CreditService, useValue: {
+            consumeCredits: jest.fn().mockResolvedValue({ transactionId: 'tx-1', newBalance: 19, purchasedDeducted: 0 }),
+            confirmTransaction: jest.fn().mockResolvedValue(undefined),
+            refundTransaction: jest.fn().mockResolvedValue(undefined),
+          } },
         ],
       }).compile();
 

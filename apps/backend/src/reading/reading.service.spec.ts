@@ -86,11 +86,15 @@ describe('ReadingService', () => {
     });
 
     it('should calculate reading streaks from consecutive days', async () => {
-      const today = new Date();
+      // Use UTC midnight dates to match the service's toISOString().split('T')[0] logic
+      const now = new Date();
+      now.setHours(0, 0, 0, 0);
+      const todayStr = now.toISOString().split('T')[0];
+      const today = new Date(todayStr + 'T12:00:00Z');
       const yesterday = new Date(today);
-      yesterday.setDate(yesterday.getDate() - 1);
+      yesterday.setUTCDate(yesterday.getUTCDate() - 1);
       const twoDaysAgo = new Date(today);
-      twoDaysAgo.setDate(twoDaysAgo.getDate() - 2);
+      twoDaysAgo.setUTCDate(twoDaysAgo.getUTCDate() - 2);
 
       prisma.bookshelfEntry.count.mockResolvedValue(0);
       prisma.readingProgress.count.mockResolvedValue(0);

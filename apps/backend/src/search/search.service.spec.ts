@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { SearchService } from './search.service';
 import { ConfigService } from '@nestjs/config';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 // Mock MeiliSearch before importing
 jest.mock('meilisearch', () => {
@@ -42,6 +43,12 @@ describe('SearchService', () => {
             get: jest.fn((key: string, defaultValue: string) => defaultValue),
           },
         },
+        { provide: PrismaService, useValue: {
+          work: {
+            findMany: jest.fn().mockResolvedValue([]),
+            count: jest.fn().mockResolvedValue(0),
+          },
+        } },
       ],
     }).compile();
 

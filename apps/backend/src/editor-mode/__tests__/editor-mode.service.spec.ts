@@ -22,6 +22,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { AiTierService } from '../../ai-settings/ai-tier.service';
 import { CreditService } from '../../billing/credit.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 
 // ─── Mock factories ───────────────────────────────────────────────────────────
 
@@ -35,6 +36,7 @@ const makePrisma = () => ({
   work: {
     create: jest.fn(),
     findUnique: jest.fn(),
+    update: jest.fn().mockResolvedValue({}),
   },
   workCreationPlan: {
     upsert: jest.fn(),
@@ -90,6 +92,7 @@ describe('EditorModeService', () => {
         { provide: AiSettingsService, useValue: aiSettings },
         { provide: AiTierService, useValue: aiTier },
         { provide: CreditService, useValue: creditService },
+        { provide: NotificationsService, useValue: { create: jest.fn().mockResolvedValue({}) } },
       ],
     }).compile();
 

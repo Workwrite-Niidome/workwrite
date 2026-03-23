@@ -59,12 +59,12 @@ describe('AiTierService', () => {
       expect(service.getCreditCost('proofread')).toBe(0);
     });
 
-    it('returns 0 for scoring (light feature)', () => {
-      expect(service.getCreditCost('scoring')).toBe(0);
-    });
-
     it('returns 0 for episode_scoring (light feature)', () => {
       expect(service.getCreditCost('episode_scoring')).toBe(0);
+    });
+
+    it('returns 1 for scoring (not in LIGHT_FEATURES)', () => {
+      expect(service.getCreditCost('scoring')).toBe(1);
     });
 
     it('returns 0 for synopsis-gen (light feature)', () => {
@@ -159,7 +159,7 @@ describe('AiTierService', () => {
       expect(tier.plan).toBe('standard');
       expect(tier.canUseAi).toBe(true);
       expect(tier.canUseThinking).toBe(true);
-      expect(tier.canUseOpus).toBe(false);
+      expect(tier.canUseOpus).toBe(true);
       expect(tier.remainingFreeUses).toBeNull();
     });
 

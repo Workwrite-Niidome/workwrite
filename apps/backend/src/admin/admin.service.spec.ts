@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { AdminService } from './admin.service';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { CreditService } from '../billing/credit.service';
 import { ForbiddenException, NotFoundException } from '@nestjs/common';
 
 const mockPrismaService = () => ({
@@ -39,6 +40,13 @@ describe('AdminService', () => {
       providers: [
         AdminService,
         { provide: PrismaService, useValue: prisma },
+        { provide: CreditService, useValue: {
+          getBalance: jest.fn().mockResolvedValue({ total: 0, monthly: 0, purchased: 0 }),
+          grantCredits: jest.fn().mockResolvedValue(undefined),
+          consumeCredits: jest.fn(),
+          confirmTransaction: jest.fn(),
+          refundTransaction: jest.fn(),
+        } },
       ],
     }).compile();
 
