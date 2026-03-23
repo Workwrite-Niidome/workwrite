@@ -397,9 +397,8 @@ ${workText}`;
 
   /**
    * Get characters available for talk.
-   * Uses Episode.extractedCharacters (populated by Haiku on first read) to determine
-   * which characters have appeared in episodes the reader has progressed through.
-   * Authors always see all characters.
+   * Shows ONLY characters from the reader's most recently read episode.
+   * This keeps the experience immersive — dead/absent characters don't linger.
    */
   async getAvailableCharacters(userId: string, workId: string) {
     const [work, allCharacters] = await Promise.all([
@@ -422,43 +421,45 @@ ${workText}`;
 
     if (!work) throw new NotFoundException('Work not found');
 
-    // Get reader's progress to determine which episodes they've read
+    // If no extraction data exists yet, trigger batch extraction
+    const hasAnyExtraction = work.episodes.some((ep) => ep.extractedCharacters != null);
+    if (!hasAnyExtraction) {
+      this.characterExtraction.triggerWorkExtraction(workId);
+      return [];
+    }
+
+    // Find the most recently read episode (highest orderIndex with reading progress)
     const progress = await this.prisma.readingProgress.findMany({
       where: { userId, workId },
       select: { episodeId: true },
     });
     const readEpisodeIds = new Set(progress.map((p) => p.episodeId));
 
-    // Collect character names from extractedCharacters of episodes the reader has actually read
-    const appearedNames = new Set<string>();
+    let latestReadEpisode: typeof work.episodes[number] | null = null;
     for (const ep of work.episodes) {
       if (readEpisodeIds.has(ep.id)) {
-        const chars = ep.extractedCharacters as any[] | null;
-        if (Array.isArray(chars)) {
-          for (const c of chars) {
-            if (c.name) appearedNames.add(c.name);
-          }
+        if (!latestReadEpisode || ep.orderIndex > latestReadEpisode.orderIndex) {
+          latestReadEpisode = ep;
         }
       }
     }
 
-    // If no extraction data exists yet, trigger batch extraction and show empty for now
-    const hasAnyExtraction = work.episodes.some((ep) => ep.extractedCharacters != null);
-    if (!hasAnyExtraction) {
-      // Trigger background extraction for all episodes
-      this.characterExtraction.triggerWorkExtraction(workId);
-      // Return empty — next page load will have data
+    // No reading progress — nothing to show
+    if (!latestReadEpisode) {
       return [];
     }
 
-    // If reader has no progress and no extracted data for episode 0, return empty
-    if (appearedNames.size === 0) {
+    // Get characters from that episode only
+    const chars = latestReadEpisode.extractedCharacters as any[] | null;
+    if (!Array.isArray(chars) || chars.length === 0) {
       return [];
     }
 
-    // Match extracted names against StoryCharacter (fuzzy: substring match)
+    const currentNames = new Set(chars.map((c: any) => c.name).filter(Boolean));
+
+    // Match against StoryCharacter (fuzzy: substring match)
     const matched = allCharacters.filter((c) => {
-      for (const name of appearedNames) {
+      for (const name of currentNames) {
         if (c.name === name || c.name.includes(name) || name.includes(c.name)) return true;
       }
       return false;
@@ -466,7 +467,7 @@ ${workText}`;
 
     // If StoryCharacter has no matches, build from extracted data directly
     if (matched.length === 0) {
-      return [...appearedNames].map((name) => ({
+      return [...currentNames].map((name) => ({
         id: `extracted:${name}`,
         name,
         role: '登場人物',
