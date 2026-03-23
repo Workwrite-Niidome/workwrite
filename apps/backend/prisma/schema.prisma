@@ -235,7 +235,8 @@ model Episode {
   work   Work @relation(fields: [workId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id])
 
-  contentVersion  Int      @default(0)
+  contentVersion      Int      @default(0)
+  extractedCharacters Json?    // [{name, role}] — auto-extracted by Haiku on first read
 
   readingProgress ReadingProgress[]
   highlights      Highlight[]

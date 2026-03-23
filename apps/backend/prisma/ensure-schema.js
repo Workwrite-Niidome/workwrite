@@ -68,6 +68,11 @@ async function ensureSchema() {
       UPDATE "StoryCharacter" SET "isPublic" = true WHERE "isPublic" = false;
     `);
 
+    // Episode extractedCharacters column (added 2026-03-23)
+    await prisma.$executeRawUnsafe(`
+      ALTER TABLE "Episode" ADD COLUMN IF NOT EXISTS "extractedCharacters" JSONB;
+    `);
+
     console.log('[ensure-schema] Schema verified successfully');
   } catch (error) {
     console.error('[ensure-schema] ERROR:', error.message);

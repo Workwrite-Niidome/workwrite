@@ -10,6 +10,7 @@ import { CreationWizardService } from '../creation-wizard/creation-wizard.servic
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
 import { PostsService } from '../posts/posts.service';
 import { WorksService } from '../works/works.service';
+import { CharacterExtractionService } from '../character-talk/character-extraction.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostType, Episode } from '@prisma/client';
 
@@ -28,6 +29,7 @@ export class EpisodesController {
     private episodeAnalysis: EpisodeAnalysisService,
     private postsService: PostsService,
     private worksService: WorksService,
+    private characterExtraction: CharacterExtractionService,
     private prisma: PrismaService,
   ) {}
 
@@ -46,8 +48,11 @@ export class EpisodesController {
   @Get('episodes/:id')
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get episode content' })
-  findOne(@Param('id') id: string, @CurrentUser('id') userId?: string) {
-    return this.episodesService.findOne(id, userId);
+  async findOne(@Param('id') id: string, @CurrentUser('id') userId?: string) {
+    const episode = await this.episodesService.findOne(id, userId);
+    // Trigger character extraction in the background if not yet done
+    this.characterExtraction.triggerIfNeeded(id);
+    return episode;
   }
 
   @Post('works/:workId/episodes')

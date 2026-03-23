@@ -394,65 +394,75 @@ ${workText}`;
   }
 
   /**
-   * Get characters available for talk based on reader's progress.
+   * Get characters available for talk.
+   * Uses Episode.extractedCharacters (populated by Haiku on first read) to determine
+   * which characters have appeared in episodes the reader has progressed through.
+   * Authors always see all characters.
    */
   async getAvailableCharacters(userId: string, workId: string) {
-    const [progress, work, publicCharacters, episodeAnalyses] = await Promise.all([
-      this.prisma.readingProgress.findMany({
-        where: { userId, workId },
-        select: { episodeId: true, completed: true },
-      }),
+    const [work, allCharacters] = await Promise.all([
       this.prisma.work.findUnique({
         where: { id: workId },
-        select: { episodes: { select: { id: true, orderIndex: true } } },
+        select: {
+          authorId: true,
+          episodes: {
+            where: { publishedAt: { not: null } },
+            select: { id: true, orderIndex: true, extractedCharacters: true },
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
       }),
       this.prisma.storyCharacter.findMany({
         where: { workId },
         select: { id: true, name: true, role: true, personality: true, speechStyle: true },
         orderBy: { sortOrder: 'asc' },
       }),
-      this.prisma.episodeAnalysis.findMany({
-        where: { workId },
-        select: { episode: { select: { orderIndex: true } }, characters: true },
-        orderBy: { episode: { orderIndex: 'asc' } },
-      }),
     ]);
 
     if (!work) throw new NotFoundException('Work not found');
 
-    // If no episode analyses exist, return all public characters
-    // (analysis data may not have been generated yet)
-    if (episodeAnalyses.length === 0) {
-      return publicCharacters;
+    // Authors always see all characters
+    if (work.authorId === userId) {
+      return allCharacters;
     }
 
-    // If user has no reading progress, assume they are reading episode 1
-    const currentEpisodeIndex = progress.length > 0
-      ? Math.max(
-          ...progress.map((p) => {
-            const ep = work.episodes.find((e) => e.id === p.episodeId);
-            return ep ? ep.orderIndex : 0;
-          }),
-          0,
-        )
-      : 0;
+    // Get reader's progress to determine which episodes they've read
+    const progress = await this.prisma.readingProgress.findMany({
+      where: { userId, workId },
+      select: { episodeId: true },
+    });
+    const readEpisodeIds = new Set(progress.map((p) => p.episodeId));
 
-    // Collect character names that appeared in read episodes
-    const appearedCharNames = new Set<string>();
-    for (const ea of episodeAnalyses) {
-      if (ea.episode.orderIndex <= currentEpisodeIndex && Array.isArray(ea.characters)) {
-        for (const c of ea.characters as any[]) {
-          if (c.name) appearedCharNames.add(c.name);
+    // Collect character names from extractedCharacters of read episodes
+    const appearedNames = new Set<string>();
+    for (const ep of work.episodes) {
+      // Include episode if reader has progress on it, or if it's episode 0 (first episode)
+      if (readEpisodeIds.has(ep.id) || ep.orderIndex === 0) {
+        const chars = ep.extractedCharacters as any[] | null;
+        if (Array.isArray(chars)) {
+          for (const c of chars) {
+            if (c.name) appearedNames.add(c.name);
+          }
         }
       }
     }
 
-    // If no characters matched (e.g. analysis exists but no character data), return all
-    if (appearedCharNames.size === 0) {
-      return publicCharacters;
+    // If no extraction data exists yet (not extracted), show all characters
+    const hasAnyExtraction = work.episodes.some((ep) => ep.extractedCharacters != null);
+    if (!hasAnyExtraction) {
+      return allCharacters;
     }
 
-    return publicCharacters.filter((c) => appearedCharNames.has(c.name));
+    // Match extracted names against StoryCharacter (fuzzy: substring match)
+    const matched = allCharacters.filter((c) => {
+      for (const name of appearedNames) {
+        if (c.name === name || c.name.includes(name) || name.includes(c.name)) return true;
+      }
+      return false;
+    });
+
+    // If nothing matched (e.g. name mismatch), fall back to all
+    return matched.length > 0 ? matched : allCharacters;
   }
 
   /**

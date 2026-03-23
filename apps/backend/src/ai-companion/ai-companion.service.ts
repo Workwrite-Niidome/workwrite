@@ -85,9 +85,6 @@ export class AiCompanionService {
     if (!work) throw new NotFoundException('Work not found');
 
     // Build work text (up to limit)
-    const completedEpisodeIds = new Set(
-      progress.filter((p) => p.completed).map((p) => p.episodeId),
-    );
     const currentEpisodeIndex = Math.max(
       ...progress.map((p) => {
         const ep = work.episodes.find((e) => e.id === p.episodeId);
@@ -135,7 +132,7 @@ export class AiCompanionService {
       const themeLines: string[] = [];
       if (storyArc.premise) themeLines.push(`前提: ${storyArc.premise}`);
       if (storyArc.centralConflict) themeLines.push(`中心的葛藤: ${storyArc.centralConflict}`);
-      if (storyArc.themes.length > 0) themeLines.push(`テーマ: ${storyArc.themes.join('、')}`);
+      if (Array.isArray(storyArc.themes) && storyArc.themes.length > 0) themeLines.push(`テーマ: ${storyArc.themes.join('、')}`);
       if (themeLines.length > 0) structuredParts.push(`【物語のテーマ】\n${themeLines.join('\n')}`);
     }
 

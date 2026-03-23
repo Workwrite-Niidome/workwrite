@@ -7,9 +7,10 @@ import { AiAssistModule } from '../ai-assist/ai-assist.module';
 import { PostsModule } from '../posts/posts.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { WorksModule } from '../works/works.module';
+import { CharacterTalkModule } from '../character-talk/character-talk.module';
 
 @Module({
-  imports: [CreationWizardModule, AiAssistModule, PostsModule, ScoringModule, WorksModule],
+  imports: [CreationWizardModule, AiAssistModule, PostsModule, ScoringModule, WorksModule, CharacterTalkModule],
   controllers: [EpisodesController],
   providers: [EpisodesService, ScheduledPublishService],
   exports: [EpisodesService],
