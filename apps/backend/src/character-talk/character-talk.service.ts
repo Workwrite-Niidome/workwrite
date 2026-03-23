@@ -406,7 +406,6 @@ ${workText}`;
       this.prisma.work.findUnique({
         where: { id: workId },
         select: {
-          authorId: true,
           episodes: {
             where: { publishedAt: { not: null } },
             select: { id: true, orderIndex: true, extractedCharacters: true },
@@ -423,11 +422,6 @@ ${workText}`;
 
     if (!work) throw new NotFoundException('Work not found');
 
-    // Authors always see all characters
-    if (work.authorId === userId) {
-      return allCharacters;
-    }
-
     // Get reader's progress to determine which episodes they've read
     const progress = await this.prisma.readingProgress.findMany({
       where: { userId, workId },
@@ -435,11 +429,10 @@ ${workText}`;
     });
     const readEpisodeIds = new Set(progress.map((p) => p.episodeId));
 
-    // Collect character names from extractedCharacters of read episodes
+    // Collect character names from extractedCharacters of episodes the reader has actually read
     const appearedNames = new Set<string>();
     for (const ep of work.episodes) {
-      // Include episode if reader has progress on it, or if it's episode 0 (first episode)
-      if (readEpisodeIds.has(ep.id) || ep.orderIndex === 0) {
+      if (readEpisodeIds.has(ep.id)) {
         const chars = ep.extractedCharacters as any[] | null;
         if (Array.isArray(chars)) {
           for (const c of chars) {
