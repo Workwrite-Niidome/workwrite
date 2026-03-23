@@ -8,6 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 import { api, type NotificationItem } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GENRE_LABELS } from '@/lib/constants';
 import { Bell, Check, MessageSquare, Star, BarChart3, Hand, BookOpen, Mail, Megaphone, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -97,7 +98,7 @@ function getRecommendReason(work: DigestWork): string {
     reasons.push(`スコア ${work.qualityScore.overall}点`);
   }
   if (work.genre) {
-    reasons.push(work.genre);
+    reasons.push(GENRE_LABELS[work.genre] || work.genre);
   }
   return reasons.length > 0 ? reasons.join(' · ') : '高評価の新作';
 }

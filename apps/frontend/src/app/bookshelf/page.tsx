@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { GENRE_LABELS } from '@/lib/constants';
 import { Tabs } from '@/components/ui/tabs';
 import { ConfirmDialog } from '@/components/ui/dialog';
 import { EmptyState } from '@/components/ui/empty-state';
@@ -174,7 +175,7 @@ export default function BookshelfPage() {
                       </p>
                       {work.genre && (
                         <Badge variant="outline" className="mt-2 text-xs">
-                          {work.genre}
+                          {GENRE_LABELS[work.genre] || work.genre}
                         </Badge>
                       )}
                     </div>
@@ -218,7 +219,7 @@ export default function BookshelfPage() {
                     </p>
                     {entry.work.genre && (
                       <Badge variant="outline" className="mt-2 text-xs">
-                        {entry.work.genre}
+                        {GENRE_LABELS[entry.work.genre] || entry.work.genre}
                       </Badge>
                     )}
                   </div>

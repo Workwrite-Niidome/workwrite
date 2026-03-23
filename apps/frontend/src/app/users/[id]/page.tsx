@@ -10,6 +10,7 @@ import { api, SnsPost } from '@/lib/api';
 import { PostCard, PostCardSkeleton } from '@/components/posts/post-card';
 import { TimelineFeed } from '@/components/posts/timeline-feed';
 import { cn } from '@/lib/utils';
+import { GENRE_LABELS } from '@/lib/constants';
 
 type Tab = 'posts' | 'works' | 'applause';
 
@@ -239,7 +240,7 @@ export default function UserProfilePage() {
                       <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{work.synopsis}</p>
                     )}
                     <p className="text-xs text-muted-foreground mt-1">
-                      {work.genre && <span>{work.genre} · </span>}
+                      {work.genre && <span>{GENRE_LABELS[work.genre] || work.genre} · </span>}
                       {work._count?.episodes || work.episodes?.length || 0}話
                     </p>
                   </div>

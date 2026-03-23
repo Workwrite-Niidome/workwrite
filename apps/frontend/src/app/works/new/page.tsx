@@ -11,15 +11,9 @@ import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { WizardShell } from '@/components/creation-wizard/wizard-shell';
 
-const GENRES = [
-  'fantasy', 'sf', 'mystery', 'romance', 'horror', 'literary',
-  'adventure', 'comedy', 'drama', 'historical', 'other',
-];
-const GENRE_LABELS: Record<string, string> = {
-  fantasy: 'ファンタジー', sf: 'SF', mystery: 'ミステリー', romance: '恋愛',
-  horror: 'ホラー', literary: '文芸', adventure: '冒険', comedy: 'コメディ',
-  drama: 'ドラマ', historical: '歴史', other: 'その他',
-};
+import { GENRE_LABELS } from '@/lib/constants';
+
+const GENRES = Object.keys(GENRE_LABELS);
 
 export default function NewWorkPage() {
   return (

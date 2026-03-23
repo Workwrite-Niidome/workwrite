@@ -7,7 +7,9 @@ export const GENRE_LABELS: Record<string, string> = {
   literary: '純文学',
   adventure: '冒険',
   comedy: 'コメディ',
-  drama: 'ドラマ',
+  drama: 'ヒューマンドラマ',
   historical: '歴史',
+  modern: '現代・日常',
+  youth: '青春',
   other: 'その他',
 };

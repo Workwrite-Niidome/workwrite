@@ -464,21 +464,23 @@ ${workText}`;
       return [];
     }
 
-    // Priority 1: episodeAnalysis.characters (already available from scoring, free)
-    const analysisChars = latestReadEpisode.aiAnalysis?.characters as any[] | null;
-    if (Array.isArray(analysisChars) && analysisChars.length > 0) {
-      const names = new Set(analysisChars.map((c: any) => c.name).filter(Boolean));
-      return this.matchStoryCharacters(allCharacters, names);
-    }
-
-    // Priority 2: extractedCharacters (Haiku lightweight extraction)
+    // Priority 1: extractedCharacters (dedicated Haiku extraction — most accurate)
     const extractedChars = latestReadEpisode.extractedCharacters as any[] | null;
     if (Array.isArray(extractedChars) && extractedChars.length > 0) {
       const names = new Set(extractedChars.map((c: any) => c.name).filter(Boolean));
       return this.matchStoryCharacters(allCharacters, names);
     }
 
-    // Neither exists — trigger lightweight extraction, return empty for now
+    // Priority 2: episodeAnalysis.characters (from scoring, free fallback)
+    const analysisChars = latestReadEpisode.aiAnalysis?.characters as any[] | null;
+    if (Array.isArray(analysisChars) && analysisChars.length > 0) {
+      const names = new Set(analysisChars.map((c: any) => c.name).filter(Boolean));
+      // Also trigger dedicated extraction for future accuracy
+      this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
+      return this.matchStoryCharacters(allCharacters, names);
+    }
+
+    // Neither exists — trigger extraction, return empty for now
     this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
     return [];
   }

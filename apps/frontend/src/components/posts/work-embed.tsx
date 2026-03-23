@@ -3,6 +3,7 @@
 import Link from 'next/link';
 import { BookOpen } from 'lucide-react';
 import { PostWork } from '@/lib/api';
+import { GENRE_LABELS } from '@/lib/constants';
 
 interface WorkEmbedProps {
   work: PostWork;
@@ -22,7 +23,7 @@ export function WorkEmbed({ work }: WorkEmbedProps) {
         <div className="min-w-0">
           <p className="text-sm font-medium truncate">{work.title}</p>
           <p className="text-xs text-muted-foreground mt-0.5">
-            {work.genre && <span>{work.genre}</span>}
+            {work.genre && <span>{GENRE_LABELS[work.genre] || work.genre}</span>}
             {episodeCount > 0 && <span>{work.genre ? ' · ' : ''}全{episodeCount}話</span>}
           </p>
           {work.synopsis && (

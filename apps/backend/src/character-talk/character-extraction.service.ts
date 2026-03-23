@@ -80,6 +80,7 @@ export class CharacterExtractionService {
     this.inFlight.add(episodeId);
     try {
       const characters = await this.callHaiku(episode.title, episode.content);
+      if (characters.length === 0) return; // No results (API key missing or parse failure) — don't save empty
       await this.prisma.episode.update({
         where: { id: episodeId },
         data: { extractedCharacters: characters as any },

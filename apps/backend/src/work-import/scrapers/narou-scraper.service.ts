@@ -98,13 +98,13 @@ export class NarouScraperService {
     if (!novel) throw new Error('作品が見つかりませんでした');
 
     const genreMap: Record<number, string> = {
-      101: '異世界〔恋愛〕', 102: '現実世界〔恋愛〕',
-      201: 'ハイファンタジー', 202: 'ローファンタジー',
-      301: '純文学', 302: 'ヒューマンドラマ', 303: '歴史', 304: '推理',
-      305: 'ホラー', 306: 'アクション', 307: 'コメディー',
-      401: 'VRゲーム', 402: '宇宙', 403: '空想科学', 404: 'パニック',
-      9801: '童話',
-      9901: 'エッセイ', 9902: 'その他', 9999: 'その他',
+      101: 'romance', 102: 'romance',
+      201: 'fantasy', 202: 'fantasy',
+      301: 'literary', 302: 'drama', 303: 'historical', 304: 'mystery',
+      305: 'horror', 306: 'adventure', 307: 'comedy',
+      401: 'sf', 402: 'sf', 403: 'sf', 404: 'sf',
+      9801: 'other',
+      9901: 'other', 9902: 'other', 9999: 'other',
     };
 
     return {
