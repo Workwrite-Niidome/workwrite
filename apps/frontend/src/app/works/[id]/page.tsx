@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime, cn } from '@/lib/utils';
 import { api, type Work, type StoryCharacter, type WorkReaderStats } from '@/lib/api';
+import { GENRE_LABELS } from '@/lib/constants';
 import { WorldTab } from '@/components/work/WorldTab';
 import { EmotionArc } from '@/components/work/EmotionArc';
 import { ScoreBadge } from '@/components/scoring/score-badge';
@@ -173,7 +174,7 @@ export default function WorkDetailPage() {
                   </span>
                 </>
               )}
-              {work.genre && <Badge variant="secondary" className="shrink-0">{work.genre}</Badge>}
+              {work.genre && <Badge variant="secondary" className="shrink-0">{GENRE_LABELS[work.genre] || work.genre}</Badge>}
               {(work as any).completionStatus === 'COMPLETED' && (
                 <Badge variant="default" className="shrink-0 bg-green-600">完結</Badge>
               )}
@@ -508,12 +509,14 @@ export default function WorkDetailPage() {
               本棚に追加済み
             </Button>
           )}
-          <Link href={`/works/${workId}/character-talk`} className="col-span-2 sm:col-span-1">
-            <Button variant="outline" className="w-full sm:w-auto">
-              <Sparkles className="h-4 w-4 mr-2" />
-              キャラクタートーク
-            </Button>
-          </Link>
+          {work.enableCharacterTalk !== false && (
+            <Link href={`/works/${workId}/character-talk`} className="col-span-2 sm:col-span-1">
+              <Button variant="outline" className="w-full sm:w-auto">
+                <Sparkles className="h-4 w-4 mr-2" />
+                キャラクタートーク
+              </Button>
+            </Link>
+          )}
         </div>
 
         {/* Author-only analytics */}

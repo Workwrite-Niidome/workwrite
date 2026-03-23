@@ -44,6 +44,15 @@ export class CharacterTalkService {
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
 
+    // Check if author has disabled character talk for this work
+    const workSettings = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { enableCharacterTalk: true },
+    });
+    if (workSettings && !workSettings.enableCharacterTalk) {
+      throw new ForbiddenException('この作品ではキャラクタートークが無効になっています');
+    }
+
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
@@ -412,6 +421,7 @@ ${workText}`;
       this.prisma.work.findUnique({
         where: { id: workId },
         select: {
+          enableCharacterTalk: true,
           episodes: {
             where: { publishedAt: { not: null } },
             select: {
@@ -432,6 +442,7 @@ ${workText}`;
     ]);
 
     if (!work) throw new NotFoundException('Work not found');
+    if (!work.enableCharacterTalk) return [];
 
     // Find the most recently read episode
     const progress = await this.prisma.readingProgress.findMany({

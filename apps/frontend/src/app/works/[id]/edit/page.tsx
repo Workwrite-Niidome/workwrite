@@ -371,7 +371,7 @@ export default function EditWorkPage() {
           <ScoreCard score={scoreDetail} workId={workId} workTitle={title} onScoreUpdate={setScoreDetail} />
 
           {/* Reader Display Settings */}
-          <ReaderDisplaySettings workId={workId} creationPlan={creationPlan} />
+          <ReaderDisplaySettings workId={workId} creationPlan={creationPlan} work={work} onWorkUpdate={setWork} />
         </div>
       </div>
 
@@ -793,9 +793,13 @@ function CreationPlanCard({
 function ReaderDisplaySettings({
   workId,
   creationPlan,
+  work,
+  onWorkUpdate,
 }: {
   workId: string;
   creationPlan: any;
+  work: Work | null;
+  onWorkUpdate: (w: Work) => void;
 }) {
   const [isWorldPublic, setIsWorldPublic] = useState(false);
   const [isEmotionPublic, setIsEmotionPublic] = useState(false);
@@ -810,8 +814,7 @@ function ReaderDisplaySettings({
 
   const hasWorldData = creationPlan?.worldBuildingData;
   const hasEmotionData = creationPlan?.emotionBlueprint;
-
-  if (!hasWorldData && !hasEmotionData) return null;
+  const enableCharacterTalk = (work as any)?.enableCharacterTalk ?? true;
 
   async function handleToggle(field: 'isWorldPublic' | 'isEmotionPublic', value: boolean) {
     setSaving(true);
@@ -819,6 +822,18 @@ function ReaderDisplaySettings({
       await api.updatePublicFlags(workId, { [field]: value });
       if (field === 'isWorldPublic') setIsWorldPublic(value);
       else setIsEmotionPublic(value);
+    } catch {
+      // revert
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleCharacterTalkToggle(value: boolean) {
+    setSaving(true);
+    try {
+      const res = await api.updateWork(workId, { enableCharacterTalk: value } as any);
+      onWorkUpdate(res.data);
     } catch {
       // revert
     } finally {
@@ -835,6 +850,25 @@ function ReaderDisplaySettings({
         </CardTitle>
       </CardHeader>
       <CardContent className="space-y-3">
+        <label className="flex items-center justify-between gap-2 cursor-pointer">
+          <div>
+            <p className="text-xs font-medium">キャラクタートーク</p>
+            <p className="text-[10px] text-muted-foreground">読者がキャラクターと会話できる機能</p>
+          </div>
+          <button
+            onClick={() => handleCharacterTalkToggle(!enableCharacterTalk)}
+            disabled={saving}
+            className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+              enableCharacterTalk ? 'bg-primary' : 'bg-muted'
+            }`}
+          >
+            <span
+              className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                enableCharacterTalk ? 'translate-x-4' : 'translate-x-0.5'
+              }`}
+            />
+          </button>
+        </label>
         {hasWorldData && (
           <label className="flex items-center justify-between gap-2 cursor-pointer">
             <div>

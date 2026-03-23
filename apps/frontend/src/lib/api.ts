@@ -1297,6 +1297,7 @@ export interface Work {
   status: 'DRAFT' | 'PUBLISHED' | 'UNPUBLISHED';
   genre: string | null;
   isAiGenerated?: boolean;
+  enableCharacterTalk?: boolean;
   originality?: number | null;
   author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
   tags: { id: string; tag: string; type: string }[];
