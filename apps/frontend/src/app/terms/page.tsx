@@ -1,86 +1,85 @@
 export default function TermsPage() {
   return (
     <div className="px-4 md:px-6 py-8">
-      <h1 className="text-lg font-semibold tracking-wide mb-8">Terms of Service</h1>
+      <h1 className="text-lg font-semibold tracking-wide mb-8">利用規約</h1>
 
       <div className="space-y-8 text-sm text-muted-foreground leading-relaxed">
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">1. Acceptance of Terms</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">1. 利用規約への同意</h2>
           <p>
-            By accessing or using Workwrite ("the Service"), you agree to be bound by these Terms of Service.
-            If you do not agree to these terms, you may not use the Service.
+            Workwrite（以下「本サービス」）にアクセスまたは利用することにより、お客様は本利用規約に拘束されることに同意するものとします。
+            本規約に同意いただけない場合、本サービスをご利用いただくことはできません。
           </p>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">2. Account Registration</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">2. アカウント登録</h2>
           <ul className="space-y-2 list-disc pl-5">
-            <li>You must provide accurate and complete information when creating an account.</li>
-            <li>You are responsible for maintaining the security of your account credentials.</li>
-            <li>You must be at least 13 years of age to use the Service.</li>
-            <li>One person may not maintain more than one account.</li>
+            <li>アカウント作成時には、正確かつ完全な情報を提供していただく必要があります。</li>
+            <li>お客様は、アカウント認証情報のセキュリティを維持する責任を負います。</li>
+            <li>本サービスの利用には、13歳以上であることが必要です。</li>
+            <li>一人につき複数のアカウントを保有することはできません。</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">3. Content Ownership</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">3. コンテンツの所有権</h2>
           <ul className="space-y-2 list-disc pl-5">
-            <li>You retain all rights to the content you publish on Workwrite.</li>
-            <li>By publishing, you grant Workwrite a non-exclusive license to display and distribute your content on the platform.</li>
-            <li>You must only post original content or content you have the rights to publish.</li>
-            <li>Content that infringes on copyrights or intellectual property will be removed.</li>
+            <li>お客様がWorkwriteに公開したコンテンツに関するすべての権利は、お客様に帰属します。</li>
+            <li>公開することにより、お客様はWorkwriteに対し、プラットフォーム上でコンテンツを表示・配信するための非独占的ライセンスを付与するものとします。</li>
+            <li>オリジナルのコンテンツ、または公開権を有するコンテンツのみを投稿してください。</li>
+            <li>著作権または知的財産権を侵害するコンテンツは削除されます。</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">4. Prohibited Conduct</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">4. 禁止行為</h2>
           <ul className="space-y-2 list-disc pl-5">
-            <li>Harassment, hate speech, or discrimination against other users.</li>
-            <li>Publishing plagiarized, stolen, or AI-generated content without disclosure.</li>
-            <li>Attempting to manipulate quality scores or engagement metrics.</li>
-            <li>Creating multiple accounts to circumvent bans or restrictions.</li>
-            <li>Distributing malware, spam, or unauthorized advertising.</li>
+            <li>他のユーザーに対する嫌がらせ、ヘイトスピーチ、または差別行為。</li>
+            <li>盗用、無断転載、またはAI生成であることを開示せずにAI生成コンテンツを公開すること。</li>
+            <li>品質スコアやエンゲージメント指標を不正に操作しようとすること。</li>
+            <li>BANや制限を回避するために複数のアカウントを作成すること。</li>
+            <li>マルウェア、スパム、または許可されていない広告を配信すること。</li>
           </ul>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">5. AI Scoring</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">5. AIスコアリング</h2>
           <p>
-            Workwrite uses AI technology to analyze and score literary works. These scores are provided
-            as guidance and do not represent absolute quality judgments. Scores may change as our
-            algorithms are updated. Authors may choose to hide their scores from public view.
+            WorkwriteはAI技術を用いて文学作品の分析およびスコアリングを行います。これらのスコアは参考として提供されるものであり、
+            絶対的な品質評価を示すものではありません。アルゴリズムの更新に伴い、スコアが変更される場合があります。
+            作者はスコアを非公開に設定することができます。
           </p>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">6. Termination</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">6. アカウントの停止・削除</h2>
           <p>
-            We reserve the right to suspend or terminate accounts that violate these terms.
-            Users may delete their accounts at any time through the settings page.
-            Upon deletion, your published works will be removed from the platform.
+            本規約に違反したアカウントを停止または削除する権利を留保します。
+            ユーザーは設定ページからいつでもアカウントを削除することができます。
+            アカウント削除後、公開された作品はプラットフォームから削除されます。
           </p>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">7. Limitation of Liability</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">7. 免責事項</h2>
           <p>
-            Workwrite is provided "as is" without warranties of any kind. We are not liable for
-            any damages arising from the use or inability to use the Service, including but not
-            limited to data loss or service interruptions.
+            Workwriteは「現状のまま」で提供され、いかなる種類の保証も行いません。
+            データの損失やサービスの中断を含むがこれに限定されない、本サービスの利用または利用不能から生じる
+            いかなる損害についても、当社は責任を負いません。
           </p>
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] uppercase text-foreground mb-3">8. Changes to Terms</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">8. 規約の変更</h2>
           <p>
-            We may update these terms from time to time. Continued use of the Service after
-            changes constitutes acceptance of the updated terms. We will notify users of significant
-            changes via email or platform notification.
+            本規約は随時更新される場合があります。変更後も本サービスを継続して利用することにより、
+            更新された規約に同意したものとみなされます。重要な変更については、メールまたはプラットフォーム上の通知にてお知らせいたします。
           </p>
         </section>
 
         <p className="pt-4 border-t border-border text-xs">
-          Last updated: March 2026
+          最終更新: 2026年3月
         </p>
       </div>
     </div>
