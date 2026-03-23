@@ -72,7 +72,9 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
 
     try {
       const histRes = await api.getCharacterTalkHistory(workId, char?.id);
-      const msgs = (histRes as any).data || (histRes as any).messages || [];
+      const raw = histRes as any;
+      // API returns { data: { messages: [...] } } via TransformInterceptor
+      const msgs = raw?.data?.messages || raw?.messages || raw?.data || [];
       setMessages(Array.isArray(msgs) ? msgs : []);
     } catch {
       // No history yet
