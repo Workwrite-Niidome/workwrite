@@ -79,13 +79,15 @@ export class CharacterExtractionService {
 
     this.inFlight.add(episodeId);
     try {
+      this.logger.log(`[extraction] Starting for episode ${episodeId}, content length: ${episode.content.length}`);
       const characters = await this.callHaiku(episode.title, episode.content);
-      if (characters.length === 0) return; // No results (API key missing or parse failure) — don't save empty
+      this.logger.log(`[extraction] Episode ${episodeId}: Haiku returned ${characters.length} characters: ${characters.map(c => c.name).join(', ')}`);
+      if (characters.length === 0) return;
       await this.prisma.episode.update({
         where: { id: episodeId },
         data: { extractedCharacters: characters as any },
       });
-      this.logger.log(`Extracted ${characters.length} characters from episode ${episodeId}`);
+      this.logger.log(`[extraction] Saved ${characters.length} characters for episode ${episodeId}`);
     } finally {
       this.inFlight.delete(episodeId);
     }
@@ -135,16 +137,22 @@ JSON配列のみを返してください。説明は不要です。
     });
 
     if (!response.ok) {
+      const errBody = await response.text().catch(() => '');
+      this.logger.error(`[extraction] Anthropic API error: ${response.status} ${errBody.slice(0, 200)}`);
       throw new Error(`Anthropic API error: ${response.status}`);
     }
 
     const data = await response.json();
     const text = data.content?.[0]?.text || '';
+    this.logger.log(`[extraction] Haiku raw response: ${text.slice(0, 300)}`);
 
     try {
       // Extract JSON array from response
       const match = text.match(/\[[\s\S]*\]/);
-      if (!match) return [];
+      if (!match) {
+        this.logger.warn(`[extraction] No JSON array found in response`);
+        return [];
+      }
       const parsed = JSON.parse(match[0]);
       if (!Array.isArray(parsed)) return [];
       return parsed
