@@ -152,7 +152,7 @@ export class AiTierService {
     const weeklyUsage = await this.prisma.aiUsageLog.count({
       where: {
         userId,
-        feature: 'companion',
+        feature: { in: ['companion', 'book_companion', 'character_talk'] },
         createdAt: { gte: weekAgo },
       },
     });
