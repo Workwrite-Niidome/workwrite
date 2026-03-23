@@ -1,4 +1,5 @@
 import { Injectable, Logger, ForbiddenException } from '@nestjs/common';
+import { Cron, CronExpression } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
 
 export class InsufficientCreditsException extends ForbiddenException {
@@ -171,6 +172,37 @@ export class CreditService {
     } catch (e) {
       this.logger.error(`Failed to refund transaction ${transactionId}`, e);
     }
+  }
+
+  /**
+   * Auto-refund stale pending transactions (older than 10 minutes).
+   * Called periodically to clean up transactions left behind by crashes/timeouts.
+   */
+  @Cron(CronExpression.EVERY_5_MINUTES)
+  async refundStalePendingTransactions(): Promise<number> {
+    const staleThreshold = new Date(Date.now() - 10 * 60 * 1000);
+    const staleTxns = await this.prisma.creditTransaction.findMany({
+      where: {
+        status: 'pending',
+        createdAt: { lt: staleThreshold },
+      },
+      select: { id: true },
+    });
+
+    if (staleTxns.length === 0) return 0;
+
+    this.logger.warn(`Found ${staleTxns.length} stale pending transactions, refunding...`);
+    let refunded = 0;
+    for (const tx of staleTxns) {
+      try {
+        await this.refundTransaction(tx.id);
+        refunded++;
+      } catch (e) {
+        this.logger.error(`Failed to auto-refund stale transaction ${tx.id}`, e);
+      }
+    }
+    this.logger.log(`Auto-refunded ${refunded}/${staleTxns.length} stale pending transactions`);
+    return refunded;
   }
 
   /**
