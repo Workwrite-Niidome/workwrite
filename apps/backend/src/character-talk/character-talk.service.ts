@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { CreditService } from '../billing/credit.service';
 import { CharacterTalkRevenueService } from './character-talk-revenue.service';
+import { CharacterExtractionService } from './character-extraction.service';
 
 const HAIKU = 'claude-haiku-4-5-20251001';
 const OPUS = 'claude-opus-4-6';
@@ -29,6 +30,7 @@ export class CharacterTalkService {
     private aiSettings: AiSettingsService,
     private creditService: CreditService,
     private revenueService: CharacterTalkRevenueService,
+    private characterExtraction: CharacterExtractionService,
   ) {}
 
   async *streamChat(
@@ -447,10 +449,18 @@ ${workText}`;
       }
     }
 
-    // If no extraction data exists yet (not extracted), show all characters
+    // If no extraction data exists yet, trigger batch extraction and show empty for now
     const hasAnyExtraction = work.episodes.some((ep) => ep.extractedCharacters != null);
     if (!hasAnyExtraction) {
-      return allCharacters;
+      // Trigger background extraction for all episodes
+      this.characterExtraction.triggerWorkExtraction(workId);
+      // Return empty — next page load will have data
+      return [];
+    }
+
+    // If reader has no progress and no extracted data for episode 0, return empty
+    if (appearedNames.size === 0) {
+      return [];
     }
 
     // Match extracted names against StoryCharacter (fuzzy: substring match)
@@ -461,8 +471,18 @@ ${workText}`;
       return false;
     });
 
-    // If nothing matched (e.g. name mismatch), fall back to all
-    return matched.length > 0 ? matched : allCharacters;
+    // If StoryCharacter has no matches, build from extracted data directly
+    if (matched.length === 0) {
+      return [...appearedNames].map((name) => ({
+        id: `extracted:${name}`,
+        name,
+        role: '登場人物',
+        personality: null,
+        speechStyle: null,
+      }));
+    }
+
+    return matched;
   }
 
   /**
