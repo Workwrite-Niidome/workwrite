@@ -50,9 +50,6 @@ async function ensureSchema() {
     // Episode extractedCharacters column (added 2026-03-23)
     await prisma.$executeRawUnsafe(`ALTER TABLE "Episode" ADD COLUMN IF NOT EXISTS "extractedCharacters" JSONB`);
 
-    // Clear old extracted data to re-extract with improved prompt (2026-03-23)
-    await prisma.$executeRawUnsafe(`UPDATE "Episode" SET "extractedCharacters" = NULL WHERE "extractedCharacters" IS NOT NULL`);
-
     console.log('[ensure-schema] Schema verified successfully');
   } catch (error) {
     console.error('[ensure-schema] ERROR:', error.message, error.stack);
