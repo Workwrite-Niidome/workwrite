@@ -229,8 +229,8 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
           {characters.length === 0 && (
             <div className="text-center py-6 text-muted-foreground">
               <Users className="h-6 w-6 mx-auto mb-2 animate-pulse" />
-              <p className="text-xs">登場人物を準備中...</p>
-              <p className="text-[10px] mt-1">エピソードを読むとキャラクターが表示されます</p>
+              <p className="text-xs">登場人物を抽出中</p>
+              <p className="text-[10px] mt-1">完了までお待ちください</p>
             </div>
           )}
           {characters.length > 0 && (
