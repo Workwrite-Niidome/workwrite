@@ -442,7 +442,12 @@ export default function EditorModeGenerationPage() {
       </div>
 
       {error && (
-        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>
+        <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">
+          {error}
+          {error.includes('クレジット') && (
+            <a href="/settings/billing" className="underline ml-2">クレジットを追加購入</a>
+          )}
+        </div>
       )}
 
       {/* Phase 3: Taste Check */}

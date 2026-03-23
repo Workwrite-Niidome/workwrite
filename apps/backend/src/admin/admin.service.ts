@@ -63,6 +63,7 @@ export class AdminService {
           createdAt: true,
           _count: { select: { works: true, reviews: true } },
           subscription: { select: { plan: true, status: true, grantedBy: true } },
+          creditBalance: { select: { balance: true, monthlyBalance: true, purchasedBalance: true } },
         },
       }),
       this.prisma.user.count({ where }),

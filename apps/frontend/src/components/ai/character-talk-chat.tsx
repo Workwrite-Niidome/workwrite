@@ -337,6 +337,9 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
       {error && (
         <div className="px-4 py-2 text-xs text-destructive bg-destructive/10 border-t border-destructive/20">
           {error}
+          {error.includes('クレジット') && (
+            <a href="/settings/billing" className="underline ml-1">クレジットを追加購入</a>
+          )}
         </div>
       )}
 
