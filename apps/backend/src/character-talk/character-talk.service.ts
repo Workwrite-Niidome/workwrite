@@ -452,6 +452,8 @@ ${workText}`;
     // Get characters from that episode only
     const chars = latestReadEpisode.extractedCharacters as any[] | null;
     if (!Array.isArray(chars) || chars.length === 0) {
+      // Not yet extracted — trigger extraction for this episode and return empty for now
+      this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
       return [];
     }
 
