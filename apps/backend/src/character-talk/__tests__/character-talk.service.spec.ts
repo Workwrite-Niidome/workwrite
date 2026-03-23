@@ -5,6 +5,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { CreditService } from '../../billing/credit.service';
 import { CharacterTalkRevenueService } from '../character-talk-revenue.service';
+import { CharacterExtractionService } from '../character-extraction.service';
 
 // ─── Constants (mirrors the service) ─────────────────────────────────────────
 
@@ -118,6 +119,7 @@ describe('CharacterTalkService - model selection', () => {
         { provide: AiSettingsService, useValue: aiSettings },
         { provide: CreditService, useValue: creditService },
         { provide: CharacterTalkRevenueService, useValue: revenueService },
+        { provide: CharacterExtractionService, useValue: { triggerIfNeeded: jest.fn(), triggerWorkExtraction: jest.fn() } },
       ],
     }).compile();
 
@@ -357,6 +359,387 @@ describe('CharacterTalkService - model selection', () => {
       );
 
       expect(creditService.consumeCredits).not.toHaveBeenCalled();
+    });
+  });
+});
+
+// ─── getAvailableCharacters ────────────────────────────────────────────────────
+
+describe('CharacterTalkService - getAvailableCharacters', () => {
+  let service: CharacterTalkService;
+  let prisma: ReturnType<typeof mockPrismaService>;
+  let extraction: { triggerIfNeeded: jest.Mock; triggerWorkExtraction: jest.Mock };
+
+  // ─── Shared test fixtures ────────────────────────────────────────────────
+
+  const WORK_ID = 'work-abc';
+  const USER_ID = 'user-xyz';
+
+  /** A published episode with no AI data at all. */
+  const makeEpisode = (
+    id: string,
+    orderIndex: number,
+    overrides: {
+      aiAnalysis?: { characters: any[] } | null;
+      extractedCharacters?: any[] | null;
+    } = {},
+  ) => ({
+    id,
+    orderIndex,
+    extractedCharacters: overrides.extractedCharacters ?? null,
+    aiAnalysis: overrides.aiAnalysis !== undefined ? overrides.aiAnalysis : null,
+  });
+
+  /** A minimal work object with enableCharacterTalk = true by default. */
+  const makeWork = (
+    enabled: boolean,
+    episodes: ReturnType<typeof makeEpisode>[],
+  ) => ({
+    enableCharacterTalk: enabled,
+    episodes,
+  });
+
+  /** A StoryCharacter record. */
+  const makeChar = (id: string, name: string) => ({
+    id,
+    name,
+    role: 'main',
+    personality: null,
+    speechStyle: null,
+  });
+
+  beforeEach(async () => {
+    prisma = mockPrismaService();
+    extraction = { triggerIfNeeded: jest.fn(), triggerWorkExtraction: jest.fn() };
+
+    const module: TestingModule = await Test.createTestingModule({
+      providers: [
+        CharacterTalkService,
+        { provide: PrismaService, useValue: prisma },
+        { provide: AiSettingsService, useValue: mockAiSettingsService() },
+        { provide: CreditService, useValue: mockCreditService() },
+        { provide: CharacterTalkRevenueService, useValue: mockRevenueService() },
+        { provide: CharacterExtractionService, useValue: extraction },
+      ],
+    }).compile();
+
+    service = module.get<CharacterTalkService>(CharacterTalkService);
+  });
+
+  // ─── 1. Work not found ─────────────────────────────────────────────────────
+
+  describe('when the work does not exist', () => {
+    it('throws NotFoundException', async () => {
+      prisma.work.findUnique.mockResolvedValue(null);
+      prisma.storyCharacter.findMany.mockResolvedValue([]);
+
+      await expect(
+        service.getAvailableCharacters(USER_ID, WORK_ID),
+      ).rejects.toThrow(NotFoundException);
+    });
+  });
+
+  // ─── 2. enableCharacterTalk = false ───────────────────────────────────────
+
+  describe('when enableCharacterTalk is false', () => {
+    it('returns an empty array immediately', async () => {
+      prisma.work.findUnique.mockResolvedValue(makeWork(false, []));
+      prisma.storyCharacter.findMany.mockResolvedValue([makeChar('c1', 'Alice')]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it('does not query reading progress', async () => {
+      prisma.work.findUnique.mockResolvedValue(makeWork(false, []));
+      prisma.storyCharacter.findMany.mockResolvedValue([]);
+
+      await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(prisma.readingProgress.findMany).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── 3. No reading progress ────────────────────────────────────────────────
+
+  describe('when no reading progress exists for the user', () => {
+    it('returns an empty array', async () => {
+      const ep = makeEpisode('ep-1', 1, { aiAnalysis: { characters: [{ name: 'Alice' }] } });
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([makeChar('c1', 'Alice')]);
+      prisma.readingProgress.findMany.mockResolvedValue([]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it('does not trigger extraction', async () => {
+      const ep = makeEpisode('ep-1', 1);
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([]);
+      prisma.readingProgress.findMany.mockResolvedValue([]);
+
+      await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(extraction.triggerIfNeeded).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── 4. No extraction data → triggers batch extraction ────────────────────
+
+  describe('when no aiAnalysis and no extractedCharacters exist', () => {
+    it('returns an empty array', async () => {
+      const ep = makeEpisode('ep-1', 1); // both null
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([makeChar('c1', 'Alice')]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it('calls triggerIfNeeded with the latest read episode id', async () => {
+      const ep = makeEpisode('ep-1', 1);
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(extraction.triggerIfNeeded).toHaveBeenCalledWith('ep-1');
+    });
+
+    it('calls triggerIfNeeded even when extractedCharacters is an empty array', async () => {
+      const ep = makeEpisode('ep-1', 1, { extractedCharacters: [] });
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(extraction.triggerIfNeeded).toHaveBeenCalledWith('ep-1');
+    });
+  });
+
+  // ─── 5. Priority 1: episodeAnalysis.characters ────────────────────────────
+
+  describe('when aiAnalysis.characters is present', () => {
+    it('returns matched StoryCharacters from aiAnalysis (priority 1)', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }, { name: 'Bob' }] },
+        extractedCharacters: [{ name: 'Charlie' }], // should be ignored
+      });
+      const alice = makeChar('c1', 'Alice');
+      const charlie = makeChar('c2', 'Charlie');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice, charlie]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      // Alice matches; Charlie is in extractedChars only, not aiAnalysis → excluded
+      expect(result).toEqual([alice]);
+    });
+
+    it('does not call triggerIfNeeded when aiAnalysis data is present', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }] },
+      });
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([makeChar('c1', 'Alice')]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(extraction.triggerIfNeeded).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── 6. Priority 2: extractedCharacters ───────────────────────────────────
+
+  describe('when aiAnalysis is absent but extractedCharacters is present', () => {
+    it('returns matched StoryCharacters from extractedCharacters (priority 2)', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: null,
+        extractedCharacters: [{ name: 'Bob' }],
+      });
+      const bob = makeChar('c1', 'Bob');
+      const alice = makeChar('c2', 'Alice');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([bob, alice]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([bob]);
+    });
+
+    it('does not call triggerIfNeeded when extractedCharacters has data', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: null,
+        extractedCharacters: [{ name: 'Bob' }],
+      });
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([makeChar('c1', 'Bob')]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(extraction.triggerIfNeeded).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── 7. Only the most recently read episode is used ───────────────────────
+
+  describe('most recently read episode selection', () => {
+    it('uses the episode with the highest orderIndex among read episodes', async () => {
+      // ep-2 is read and has a higher orderIndex than ep-1
+      const ep1 = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }] },
+      });
+      const ep2 = makeEpisode('ep-2', 2, {
+        aiAnalysis: { characters: [{ name: 'Bob' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+      const bob = makeChar('c2', 'Bob');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep1, ep2]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice, bob]);
+      // User has read both episodes — latest (ep-2) should win
+      prisma.readingProgress.findMany.mockResolvedValue([
+        { episodeId: 'ep-1' },
+        { episodeId: 'ep-2' },
+      ]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([bob]);
+      expect(result).not.toContainEqual(alice);
+    });
+
+    it('ignores episodes that the user has not read', async () => {
+      // Only ep-1 read; ep-2 has richer data but should not be used
+      const ep1 = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }] },
+      });
+      const ep2 = makeEpisode('ep-2', 2, {
+        aiAnalysis: { characters: [{ name: 'Bob' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+      const bob = makeChar('c2', 'Bob');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep1, ep2]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice, bob]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([alice]);
+    });
+  });
+
+  // ─── 8. Fuzzy matching ────────────────────────────────────────────────────
+
+  describe('matchStoryCharacters fuzzy logic', () => {
+    it('matches by exact name equality', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toContainEqual(alice);
+    });
+
+    it('matches when StoryCharacter name contains the extracted name (c.name.includes(name))', async () => {
+      // StoryCharacter full name = "Alice Smith", extracted = "Alice"
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }] },
+      });
+      const aliceSmith = makeChar('c1', 'Alice Smith');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([aliceSmith]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toContainEqual(aliceSmith);
+    });
+
+    it('matches when extracted name contains the StoryCharacter name (name.includes(c.name))', async () => {
+      // StoryCharacter name = "Alice", extracted = "Alice Smith"
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice Smith' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toContainEqual(alice);
+    });
+
+    it('does not match when names share no substring relationship', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Bob' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([]);
+    });
+
+    it('excludes StoryCharacters whose name is not referenced by any extracted name', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: 'Alice' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+      const charlie = makeChar('c2', 'Charlie');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice, charlie]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toContainEqual(alice);
+      expect(result).not.toContainEqual(charlie);
+    });
+
+    it('ignores extracted character entries that have no name field', async () => {
+      const ep = makeEpisode('ep-1', 1, {
+        aiAnalysis: { characters: [{ name: null }, { description: 'unnamed' }] },
+      });
+      const alice = makeChar('c1', 'Alice');
+
+      prisma.work.findUnique.mockResolvedValue(makeWork(true, [ep]));
+      prisma.storyCharacter.findMany.mockResolvedValue([alice]);
+      prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
+
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
+
+      expect(result).toEqual([]);
     });
   });
 });
