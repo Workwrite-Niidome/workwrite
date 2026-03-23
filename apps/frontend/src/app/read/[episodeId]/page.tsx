@@ -160,6 +160,15 @@ export default function ReaderPage() {
     api.getEpisode(episodeId)
       .then((res) => {
         setEpisode(res.data);
+        // Record initial reading progress (0%) so character talk knows this episode was opened
+        if (isAuthenticated) {
+          api.updateReadingProgress(res.data.workId, {
+            episodeId,
+            progressPct: 0,
+            lastPosition: 0,
+            readTimeMs: 0,
+          }).catch(() => {});
+        }
         return Promise.all([
           api.getEpisodes(res.data.workId, true),
           api.getWork(res.data.workId),
