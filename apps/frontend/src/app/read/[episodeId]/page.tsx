@@ -749,7 +749,7 @@ export default function ReaderPage() {
       {/* Companion sidebar / BottomSheet */}
       {isMobile ? (
         <BottomSheet open={showCompanion} onClose={() => setShowCompanion(false)} title="キャラクタートーク">
-          <div className="h-[60vh]">
+          <div className="h-[60vh] flex flex-col overflow-hidden">
             <CharacterTalkChat workId={episode.workId} episodeId={episodeId} />
           </div>
         </BottomSheet>
