@@ -12,7 +12,7 @@ export class CreditGrantScheduler {
     private creditService: CreditService,
   ) {}
 
-  /** Grant 20cr to all free users on the 1st of each month */
+  /** Grant 10cr to all free users on the 1st of each month */
   @Cron('0 0 1 * *')
   async grantFreeCredits() {
     this.logger.log('Starting monthly free credit grant...');
@@ -44,7 +44,7 @@ export class CreditGrantScheduler {
 
       for (const user of users) {
         try {
-          await this.creditService.grantMonthlyCredits(user.id, 20, 'free');
+          await this.creditService.grantMonthlyCredits(user.id, 10, 'free');
           processed++;
         } catch (e) {
           this.logger.error(

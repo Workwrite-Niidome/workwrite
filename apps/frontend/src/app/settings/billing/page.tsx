@@ -15,7 +15,7 @@ const PLANS = [
     id: 'free',
     name: 'Free',
     price: '\u00A50',
-    credits: '20cr / \u6708',
+    credits: '10cr / \u6708',
     icon: Sparkles,
   },
   {
@@ -256,16 +256,16 @@ export default function BillingPage() {
                   className="rounded-lg border border-border p-4 text-left hover:border-foreground transition-colors"
                 >
                   <p className="text-lg font-serif font-medium">¥500</p>
-                  <p className="text-sm text-muted-foreground">50cr</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">¥10 / cr</p>
+                  <p className="text-sm text-muted-foreground">20cr</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">¥25 / cr</p>
                 </button>
                 <button
                   onClick={() => handlePurchaseCredits('free_1000')}
                   className="rounded-lg border border-border p-4 text-left hover:border-foreground transition-colors"
                 >
                   <p className="text-lg font-serif font-medium">¥1,000</p>
-                  <p className="text-sm text-muted-foreground">100cr</p>
-                  <p className="text-[10px] text-muted-foreground mt-1">¥10 / cr</p>
+                  <p className="text-sm text-muted-foreground">40cr</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">¥25 / cr</p>
                 </button>
               </div>
             </div>

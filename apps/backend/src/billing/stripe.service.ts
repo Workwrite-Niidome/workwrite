@@ -27,8 +27,8 @@ export class StripeService {
   private creditPurchasePrices: Record<string, CreditPurchaseConfig> = {
     standard: { priceId: '', amount: 100, priceJpy: 980 },
     pro: { priceId: '', amount: 100, priceJpy: 880 },
-    free_500: { priceId: '', amount: 50, priceJpy: 500 },
-    free_1000: { priceId: '', amount: 100, priceJpy: 1000 },
+    free_500: { priceId: '', amount: 20, priceJpy: 500 },
+    free_1000: { priceId: '', amount: 40, priceJpy: 1000 },
   };
 
   constructor(

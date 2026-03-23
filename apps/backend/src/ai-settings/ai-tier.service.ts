@@ -293,6 +293,6 @@ export class AiTierService {
     });
 
     // Reset to free credits
-    await this.creditService.grantMonthlyCredits(targetUserId, 30, 'free');
+    await this.creditService.grantMonthlyCredits(targetUserId, 10, 'free');
   }
 }
