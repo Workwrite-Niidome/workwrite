@@ -122,7 +122,7 @@ export default function UserProfilePage() {
     );
   }
 
-  const displayName = profile.displayName || profile.name;
+  const displayName = profile.displayName || profile.name || '?';
 
   return (
     <main className="w-full md:mx-auto md:max-w-2xl min-h-screen">
