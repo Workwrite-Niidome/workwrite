@@ -22,6 +22,9 @@ export function useReaderShortcuts(callbacks: ReaderShortcutCallbacks) {
         return;
       }
 
+      // Don't intercept browser shortcuts (Ctrl+F, Ctrl+S, etc.)
+      if (e.ctrlKey || e.metaKey) return;
+
       switch (e.key) {
         case 'ArrowLeft':
           callbacks.onPrevEpisode?.();

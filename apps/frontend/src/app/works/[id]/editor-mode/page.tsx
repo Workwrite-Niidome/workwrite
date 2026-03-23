@@ -31,7 +31,7 @@ interface EditorEpisode {
   title: string;
   content: string;
   orderIndex: number;
-  status: 'pending' | 'generated' | 'approved' | 'revised';
+  approved: boolean;
   wordCount: number;
 }
 
@@ -238,7 +238,7 @@ export default function EditorModeGenerationPage() {
 
   const handleBulkApprove = async () => {
     const currentEpisodes = job?.episodes || [];
-    const unapproved = currentEpisodes.filter(ep => ep.status !== 'approved');
+    const unapproved = currentEpisodes.filter(ep => !ep.approved);
     if (unapproved.length === 0) return;
     setBulkApproving(true);
     try {
@@ -416,7 +416,7 @@ export default function EditorModeGenerationPage() {
   }
 
   const episodes = job.episodes || [];
-  const approvedCount = episodes.filter(ep => ep.status === 'approved').length;
+  const approvedCount = episodes.filter(ep => ep.approved).length;
   const allApproved = episodes.length > 0 && approvedCount === episodes.length;
 
   // Determine if first episode is ready for taste check
@@ -658,7 +658,7 @@ export default function EditorModeGenerationPage() {
           <div className="space-y-2">
             {episodes.map((ep) => (
               <Card key={ep.id} className={cn(
-                ep.status === 'approved' && 'border-green-500/30',
+                ep.approved ? 'border-green-500/30 bg-green-50/30 dark:bg-green-950/10' : 'border-amber-400/20',
               )}>
                 <button
                   onClick={() => setExpandedEpisode(expandedEpisode === ep.id ? null : ep.id)}
@@ -676,7 +676,7 @@ export default function EditorModeGenerationPage() {
                   </div>
                   <div className="flex items-center gap-2">
                     <span className="text-xs text-muted-foreground">{ep.wordCount?.toLocaleString()}字</span>
-                    <EpisodeStatusBadge status={ep.status} />
+                    <EpisodeStatusBadge approved={ep.approved} hasContent={!!ep.content} />
                   </div>
                 </button>
 
@@ -732,13 +732,13 @@ export default function EditorModeGenerationPage() {
                       <div className="flex flex-wrap gap-2 border-t pt-3">
                         <Button
                           size="sm"
-                          variant={ep.status === 'approved' ? 'secondary' : 'default'}
+                          variant={ep.approved ? 'secondary' : 'default'}
                           onClick={() => handleApproveEpisode(ep.id)}
-                          disabled={ep.status === 'approved'}
-                          className="gap-1"
+                          disabled={ep.approved}
+                          className={cn('gap-1', ep.approved && 'bg-green-500/10 text-green-600 border-green-500/30')}
                         >
                           <CheckCircle2 className="h-3.5 w-3.5" />
-                          {ep.status === 'approved' ? '承認済み' : '承認'}
+                          {ep.approved ? '承認済み' : '承認'}
                         </Button>
                         <Button
                           size="sm"
@@ -817,17 +817,14 @@ export default function EditorModeGenerationPage() {
   );
 }
 
-function EpisodeStatusBadge({ status }: { status: string }) {
-  switch (status) {
-    case 'approved':
-      return <Badge className="bg-green-500 text-white text-[10px]">承認済み</Badge>;
-    case 'revised':
-      return <Badge variant="secondary" className="text-[10px]">修正済み</Badge>;
-    case 'generated':
-      return <Badge variant="outline" className="text-[10px]">生成済み</Badge>;
-    default:
-      return <Badge variant="outline" className="text-[10px] text-muted-foreground">未生成</Badge>;
+function EpisodeStatusBadge({ approved, hasContent }: { approved: boolean; hasContent: boolean }) {
+  if (approved) {
+    return <Badge className="bg-green-500 text-white text-[10px]">承認済み</Badge>;
   }
+  if (hasContent) {
+    return <Badge variant="outline" className="text-[10px] border-amber-400 text-amber-600">レビュー待ち</Badge>;
+  }
+  return <Badge variant="outline" className="text-[10px] text-muted-foreground">未生成</Badge>;
 }
 
 function ConfirmModeEpisode({

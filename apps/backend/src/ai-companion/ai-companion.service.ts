@@ -276,7 +276,7 @@ ${workText}`;
 
   async clearConversation(userId: string, workId: string) {
     await this.prisma.aiConversation.deleteMany({
-      where: { userId, workId },
+      where: { userId, workId, mode: 'companion', characterId: null },
     });
     return { deleted: true };
   }
