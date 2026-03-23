@@ -2,11 +2,13 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { Bell } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { api, type NotificationItem } from '@/lib/api';
 
 export function NotificationDropdown() {
+  const router = useRouter();
   const [open, setOpen] = useState(false);
   const [notifications, setNotifications] = useState<NotificationItem[]>([]);
   const [unreadCount, setUnreadCount] = useState(0);
@@ -113,7 +115,13 @@ export function NotificationDropdown() {
               notifications.map((n) => (
                 <button
                   key={n.id}
-                  onClick={() => !n.read && handleMarkRead(n.id)}
+                  onClick={() => {
+                    if (!n.read) handleMarkRead(n.id);
+                    if (n.type === 'digest') {
+                      setOpen(false);
+                      router.push('/notifications');
+                    }
+                  }}
                   className={`w-full text-left px-4 py-3 border-b border-border last:border-b-0 hover:bg-muted/50 transition-colors ${
                     !n.read ? 'bg-muted/20' : ''
                   }`}
