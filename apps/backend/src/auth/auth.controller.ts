@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Body, Res, HttpCode, HttpStatus, Logger, BadRequestException, UseGuards, Req } from '@nestjs/common';
+import { Controller, Post, Get, Body, Res, HttpCode, HttpStatus, HttpException, Logger, BadRequestException, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiResponse } from '@nestjs/swagger';
 import { ConfigService } from '@nestjs/config';
 import { Response, Request } from 'express';
@@ -19,6 +19,41 @@ setInterval(() => {
   }
 }, 5 * 60 * 1000);
 
+// ─── Auth rate limiting (in-memory, per IP) ──────────────────────────────────
+// login: 10 attempts per 15 minutes
+// register: 5 attempts per 15 minutes
+// refresh: 30 attempts per 15 minutes
+const authRateLimitMap = new Map<string, number[]>();
+const AUTH_RATE_WINDOW_MS = 15 * 60 * 1000;
+
+function checkAuthRateLimit(key: string, maxAttempts: number): void {
+  const now = Date.now();
+  const timestamps = authRateLimitMap.get(key) || [];
+  const recent = timestamps.filter((t) => now - t < AUTH_RATE_WINDOW_MS);
+  if (recent.length >= maxAttempts) {
+    throw new HttpException('リクエストが多すぎます。しばらく経ってからお試しください。', 429);
+  }
+  recent.push(now);
+  if (recent.length === 0) {
+    authRateLimitMap.delete(key);
+  } else {
+    authRateLimitMap.set(key, recent);
+  }
+}
+
+// Clean up stale rate limit entries every 5 minutes
+setInterval(() => {
+  const now = Date.now();
+  for (const [key, timestamps] of authRateLimitMap) {
+    const recent = timestamps.filter((t) => now - t < AUTH_RATE_WINDOW_MS);
+    if (recent.length === 0) {
+      authRateLimitMap.delete(key);
+    } else {
+      authRateLimitMap.set(key, recent);
+    }
+  }
+}, 5 * 60 * 1000);
+
 @ApiTags('Auth')
 @Controller('auth')
 export class AuthController {
@@ -33,7 +68,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Register with email/password' })
   @ApiResponse({ status: 201, description: 'User registered' })
   @ApiResponse({ status: 409, description: 'Email already registered' })
-  register(@Body() dto: RegisterDto) {
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  register(@Body() dto: RegisterDto, @Req() req: Request) {
+    checkAuthRateLimit(`register:${req.ip}`, 5);
     return this.authService.register(dto);
   }
 
@@ -42,7 +79,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Login with email/password' })
   @ApiResponse({ status: 200, description: 'Login successful' })
   @ApiResponse({ status: 401, description: 'Invalid credentials' })
-  login(@Body() dto: LoginDto) {
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  login(@Body() dto: LoginDto, @Req() req: Request) {
+    checkAuthRateLimit(`login:${req.ip}`, 10);
     return this.authService.login(dto);
   }
 
@@ -51,7 +90,9 @@ export class AuthController {
   @ApiOperation({ summary: 'Refresh access token' })
   @ApiResponse({ status: 200, description: 'Token refreshed' })
   @ApiResponse({ status: 401, description: 'Invalid refresh token' })
-  refresh(@Body() dto: RefreshTokenDto) {
+  @ApiResponse({ status: 429, description: 'Too many requests' })
+  refresh(@Body() dto: RefreshTokenDto, @Req() req: Request) {
+    checkAuthRateLimit(`refresh:${req.ip}`, 30);
     return this.authService.refreshTokens(dto.refreshToken);
   }
 

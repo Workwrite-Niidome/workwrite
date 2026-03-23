@@ -52,6 +52,7 @@ export class CharacterTalkController {
         useOpus: body.useOpus,
       });
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);

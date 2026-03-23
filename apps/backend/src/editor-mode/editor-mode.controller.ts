@@ -52,6 +52,7 @@ export class EditorModeController {
         userId, workId, dto.message, dto.aiMode || 'normal', dto.designState,
       );
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
@@ -103,6 +104,7 @@ export class EditorModeController {
         userId, workId, body.aiMode || 'normal',
       );
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
@@ -179,6 +181,7 @@ export class EditorModeController {
         userId, workId, episodeId, dto.instruction, dto.aiMode || 'normal',
       );
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
@@ -208,6 +211,7 @@ export class EditorModeController {
         userId, workId, episodeId, body.aiMode || 'normal',
       );
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
@@ -237,6 +241,7 @@ export class EditorModeController {
         userId, workId, episodeId, body.aiMode || 'normal',
       );
       for await (const chunk of stream) {
+        if (res.destroyed) break;
         res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
       }
       res.write(`data: [DONE]\n\n`);
