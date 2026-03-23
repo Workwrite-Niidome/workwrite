@@ -1,4 +1,5 @@
 import { Injectable, Logger } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 
@@ -32,6 +33,38 @@ export class CharacterExtractionService {
     this.extractIfNeeded(episodeId).catch((e) =>
       this.logger.warn(`Character extraction failed for episode ${episodeId}: ${e.message}`),
     );
+  }
+
+  /**
+   * Trigger extraction for ALL published episodes of a work that haven't been extracted yet.
+   * Called from getAvailableCharacters when extraction data is missing.
+   * Processes sequentially to avoid API rate limits.
+   */
+  triggerWorkExtraction(workId: string) {
+    if (this.inFlight.has(`work:${workId}`)) return;
+
+    this.extractWork(workId).catch((e) =>
+      this.logger.warn(`Work extraction failed for ${workId}: ${e.message}`),
+    );
+  }
+
+  private async extractWork(workId: string) {
+    this.inFlight.add(`work:${workId}`);
+    try {
+      const episodes = await this.prisma.episode.findMany({
+        where: { workId, publishedAt: { not: null }, extractedCharacters: { equals: Prisma.DbNull } },
+        select: { id: true },
+        orderBy: { orderIndex: 'asc' },
+      });
+
+      this.logger.log(`Starting batch extraction for work ${workId}: ${episodes.length} episodes`);
+
+      for (const ep of episodes) {
+        await this.extractIfNeeded(ep.id);
+      }
+    } finally {
+      this.inFlight.delete(`work:${workId}`);
+    }
   }
 
   private async extractIfNeeded(episodeId: string) {
