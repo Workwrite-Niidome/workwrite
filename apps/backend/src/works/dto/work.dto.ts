@@ -86,6 +86,11 @@ export class UpdateWorkDto {
   @IsBoolean()
   isAiGenerated?: boolean;
 
+  @ApiPropertyOptional({ description: 'キャラクタートーク有効/無効' })
+  @IsOptional()
+  @IsBoolean()
+  enableCharacterTalk?: boolean;
+
   @ApiPropertyOptional({ type: [String] })
   @IsOptional()
   @IsArray()

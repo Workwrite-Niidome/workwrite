@@ -9,12 +9,24 @@ export class DigestScheduler {
 
   constructor(private prisma: PrismaService) {}
 
-  /** Send daily digest notifications at 9:00 AM JST (0:00 UTC) */
+  /** Send daily digest notifications at 9:00 AM JST (0:00 UTC) — once per day */
   @Cron('0 0 * * *')
   async sendDailyDigests() {
     this.logger.log('Starting daily digest notifications...');
 
     const now = new Date();
+    const todayStart = new Date(now);
+    todayStart.setUTCHours(0, 0, 0, 0);
+
+    // Check if digest was already sent today (prevent duplicates on restart/multiple instances)
+    const alreadySent = await this.prisma.notification.count({
+      where: { type: 'digest', createdAt: { gte: todayStart } },
+    });
+    if (alreadySent > 0) {
+      this.logger.log(`Digest already sent today (${alreadySent} notifications). Skipping.`);
+      return;
+    }
+
     const last30Days = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000);
     const last24Hours = new Date(now.getTime() - 24 * 60 * 60 * 1000);
     const last7Days = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000);
@@ -120,6 +132,9 @@ export class DigestScheduler {
       select: {
         id: true,
         title: true,
+        synopsis: true,
+        coverUrl: true,
+        genre: true,
         authorId: true,
         author: { select: { name: true, displayName: true } },
         qualityScore: { select: { overall: true } },

@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import {
   Play, Pause, Check, ChevronRight, ChevronDown, Loader2, RefreshCw,
-  Send, Crown, CheckCircle2, Edit3, Wand2, RotateCcw, Globe, Pencil, Save,
+  Send, Crown, CheckCircle2, Edit3, Wand2, RotateCcw, Pencil, Save,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -387,10 +387,10 @@ export default function EditorModeGenerationPage() {
     setPublishing(true);
     setError(null);
     try {
-      await api.updateWork(workId, { status: 'PUBLISHED' } as any);
+      await api.editorModeComplete(workId);
       router.push(`/works/${workId}`);
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'Failed to publish');
+      setError(err instanceof Error ? err.message : 'Failed to save');
     } finally {
       setPublishing(false);
     }
@@ -648,8 +648,8 @@ export default function EditorModeGenerationPage() {
                 disabled={!allApproved || publishing}
                 className="gap-2"
               >
-                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Globe className="h-4 w-4" />}
-                公開
+                {publishing ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+                下書きとして保存
               </Button>
             </div>
           </div>

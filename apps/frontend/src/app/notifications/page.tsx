@@ -2,11 +2,13 @@
 
 import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link';
+import Image from 'next/image';
 import { useAuth } from '@/lib/auth-context';
 import { api, type NotificationItem } from '@/lib/api';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bell, Check, MessageSquare, Star, BarChart3, Hand, BookOpen, Mail, Megaphone } from 'lucide-react';
+import { Bell, Check, MessageSquare, Star, BarChart3, Hand, BookOpen, Mail, Megaphone, Sparkles } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const ICON_MAP: Record<string, React.ElementType> = {
@@ -16,7 +18,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   reaction: Hand,
   new_episode: BookOpen,
   letter: Mail,
-  digest: Bell,
+  digest: Sparkles,
   announcement: Megaphone,
   editor_mode: BookOpen,
 };
@@ -42,7 +44,7 @@ function getNotificationLink(n: NotificationItem): string | null {
     case 'letter':
       return '/dashboard/letters/received';
     case 'digest':
-      return '/';
+      return null; // Handled inline with expanded cards
     case 'announcement':
       return '/announcements';
     case 'editor_mode':
@@ -64,6 +66,134 @@ function timeAgo(dateStr: string): string {
   const days = Math.floor(hours / 24);
   if (days < 30) return `${days}日前`;
   return new Date(dateStr).toLocaleDateString('ja-JP');
+}
+
+interface DigestWork {
+  id: string;
+  title: string;
+  synopsis?: string;
+  coverUrl?: string;
+  genre?: string;
+  author: { name: string; displayName?: string | null };
+  qualityScore?: { overall: number };
+}
+
+interface DigestFollowUpdate {
+  id: string;
+  title: string;
+  workId: string;
+  author: { name: string; displayName?: string | null };
+  work: { title: string };
+}
+
+interface DigestReadingReminder {
+  workId: string;
+  work: { title: string };
+}
+
+function getRecommendReason(work: DigestWork): string {
+  const reasons: string[] = [];
+  if (work.qualityScore?.overall) {
+    reasons.push(`スコア ${work.qualityScore.overall}点`);
+  }
+  if (work.genre) {
+    reasons.push(work.genre);
+  }
+  return reasons.length > 0 ? reasons.join(' · ') : '高評価の新作';
+}
+
+function DigestContent({ data }: { data: Record<string, unknown> }) {
+  const newWorks = (data.newWorks as DigestWork[] | undefined) || [];
+  const followUpdates = (data.followUpdates as DigestFollowUpdate[] | undefined) || [];
+  const readingReminders = (data.readingReminders as DigestReadingReminder[] | undefined) || [];
+
+  return (
+    <div className="mt-3 space-y-4">
+      {/* New highly-rated works */}
+      {newWorks.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2">おすすめの新作</p>
+          <div className="space-y-2">
+            {newWorks.map((work) => (
+              <Link
+                key={work.id}
+                href={`/works/${work.id}`}
+                className="flex gap-3 p-3 rounded-lg border border-border hover:bg-muted/50 transition-colors"
+              >
+                {work.coverUrl ? (
+                  <Image
+                    src={work.coverUrl}
+                    alt={work.title}
+                    width={48}
+                    height={68}
+                    className="rounded object-cover flex-shrink-0"
+                    style={{ width: 48, height: 68 }}
+                  />
+                ) : (
+                  <div className="w-12 h-[68px] rounded bg-muted flex items-center justify-center flex-shrink-0">
+                    <BookOpen className="h-5 w-5 text-muted-foreground" />
+                  </div>
+                )}
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium leading-snug line-clamp-1">{work.title}</p>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    {work.author.displayName ?? work.author.name}
+                  </p>
+                  {work.synopsis && (
+                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{work.synopsis}</p>
+                  )}
+                  <p className="text-[11px] text-primary/80 mt-1">{getRecommendReason(work)}</p>
+                </div>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Follow updates */}
+      {followUpdates.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2">フォロー中の新着</p>
+          <div className="space-y-1">
+            {followUpdates.map((ep) => (
+              <Link
+                key={ep.id}
+                href={`/read/${ep.id}`}
+                className="flex items-center gap-2 p-2 rounded hover:bg-muted/50 transition-colors text-sm"
+              >
+                <BookOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="line-clamp-1">
+                  {ep.work.title} — {ep.title}
+                </span>
+                <span className="text-xs text-muted-foreground ml-auto flex-shrink-0">
+                  {ep.author.displayName ?? ep.author.name}
+                </span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* Reading reminders */}
+      {readingReminders.length > 0 && (
+        <div>
+          <p className="text-xs font-medium text-muted-foreground mb-2">読みかけの作品</p>
+          <div className="space-y-1">
+            {readingReminders.map((r) => (
+              <Link
+                key={r.workId}
+                href={`/works/${r.workId}`}
+                className="flex items-center gap-2 p-2 rounded hover:bg-muted/50 transition-colors text-sm"
+              >
+                <BookOpen className="h-3.5 w-3.5 text-muted-foreground flex-shrink-0" />
+                <span className="line-clamp-1">{r.work.title}</span>
+              </Link>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 }
 
 export default function NotificationsPage() {
@@ -163,34 +293,48 @@ export default function NotificationsPage() {
         ) : (
           notifications.map((n) => {
             const link = getNotificationLink(n);
+            const isDigest = n.type === 'digest';
             return (
-              <button
+              <div
                 key={n.id}
-                onClick={() => handleClick(n)}
                 className={cn(
-                  'w-full text-left flex gap-3 p-4 rounded-lg transition-colors',
-                  link && 'cursor-pointer',
+                  'rounded-lg transition-colors',
                   n.read
-                    ? 'text-muted-foreground hover:bg-muted/30'
-                    : 'bg-secondary/40 hover:bg-secondary/60',
+                    ? 'text-muted-foreground'
+                    : 'bg-secondary/40',
                 )}
               >
-                <div className={cn('mt-0.5', !n.read && 'text-foreground')}>
-                  <NotificationIcon type={n.type} />
-                </div>
-                <div className="flex-1 min-w-0">
-                  <p className={cn('text-sm leading-snug', !n.read && 'font-medium text-foreground')}>
-                    {n.title}
-                  </p>
-                  {n.body && (
-                    <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>
+                <button
+                  onClick={() => handleClick(n)}
+                  className={cn(
+                    'w-full text-left flex gap-3 p-4',
+                    link && 'cursor-pointer hover:bg-muted/30',
+                    isDigest && 'cursor-default',
                   )}
-                  <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.createdAt)}</p>
-                </div>
-                {!n.read && (
-                  <div className="mt-1.5 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                >
+                  <div className={cn('mt-0.5', !n.read && 'text-foreground')}>
+                    <NotificationIcon type={n.type} />
+                  </div>
+                  <div className="flex-1 min-w-0">
+                    <p className={cn('text-sm leading-snug', !n.read && 'font-medium text-foreground')}>
+                      {n.title}
+                    </p>
+                    {n.body && !isDigest && (
+                      <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{n.body}</p>
+                    )}
+                    <p className="text-[11px] text-muted-foreground mt-1">{timeAgo(n.createdAt)}</p>
+                  </div>
+                  {!n.read && (
+                    <div className="mt-1.5 h-2 w-2 rounded-full bg-primary flex-shrink-0" />
+                  )}
+                </button>
+                {/* Expand digest notifications inline with work cards */}
+                {isDigest && n.data && (
+                  <div className="px-4 pb-4 pl-11">
+                    <DigestContent data={n.data as Record<string, unknown>} />
+                  </div>
                 )}
-              </button>
+              </div>
             );
           })
         )}

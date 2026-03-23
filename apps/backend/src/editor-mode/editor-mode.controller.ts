@@ -76,6 +76,17 @@ export class EditorModeController {
     return this.editorModeService.finalizeDesign(userId, workId, dto);
   }
 
+  // ─── Complete Work ──────────────────────────────────────
+
+  @Post('works/:workId/editor-mode/complete')
+  @ApiOperation({ summary: 'Complete work: save design data to DB and set status to DRAFT' })
+  async complete(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    return this.editorModeService.completeWork(userId, workId);
+  }
+
   // ─── Generate First Episode (SSE) ─────────────────────────
 
   @Post('works/:workId/editor-mode/generate-first')

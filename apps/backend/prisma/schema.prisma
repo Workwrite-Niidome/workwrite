@@ -187,7 +187,8 @@ model Work {
   posts Post[]
 
   // AI-generated content flag
-  isAiGenerated  Boolean @default(false)
+  isAiGenerated       Boolean @default(false)
+  enableCharacterTalk Boolean @default(true)
 
   // Editor Mode
   editorModeJob  EditorModeJob?

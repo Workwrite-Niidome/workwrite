@@ -367,23 +367,45 @@ __END_UPDATE__
   async finalizeDesign(userId: string, workId: string, dto: FinalizeDesignDto) {
     const job = await this.getJobWithOwnerCheck(workId, userId);
 
-    // Extract design from chat history's last __DESIGN_UPDATE__ block
+    // Extract design from chat history — merge ALL __DESIGN_UPDATE__ blocks
     const chatHistory = (job.designChatHistory as any[]) || [];
-    const designData = this.extractLatestDesignUpdate(chatHistory);
+    const designData = this.extractMergedDesignUpdates(chatHistory);
 
-    // Save to WorkCreationPlan
+    // Update Work with design data
+    await this.prisma.work.update({
+      where: { id: workId },
+      data: {
+        title: designData?.title || designData?.genre_setting || '無題',
+        synopsis: designData?.synopsis || undefined,
+        genre: designData?.genre_setting || designData?.genre || undefined,
+      },
+    });
+
+    // Save to WorkCreationPlan with correct field names
+    const emotionBlueprint = {
+      coreMessage: designData?.coreMessage || designData?.emotion || '',
+      targetEmotions: designData?.targetEmotions || '',
+      readerJourney: designData?.readerJourney || '',
+      readerOneLiner: designData?.readerOneLiner || '',
+    };
+    const plotOutline = designData?.actGroups
+      ? { actGroups: designData.actGroups, conflict: designData.conflict, structureTemplate: designData.structureTemplate }
+      : (designData?.plot ? { text: designData.plot } : undefined);
+
     await this.prisma.workCreationPlan.upsert({
       where: { workId },
       update: {
         characters: designData?.characters || undefined,
-        plotOutline: designData?.plot ? { text: designData.plot } : undefined,
-        emotionBlueprint: designData?.emotion ? { coreMessage: designData.emotion } : undefined,
+        plotOutline,
+        emotionBlueprint,
+        worldBuildingData: designData?.worldBuilding || undefined,
       },
       create: {
         workId,
         characters: designData?.characters || undefined,
-        plotOutline: designData?.plot ? { text: designData.plot } : undefined,
-        emotionBlueprint: designData?.emotion ? { coreMessage: designData.emotion } : undefined,
+        plotOutline,
+        emotionBlueprint,
+        worldBuildingData: designData?.worldBuilding || undefined,
       },
     });
 
@@ -1092,6 +1114,103 @@ ${episode.content}
     }
   }
 
+  // ─── Complete Work (save design data to DB) ──────────────
+
+  async completeWork(userId: string, workId: string) {
+    const job = await this.getJobWithOwnerCheck(workId, userId);
+
+    // Extract ALL design data (merge all __DESIGN_UPDATE__ blocks)
+    const chatHistory = (job.designChatHistory as any[]) || [];
+    const designData = this.extractMergedDesignUpdates(chatHistory);
+
+    // 1. Update Work table
+    await this.prisma.work.update({
+      where: { id: workId },
+      data: {
+        title: designData?.title || '無題',
+        synopsis: designData?.synopsis || null,
+        genre: designData?.genre_setting || designData?.genre || null,
+        status: 'DRAFT',
+      },
+    });
+
+    // 2. Save full design to WorkCreationPlan
+    const emotionBlueprint = {
+      coreMessage: designData?.coreMessage || '',
+      targetEmotions: designData?.targetEmotions || '',
+      readerJourney: designData?.readerJourney || '',
+      readerOneLiner: designData?.readerOneLiner || '',
+      tone: designData?.tone || '',
+    };
+    const plotOutline = {
+      actGroups: designData?.actGroups || undefined,
+      conflict: designData?.conflict || undefined,
+      structureTemplate: designData?.structureTemplate || undefined,
+    };
+
+    await this.prisma.workCreationPlan.upsert({
+      where: { workId },
+      update: {
+        characters: designData?.characters || undefined,
+        plotOutline,
+        emotionBlueprint,
+        worldBuildingData: designData?.worldBuilding || undefined,
+      },
+      create: {
+        workId,
+        characters: designData?.characters || undefined,
+        plotOutline,
+        emotionBlueprint,
+        worldBuildingData: designData?.worldBuilding || undefined,
+      },
+    });
+
+    // 3. Register StoryCharacters
+    if (Array.isArray(designData?.characters)) {
+      await this.prisma.storyCharacter.deleteMany({ where: { workId } });
+
+      for (const [i, char] of designData.characters.entries()) {
+        await this.prisma.storyCharacter.create({
+          data: {
+            workId,
+            name: char.name || `キャラクター${i + 1}`,
+            role: char.role || '',
+            personality: char.personality || '',
+            speechStyle: char.speechStyle || '',
+            firstPerson: char.firstPerson || '',
+            background: char.background || '',
+            sortOrder: i,
+          },
+        });
+      }
+    }
+
+    // 4. Update episode titles from design
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, orderIndex: true, title: true },
+    });
+
+    for (const ep of episodes) {
+      const designTitle = this.getEpisodeTitleFromDesign(designData, ep.orderIndex + 1);
+      if (designTitle && designTitle !== ep.title) {
+        await this.prisma.episode.update({
+          where: { id: ep.id },
+          data: { title: designTitle },
+        });
+      }
+    }
+
+    // 5. Update job status
+    await this.prisma.editorModeJob.update({
+      where: { workId },
+      data: { status: 'completed' },
+    });
+
+    return { status: 'completed', workId };
+  }
+
   // ─── Private helpers ──────────────────────────────────────
 
   private async getApiConfigForMode(
@@ -1152,6 +1271,35 @@ ${episode.content}
       }
     }
     return null;
+  }
+
+  /**
+   * Merge ALL __DESIGN_UPDATE__ blocks from oldest to newest.
+   * Later updates override earlier ones, giving the final accumulated design.
+   */
+  private extractMergedDesignUpdates(chatHistory: { role: string; content: string }[]): any | null {
+    let merged: any = {};
+    const patterns = [
+      /__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/,
+      /__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```/,
+      /__DESIGN_UPDATE__\s*(\{[\s\S]*?\})\s*$/,
+    ];
+
+    for (const msg of chatHistory) {
+      if (msg.role !== 'assistant') continue;
+      for (const pattern of patterns) {
+        const match = msg.content.match(pattern);
+        if (match) {
+          try {
+            const parsed = JSON.parse(match[1]);
+            merged = { ...merged, ...parsed };
+          } catch { /* skip unparseable blocks */ }
+          break;
+        }
+      }
+    }
+
+    return Object.keys(merged).length > 0 ? merged : null;
   }
 
   private buildEpisodeGenerationPrompt(
