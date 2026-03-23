@@ -187,7 +187,10 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
     return (
       <div className="flex flex-col h-full overflow-y-auto">
         <div className="px-4 py-4 border-b border-border">
-          <h2 className="text-base font-bold">キャラクタートーク</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-base font-bold">キャラクタートーク</h2>
+            <span className="text-[10px] px-1.5 py-0.5 rounded bg-muted text-muted-foreground font-medium">Beta</span>
+          </div>
           <p className="text-xs text-muted-foreground mt-1">登場人物と直接会話しよう</p>
           {credits && (
             <p className="text-xs text-muted-foreground mt-1">
