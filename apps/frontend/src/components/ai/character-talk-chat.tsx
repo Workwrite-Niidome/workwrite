@@ -63,13 +63,6 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
     return conv?.messageCount ?? 0;
   }
 
-  function getModelLabel(): { label: string; color: string } {
-    if (useOpus) return { label: 'Opus', color: 'bg-purple-500 text-white' };
-    // Default model depends on plan; show Sonnet as default upgraded, Haiku for free
-    if (credits && credits.total > 0) return { label: 'Sonnet', color: 'bg-blue-500 text-white' };
-    return { label: 'Haiku', color: 'bg-gray-500 text-white' };
-  }
-
   async function selectCharacter(char: TalkableCharacter | null) {
     setSelectedCharacter(char);
     setMode(char ? 'character' : 'companion');
@@ -195,7 +188,7 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
           <p className="text-xs text-muted-foreground mt-1">登場人物と直接会話しよう</p>
           {credits && (
             <p className="text-xs text-muted-foreground mt-1">
-              クレジット残高: {credits.total}
+              1cr/回 | 残高: {credits.total}cr
             </p>
           )}
         </div>
@@ -246,27 +239,22 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
                     <button
                       key={char.id}
                       onClick={() => selectCharacter(char)}
-                      className="w-full text-left border border-border rounded-lg p-4 hover:bg-muted/50 transition-colors"
+                      className="w-full text-left border border-border rounded-lg p-3 hover:bg-muted/50 transition-colors"
                     >
                       <div className="flex items-center gap-3">
-                        <div className="h-10 w-10 rounded-full bg-muted flex items-center justify-center shrink-0">
+                        <div className="h-9 w-9 rounded-full bg-muted flex items-center justify-center shrink-0">
                           <span className="text-sm font-bold">{char.name[0]}</span>
                         </div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2">
-                            <span className="text-sm font-medium">{char.name}</span>
-                            <span className="text-xs text-muted-foreground">({char.role})</span>
-                            {count > 0 && (
-                              <Badge variant="secondary" className="text-[10px] h-5">
-                                <MessageCircle className="h-3 w-3 mr-0.5" />
-                                {count}
-                              </Badge>
-                            )}
-                          </div>
-                          {char.personality && (
-                            <p className="text-xs text-muted-foreground mt-0.5 line-clamp-1">{char.personality}</p>
-                          )}
+                          <span className="text-sm font-medium truncate block">{char.name}</span>
+                          <span className="text-xs text-muted-foreground">{char.role}</span>
                         </div>
+                        {count > 0 && (
+                          <Badge variant="secondary" className="text-[10px] h-5 shrink-0">
+                            <MessageCircle className="h-3 w-3 mr-0.5" />
+                            {count}
+                          </Badge>
+                        )}
                       </div>
                     </button>
                   );
@@ -280,45 +268,34 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
   }
 
   // Chat phase
-  const modelInfo = getModelLabel();
   const chatTitle = selectedCharacter ? selectedCharacter.name : 'コンパニオン';
+  const costPerMessage = useOpus ? 5 : 1;
 
   return (
     <div className="flex flex-col h-full">
       {/* Chat header */}
-      <div className="flex items-center justify-between px-4 py-2 border-b border-border">
-        <div className="flex items-center gap-2">
-          <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8" title="戻る">
+      <div className="flex items-center justify-between px-4 py-2 border-b border-border gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <Button variant="ghost" size="icon" onClick={goBack} className="h-8 w-8 shrink-0" title="戻る">
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <div>
-            <div className="flex items-center gap-2">
-              <p className="text-sm font-medium">{chatTitle}</p>
-              <Badge className={`text-[10px] h-5 ${modelInfo.color}`}>
-                {modelInfo.label}
-              </Badge>
-            </div>
-            {selectedCharacter && (
-              <p className="text-xs text-muted-foreground">{selectedCharacter.role}</p>
-            )}
-          </div>
+          <p className="text-sm font-medium truncate">{chatTitle}</p>
         </div>
-        <div className="flex items-center gap-1">
+        <div className="flex items-center gap-1.5 shrink-0">
           {credits && credits.purchased > 0 && (
             <Button
               variant={useOpus ? 'default' : 'outline'}
               size="sm"
               className="h-7 text-xs gap-1"
               onClick={() => setUseOpus(!useOpus)}
-              title="Opusモードを切り替え"
             >
               <Crown className="h-3 w-3" />
               Opus
             </Button>
           )}
           {credits && (
-            <span className="text-xs text-muted-foreground ml-1">
-              残{credits.total}
+            <span className="text-[11px] text-muted-foreground whitespace-nowrap">
+              {costPerMessage}cr/回 | 残{credits.total}
             </span>
           )}
           <Button variant="ghost" size="icon" onClick={handleClear} className="h-8 w-8" title="会話をクリア">
