@@ -18,6 +18,7 @@ const ICON_MAP: Record<string, React.ElementType> = {
   letter: Mail,
   digest: Bell,
   announcement: Megaphone,
+  editor_mode: BookOpen,
 };
 
 function NotificationIcon({ type }: { type: string }) {
@@ -44,6 +45,8 @@ function getNotificationLink(n: NotificationItem): string | null {
       return '/';
     case 'announcement':
       return '/announcements';
+    case 'editor_mode':
+      return data.workId ? `/works/${data.workId}/editor-mode` : null;
     default:
       if (data.workId) return `/works/${data.workId}`;
       if (data.episodeId) return `/read/${data.episodeId}`;

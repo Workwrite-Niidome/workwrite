@@ -508,10 +508,10 @@ export default function WorkDetailPage() {
               本棚に追加済み
             </Button>
           )}
-          <Link href={`/works/${workId}/companion`} className="col-span-2 sm:col-span-1">
+          <Link href={`/works/${workId}/character-talk`} className="col-span-2 sm:col-span-1">
             <Button variant="outline" className="w-full sm:w-auto">
               <Sparkles className="h-4 w-4 mr-2" />
-              AIと語る
+              キャラクタートーク
             </Button>
           </Link>
         </div>

@@ -71,15 +71,17 @@ async function bootstrap() {
     new TransformInterceptor(),
   );
 
-  // Swagger/OpenAPI
-  const config = new DocumentBuilder()
-    .setTitle('Workwrite API')
-    .setDescription('Workwrite - REST API')
-    .setVersion('1.0')
-    .addBearerAuth()
-    .build();
-  const document = SwaggerModule.createDocument(app, config);
-  SwaggerModule.setup('api/docs', app, document);
+  // Swagger/OpenAPI (disabled in production)
+  if (process.env.NODE_ENV !== 'production') {
+    const config = new DocumentBuilder()
+      .setTitle('Workwrite API')
+      .setDescription('Workwrite - REST API')
+      .setVersion('1.0')
+      .addBearerAuth()
+      .build();
+    const document = SwaggerModule.createDocument(app, config);
+    SwaggerModule.setup('api/docs', app, document);
+  }
 
   // Increase HTTP server timeout for SSE streaming (AI assist)
   const port = process.env.PORT || 3001;

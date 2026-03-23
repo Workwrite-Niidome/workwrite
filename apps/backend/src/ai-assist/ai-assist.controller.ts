@@ -6,6 +6,8 @@ import { EpisodeAnalysisService } from './episode-analysis.service';
 import { AiContextBuilderService } from './ai-context-builder.service';
 import { AiAssistDto, ExtractCharactersDto, SaveDraftDto } from './dto/ai-assist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { PrismaService } from '../common/prisma/prisma.service';
 
@@ -182,6 +184,49 @@ export class AiAssistController {
     }
     const result = await this.episodeAnalysis.analyzeAllEpisodes(workId, force === 'true');
     return result;
+  }
+
+  @Post('admin/analyze-work/:workId')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Analyze all episodes of a specific work (admin only)' })
+  async adminAnalyzeWork(
+    @Param('workId') workId: string,
+    @Query('force') force?: string,
+  ) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { id: true, title: true },
+    });
+    if (!work) return { error: 'Work not found' };
+    const result = await this.episodeAnalysis.analyzeAllEpisodes(workId, force === 'true');
+    return { workId, title: work.title, ...result };
+  }
+
+  @Post('admin/analyze-all-published')
+  @UseGuards(JwtAuthGuard, RolesGuard)
+  @Roles('ADMIN')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Analyze all episodes of all published works (admin only)' })
+  async analyzeAllPublished(@Query('force') force?: string) {
+    const works = await this.prisma.work.findMany({
+      where: { status: 'PUBLISHED' },
+      select: { id: true, title: true, _count: { select: { episodes: true } } },
+    });
+
+    const results: { workId: string; title: string; result: any }[] = [];
+    for (const work of works) {
+      this.logger.log(`Analyzing work: ${work.title} (${work.id}), ${work._count.episodes} episodes`);
+      try {
+        const result = await this.episodeAnalysis.analyzeAllEpisodes(work.id, force === 'true');
+        results.push({ workId: work.id, title: work.title, result });
+      } catch (e: any) {
+        results.push({ workId: work.id, title: work.title, result: { error: e.message } });
+      }
+    }
+
+    return { total: works.length, results };
   }
 
   @Get('ai/context/:workId')

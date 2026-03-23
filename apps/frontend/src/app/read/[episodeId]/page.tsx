@@ -12,6 +12,7 @@ import {
   X,
   Mail,
   Sparkles,
+  MessageCircle,
   Copy,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -25,7 +26,7 @@ import { HighlightedText } from '@/components/reader/highlighted-text';
 import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
 import { HighlightDetailPopover } from '@/components/reader/highlight-detail-popover';
 import { EpisodeCompleteBanner } from '@/components/reader/episode-complete-banner';
-import { CompanionChat } from '@/components/ai/companion-chat';
+import { CharacterTalkChat } from '@/components/ai/character-talk-chat';
 import { LetterPanel } from '@/components/reader/letter-panel';
 import { useReaderShortcuts } from '@/hooks/use-reader-shortcuts';
 import { ShortcutsHelp } from '@/components/reader/shortcuts-help';
@@ -561,7 +562,7 @@ export default function ReaderPage() {
               残り {estimateReadingTime(Math.round(episode.wordCount * (1 - progressPct)))}
             </span>
           )}
-          <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="AIコンパニオン (a)">
+          <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="キャラクタートーク (a)">
             <Sparkles className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={toggleLetters} className="min-h-[44px] min-w-[44px]" title="レター (c)">
@@ -686,6 +687,17 @@ export default function ReaderPage() {
         )}
       </nav>
 
+      {/* Floating character talk button -- desktop only, always visible */}
+      {!isMobile && !showCompanion && !immersiveMode && (
+        <button
+          onClick={toggleCompanion}
+          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+        >
+          <MessageCircle className="h-5 w-5" />
+          <span className="text-sm font-medium">キャラクターと話す</span>
+        </button>
+      )}
+
       {/* Mobile bottom navigation bar */}
       {isMobile && !immersiveMode && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border flex justify-around py-2 px-4">
@@ -698,8 +710,8 @@ export default function ReaderPage() {
             <span className="text-[10px]">レター</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
-            <Sparkles className="h-4 w-4" />
-            <span className="text-[10px]">AI</span>
+            <MessageCircle className="h-4 w-4" />
+            <span className="text-[10px]">キャラ</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={navigateNext} disabled={!nextEp} className="flex-col gap-0.5 h-auto py-1">
             <ChevronRight className="h-4 w-4" />
@@ -727,21 +739,21 @@ export default function ReaderPage() {
 
       {/* Companion sidebar / BottomSheet */}
       {isMobile ? (
-        <BottomSheet open={showCompanion} onClose={() => setShowCompanion(false)} title="AIコンパニオン">
+        <BottomSheet open={showCompanion} onClose={() => setShowCompanion(false)} title="キャラクタートーク">
           <div className="h-[60vh]">
-            <CompanionChat workId={episode.workId} />
+            <CharacterTalkChat workId={episode.workId} />
           </div>
         </BottomSheet>
       ) : showCompanion ? (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-96 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
-            <span className="font-medium text-sm">AIコンパニオン</span>
+            <span className="font-medium text-sm">キャラクタートーク</span>
             <Button variant="ghost" size="icon" onClick={() => setShowCompanion(false)} className="h-9 w-9">
               <X className="h-4 w-4" />
             </Button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <CompanionChat workId={episode.workId} />
+            <CharacterTalkChat workId={episode.workId} />
           </div>
         </div>
       ) : null}

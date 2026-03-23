@@ -43,4 +43,4 @@ WORKDIR /app/apps/backend
 
 EXPOSE 3001
 
-CMD ["sh", "-c", "node prisma/ensure-schema.js && (npx prisma db push --schema=prisma/schema.prisma || echo 'WARNING: prisma db push failed') && (npx prisma db seed || true) && node dist/main"]
+CMD ["sh", "-c", "node prisma/ensure-schema.js && npx prisma db push --schema=prisma/schema.prisma && (npx prisma db seed || true) && node dist/main"]

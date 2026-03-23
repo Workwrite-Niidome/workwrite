@@ -59,21 +59,19 @@ function EditorModeDesignContent() {
   }, []);
 
   // Resume: load existing design + jump to review
+  // Only load REFINEMENT messages (skip the first user+assistant pair = initial brief)
   useEffect(() => {
     if (!resumeWorkId) return;
     api.editorModeStatus(resumeWorkId)
       .then((res: any) => {
         const job = res?.data || res;
-        if (job?.designChatHistory && Array.isArray(job.designChatHistory)) {
-          setMessages(job.designChatHistory.filter((m: any) => m.role && m.content).map((m: any) => ({
-            role: m.role as 'user' | 'assistant',
-            content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
-          })));
-        }
         if (job?.creditsConsumed) setCreditConsumed(job.creditsConsumed);
-        if (job?.designChatHistory) {
+        if (job?.designChatHistory && Array.isArray(job.designChatHistory)) {
+          const history = job.designChatHistory as any[];
+
+          // Extract design from ALL assistant messages
           let merged: Partial<DesignData> = {};
-          for (const msg of (job.designChatHistory as any[])) {
+          for (const msg of history) {
             if (msg.role !== 'assistant') continue;
             const patterns = [
               /__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/,
@@ -98,6 +96,19 @@ function EditorModeDesignContent() {
           if (Object.keys(merged).length > 0) {
             setDesign(merged);
           }
+
+          // For chat display: skip the first user+assistant pair (initial brief)
+          // Only show refinement messages (from the 3rd message onward)
+          const refinementMessages = history
+            .slice(2) // skip first user msg + first assistant response
+            .filter((m: any) => m.role && m.content)
+            .map((m: any) => ({
+              role: m.role as 'user' | 'assistant',
+              content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
+            }))
+            .filter((m: ChatMessage) => m.content.length > 0);
+          setMessages(refinementMessages);
+          if (refinementMessages.length > 0) setChatOpen(true);
         }
         setPhase('review');
       })
@@ -269,7 +280,8 @@ function EditorModeDesignContent() {
     sendMessage(msg);
   }, [inputValue, isStreaming, sendMessage]);
 
-  // Mobile chat sheet state
+  // Chat panel visibility (hidden until user requests revision)
+  const [chatOpen, setChatOpen] = useState(false);
   const [chatSheetOpen, setChatSheetOpen] = useState(false);
   const inputRef = useRef<HTMLTextAreaElement>(null);
 
@@ -277,9 +289,14 @@ function EditorModeDesignContent() {
   const handleRequestRevision = useCallback((sectionLabel: string, _context: string) => {
     const prefix = `【${sectionLabel}について】`;
     setInputValue(prefix + ' ');
-    // On mobile, open the bottom sheet
-    setChatSheetOpen(true);
-    // Focus the input after sheet opens
+    // Desktop (lg+): open side panel only
+    // Mobile: open bottom sheet only
+    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
+    if (isDesktop) {
+      setChatOpen(true);
+    } else {
+      setChatSheetOpen(true);
+    }
     setTimeout(() => inputRef.current?.focus(), 350);
   }, []);
 
@@ -410,13 +427,21 @@ function EditorModeDesignContent() {
           </div>
 
           {streamingText && (
-            <div className="text-left bg-secondary/50 rounded-lg p-4 max-h-64 overflow-y-auto">
-              <div className="flex items-start gap-2">
-                <Bot className="h-4 w-4 text-indigo-500 mt-0.5 flex-shrink-0" />
-                <p className="text-sm text-muted-foreground whitespace-pre-wrap leading-relaxed">
-                  {streamingText}
-                </p>
+            <div className="space-y-2">
+              <div className="flex flex-wrap gap-2 justify-center">
+                {['キャラクター', '世界観', 'プロット', '感情設計'].map((label) => {
+                  const found = streamingText.includes(label) || streamingText.includes(label.toLowerCase());
+                  return (
+                    <span key={label} className={cn(
+                      'px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all',
+                      found ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400' : 'border-border text-muted-foreground/40',
+                    )}>
+                      {found ? '✓ ' : ''}{label}
+                    </span>
+                  );
+                })}
               </div>
+              <p className="text-xs text-muted-foreground">設計要素を構築中...</p>
             </div>
           )}
 
@@ -552,8 +577,8 @@ function EditorModeDesignContent() {
 
       {/* Main area */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-        {/* Design display (full width on mobile, 60% on desktop) */}
-        <div className="flex-1 lg:flex-[3] overflow-y-auto lg:border-r pb-16 lg:pb-0">
+        {/* Design display (full width when chat closed, 60% when chat open) */}
+        <div className={cn('flex-1 overflow-y-auto pb-16 lg:pb-0', chatOpen && 'lg:flex-[3] lg:border-r')}>
           <div className="p-4 max-w-3xl">
             <DesignDisplay
               design={design}
@@ -564,18 +589,34 @@ function EditorModeDesignContent() {
           </div>
         </div>
 
-        {/* Desktop: Chat panel (right 40%) */}
-        <div className="hidden lg:flex lg:flex-[2] flex-col min-h-0">
-          <div className="flex-shrink-0 px-4 py-2 border-b bg-muted/30">
-            <p className="text-xs font-medium text-muted-foreground">対話 — 修正指示・ブラッシュアップ (5cr/回)</p>
+        {/* Desktop: Floating button to reopen chat when closed */}
+        {!chatOpen && (
+          <div className="hidden lg:flex items-center">
+            <button
+              onClick={() => setChatOpen(true)}
+              className="fixed right-6 bottom-6 z-40 h-12 w-12 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg flex items-center justify-center transition-colors"
+              title="チャットを開く"
+            >
+              <MessageSquare className="h-5 w-5" />
+            </button>
           </div>
-          <div className="flex-1 overflow-y-auto p-4 space-y-3">
-            {chatMessagesUI}
+        )}
+
+        {/* Desktop: Chat panel (right 40%) — only visible after user opens it */}
+        {chatOpen && (
+          <div className="hidden lg:flex lg:flex-[2] flex-col min-h-0">
+            <div className="flex-shrink-0 px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">対話 — 修正指示・ブラッシュアップ (5cr/回)</p>
+              <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">閉じる</button>
+            </div>
+            <div className="flex-1 overflow-y-auto p-4 space-y-3">
+              {chatMessagesUI}
+            </div>
+            <div className="flex-shrink-0 border-t p-3">
+              {chatInputUI}
+            </div>
           </div>
-          <div className="flex-shrink-0 border-t p-3">
-            {chatInputUI}
-          </div>
-        </div>
+        )}
 
         {/* Mobile: Persistent bottom bar (opens chat sheet) */}
         <div className="lg:hidden fixed bottom-0 left-0 right-0 border-t bg-background z-40">

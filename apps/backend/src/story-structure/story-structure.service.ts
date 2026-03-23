@@ -10,6 +10,16 @@ export class StoryStructureService {
   private readonly logger = new Logger(StoryStructureService.name);
   constructor(private prisma: PrismaService) {}
 
+  /** Verify the authenticated user owns the work. Throws ForbiddenException if not. */
+  private async verifyOwnership(workId: string, userId: string) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { authorId: true },
+    });
+    if (!work) throw new NotFoundException('Work not found');
+    if (work.authorId !== userId) throw new ForbiddenException();
+  }
+
   // ─── Characters ──────────────────────────────────────
 
   async getCharacters(workId: string) {
@@ -38,7 +48,8 @@ export class StoryStructureService {
     });
   }
 
-  async createCharacter(workId: string, dto: CreateCharacterDto) {
+  async createCharacter(workId: string, userId: string, dto: CreateCharacterDto) {
+    await this.verifyOwnership(workId, userId);
     const maxOrder = await this.prisma.storyCharacter.aggregate({
       where: { workId },
       _max: { sortOrder: true },
@@ -52,20 +63,23 @@ export class StoryStructureService {
     });
   }
 
-  async updateCharacter(workId: string, id: string, dto: UpdateCharacterDto) {
+  async updateCharacter(workId: string, id: string, userId: string, dto: UpdateCharacterDto) {
+    await this.verifyOwnership(workId, userId);
     const char = await this.prisma.storyCharacter.findUnique({ where: { id } });
     if (!char || char.workId !== workId) throw new NotFoundException();
     return this.prisma.storyCharacter.update({ where: { id }, data: dto });
   }
 
-  async deleteCharacter(workId: string, id: string) {
+  async deleteCharacter(workId: string, id: string, userId: string) {
+    await this.verifyOwnership(workId, userId);
     const char = await this.prisma.storyCharacter.findUnique({ where: { id } });
     if (!char || char.workId !== workId) throw new NotFoundException();
     await this.prisma.storyCharacter.delete({ where: { id } });
     return { deleted: true };
   }
 
-  async setRelation(workId: string, fromId: string, dto: SetRelationDto) {
+  async setRelation(workId: string, fromId: string, userId: string, dto: SetRelationDto) {
+    await this.verifyOwnership(workId, userId);
     const from = await this.prisma.storyCharacter.findUnique({ where: { id: fromId } });
     if (!from || from.workId !== workId) throw new NotFoundException();
     const to = await this.prisma.storyCharacter.findUnique({ where: { id: dto.toCharacterId } });
@@ -93,7 +107,8 @@ export class StoryStructureService {
   }
 
   /** Migrate characters from WorkCreationPlan JSON to StoryCharacter table */
-  async migrateCharacters(workId: string) {
+  async migrateCharacters(workId: string, userId: string) {
+    await this.verifyOwnership(workId, userId);
     const plan = await this.prisma.workCreationPlan.findUnique({ where: { workId } });
     if (!plan?.characters) return { migrated: 0 };
 
@@ -122,6 +137,7 @@ export class StoryStructureService {
           arc: c.arc,
           notes: [c.description, c.uniqueTrait, c.relationships].filter(Boolean).join('\n') || null,
           customFields: c.customFieldValues ?? null,
+          isPublic: true,
           sortOrder: i,
         },
       });
@@ -144,7 +160,8 @@ export class StoryStructureService {
     });
   }
 
-  async upsertArc(workId: string, dto: UpsertArcDto) {
+  async upsertArc(workId: string, userId: string, dto: UpsertArcDto) {
+    await this.verifyOwnership(workId, userId);
     const existing = await this.prisma.storyArc.findUnique({ where: { workId } });
 
     if (existing) {
@@ -206,7 +223,8 @@ export class StoryStructureService {
     return this.getStoryArc(workId);
   }
 
-  async createScene(workId: string, dto: CreateSceneDto) {
+  async createScene(workId: string, userId: string, dto: CreateSceneDto) {
+    await this.verifyOwnership(workId, userId);
     const act = await this.prisma.storyAct.findUnique({
       where: { id: dto.actId },
       include: { arc: true },
@@ -231,7 +249,8 @@ export class StoryStructureService {
     });
   }
 
-  async updateScene(workId: string, sceneId: string, dto: UpdateSceneDto) {
+  async updateScene(workId: string, sceneId: string, userId: string, dto: UpdateSceneDto) {
+    await this.verifyOwnership(workId, userId);
     const scene = await this.prisma.storyScene.findUnique({
       where: { id: sceneId },
       include: { act: { include: { arc: true } } },
@@ -253,7 +272,8 @@ export class StoryStructureService {
     });
   }
 
-  async deleteScene(workId: string, sceneId: string) {
+  async deleteScene(workId: string, sceneId: string, userId: string) {
+    await this.verifyOwnership(workId, userId);
     const scene = await this.prisma.storyScene.findUnique({
       where: { id: sceneId },
       include: { act: { include: { arc: true } } },
@@ -263,7 +283,8 @@ export class StoryStructureService {
     return { deleted: true };
   }
 
-  async linkSceneToEpisode(workId: string, sceneId: string, episodeId: string) {
+  async linkSceneToEpisode(workId: string, sceneId: string, userId: string, episodeId: string) {
+    await this.verifyOwnership(workId, userId);
     const scene = await this.prisma.storyScene.findUnique({
       where: { id: sceneId },
       include: { act: { include: { arc: true } } },
@@ -277,7 +298,8 @@ export class StoryStructureService {
   }
 
   /** Migrate plotOutline + chapterOutline from WorkCreationPlan to StoryArc/Act/Scene */
-  async migrateArc(workId: string) {
+  async migrateArc(workId: string, userId: string) {
+    await this.verifyOwnership(workId, userId);
     const plan = await this.prisma.workCreationPlan.findUnique({ where: { workId } });
     if (!plan) return { migrated: false };
 
@@ -376,7 +398,8 @@ export class StoryStructureService {
     };
   }
 
-  async updatePublicFlags(workId: string, flags: { isWorldPublic?: boolean; isEmotionPublic?: boolean }) {
+  async updatePublicFlags(workId: string, userId: string, flags: { isWorldPublic?: boolean; isEmotionPublic?: boolean }) {
+    await this.verifyOwnership(workId, userId);
     return this.prisma.workCreationPlan.update({
       where: { workId },
       data: flags,

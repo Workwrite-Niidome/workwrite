@@ -26,8 +26,9 @@ export class AiCompanionService {
     workId: string,
     userMessage: string,
   ): AsyncGenerator<string> {
-    // Check tier (enforces free weekly limit, throws ForbiddenException if exceeded)
-    const modelConfig = await this.aiTier.getModelConfig(userId, false, 'companion');
+    // Check companion-specific limits (weekly limit for free users, not credit-based)
+    await this.aiTier.assertCanUseCompanion(userId);
+    const modelConfig = await this.aiTier.getCompanionModelConfig();
 
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
@@ -38,8 +39,8 @@ export class AiCompanionService {
     const model = modelConfig.model;
 
     // Load or create conversation
-    let conversation = await this.prisma.aiConversation.findUnique({
-      where: { userId_workId: { userId, workId } },
+    let conversation = await this.prisma.aiConversation.findFirst({
+      where: { userId, workId, mode: 'companion', characterId: null },
     });
 
     const existingMessages: ChatMessage[] = conversation
@@ -62,7 +63,7 @@ export class AiCompanionService {
         select: { episodeId: true, completed: true, progressPct: true },
       }),
       this.prisma.storyCharacter.findMany({
-        where: { workId, isPublic: true },
+        where: { workId },
         select: { name: true, role: true, personality: true, motivation: true, speechStyle: true },
         orderBy: { sortOrder: 'asc' },
       }),
@@ -84,9 +85,6 @@ export class AiCompanionService {
     if (!work) throw new NotFoundException('Work not found');
 
     // Build work text (up to limit)
-    const completedEpisodeIds = new Set(
-      progress.filter((p) => p.completed).map((p) => p.episodeId),
-    );
     const currentEpisodeIndex = Math.max(
       ...progress.map((p) => {
         const ep = work.episodes.find((e) => e.id === p.episodeId);
@@ -134,7 +132,7 @@ export class AiCompanionService {
       const themeLines: string[] = [];
       if (storyArc.premise) themeLines.push(`前提: ${storyArc.premise}`);
       if (storyArc.centralConflict) themeLines.push(`中心的葛藤: ${storyArc.centralConflict}`);
-      if (storyArc.themes.length > 0) themeLines.push(`テーマ: ${storyArc.themes.join('、')}`);
+      if (Array.isArray(storyArc.themes) && storyArc.themes.length > 0) themeLines.push(`テーマ: ${storyArc.themes.join('、')}`);
       if (themeLines.length > 0) structuredParts.push(`【物語のテーマ】\n${themeLines.join('\n')}`);
     }
 
@@ -243,11 +241,16 @@ ${workText}`;
         { role: 'assistant', content: assistantResponse },
       ];
 
-      await this.prisma.aiConversation.upsert({
-        where: { userId_workId: { userId, workId } },
-        update: { messages: updatedMessages as any },
-        create: { userId, workId, messages: updatedMessages as any },
-      }).catch((e) => this.logger.error('Failed to save conversation', e));
+      if (conversation) {
+        await this.prisma.aiConversation.update({
+          where: { id: conversation.id },
+          data: { messages: updatedMessages as any, messageCount: updatedMessages.length },
+        }).catch((e) => this.logger.error('Failed to save conversation', e));
+      } else {
+        await this.prisma.aiConversation.create({
+          data: { userId, workId, mode: 'companion', messages: updatedMessages as any, messageCount: updatedMessages.length },
+        }).catch((e) => this.logger.error('Failed to save conversation', e));
+      }
 
       // Log usage
       const durationMs = Date.now() - startTime;
@@ -265,8 +268,8 @@ ${workText}`;
   }
 
   async getHistory(userId: string, workId: string) {
-    const conversation = await this.prisma.aiConversation.findUnique({
-      where: { userId_workId: { userId, workId } },
+    const conversation = await this.prisma.aiConversation.findFirst({
+      where: { userId, workId, mode: 'companion', characterId: null },
     });
     return { messages: conversation?.messages || [] };
   }

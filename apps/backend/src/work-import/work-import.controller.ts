@@ -34,8 +34,11 @@ export class WorkImportController {
 
   @Get(':importId/status')
   @ApiOperation({ summary: 'Get import status' })
-  async getImportStatus(@Param('importId') importId: string) {
-    const status = await this.importService.getImportStatus(importId);
+  async getImportStatus(
+    @Param('importId') importId: string,
+    @CurrentUser('id') userId: string,
+  ) {
+    const status = await this.importService.getImportStatus(importId, userId);
     return { data: status };
   }
 

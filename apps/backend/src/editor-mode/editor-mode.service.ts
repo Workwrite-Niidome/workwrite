@@ -3,6 +3,7 @@ import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
 import { CreditService } from '../billing/credit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import {
   FinalizeDesignDto,
   StartGenerationDto,
@@ -18,6 +19,7 @@ export class EditorModeService {
     private aiSettings: AiSettingsService,
     private aiTier: AiTierService,
     private creditService: CreditService,
+    private notifications: NotificationsService,
   ) {}
 
   // ─── Ownership check helper ──────────────────────────────
@@ -94,12 +96,15 @@ export class EditorModeService {
 
     if (isFirstMessage) {
       // ─── First message: complete design generation from user's brief ───
-      maxTokens = 8000;
-      systemPrompt = `あなたはベストセラー作家です。編集者（ユーザー）からブリーフを受け取り、完全な小説の設計書を作成してください。
+      maxTokens = 16000;
+      systemPrompt = `あなたはベストセラー作家です。編集者（ユーザー）からブリーフを受け取り、完全な小説の設計書をJSON形式で出力してください。
 
-【絶対ルール】以下の全フィールドを**一つ残らず**埋めてください。情報が足りなければ類推・創作して埋めてください。空欄は許されません。
+【絶対ルール】
+- 会話文や説明文は一切不要です。JSON出力のみ行ってください
+- 以下の全フィールドを**一つ残らず**埋めてください
+- 情報が足りなければ類推・創作して埋めてください。空欄・null・空文字は禁止です
 
-まず設計の概要を自然な言葉で3-5段落で説明してください。その後、末尾に必ず以下の形式でJSONブロックを出力してください:
+以下の形式で出力してください（これ以外のテキストは出力しないでください）:
 
 __DESIGN_UPDATE__
 {
@@ -115,8 +120,8 @@ __DESIGN_UPDATE__
   "synopsis": "3-5行のあらすじ（必須）",
   "scope": "X話 × Y字（必須。ブリーフに指定があればそれを、なければ10話 × 3000字を推奨）",
   "characters": [
-    {"name": "名前", "role": "役割", "personality": "性格（2-3文）", "speechStyle": "口調の特徴と例文", "firstPerson": "一人称（俺/私/僕/わたし等）", "motivation": "行動の動機", "background": "背景・過去"},
-    （最低3人、理想4-5人。全員に明確な口調の差をつける）
+    {"name": "フルネーム", "role": "役割", "gender": "性別（男性/女性/その他）", "age": "年齢（数字または「10代後半」等）", "appearance": "外見の特徴（髪型・体格・服装・印象的な特徴を2-3文）", "personality": "性格（2-3文）", "speechStyle": "口調の特徴と例文", "firstPerson": "一人称（俺/私/僕/わたし等）", "motivation": "行動の動機", "background": "背景・過去"},
+    （最低3人、理想4-5人。全員に明確な口調の差をつける。年齢・性別・外見は必須）
   ],
   "worldBuilding": {
     "basics": {"era": "時代設定（必須）", "setting": "舞台の具体的な場所（必須）", "civilizationLevel": "文明・技術レベル（必須）"},
@@ -387,7 +392,7 @@ __END_UPDATE__
     for (let i = 1; i <= dto.totalEpisodes; i++) {
       episodePlan.push({
         episodeNumber: i,
-        title: `第${i}話`,
+        title: this.getEpisodeTitleFromDesign(designData, i),
         summary: '',
       });
     }
@@ -435,17 +440,18 @@ __END_UPDATE__
     // Save episode
     const work = await this.prisma.work.findUnique({ where: { id: workId } });
     if (work) {
+      const firstEpisodeTitle = this.getEpisodeTitleFromDesign(designData, 1);
       await this.prisma.episode.upsert({
         where: { workId_orderIndex: { workId, orderIndex: 0 } },
         update: {
           content: fullOutput,
-          title: `第1話`,
+          title: firstEpisodeTitle,
           wordCount: fullOutput.length,
         },
         create: {
           workId,
           authorId: userId,
-          title: `第1話`,
+          title: firstEpisodeTitle,
           content: fullOutput,
           orderIndex: 0,
           wordCount: fullOutput.length,
@@ -479,9 +485,14 @@ __END_UPDATE__
     if (updated.count === 0) throw new ConflictException('Generation already in progress');
 
     // Fire-and-forget: start the generation loop
-    this.runGenerationLoop(workId, userId).catch((e) =>
-      this.logger.error(`Generation loop error for work ${workId}`, e),
-    );
+    this.runGenerationLoop(workId, userId).catch(async (e) => {
+      this.logger.error(`Generation loop error for work ${workId}`, e);
+      // Ensure job is paused on unhandled error
+      await this.prisma.editorModeJob.update({
+        where: { workId },
+        data: { status: 'paused' },
+      }).catch(() => {});
+    });
 
     return { status: 'generating' };
   }
@@ -514,9 +525,13 @@ __END_UPDATE__
     });
     if (updated.count === 0) throw new ConflictException('Generation already in progress');
 
-    this.runGenerationLoop(workId, userId).catch((e) =>
-      this.logger.error(`Generation loop error for work ${workId}`, e),
-    );
+    this.runGenerationLoop(workId, userId).catch(async (e) => {
+      this.logger.error(`Generation loop error for work ${workId}`, e);
+      await this.prisma.editorModeJob.update({
+        where: { workId },
+        data: { status: 'paused' },
+      }).catch(() => {});
+    });
 
     return { status: 'generating' };
   }
@@ -742,6 +757,26 @@ ${episode.content}
     return { approved: true, episodeId };
   }
 
+  // ─── Update Episode Content ──────────────────────────────
+
+  async updateEpisodeContent(userId: string, workId: string, episodeId: string, content: string) {
+    await this.getJobWithOwnerCheck(workId, userId);
+
+    const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
+    if (!episode) throw new NotFoundException('Episode not found');
+    if (episode.workId !== workId) throw new NotFoundException('Episode not found');
+
+    const updated = await this.prisma.episode.update({
+      where: { id: episodeId },
+      data: {
+        content,
+        wordCount: content.length,
+      },
+    });
+
+    return { updated: true, episodeId, wordCount: updated.wordCount };
+  }
+
   // ─── Get Status ───────────────────────────────────────────
 
   async getStatus(userId: string, workId: string) {
@@ -753,6 +788,7 @@ ${episode.content}
       select: {
         id: true,
         title: true,
+        content: true,
         orderIndex: true,
         wordCount: true,
         publishedAt: true,
@@ -773,6 +809,7 @@ ${episode.content}
       episodes: episodes.map((ep) => ({
         id: ep.id,
         title: ep.title,
+        content: ep.content,
         orderIndex: ep.orderIndex,
         wordCount: ep.wordCount,
         approved: !!ep.publishedAt,
@@ -817,6 +854,15 @@ ${episode.content}
           data: { status: 'reviewing' },
         });
         this.logger.log(`Generation complete for work ${workId}`);
+
+        // Notify user
+        const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { title: true } });
+        await this.notifications.createNotification(userId, {
+          type: 'editor_mode',
+          title: '全話の生成が完了しました',
+          body: `「${work?.title || '作品'}」の全${job.totalEpisodes}話が生成されました。レビューして公開しましょう。`,
+          data: { workId },
+        }).catch(() => {});
         break;
       }
 
@@ -833,6 +879,12 @@ ${episode.content}
             where: { workId },
             data: { status: 'paused' },
           });
+          await this.notifications.createNotification(userId, {
+            type: 'editor_mode',
+            title: 'クレジット不足で生成が停止しました',
+            body: `第${nextEpisodeIndex + 1}話以降の生成にはクレジットの追加が必要です。`,
+            data: { workId },
+          }).catch(() => {});
           break;
         }
 
@@ -855,26 +907,24 @@ ${episode.content}
         const systemPrompt = this.buildEpisodeGenerationPrompt(designData, plan, episodeSummaries, episodeNumber, job.totalEpisodes);
         const userPrompt = `第${episodeNumber}話を執筆してください。`;
 
-        // Generate (non-streaming for background loop)
-        let fullOutput = '';
-        for await (const chunk of this.streamFromClaude(
+        // Generate (non-streaming for background loop — faster & more reliable)
+        const fullOutput = await this.callClaudeNonStreaming(
           apiKey, model, systemPrompt, userPrompt, userId, 'editor_mode_generate', creditCost,
-        )) {
-          fullOutput += chunk;
-        }
+        );
 
         // Save episode
+        const episodeTitle = this.getEpisodeTitleFromDesign(designData, episodeNumber);
         await this.prisma.episode.upsert({
           where: { workId_orderIndex: { workId, orderIndex: nextEpisodeIndex } },
           update: {
             content: fullOutput,
-            title: `第${episodeNumber}話`,
+            title: episodeTitle,
             wordCount: fullOutput.length,
           },
           create: {
             workId,
             authorId: userId,
-            title: `第${episodeNumber}話`,
+            title: episodeTitle,
             content: fullOutput,
             orderIndex: nextEpisodeIndex,
             wordCount: fullOutput.length,
@@ -906,6 +956,14 @@ ${episode.content}
           where: { workId },
           data: { status: 'paused' },
         }).catch(() => {});
+
+        // Notify user of error
+        await this.notifications.createNotification(userId, {
+          type: 'editor_mode',
+          title: '生成が停止しました',
+          body: `第${nextEpisodeIndex + 1}話の生成中にエラーが発生しました。「続きから生成」で再開できます。`,
+          data: { workId },
+        }).catch(() => {});
         break;
       }
     }
@@ -934,6 +992,10 @@ ${episode.content}
         transactionId = result.transactionId;
       }
 
+      // 5-minute timeout for Claude API calls
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
         headers: {
@@ -949,7 +1011,8 @@ ${episode.content}
           system: [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }],
           messages: [{ role: 'user', content: userPrompt }],
         }),
-      });
+        signal: abortController.signal,
+      }).finally(() => clearTimeout(timeout));
 
       if (!response.ok) {
         const errorText = await response.text();
@@ -1050,6 +1113,27 @@ ${episode.content}
     return { apiKey, model: modelConfig.model, creditCost };
   }
 
+  /**
+   * Flatten all episodes from actGroups and find the title for a given episode number (1-based).
+   */
+  private getEpisodeTitleFromDesign(designData: any, episodeNumber: number): string {
+    const fallback = `第${episodeNumber}話`;
+    if (!designData?.actGroups || !Array.isArray(designData.actGroups)) return fallback;
+
+    let index = 0;
+    for (const group of designData.actGroups) {
+      if (!Array.isArray(group.episodes)) continue;
+      for (const ep of group.episodes) {
+        index++;
+        if (index === episodeNumber) {
+          // ep.title is like "第1話: サブタイトル" — use as-is
+          return ep.title || fallback;
+        }
+      }
+    }
+    return fallback;
+  }
+
   private extractLatestDesignUpdate(chatHistory: { role: string; content: string }[]): any | null {
     // Walk backwards through assistant messages to find the latest __DESIGN_UPDATE__
     for (let i = chatHistory.length - 1; i >= 0; i--) {
@@ -1124,5 +1208,82 @@ ${episode.content}
     parts.push(`\n現在: 第${currentEpisodeNumber}話 / 全${totalEpisodes}話`);
 
     return parts.join('\n');
+  }
+
+  // ─── Non-streaming Claude call (for background generation) ──
+
+  private async callClaudeNonStreaming(
+    apiKey: string,
+    model: string,
+    systemPrompt: string,
+    userPrompt: string,
+    userId: string,
+    feature: string,
+    creditCost: number,
+  ): Promise<string> {
+    const startTime = Date.now();
+    let transactionId: string | null = null;
+
+    try {
+      if (creditCost > 0) {
+        const result = await this.creditService.consumeCredits(userId, creditCost, feature, model);
+        transactionId = result.transactionId;
+      }
+
+      const abortController = new AbortController();
+      const timeout = setTimeout(() => abortController.abort(), 5 * 60 * 1000);
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model,
+          max_tokens: 8000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+        signal: abortController.signal,
+      }).finally(() => clearTimeout(timeout));
+
+      if (!response.ok) {
+        const errorText = await response.text();
+        this.logger.error(`Claude API error (non-streaming): ${response.status} ${errorText}`);
+        if (transactionId) {
+          await this.creditService.refundTransaction(transactionId);
+        }
+        throw new ServiceUnavailableException(`AI service error: ${response.status}`);
+      }
+
+      const data = await response.json();
+      const content = data.content?.[0]?.text || '';
+      const inputTokens = data.usage?.input_tokens || 0;
+      const outputTokens = data.usage?.output_tokens || 0;
+
+      const durationMs = Date.now() - startTime;
+      this.logger.log(`Non-streaming generation: ${inputTokens} in / ${outputTokens} out / ${durationMs}ms / ${model}`);
+
+      await this.prisma.aiUsageLog
+        .create({
+          data: { userId, feature, inputTokens, outputTokens, model, durationMs },
+        })
+        .catch((e) => this.logger.error('Failed to log AI usage', e));
+
+      if (transactionId && content) {
+        await this.creditService.confirmTransaction(transactionId).catch((e) => this.logger.error('Credit confirm failed', e));
+      } else if (transactionId) {
+        await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error('Credit refund failed', e));
+      }
+
+      return content;
+    } catch (error) {
+      if (transactionId) {
+        await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error('Credit refund failed', e));
+      }
+      throw error;
+    }
   }
 }

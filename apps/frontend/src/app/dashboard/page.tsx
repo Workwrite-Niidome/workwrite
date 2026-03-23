@@ -63,7 +63,9 @@ export default function DashboardPage() {
               .then((statusRes: any) => ({ ...w, editorModeJob: (statusRes as any)?.data || statusRes }))
               .catch(() => ({ ...w, editorModeJob: null }))
           )
-        ).then((results) => setEditorModeWorks(results.filter((w: any) => w.editorModeJob)));
+        ).then((results) => setEditorModeWorks(
+          results.filter((w: any) => w.editorModeJob && w.editorModeJob.status !== 'designing')
+        ));
       })
       .catch(() => {});
   }, []);
@@ -276,7 +278,9 @@ export default function DashboardPage() {
       ) : (
         <div className="space-y-4">
           <h2 className="text-lg font-semibold">作品一覧</h2>
-          {overview.works.map((work) => (
+          {overview.works
+            .filter((work) => !(work.isAiGenerated && work.status === 'DRAFT' && work.title?.includes('編集者モード')))
+            .map((work) => (
             <Card key={work.id} className="group">
               <Link href={`/works/${work.id}/edit`} className="block">
                 <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
