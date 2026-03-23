@@ -32,9 +32,10 @@ function SearchContent() {
   const initialQuery = searchParams.get('q') || '';
   const initialSort = searchParams.get('sort') || 'relevance';
   const initialCategory = searchParams.get('category') || '';
+  const initialGenre = searchParams.get('genre') || '';
   const { isAuthenticated } = useAuth();
   const [query, setQuery] = useState(initialQuery);
-  const [genre, setGenre] = useState('');
+  const [genre, setGenre] = useState(initialGenre);
   const [sortBy, setSortBy] = useState(initialSort);
   const [category, setCategory] = useState(initialCategory);
   const [results, setResults] = useState<Work[]>([]);
@@ -44,15 +45,18 @@ function SearchContent() {
 
   useEffect(() => {
     doSearch(initialQuery, 0);
-  }, [initialQuery, initialSort, initialCategory]);
+  }, [initialQuery, initialSort, initialCategory, initialGenre]);
 
-  async function doSearch(q: string, pageNum: number) {
+  async function doSearch(q: string, pageNum: number, overrides?: { genre?: string; sort?: string; category?: string }) {
+    const g = overrides?.genre ?? genre;
+    const s = overrides?.sort ?? sortBy;
+    const c = overrides?.category ?? category;
     setLoading(true);
     try {
       const res = await api.searchWorks(q, {
-        genre: genre || undefined,
-        sort: sortBy !== 'relevance' ? sortBy : undefined,
-        category: category || undefined,
+        genre: g || undefined,
+        sort: s !== 'relevance' ? s : undefined,
+        category: c || undefined,
         limit: PAGE_SIZE,
         offset: pageNum * PAGE_SIZE,
       } as any);
@@ -73,12 +77,12 @@ function SearchContent() {
 
   function handleSortChange(value: string) {
     setSortBy(value);
-    doSearch(query, 0);
+    doSearch(query, 0, { sort: value });
   }
 
   function handleGenreChange(value: string) {
     setGenre(value);
-    doSearch(query, 0);
+    doSearch(query, 0, { genre: value });
   }
 
   const totalPages = Math.ceil(total / PAGE_SIZE);
@@ -130,7 +134,7 @@ function SearchContent() {
         </select>
         <select
           value={category}
-          onChange={(e) => { setCategory(e.target.value); doSearch(query, 0); }}
+          onChange={(e) => { const v = e.target.value; setCategory(v); doSearch(query, 0, { category: v }); }}
           className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
           aria-label="カテゴリ"
         >
@@ -140,7 +144,7 @@ function SearchContent() {
         </select>
         {(genre || sortBy !== 'relevance' || category) && (
           <button
-            onClick={() => { setGenre(''); setSortBy('relevance'); setCategory(''); doSearch(query, 0); }}
+            onClick={() => { setGenre(''); setSortBy('relevance'); setCategory(''); doSearch(query, 0, { genre: '', sort: 'relevance', category: '' }); }}
             className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors"
           >
             フィルターをクリア
