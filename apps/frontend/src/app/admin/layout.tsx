@@ -1,9 +1,10 @@
 'use client';
 
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
+import { api } from '@/lib/api';
 import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText, Megaphone } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
@@ -21,14 +22,27 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
   const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
+  const [serverVerified, setServerVerified] = useState(false);
 
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || user?.role !== 'ADMIN')) {
       router.push('/');
+      return;
+    }
+
+    // Server-side verification: call an admin-only endpoint to confirm
+    // the user truly has ADMIN role (prevents client-side role tampering)
+    if (!isLoading && isAuthenticated && user?.role === 'ADMIN') {
+      api.getAdminStats()
+        .then(() => setServerVerified(true))
+        .catch(() => {
+          setServerVerified(false);
+          router.push('/');
+        });
     }
   }, [isLoading, isAuthenticated, user, router]);
 
-  if (isLoading || !isAuthenticated || user?.role !== 'ADMIN') {
+  if (isLoading || !isAuthenticated || user?.role !== 'ADMIN' || !serverVerified) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-sm text-muted-foreground">Loading...</p>

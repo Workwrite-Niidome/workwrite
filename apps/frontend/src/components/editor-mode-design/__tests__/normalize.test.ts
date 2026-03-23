@@ -429,3 +429,118 @@ describe('normalizeDesignUpdate — full AI response', () => {
     expect(result.actGroups).toBeUndefined();
   });
 });
+
+// ─── Multi-update merge simulation ───────────────────────────────────────────
+
+describe('normalizeDesignUpdate — sequential merge (simulating extractMergedDesignUpdates)', () => {
+  /** Helper: merge multiple raw AI updates in order, simulating the backend merge logic */
+  function mergeUpdates(...updates: any[]): Partial<import('../types').DesignData> {
+    let merged: Partial<import('../types').DesignData> = {};
+    for (const raw of updates) {
+      const normalized = normalizeDesignUpdate(raw);
+      for (const [k, v] of Object.entries(normalized)) {
+        if (v !== undefined && v !== null) {
+          (merged as any)[k] = v;
+        }
+      }
+    }
+    return merged;
+  }
+
+  it('merges initial design + refinement correctly', () => {
+    const initial = {
+      title: '夜明けの水晶',
+      genre_setting: 'ファンタジー',
+      characters: [
+        { name: 'リーナ', role: '主人公', personality: '穏やか' },
+        { name: 'カイ', role: '相棒', personality: '皮肉屋' },
+      ],
+      scope: '10話 × 3000字',
+    };
+
+    const refinement = {
+      characters: [
+        { name: 'リーナ', role: '主人公', personality: '穏やかだが芯が強い' },
+        { name: 'カイ', role: '相棒', personality: '皮肉屋だが情深い' },
+        { name: 'セラ', role: '案内人', personality: '謎めいた' },
+      ],
+    };
+
+    const result = mergeUpdates(initial, refinement);
+
+    // Title should come from initial
+    expect(result.title).toBe('夜明けの水晶');
+    expect(result.genre).toBe('ファンタジー');
+    // Characters should be overwritten by refinement (3 chars)
+    expect(result.characters).toHaveLength(3);
+    expect(result.characters![0].personality).toBe('穏やかだが芯が強い');
+    expect(result.characters![2].name).toBe('セラ');
+    // Scope from initial
+    expect(result.episodeCount).toBe(10);
+    expect(result.charCountPerEpisode).toBe(3000);
+  });
+
+  it('later updates override earlier ones for same field', () => {
+    const v1 = { title: '旧タイトル', tone: 'ダーク' };
+    const v2 = { title: '新タイトル' };
+
+    const result = mergeUpdates(v1, v2);
+
+    expect(result.title).toBe('新タイトル');
+    expect(result.tone).toBe('ダーク'); // not overwritten
+  });
+
+  it('preserves fields from initial when refinement has different fields', () => {
+    const initial = {
+      title: 'テスト作品',
+      genre_setting: 'SF',
+      coreMessage: 'テーマA',
+      worldBuilding: {
+        basics: { era: '未来', setting: '宇宙', civilizationLevel: '高度' },
+        rules: [],
+        terminology: [],
+        history: '',
+        infoAsymmetry: { commonKnowledge: '', hiddenTruths: '' },
+        items: [],
+      },
+    };
+
+    const refinement = {
+      conflict: '新しい葛藤',
+      targetEmotions: '驚き→感動',
+    };
+
+    const result = mergeUpdates(initial, refinement);
+
+    // Initial fields preserved
+    expect(result.title).toBe('テスト作品');
+    expect(result.genre).toBe('SF');
+    expect(result.coreMessage).toBe('テーマA');
+    expect(result.worldBuilding?.basics?.era).toBe('未来');
+    // Refinement fields added
+    expect(result.conflict).toBe('新しい葛藤');
+    expect(result.targetEmotions).toBe('驚き→感動');
+  });
+
+  it('handles three sequential updates', () => {
+    const v1 = { title: 'v1', genre_setting: 'ファンタジー' };
+    const v2 = { tone: 'ダーク', conflict: '葛藤A' };
+    const v3 = { title: 'v3', conflict: '葛藤B (改良)' };
+
+    const result = mergeUpdates(v1, v2, v3);
+
+    expect(result.title).toBe('v3'); // latest
+    expect(result.genre).toBe('ファンタジー'); // from v1
+    expect(result.tone).toBe('ダーク'); // from v2
+    expect(result.conflict).toBe('葛藤B (改良)'); // v3 overrides v2
+  });
+
+  it('handles empty updates gracefully', () => {
+    const initial = { title: '作品' };
+    const empty = {};
+
+    const result = mergeUpdates(initial, empty);
+
+    expect(result.title).toBe('作品');
+  });
+});
