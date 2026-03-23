@@ -123,9 +123,9 @@ export class EpisodesController {
   async publish(@Param('id') id: string, @CurrentUser('id') userId: string) {
     const result = await this.episodesService.publish(id, userId);
     const episode = await this.episodesService.findOne(id, userId);
-    // Run analysis and summary on publish (the right time for API calls)
+    // Run analysis on publish (the right time for API calls)
     this.triggerEpisodeAnalysis(episode.workId, id);
-    this.triggerSummaryUpdate(episode.workId, userId);
+    // storySummary auto-fire disabled — not consumed by any feature, major API cost savings
     // Auto-post to SNS
     this.createAutoEpisodePost(userId, episode).catch((e) =>
       this.logger.warn(`Auto-post failed: ${e}`),
@@ -224,7 +224,6 @@ export class EpisodesController {
       const analysis = await this.episodeAnalysis.getAnalysis(episode.id);
       if (!analysis) {
         this.triggerEpisodeAnalysis(episode.workId, episode.id);
-        this.triggerSummaryUpdate(episode.workId, userId);
         return;
       }
 
@@ -241,7 +240,6 @@ export class EpisodesController {
       if (changeRatio > 0.2) {
         this.logger.log(`Published episode ${episode.id} content changed ${Math.round(changeRatio * 100)}% (normalized), re-analyzing`);
         this.triggerEpisodeAnalysis(episode.workId, episode.id);
-        this.triggerSummaryUpdate(episode.workId, userId);
       }
     } catch {
       // On error, skip re-analysis silently
