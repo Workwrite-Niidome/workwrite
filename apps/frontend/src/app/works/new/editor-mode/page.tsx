@@ -3,49 +3,114 @@
 import { useState, useRef, useEffect, useCallback, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
 import {
-  Send, Loader2,
-  Bot, ArrowLeft, MessageSquare,
-  Sparkles, Pen,
+  Send, Crown, Sparkles, Check, Loader2, ChevronRight,
+  Edit3, Bot, ArrowLeft, Plus, Trash2, MessageSquare,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { BottomSheet } from '@/components/ui/bottom-sheet';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
 import { consumeSSEStream } from '@/lib/use-ai-stream';
 import { cn } from '@/lib/utils';
-import { DesignDisplay } from '@/components/editor-mode-design/design-display';
-import type { DesignData, ChatMessage } from '@/components/editor-mode-design/types';
-import { normalizeDesignUpdate } from '@/components/editor-mode-design/normalize';
 
-const GENRE_CHIPS = ['ファンタジー', 'SF', 'ミステリー', '恋愛', 'ホラー', '現代文学', '歴史'];
+interface DesignData {
+  genre?: string;
+  theme?: string;
+  afterReading?: string;
+  protagonist?: { name: string; role: string; personality: string; speechStyle: string };
+  characters?: { name: string; role: string; personality: string; speechStyle: string }[];
+  worldBuilding?: string;
+  conflict?: string;
+  plotOutline?: string;
+  tone?: string;
+  episodeCount?: number;
+  charCountPerEpisode?: number;
+}
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
+const CHECKLIST_ITEMS = [
+  { key: 'genre', label: 'ジャンル・舞台' },
+  { key: 'theme', label: 'テーマ・コアメッセージ' },
+  { key: 'afterReading', label: '読者に届けたい感情・読後感' },
+  { key: 'protagonist', label: '主人公' },
+  { key: 'characters', label: '主要キャラクター（2人以上）' },
+  { key: 'worldBuilding', label: '世界観・ルール' },
+  { key: 'conflict', label: 'コンフリクト（中心的な葛藤）' },
+  { key: 'plotOutline', label: 'プロット概要' },
+  { key: 'tone', label: 'トーン・文体' },
+  { key: 'episodeCount', label: '話数・各話の文字数目安' },
+] as const;
+
+/** Normalize AI's __DESIGN_UPDATE__ output to match our DesignData shape */
+function normalizeDesignUpdate(raw: any): Partial<DesignData> {
+  const d: Partial<DesignData> = {};
+  const str = (v: any) => v && v !== 'null' ? String(v) : undefined;
+  if (str(raw.genre_setting || raw.genre)) d.genre = str(raw.genre_setting || raw.genre);
+  if (str(raw.theme)) d.theme = str(raw.theme);
+  if (str(raw.emotion || raw.afterReading)) d.afterReading = str(raw.emotion || raw.afterReading);
+  if (raw.protagonist && raw.protagonist !== 'null') {
+    d.protagonist = typeof raw.protagonist === 'string'
+      ? { name: raw.protagonist, role: '', personality: '', speechStyle: '' }
+      : raw.protagonist;
+  }
+  if (raw.characters && raw.characters !== 'null' && Array.isArray(raw.characters)) {
+    d.characters = raw.characters;
+  }
+  if (str(raw.world || raw.worldBuilding)) d.worldBuilding = str(raw.world || raw.worldBuilding);
+  if (str(raw.conflict)) d.conflict = str(raw.conflict);
+  if (str(raw.plot || raw.plotOutline)) d.plotOutline = str(raw.plot || raw.plotOutline);
+  if (str(raw.tone)) d.tone = str(raw.tone);
+  const scope = raw.scope || raw.episodeCount;
+  if (scope && scope !== 'null') {
+    const m = String(scope).match(/(\d+)/);
+    if (m) d.episodeCount = parseInt(m[1], 10);
+  }
+  return d;
+}
+
+function isChecklistItemFilled(design: DesignData, key: string): boolean {
+  switch (key) {
+    case 'genre': return !!design.genre;
+    case 'theme': return !!design.theme;
+    case 'afterReading': return !!design.afterReading;
+    case 'protagonist': return !!(typeof design.protagonist === 'object' ? design.protagonist?.name : design.protagonist);
+    case 'characters': return Array.isArray(design.characters) ? design.characters.length >= 2 : !!design.characters;
+    case 'worldBuilding': return !!design.worldBuilding;
+    case 'conflict': return !!design.conflict;
+    case 'plotOutline': return !!design.plotOutline;
+    case 'tone': return !!design.tone;
+    case 'episodeCount': return !!design.episodeCount && !!design.charCountPerEpisode;
+    default: return false;
+  }
+}
 
 function EditorModeDesignContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const resumeWorkId = searchParams.get('resume');
-
-  // Core state
-  const [phase, setPhase] = useState<'brief' | 'generating' | 'review'>(resumeWorkId ? 'generating' : 'brief');
+  const [phase, setPhase] = useState<'designing' | 'reviewing'>('designing');
+  const [aiMode, setAiMode] = useState<'normal' | 'premium'>('normal');
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [inputValue, setInputValue] = useState('');
-  const [briefValue, setBriefValue] = useState('');
-  const [selectedGenres, setSelectedGenres] = useState<string[]>([]);
   const [isStreaming, setIsStreaming] = useState(false);
   const [design, setDesign] = useState<DesignData>({});
   const [creditsConsumed, setCreditConsumed] = useState(0);
   const [creditsRemaining, setCreditsRemaining] = useState<number | null>(null);
   const [workId, setWorkId] = useState<string | null>(resumeWorkId);
   const [error, setError] = useState<string | null>(null);
+  const [reviseField, setReviseField] = useState<string | null>(null);
+  const [reviseInstruction, setReviseInstruction] = useState('');
+  const [isRevising, setIsRevising] = useState(false);
   const [finalizing, setFinalizing] = useState(false);
-  const [streamingText, setStreamingText] = useState('');
-  const [highlightedKeys, setHighlightedKeys] = useState<Set<string>>(new Set());
 
-  const abortRef = useRef<AbortController | null>(null);
   const chatEndRef = useRef<HTMLDivElement>(null);
-  const highlightTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
-
-  // Always Opus
-  const aiMode = 'premium' as const;
+  const abortRef = useRef<AbortController | null>(null);
 
   // Load credits on mount
   useEffect(() => {
@@ -58,102 +123,54 @@ function EditorModeDesignContent() {
       .catch(() => {});
   }, []);
 
-  // Resume: load existing design + jump to review
-  // Only load REFINEMENT messages (skip the first user+assistant pair = initial brief)
+  // Resume: load existing chat history
   useEffect(() => {
     if (!resumeWorkId) return;
     api.editorModeStatus(resumeWorkId)
       .then((res: any) => {
         const job = res?.data || res;
-        if (job?.creditsConsumed) setCreditConsumed(job.creditsConsumed);
         if (job?.designChatHistory && Array.isArray(job.designChatHistory)) {
-          const history = job.designChatHistory as any[];
-
-          // Extract design from ALL assistant messages
-          let merged: Partial<DesignData> = {};
-          for (const msg of history) {
+          setMessages(job.designChatHistory.filter((m: any) => m.role && m.content).map((m: any) => ({
+            role: m.role as 'user' | 'assistant',
+            content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
+          })));
+        }
+        if (job?.creditsConsumed) setCreditConsumed(job.creditsConsumed);
+        // Try to extract design from chat history
+        if (job?.designChatHistory) {
+          for (let i = (job.designChatHistory as any[]).length - 1; i >= 0; i--) {
+            const msg = job.designChatHistory[i];
             if (msg.role !== 'assistant') continue;
-            const patterns = [
-              /__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/,
-              /__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```/,
-              /__DESIGN_UPDATE__\s*(\{[\s\S]*?\})\s*$/,
-            ];
-            for (const pattern of patterns) {
-              const match = msg.content.match(pattern);
-              if (match) {
-                try {
-                  const parsed = normalizeDesignUpdate(JSON.parse(match[1]));
-                  for (const [k, v] of Object.entries(parsed)) {
-                    if (v !== undefined && v !== null) {
-                      (merged as any)[k] = v;
-                    }
-                  }
-                } catch { /* skip */ }
-                break;
-              }
+            const match = msg.content.match(/__DESIGN_UPDATE__\s*([\s\S]*?)__END_UPDATE__/);
+            if (match) {
+              try { setDesign(normalizeDesignUpdate(JSON.parse(match[1]))); break; } catch { /* skip */ }
             }
           }
-          if (Object.keys(merged).length > 0) {
-            setDesign(merged);
-          }
-
-          // For chat display: skip the first user+assistant pair (initial brief)
-          // Only show refinement messages (from the 3rd message onward)
-          const refinementMessages = history
-            .slice(2) // skip first user msg + first assistant response
-            .filter((m: any) => m.role && m.content)
-            .map((m: any) => ({
-              role: m.role as 'user' | 'assistant',
-              content: m.content.replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/g, '').trim(),
-            }))
-            .filter((m: ChatMessage) => m.content.length > 0);
-          setMessages(refinementMessages);
-          if (refinementMessages.length > 0) setChatOpen(true);
         }
-        setPhase('review');
       })
-      .catch(() => {
-        setPhase('brief');
-      });
+      .catch(() => {});
   }, [resumeWorkId]);
 
-  // Auto-scroll chat (only in review phase, not during initial generation)
+  // Auto-scroll chat (only within the chat container, not the whole page)
+  const chatContainerRef = useRef<HTMLDivElement>(null);
   useEffect(() => {
-    if (phase === 'review') {
-      chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+    if (chatContainerRef.current) {
+      chatContainerRef.current.scrollTop = chatContainerRef.current.scrollHeight;
     }
-  }, [messages, phase]);
+  }, [messages, isStreaming]);
 
-  /** Flash highlight on changed keys for 4 seconds */
-  const flashHighlight = useCallback((keys: string[]) => {
-    if (keys.length === 0) return;
-    setHighlightedKeys(new Set(keys));
-    if (highlightTimerRef.current) clearTimeout(highlightTimerRef.current);
-    highlightTimerRef.current = setTimeout(() => setHighlightedKeys(new Set()), 4000);
-  }, []);
+  const filledCount = CHECKLIST_ITEMS.filter(item => isChecklistItemFilled(design, item.key)).length;
+  const allFilled = filledCount === CHECKLIST_ITEMS.length;
 
-  const applyDesignUpdate = useCallback((raw: any) => {
-    const update = normalizeDesignUpdate(raw);
-    const keys = Object.keys(update);
-    setDesign(prev => ({ ...prev, ...update }));
-    flashHighlight(keys);
-  }, [flashHighlight]);
-
-  /**
-   * Core message sending logic.
-   * @param isInitial — true for the first brief submission (no chat UI, only generating screen)
-   */
-  const sendMessage = useCallback(async (message: string, existingMessages: ChatMessage[] = messages, isInitial = false) => {
-    if (!message.trim() || isStreaming) return;
+  const sendMessage = useCallback(async () => {
+    if (!inputValue.trim() || isStreaming) return;
+    const message = inputValue.trim();
+    setInputValue('');
     setError(null);
 
-    // For refinement messages, add to chat. For initial brief, don't show in chat.
-    const newMessages: ChatMessage[] = isInitial
-      ? existingMessages
-      : [...existingMessages, { role: 'user', content: message }];
-    if (!isInitial) setMessages(newMessages);
+    const newMessages: ChatMessage[] = [...messages, { role: 'user', content: message }];
+    setMessages(newMessages);
     setIsStreaming(true);
-    setStreamingText('');
 
     const controller = new AbortController();
     abortRef.current = controller;
@@ -168,7 +185,7 @@ function EditorModeDesignContent() {
           'Content-Type': 'application/json',
           ...(token ? { Authorization: `Bearer ${token}` } : {}),
         },
-        body: JSON.stringify({ message, aiMode, designState: design }),
+        body: JSON.stringify({ message, aiMode }),
         signal: controller.signal,
       });
 
@@ -185,21 +202,10 @@ function EditorModeDesignContent() {
         }
         if (parsed.text) {
           accumulated += parsed.text;
-          const cleanForDisplay = accumulated.replace(/__DESIGN_UPDATE__[\s\S]*$/g, '').trim();
-          // During initial generation, only update streamingText (shown on generating screen)
-          // During refinement, update both streamingText and chat messages
-          setStreamingText(cleanForDisplay);
-          if (!isInitial) {
-            setMessages([...newMessages, { role: 'assistant', content: cleanForDisplay }]);
-          }
+          setMessages([...newMessages, { role: 'assistant', content: accumulated }]);
         }
         if (parsed.workId) {
           setWorkId(parsed.workId);
-          const url = new URL(window.location.href);
-          if (!url.searchParams.has('resume')) {
-            url.searchParams.set('resume', parsed.workId);
-            window.history.replaceState({}, '', url.toString());
-          }
         }
         if (parsed.creditsConsumed !== undefined) {
           setCreditConsumed(parsed.creditsConsumed);
@@ -208,11 +214,14 @@ function EditorModeDesignContent() {
           setCreditsRemaining(parsed.creditsRemaining);
         }
         if (parsed.designUpdate) {
-          applyDesignUpdate(parsed.designUpdate);
+          setDesign(prev => ({ ...prev, ...normalizeDesignUpdate(parsed.designUpdate) }));
         }
       });
 
-      // Parse __DESIGN_UPDATE__ from accumulated text
+      // Check for __DESIGN_UPDATE__ block in accumulated text (multiple formats)
+      // Format 1: __DESIGN_UPDATE__ ```json {...} ```
+      // Format 2: __DESIGN_UPDATE__ {...} __END_UPDATE__
+      // Format 3: __DESIGN_UPDATE__\n{...}\n__END_UPDATE__
       const patterns = [
         /__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```\s*(__END_UPDATE__)?/,
         /__DESIGN_UPDATE__\s*(\{[\s\S]*?\})\s*__END_UPDATE__/,
@@ -223,82 +232,83 @@ function EditorModeDesignContent() {
         if (designMatch) {
           try {
             const raw = JSON.parse(designMatch[1]);
-            applyDesignUpdate(raw);
-          } catch { /* skip */ }
-          // For refinement, store clean AI response in chat
-          if (!isInitial) {
+            const designUpdate = normalizeDesignUpdate(raw);
+            setDesign(prev => ({ ...prev, ...designUpdate }));
+            // Remove the entire design update block from displayed message
             const cleanContent = accumulated
               .replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/, '')
               .replace(/\s*---\s*$/, '')
               .trim();
             setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
+          } catch {
+            // Failed to parse, try removing the raw block anyway
+            const cleanContent = accumulated
+              .replace(/__DESIGN_UPDATE__[\s\S]*?(__END_UPDATE__|$)/, '')
+              .trim();
+            if (cleanContent !== accumulated) {
+              setMessages([...newMessages, { role: 'assistant', content: cleanContent }]);
+            }
           }
           break;
         }
       }
-
-      setPhase('review');
     } catch (err: unknown) {
       if (err instanceof Error && err.name === 'AbortError') return;
       setError(err instanceof Error ? err.message : 'Unknown error occurred');
-      if (phase === 'generating') setPhase('brief');
     } finally {
       setIsStreaming(false);
-      setStreamingText('');
-      api.getAiStatus()
-        .then((res: any) => {
-          if (res.data?.tier?.credits?.total !== undefined) {
-            setCreditsRemaining(res.data.tier.credits.total);
-          }
-        })
-        .catch(() => {});
-      if (workId) {
-        api.editorModeStatus(workId)
-          .then((res: any) => {
-            const job = res?.data || res;
-            if (job?.creditsConsumed !== undefined) {
-              setCreditConsumed(job.creditsConsumed);
-            }
-          })
-          .catch(() => {});
+    }
+  }, [inputValue, isStreaming, messages, aiMode, workId]);
+
+  const handleReviseSection = async (field: string, instruction: string) => {
+    if (!instruction.trim() || isRevising) return;
+    setIsRevising(true);
+    setError(null);
+
+    try {
+      const token = api.getToken();
+      const chatUrl = await api.editorModeChat(workId || '_new');
+
+      const res = await fetch(chatUrl, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          ...(token ? { Authorization: `Bearer ${token}` } : {}),
+        },
+        body: JSON.stringify({
+          message: `${field}セクションを修正してください: ${instruction}`,
+          aiMode,
+          workId,
+          reviseField: field,
+        }),
+      });
+
+      if (!res.ok) throw new Error(`Error: ${res.status}`);
+
+      let accumulated = '';
+      await consumeSSEStream(res, (parsed) => {
+        if (parsed.text) accumulated += parsed.text;
+        if (parsed.designUpdate) {
+          setDesign(prev => ({ ...prev, ...normalizeDesignUpdate(parsed.designUpdate) }));
+        }
+        if (parsed.creditsConsumed !== undefined) setCreditConsumed(parsed.creditsConsumed);
+        if (parsed.creditsRemaining !== undefined) setCreditsRemaining(parsed.creditsRemaining);
+      });
+
+      const designMatch = accumulated.match(/__DESIGN_UPDATE__\s*```json\s*([\s\S]*?)```/);
+      if (designMatch) {
+        try {
+          setDesign(prev => ({ ...prev, ...normalizeDesignUpdate(JSON.parse(designMatch[1])) }));
+        } catch { /* ignore */ }
       }
+    } catch (err: unknown) {
+      setError(err instanceof Error ? err.message : 'Unknown error');
+    } finally {
+      setIsRevising(false);
+      setReviseField(null);
+      setReviseInstruction('');
     }
-  }, [isStreaming, messages, aiMode, workId, design, applyDesignUpdate, phase]);
-
-  const handleBriefSubmit = useCallback(() => {
-    const genrePrefix = selectedGenres.length > 0 ? `[ジャンル: ${selectedGenres.join(', ')}] ` : '';
-    const fullMessage = genrePrefix + briefValue.trim();
-    if (!fullMessage.trim()) return;
-    setPhase('generating');
-    sendMessage(fullMessage, [], true); // isInitial = true → no chat UI
-  }, [briefValue, selectedGenres, sendMessage]);
-
-  const handleRefinementSend = useCallback(() => {
-    if (!inputValue.trim() || isStreaming) return;
-    const msg = inputValue.trim();
-    setInputValue('');
-    sendMessage(msg);
-  }, [inputValue, isStreaming, sendMessage]);
-
-  // Chat panel visibility (hidden until user requests revision)
-  const [chatOpen, setChatOpen] = useState(false);
-  const [chatSheetOpen, setChatSheetOpen] = useState(false);
-  const inputRef = useRef<HTMLTextAreaElement>(null);
-
-  /** Called when user clicks "修正を依頼" on a design section */
-  const handleRequestRevision = useCallback((sectionLabel: string, _context: string) => {
-    const prefix = `【${sectionLabel}について】`;
-    setInputValue(prefix + ' ');
-    // Desktop (lg+): open side panel only
-    // Mobile: open bottom sheet only
-    const isDesktop = window.matchMedia('(min-width: 1024px)').matches;
-    if (isDesktop) {
-      setChatOpen(true);
-    } else {
-      setChatSheetOpen(true);
-    }
-    setTimeout(() => inputRef.current?.focus(), 350);
-  }, []);
+  };
 
   const handleFinalize = async () => {
     if (!workId || !design.episodeCount || !design.charCountPerEpisode) return;
@@ -319,343 +329,459 @@ function EditorModeDesignContent() {
     }
   };
 
-  const toggleGenre = (g: string) => {
-    setSelectedGenres(prev => prev.includes(g) ? prev.filter(x => x !== g) : [...prev, g]);
-  };
-
-  // ─── Phase: Brief ───
-  if (phase === 'brief') {
+  if (phase === 'reviewing') {
     return (
-      <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-2xl space-y-6">
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => router.push('/works/new')}
-            className="text-muted-foreground"
-          >
-            <ArrowLeft className="h-4 w-4 mr-1" />
-            戻る
+      <div className="px-4 py-8 max-w-4xl mx-auto space-y-6">
+        {/* Top bar */}
+        <div className="flex items-center justify-between">
+          <Button variant="ghost" size="sm" onClick={() => setPhase('designing')}>
+            <ArrowLeft className="h-4 w-4 mr-1" /> 対話に戻る
           </Button>
-
-          <div className="text-center space-y-2">
-            <div className="inline-flex items-center gap-2 text-indigo-500 mb-2">
-              <Sparkles className="h-5 w-5" />
-              <span className="text-sm font-medium">編集者モード</span>
-            </div>
-            <h1 className="text-2xl font-bold">どんな物語を作りたいですか？</h1>
-            <p className="text-sm text-muted-foreground max-w-md mx-auto">
-              ジャンル、テーマ、雰囲気、キャラクター像…自由に書いてください。AIが完全な設計書を生成します。
-            </p>
-          </div>
-
-          <div className="flex flex-wrap justify-center gap-2">
-            {GENRE_CHIPS.map(g => (
-              <button
-                key={g}
-                onClick={() => toggleGenre(g)}
-                className={cn(
-                  'px-3 py-1.5 rounded-full text-xs font-medium border transition-colors',
-                  selectedGenres.includes(g)
-                    ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400'
-                    : 'border-border text-muted-foreground hover:border-indigo-500/30 hover:text-foreground',
-                )}
-              >
-                {g}
-              </button>
-            ))}
-          </div>
-
-          <Textarea
-            value={briefValue}
-            onChange={(e) => setBriefValue(e.target.value)}
-            onKeyDown={(e) => {
-              if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && briefValue.trim()) {
-                e.preventDefault();
-                handleBriefSubmit();
-              }
-            }}
-            placeholder="例: 記憶を失った少女が、崩壊しつつある幻想世界を旅しながら自分の正体を知る物語。切なくも温かい雰囲気で、最後に大きなどんでん返しを..."
-            rows={5}
-            className="text-sm resize-none"
-          />
-
-          <div className="flex items-center justify-end">
+          <div className="flex items-center gap-3 text-sm">
+            <ModeSelector aiMode={aiMode} onModeChange={setAiMode} />
             <CreditDisplay consumed={creditsConsumed} remaining={creditsRemaining} />
           </div>
-
-          <Button
-            onClick={handleBriefSubmit}
-            disabled={!briefValue.trim()}
-            className="w-full bg-indigo-500 hover:bg-indigo-600 text-white"
-            size="lg"
-          >
-            <Sparkles className="h-4 w-4 mr-2" />
-            設計書を生成 (10cr)
-          </Button>
-
-          <p className="text-center text-[11px] text-muted-foreground">
-            Claude Opusが全体の設計書（キャラクター・世界観・プロット・感情設計）を一括生成します
-          </p>
         </div>
-      </div>
-    );
-  }
 
-  // ─── Phase: Generating ───
-  if (phase === 'generating') {
-    return (
-      <div className="min-h-[calc(100vh-4rem)] flex flex-col items-center justify-center px-4">
-        <div className="w-full max-w-xl space-y-6 text-center">
-          <div className="flex justify-center">
-            <div className="h-16 w-16 rounded-full bg-indigo-500/10 flex items-center justify-center">
-              <Loader2 className="h-8 w-8 text-indigo-500 animate-spin" />
-            </div>
-          </div>
-          <div className="space-y-1">
-            <h2 className="text-lg font-medium">設計書を生成中</h2>
-            <p className="text-sm text-muted-foreground">
-              <span className="inline-flex items-center gap-1">
-                AIが物語の設計書を構築しています
-                <span className="inline-flex gap-0.5">
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '0ms' }} />
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '150ms' }} />
-                  <span className="w-1 h-1 rounded-full bg-muted-foreground/60 animate-bounce" style={{ animationDelay: '300ms' }} />
-                </span>
-              </span>
-            </p>
-          </div>
+        <h1 className="text-xl font-bold">設計レビュー</h1>
+        <p className="text-sm text-muted-foreground">設計内容を確認・編集してください。各セクションは直接編集するか、AIに修正指示を出せます。</p>
 
-          {streamingText && (
-            <div className="space-y-2">
-              <div className="flex flex-wrap gap-2 justify-center">
-                {['キャラクター', '世界観', 'プロット', '感情設計'].map((label) => {
-                  const found = streamingText.includes(label) || streamingText.includes(label.toLowerCase());
-                  return (
-                    <span key={label} className={cn(
-                      'px-2 py-0.5 rounded-full text-[10px] font-medium border transition-all',
-                      found ? 'bg-indigo-500/10 border-indigo-500/30 text-indigo-600 dark:text-indigo-400' : 'border-border text-muted-foreground/40',
-                    )}>
-                      {found ? '✓ ' : ''}{label}
-                    </span>
-                  );
-                })}
+        {error && (
+          <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-md">{error}</div>
+        )}
+
+        {/* Editable sections */}
+        <div className="space-y-4">
+          <EditableSection
+            label="ジャンル・舞台"
+            value={design.genre || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, genre: v }))}
+            onRevise={(instruction) => handleReviseSection('genre', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="genre"
+          />
+
+          <EditableSection
+            label="テーマ"
+            value={design.theme || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, theme: v }))}
+            onRevise={(instruction) => handleReviseSection('theme', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="theme"
+            multiline
+          />
+
+          <EditableSection
+            label="読後感"
+            value={design.afterReading || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, afterReading: v }))}
+            onRevise={(instruction) => handleReviseSection('afterReading', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="afterReading"
+            multiline
+          />
+
+          {/* Characters */}
+          <Card>
+            <CardHeader className="pb-3">
+              <CardTitle className="text-sm flex items-center justify-between">
+                キャラクター
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 text-xs gap-1"
+                  onClick={() => setDesign(prev => ({
+                    ...prev,
+                    characters: [...(prev.characters || []), { name: '', role: '', personality: '', speechStyle: '' }],
+                  }))}
+                >
+                  <Plus className="h-3 w-3" /> 追加
+                </Button>
+              </CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {/* Protagonist */}
+              {design.protagonist && (
+                <CharacterCard
+                  character={design.protagonist}
+                  label="主人公"
+                  onChange={(updated) => setDesign(prev => ({ ...prev, protagonist: updated }))}
+                />
+              )}
+              {/* Other characters */}
+              {design.characters?.map((char, idx) => (
+                <CharacterCard
+                  key={idx}
+                  character={char}
+                  label={`キャラクター ${idx + 1}`}
+                  onChange={(updated) => {
+                    const newChars = [...(design.characters || [])];
+                    newChars[idx] = updated;
+                    setDesign(prev => ({ ...prev, characters: newChars }));
+                  }}
+                  onDelete={() => {
+                    const newChars = (design.characters || []).filter((_, i) => i !== idx);
+                    setDesign(prev => ({ ...prev, characters: newChars }));
+                  }}
+                />
+              ))}
+              <div className="flex justify-end">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs"
+                  onClick={() => {
+                    setReviseField('characters');
+                    setReviseInstruction('');
+                  }}
+                >
+                  <Bot className="h-3 w-3 mr-1" /> AIに修正させる
+                </Button>
               </div>
-              <p className="text-xs text-muted-foreground">設計要素を構築中...</p>
-            </div>
-          )}
+              {reviseField === 'characters' && (
+                <ReviseInput
+                  instruction={reviseInstruction}
+                  setInstruction={setReviseInstruction}
+                  onSubmit={() => handleReviseSection('characters', reviseInstruction)}
+                  onCancel={() => setReviseField(null)}
+                  isRevising={isRevising}
+                />
+              )}
+            </CardContent>
+          </Card>
 
-          {error && (
-            <div className="p-3 text-sm text-destructive bg-destructive/10 rounded-lg">
-              {error}
-              <Button
-                variant="outline"
-                size="sm"
-                className="mt-2"
-                onClick={() => { setPhase('brief'); setError(null); }}
-              >
-                やり直す
-              </Button>
-            </div>
-          )}
+          <EditableSection
+            label="世界観"
+            value={design.worldBuilding || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, worldBuilding: v }))}
+            onRevise={(instruction) => handleReviseSection('worldBuilding', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="worldBuilding"
+            multiline
+          />
+
+          <EditableSection
+            label="葛藤"
+            value={design.conflict || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, conflict: v }))}
+            onRevise={(instruction) => handleReviseSection('conflict', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="conflict"
+            multiline
+          />
+
+          <EditableSection
+            label="プロット概要"
+            value={design.plotOutline || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, plotOutline: v }))}
+            onRevise={(instruction) => handleReviseSection('plotOutline', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="plotOutline"
+            multiline
+          />
+
+          <EditableSection
+            label="トーン"
+            value={design.tone || ''}
+            onChange={(v) => setDesign(prev => ({ ...prev, tone: v }))}
+            onRevise={(instruction) => handleReviseSection('tone', instruction)}
+            reviseField={reviseField}
+            setReviseField={setReviseField}
+            reviseInstruction={reviseInstruction}
+            setReviseInstruction={setReviseInstruction}
+            isRevising={isRevising}
+            fieldKey="tone"
+            multiline
+          />
+
+          {/* Episode count + char count */}
+          <Card>
+            <CardContent className="pt-6 space-y-4">
+              <div className="grid grid-cols-2 gap-4">
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">話数</label>
+                  <Input
+                    type="number"
+                    min={1}
+                    max={100}
+                    value={design.episodeCount || ''}
+                    onChange={(e) => setDesign(prev => ({ ...prev, episodeCount: Number(e.target.value) || undefined }))}
+                    placeholder="例: 10"
+                  />
+                </div>
+                <div className="space-y-2">
+                  <label className="text-sm font-medium">文字数目安（1話あたり）</label>
+                  <Input
+                    type="number"
+                    min={500}
+                    max={20000}
+                    step={500}
+                    value={design.charCountPerEpisode || ''}
+                    onChange={(e) => setDesign(prev => ({ ...prev, charCountPerEpisode: Number(e.target.value) || undefined }))}
+                    placeholder="例: 3000"
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+        </div>
+
+        {/* Credit estimate */}
+        {design.episodeCount && design.charCountPerEpisode && (
+          <Card className="border-indigo-400/30 bg-indigo-50/10 dark:bg-indigo-950/10">
+            <CardContent className="pt-6">
+              <h3 className="text-sm font-medium mb-2">推定クレジット消費</h3>
+              <div className="grid grid-cols-2 gap-4 text-sm">
+                <div>
+                  <p className="text-muted-foreground">通常モード（Sonnet）</p>
+                  <p className="font-bold">{design.episodeCount} x 1 = {design.episodeCount}cr</p>
+                </div>
+                <div>
+                  <p className="text-muted-foreground">高精度モード（Opus）</p>
+                  <p className="font-bold">{design.episodeCount} x 5 = {design.episodeCount * 5}cr</p>
+                </div>
+              </div>
+              {creditsRemaining !== null && (
+                <p className="text-sm mt-2">
+                  残りクレジット: <span className="font-bold">{creditsRemaining}cr</span>
+                  {creditsRemaining < (aiMode === 'premium' ? design.episodeCount * 5 : design.episodeCount) && (
+                    <span className="text-destructive ml-2">
+                      クレジットが不足しています。
+                      <a href="/settings/billing" className="underline ml-1">追加購入</a>
+                    </span>
+                  )}
+                </p>
+              )}
+            </CardContent>
+          </Card>
+        )}
+
+        {/* Finalize button */}
+        <div className="flex justify-end">
+          <Button
+            onClick={handleFinalize}
+            disabled={!design.episodeCount || !design.charCountPerEpisode || finalizing}
+            className="gap-2"
+          >
+            {finalizing ? <Loader2 className="h-4 w-4 animate-spin" /> : <ChevronRight className="h-4 w-4" />}
+            設計を確定して第1話を生成
+          </Button>
         </div>
       </div>
     );
   }
 
-  // ─── Shared chat UI (reused in desktop panel and mobile bottom sheet) ───
-  const chatMessagesUI = (
-    <>
-      {messages.map((msg, i) => (
-        <div key={i} className={cn('flex items-start gap-2', msg.role === 'user' && 'flex-row-reverse')}>
-          <div className={cn(
-            'h-7 w-7 rounded-full flex items-center justify-center flex-shrink-0',
-            msg.role === 'user' ? 'bg-primary/10' : 'bg-indigo-500/10',
-          )}>
-            {msg.role === 'user' ? (
-              <MessageSquare className="h-3.5 w-3.5 text-primary" />
-            ) : (
-              <Bot className="h-3.5 w-3.5 text-indigo-500" />
-            )}
-          </div>
-          <div className={cn(
-            'rounded-lg p-3 text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap',
-            msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50',
-          )}>
-            {msg.content}
-          </div>
-        </div>
-      ))}
-      {isStreaming && (
-        <div className="flex items-start gap-2">
-          <div className="h-7 w-7 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
-            <Bot className="h-3.5 w-3.5 text-indigo-500" />
-          </div>
-          <div className="bg-secondary/50 rounded-lg p-3 text-sm leading-relaxed max-w-[85%]">
-            {streamingText ? (
-              <p className="whitespace-pre-wrap">{streamingText}</p>
-            ) : (
-              <span className="flex gap-0.5">
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
-                <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
-              </span>
-            )}
-          </div>
-        </div>
-      )}
-      <div ref={chatEndRef} />
-    </>
-  );
-
-  const chatInputUI = (
-    <div className="flex gap-2 items-end">
-      <Textarea
-        ref={inputRef}
-        value={inputValue}
-        onChange={(e) => setInputValue(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && inputValue.trim() && !isStreaming) {
-            e.preventDefault();
-            handleRefinementSend();
-          }
-        }}
-        placeholder='修正指示を入力... 例: 「主人公の性格をもっと内向的にして」'
-        rows={2}
-        className="flex-1 resize-none text-sm"
-      />
-      <Button
-        onClick={handleRefinementSend}
-        disabled={!inputValue.trim() || isStreaming}
-        className="self-end bg-indigo-500 hover:bg-indigo-600 text-white"
-      >
-        {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-      </Button>
-    </div>
-  );
-
-  // Last assistant message preview for mobile bar
-  const lastAssistantMsg = [...messages].reverse().find(m => m.role === 'assistant');
-
-  // ─── Phase: Review ───
+  // Phase 1: Design Chat
   return (
     <div className="h-[calc(100vh-4rem)] flex flex-col">
       {/* Top bar */}
-      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b gap-2">
-        <div className="flex items-center gap-2 min-w-0">
+      <div className="flex-shrink-0 flex items-center justify-between px-4 py-2 border-b">
+        <div className="flex items-center gap-2">
           <Button variant="ghost" size="sm" onClick={() => router.push('/works/new')}>
             <ArrowLeft className="h-4 w-4" />
           </Button>
-          <h1 className="text-sm font-medium truncate">
-            {design.title || '設計書レビュー'}
-          </h1>
+          <h1 className="text-sm font-medium">編集者モード - 設計対話</h1>
         </div>
-        <div className="flex items-center gap-3 flex-shrink-0">
+        <div className="flex items-center gap-3">
           <CreditDisplay consumed={creditsConsumed} remaining={creditsRemaining} />
-          <Button
-            onClick={handleFinalize}
-            disabled={finalizing || !workId || !design.episodeCount || !design.charCountPerEpisode}
-            size="sm"
-            className="bg-indigo-500 hover:bg-indigo-600 text-white"
-          >
-            {finalizing ? (
-              <Loader2 className="h-3.5 w-3.5 animate-spin mr-1" />
-            ) : (
-              <Pen className="h-3.5 w-3.5 mr-1" />
-            )}
-            <span className="hidden sm:inline">設計を確定して執筆へ</span>
-            <span className="sm:hidden">確定</span>
-          </Button>
         </div>
       </div>
 
-      {error && (
-        <div className="px-4 py-2">
-          <div className="p-2 text-xs text-destructive bg-destructive/10 rounded-md">{error}</div>
-        </div>
-      )}
-
-      {/* Main area */}
+      {/* Main content: split pane */}
       <div className="flex-1 min-h-0 flex flex-col lg:flex-row">
-        {/* Design display (full width when chat closed, 60% when chat open) */}
-        <div className={cn('flex-1 overflow-y-auto pb-16 lg:pb-0', chatOpen && 'lg:flex-[3] lg:border-r')}>
-          <div className="p-4 max-w-3xl">
-            <DesignDisplay
-              design={design}
-              onChange={(partial) => setDesign(prev => ({ ...prev, ...partial }))}
-              onRequestRevision={handleRequestRevision}
-              highlightedKeys={highlightedKeys}
-            />
+        {/* Left: Chat */}
+        <div className="flex-1 flex flex-col min-h-0 lg:border-r">
+          <div ref={chatContainerRef} className="flex-1 overflow-y-auto p-4 space-y-3">
+            {messages.length === 0 && (
+              <div className="flex items-start gap-3">
+                <div className="h-8 w-8 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+                  <Bot className="h-4 w-4 text-indigo-500" />
+                </div>
+                <div className="bg-secondary/50 rounded-lg p-3 text-sm leading-relaxed max-w-[85%]">
+                  どんな物語を作りたいですか？ジャンル、雰囲気、テーマなど自由に教えてください。
+                </div>
+              </div>
+            )}
+            {messages.map((msg, i) => (
+              <div key={i} className={cn('flex items-start gap-3', msg.role === 'user' && 'flex-row-reverse')}>
+                <div className={cn(
+                  'h-8 w-8 rounded-full flex items-center justify-center flex-shrink-0',
+                  msg.role === 'user' ? 'bg-primary/10' : 'bg-indigo-500/10',
+                )}>
+                  {msg.role === 'user' ? (
+                    <MessageSquare className="h-4 w-4 text-primary" />
+                  ) : (
+                    <Bot className="h-4 w-4 text-indigo-500" />
+                  )}
+                </div>
+                <div className={cn(
+                  'rounded-lg p-3 text-sm leading-relaxed max-w-[85%] whitespace-pre-wrap',
+                  msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50',
+                )}>
+                  {msg.content}
+                </div>
+              </div>
+            ))}
+            {isStreaming && messages.length > 0 && messages[messages.length - 1].role === 'user' && (
+              <div className="flex items-start gap-3">
+                <div className="h-8 w-8 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
+                  <Bot className="h-4 w-4 text-indigo-500" />
+                </div>
+                <div className="bg-secondary/50 rounded-lg p-3">
+                  <span className="flex gap-0.5">
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '0ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '150ms' }} />
+                    <span className="w-1.5 h-1.5 rounded-full bg-muted-foreground/40 animate-bounce" style={{ animationDelay: '300ms' }} />
+                  </span>
+                </div>
+              </div>
+            )}
+            <div ref={chatEndRef} />
+          </div>
+
+          {error && (
+            <div className="px-4 py-2">
+              <div className="p-2 text-xs text-destructive bg-destructive/10 rounded-md">{error}</div>
+            </div>
+          )}
+
+          {/* Input */}
+          <div className="flex-shrink-0 border-t p-3">
+            <div className="flex gap-2">
+              <Textarea
+                value={inputValue}
+                onChange={(e) => setInputValue(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && inputValue.trim() && !isStreaming) {
+                    e.preventDefault();
+                    sendMessage();
+                  }
+                }}
+                placeholder="作品のビジョンを伝えましょう... (Ctrl+Enter)"
+                rows={2}
+                className="flex-1 resize-none"
+              />
+              <Button
+                onClick={sendMessage}
+                disabled={!inputValue.trim() || isStreaming}
+                className="self-end"
+              >
+                {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
           </div>
         </div>
 
-        {/* Desktop: Floating button to reopen chat when closed */}
-        {!chatOpen && (
-          <div className="hidden lg:flex items-center">
-            <button
-              onClick={() => setChatOpen(true)}
-              className="fixed right-6 bottom-6 z-40 h-12 w-12 rounded-full bg-indigo-500 hover:bg-indigo-600 text-white shadow-lg flex items-center justify-center transition-colors"
-              title="チャットを開く"
-            >
-              <MessageSquare className="h-5 w-5" />
-            </button>
+        {/* Right: Checklist */}
+        <div className="lg:w-80 flex-shrink-0 border-t lg:border-t-0 overflow-y-auto p-4 space-y-4">
+          <div>
+            <h2 className="text-sm font-medium mb-1">設計チェックリスト</h2>
+            <p className="text-xs text-muted-foreground mb-3">{filledCount} / {CHECKLIST_ITEMS.length} 完了</p>
+            <div className="w-full h-1.5 rounded-full bg-muted overflow-hidden mb-4">
+              <div
+                className="h-full rounded-full bg-indigo-500 transition-all duration-500"
+                style={{ width: `${(filledCount / CHECKLIST_ITEMS.length) * 100}%` }}
+              />
+            </div>
+            <ChecklistWithPreview design={design} />
           </div>
-        )}
 
-        {/* Desktop: Chat panel (right 40%) — only visible after user opens it */}
-        {chatOpen && (
-          <div className="hidden lg:flex lg:flex-[2] flex-col min-h-0">
-            <div className="flex-shrink-0 px-4 py-2 border-b bg-muted/30 flex items-center justify-between">
-              <p className="text-xs font-medium text-muted-foreground">対話 — 修正指示・ブラッシュアップ (5cr/回)</p>
-              <button onClick={() => setChatOpen(false)} className="text-xs text-muted-foreground hover:text-foreground">閉じる</button>
-            </div>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {chatMessagesUI}
-            </div>
-            <div className="flex-shrink-0 border-t p-3">
-              {chatInputUI}
-            </div>
-          </div>
-        )}
-
-        {/* Mobile: Persistent bottom bar (opens chat sheet) */}
-        <div className="lg:hidden fixed bottom-0 left-0 right-0 border-t bg-background z-40">
-          <button
-            onClick={() => setChatSheetOpen(true)}
-            className="w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-muted/30 transition-colors"
-          >
-            <div className="h-8 w-8 rounded-full bg-indigo-500/10 flex items-center justify-center flex-shrink-0">
-              <MessageSquare className="h-4 w-4 text-indigo-500" />
-            </div>
-            <div className="flex-1 min-w-0">
-              {isStreaming ? (
-                <p className="text-xs text-indigo-500 font-medium">AI応答中...</p>
-              ) : lastAssistantMsg ? (
-                <p className="text-xs text-muted-foreground truncate">{lastAssistantMsg.content}</p>
-              ) : (
-                <p className="text-xs text-muted-foreground">修正指示を入力...</p>
+          {/* Design preview */}
+          {filledCount > 0 && (
+            <div className="space-y-2">
+              <h3 className="text-xs font-medium text-muted-foreground">設計プレビュー</h3>
+              {design.genre && (
+                <div className="text-xs"><span className="font-medium">ジャンル:</span> {design.genre}</div>
+              )}
+              {design.theme && (
+                <div className="text-xs"><span className="font-medium">テーマ:</span> {design.theme}</div>
+              )}
+              {design.protagonist?.name && (
+                <div className="text-xs"><span className="font-medium">主人公:</span> {design.protagonist.name}</div>
+              )}
+              {(design.characters?.length ?? 0) > 0 && (
+                <div className="text-xs">
+                  <span className="font-medium">キャラ:</span>{' '}
+                  {design.characters?.map(c => c.name).filter(Boolean).join(', ')}
+                </div>
+              )}
+              {design.tone && (
+                <div className="text-xs"><span className="font-medium">トーン:</span> {design.tone}</div>
+              )}
+              {design.episodeCount && (
+                <div className="text-xs"><span className="font-medium">話数:</span> {design.episodeCount}話</div>
               )}
             </div>
-            <span className="text-[10px] text-muted-foreground/70">5cr/回</span>
-          </button>
-        </div>
+          )}
 
-        {/* Mobile: Chat bottom sheet */}
-        <BottomSheet
-          open={chatSheetOpen}
-          onClose={() => setChatSheetOpen(false)}
-          title="対話 — 修正指示・ブラッシュアップ"
-        >
-          <div className="flex flex-col" style={{ height: '70vh' }}>
-            <div className="flex-1 overflow-y-auto p-4 space-y-3">
-              {chatMessagesUI}
-            </div>
-            <div className="flex-shrink-0 border-t p-3">
-              {chatInputUI}
-            </div>
-          </div>
-        </BottomSheet>
+          {/* Transition button */}
+          {allFilled && (
+            <Button
+              onClick={() => setPhase('reviewing')}
+              className="w-full gap-2 bg-indigo-500 hover:bg-indigo-600"
+            >
+              設計完了 → レビューへ
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          )}
+        </div>
       </div>
+    </div>
+  );
+}
+
+// Sub-components
+
+function ModeSelector({ aiMode, onModeChange }: { aiMode: 'normal' | 'premium'; onModeChange: (mode: 'normal' | 'premium') => void }) {
+  return (
+    <div className="flex items-center gap-1">
+      <button
+        onClick={() => onModeChange('normal')}
+        className={cn(
+          'flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors',
+          aiMode === 'normal'
+            ? 'bg-primary/10 border-primary/30 text-primary'
+            : 'border-border text-muted-foreground hover:border-primary/30',
+        )}
+      >
+        通常 <span className="opacity-60">1cr</span>
+      </button>
+      <button
+        onClick={() => onModeChange('premium')}
+        className={cn(
+          'flex items-center gap-0.5 px-2 py-1 rounded-full text-[10px] font-medium border transition-colors',
+          aiMode === 'premium'
+            ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+            : 'border-border text-muted-foreground hover:border-amber-500/30',
+        )}
+      >
+        <Crown className="h-2.5 w-2.5" />
+        高精度 <span className="opacity-60">5cr</span>
+      </button>
     </div>
   );
 }
@@ -668,6 +794,257 @@ function CreditDisplay({ consumed, remaining }: { consumed: number; remaining: n
         <> / 残り: <span className="font-medium text-foreground">{remaining}cr</span></>
       )}
     </div>
+  );
+}
+
+function EditableSection({
+  label,
+  value,
+  onChange,
+  onRevise,
+  reviseField,
+  setReviseField,
+  reviseInstruction,
+  setReviseInstruction,
+  isRevising,
+  fieldKey,
+  multiline,
+}: {
+  label: string;
+  value: string;
+  onChange: (v: string) => void;
+  onRevise: (instruction: string) => void;
+  reviseField: string | null;
+  setReviseField: (f: string | null) => void;
+  reviseInstruction: string;
+  setReviseInstruction: (v: string) => void;
+  isRevising: boolean;
+  fieldKey: string;
+  multiline?: boolean;
+}) {
+  return (
+    <Card>
+      <CardContent className="pt-6 space-y-2">
+        <div className="flex items-center justify-between">
+          <label className="text-sm font-medium">{label}</label>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="text-xs h-7"
+            onClick={() => {
+              setReviseField(fieldKey);
+              setReviseInstruction('');
+            }}
+          >
+            <Bot className="h-3 w-3 mr-1" /> AIに修正させる
+          </Button>
+        </div>
+        {multiline ? (
+          <Textarea
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            rows={3}
+            className="text-sm"
+          />
+        ) : (
+          <Input
+            value={value}
+            onChange={(e) => onChange(e.target.value)}
+            className="text-sm"
+          />
+        )}
+        {reviseField === fieldKey && (
+          <ReviseInput
+            instruction={reviseInstruction}
+            setInstruction={setReviseInstruction}
+            onSubmit={() => onRevise(reviseInstruction)}
+            onCancel={() => setReviseField(null)}
+            isRevising={isRevising}
+          />
+        )}
+      </CardContent>
+    </Card>
+  );
+}
+
+function ReviseInput({
+  instruction,
+  setInstruction,
+  onSubmit,
+  onCancel,
+  isRevising,
+}: {
+  instruction: string;
+  setInstruction: (v: string) => void;
+  onSubmit: () => void;
+  onCancel: () => void;
+  isRevising: boolean;
+}) {
+  return (
+    <div className="flex gap-2 items-end border-t border-border/50 pt-2">
+      <Textarea
+        value={instruction}
+        onChange={(e) => setInstruction(e.target.value)}
+        placeholder="修正指示を入力..."
+        rows={2}
+        className="flex-1 text-xs resize-none"
+      />
+      <div className="flex flex-col gap-1">
+        <Button
+          size="sm"
+          onClick={onSubmit}
+          disabled={!instruction.trim() || isRevising}
+          className="h-7 text-xs"
+        >
+          {isRevising ? <Loader2 className="h-3 w-3 animate-spin" /> : '送信'}
+        </Button>
+        <Button
+          size="sm"
+          variant="ghost"
+          onClick={onCancel}
+          className="h-7 text-xs"
+        >
+          キャンセル
+        </Button>
+      </div>
+    </div>
+  );
+}
+
+function CharacterCard({
+  character,
+  label,
+  onChange,
+  onDelete,
+}: {
+  character: { name: string; role: string; personality: string; speechStyle: string };
+  label: string;
+  onChange: (updated: { name: string; role: string; personality: string; speechStyle: string }) => void;
+  onDelete?: () => void;
+}) {
+  return (
+    <div className="border border-border rounded-lg p-3 space-y-2">
+      <div className="flex items-center justify-between">
+        <span className="text-xs font-medium text-muted-foreground">{label}</span>
+        {onDelete && (
+          <Button variant="ghost" size="sm" className="h-6 w-6 p-0 text-muted-foreground hover:text-destructive" onClick={onDelete}>
+            <Trash2 className="h-3 w-3" />
+          </Button>
+        )}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        <div className="space-y-1">
+          <label className="text-[10px] text-muted-foreground">名前</label>
+          <Input
+            value={character.name}
+            onChange={(e) => onChange({ ...character, name: e.target.value })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] text-muted-foreground">役割</label>
+          <Input
+            value={character.role}
+            onChange={(e) => onChange({ ...character, role: e.target.value })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] text-muted-foreground">性格</label>
+          <Input
+            value={character.personality}
+            onChange={(e) => onChange({ ...character, personality: e.target.value })}
+            className="h-7 text-xs"
+          />
+        </div>
+        <div className="space-y-1">
+          <label className="text-[10px] text-muted-foreground">口調</label>
+          <Input
+            value={character.speechStyle}
+            onChange={(e) => onChange({ ...character, speechStyle: e.target.value })}
+            className="h-7 text-xs"
+          />
+        </div>
+      </div>
+    </div>
+  );
+}
+
+
+function getDesignValueForKey(design: DesignData, key: string): string | null {
+  switch (key) {
+    case 'genre': return design.genre || null;
+    case 'theme': return design.theme || null;
+    case 'afterReading': return design.afterReading || null;
+    case 'protagonist': {
+      const p = design.protagonist;
+      if (typeof p === 'string') return p;
+      return p?.name ? `${p.name}（${p.role || ''}）— ${p.personality || ''}` : null;
+    }
+    case 'characters': {
+      const chars = design.characters;
+      if (!chars) return null;
+      if (typeof chars === 'string') return chars;
+      if (!Array.isArray(chars) || chars.length === 0) return null;
+      return chars.map((c: any) => typeof c === 'string' ? c : `${c.name}（${c.role || ''}）`).join('、');
+    }
+    case 'worldBuilding': return design.worldBuilding || null;
+    case 'conflict': return design.conflict || null;
+    case 'plotOutline': return design.plotOutline || null;
+    case 'tone': return design.tone || null;
+    case 'episodeCount': {
+      if (!design.episodeCount) return null;
+      return `${design.episodeCount}話 × ${design.charCountPerEpisode || '?'}字`;
+    }
+    default: return null;
+  }
+}
+
+function ChecklistWithPreview({ design }: { design: DesignData }) {
+  const [expandedKey, setExpandedKey] = useState<string | null>(null);
+
+  return (
+    <ul className="space-y-1">
+      {CHECKLIST_ITEMS.map((item) => {
+        const filled = isChecklistItemFilled(design, item.key);
+        const value = getDesignValueForKey(design, item.key);
+        const isExpanded = expandedKey === item.key;
+
+        return (
+          <li key={item.key}>
+            <button
+              onClick={() => filled && setExpandedKey(isExpanded ? null : item.key)}
+              className={cn(
+                'w-full flex items-center gap-2 text-sm py-1.5 px-2 rounded-md transition-colors text-left',
+                filled ? 'hover:bg-muted cursor-pointer' : 'cursor-default',
+                isExpanded && 'bg-muted',
+              )}
+            >
+              <div className={cn(
+                'h-5 w-5 rounded-full flex items-center justify-center border transition-colors shrink-0',
+                filled ? 'bg-green-500 border-green-500 text-white' : 'border-border',
+              )}>
+                {filled && <Check className="h-3 w-3" />}
+              </div>
+              <span className={cn('flex-1', filled ? 'text-foreground' : 'text-muted-foreground')}>
+                {item.label}
+              </span>
+              {filled && (
+                <ChevronRight className={cn(
+                  'h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0',
+                  isExpanded && 'rotate-90',
+                )} />
+              )}
+            </button>
+            {isExpanded && value && (
+              <div className="ml-9 mr-2 mb-2 p-2 rounded bg-muted/50 text-xs text-muted-foreground leading-relaxed whitespace-pre-wrap animate-in fade-in slide-in-from-top-1 duration-200">
+                {value}
+              </div>
+            )}
+          </li>
+        );
+      })}
+    </ul>
   );
 }
 
