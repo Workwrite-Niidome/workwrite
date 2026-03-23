@@ -1,17 +1,12 @@
 'use client';
 
 import { BookOpen, Heart, Users, Map, List, Globe, Sparkles } from 'lucide-react';
+import { GENRE_LABELS } from '@/lib/constants';
 import type { WizardData } from './wizard-shell';
 
 interface Props {
   data: WizardData;
 }
-
-const GENRE_LABELS: Record<string, string> = {
-  fantasy: 'ファンタジー', sf: 'SF', mystery: 'ミステリー', romance: '恋愛',
-  horror: 'ホラー', literary: '文芸', adventure: '冒険', comedy: 'コメディ',
-  drama: 'ドラマ', historical: '歴史', other: 'その他',
-};
 
 const TEMPLATE_LABELS: Record<string, string> = {
   'kishotenketsu': '起承転結',

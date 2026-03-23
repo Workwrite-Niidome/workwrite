@@ -8,6 +8,7 @@ import { Badge } from '@/components/ui/badge';
 import { Loading } from '@/components/layout/loading';
 import { api, type Work, type Episode } from '@/lib/api';
 import { ArrowLeft, ChevronRight, Eye } from 'lucide-react';
+import { GENRE_LABELS } from '@/lib/constants';
 
 export default function PreviewPage() {
   const params = useParams();
@@ -51,7 +52,7 @@ export default function PreviewPage() {
             <div className="text-center space-y-3">
               <h1 className="text-3xl font-bold">{work.title}</h1>
               <p className="text-muted-foreground">{work.author?.displayName || work.author?.name}</p>
-              {work.genre && <Badge variant="secondary">{work.genre}</Badge>}
+              {work.genre && <Badge variant="secondary">{GENRE_LABELS[work.genre] || work.genre}</Badge>}
             </div>
 
             {work.synopsis && (

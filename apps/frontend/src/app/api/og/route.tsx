@@ -5,6 +5,12 @@ export const runtime = 'edge';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-db434.up.railway.app/api/v1';
 
+const GENRE_LABELS: Record<string, string> = {
+  fantasy: 'ファンタジー', sf: 'SF', mystery: 'ミステリー', romance: '恋愛',
+  horror: 'ホラー', literary: '純文学', adventure: '冒険', comedy: 'コメディ',
+  drama: 'ヒューマンドラマ', historical: '歴史', modern: '現代・日常', youth: '青春', other: 'その他',
+};
+
 function getScoreLabel(score: number): string {
   if (score >= 85) return '傑作';
   if (score >= 70) return '秀作';
@@ -62,7 +68,7 @@ export async function GET(req: NextRequest) {
       title = work.title || title;
       synopsis = work.synopsis || '';
       author = work.author?.displayName || work.author?.name || '';
-      genre = work.genre || '';
+      genre = GENRE_LABELS[work.genre] || work.genre || '';
       episodeCount = work._count?.episodes || work.episodes?.length || 0;
       if (work.qualityScore && work.qualityScore.overall) {
         overall = Math.round(work.qualityScore.overall);

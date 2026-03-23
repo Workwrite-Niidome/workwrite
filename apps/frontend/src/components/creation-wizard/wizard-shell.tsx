@@ -199,13 +199,10 @@ export function WizardShell() {
       const userTags = data.tags.split(/[,、\s]+/).filter(Boolean);
       const subGenreTags = data.subGenres || [];
       const tags = [...new Set([...subGenreTags, ...userTags])];
-      const genreLabel: Record<string, string> = {
-        fantasy: 'ファンタジー', sf: 'SF', modern: '現代', historical: '歴史・時代',
-      };
       const res = await api.createWork({
         title: data.title,
         synopsis: data.synopsis,
-        genre: genreLabel[data.genre] || data.genre,
+        genre: data.genre,
         tags,
       });
       const workId = res.data.id;

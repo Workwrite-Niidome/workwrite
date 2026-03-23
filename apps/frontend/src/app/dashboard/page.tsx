@@ -12,6 +12,7 @@ import { ScoreBadge } from '@/components/scoring/score-badge';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work } from '@/lib/api';
 import { loadDrafts, deleteDraft, type WizardDraft } from '@/lib/wizard-drafts';
+import { GENRE_LABELS } from '@/lib/constants';
 
 interface EditorModeWork {
   id: string;
@@ -303,7 +304,7 @@ export default function DashboardPage() {
                     <span>{work._count?.episodes ?? 0} エピソード</span>
                     <span><Eye className="h-3 w-3 inline mr-0.5" />{work.totalViews}</span>
                     <span>{work._count?.reviews ?? 0} レビュー</span>
-                    {work.genre && <Badge variant="outline">{work.genre}</Badge>}
+                    {work.genre && <Badge variant="outline">{GENRE_LABELS[work.genre] || work.genre}</Badge>}
                   </div>
                 </CardContent>
               </Link>

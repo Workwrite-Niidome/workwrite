@@ -10,6 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useAuth } from '@/lib/auth-context';
 import { api, type ReadingStats } from '@/lib/api';
+import { GENRE_LABELS } from '@/lib/constants';
 
 function formatReadTime(ms: number): string {
   const hours = Math.floor(ms / 3600000);
@@ -17,20 +18,6 @@ function formatReadTime(ms: number): string {
   if (hours > 0) return `${hours}時間${minutes}分`;
   return `${minutes}分`;
 }
-
-const GENRE_LABELS: Record<string, string> = {
-  fantasy: 'ファンタジー',
-  sf: 'SF',
-  mystery: 'ミステリー',
-  romance: '恋愛',
-  horror: 'ホラー',
-  literary: '純文学',
-  adventure: '冒険',
-  comedy: 'コメディ',
-  drama: 'ドラマ',
-  historical: '歴史',
-  other: 'その他',
-};
 
 export default function StatsPage() {
   const router = useRouter();
