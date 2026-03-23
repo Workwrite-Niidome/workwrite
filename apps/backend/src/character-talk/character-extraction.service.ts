@@ -70,17 +70,24 @@ export class CharacterExtractionService {
   private async extractIfNeeded(episodeId: string) {
     const episode = await this.prisma.episode.findUnique({
       where: { id: episodeId },
-      select: { id: true, title: true, content: true, extractedCharacters: true, publishedAt: true },
+      select: { id: true, workId: true, title: true, content: true, extractedCharacters: true, publishedAt: true },
     });
 
     // Skip if already extracted, unpublished, or no content
     if (!episode || episode.extractedCharacters || !episode.publishedAt) return;
     if (!episode.content || episode.content.length < 50) return;
 
+    // Get known character names to help Haiku match correctly
+    const knownCharacters = await this.prisma.storyCharacter.findMany({
+      where: { workId: episode.workId },
+      select: { name: true },
+    });
+    const knownNames = knownCharacters.map((c) => c.name);
+
     this.inFlight.add(episodeId);
     try {
-      this.logger.log(`[extraction] Starting for episode ${episodeId}, content length: ${episode.content.length}`);
-      const characters = await this.callHaiku(episode.title, episode.content);
+      this.logger.log(`[extraction] Starting for episode ${episodeId}, content length: ${episode.content.length}, known chars: ${knownNames.length}`);
+      const characters = await this.callHaiku(episode.title, episode.content, knownNames);
       this.logger.log(`[extraction] Episode ${episodeId}: Haiku returned ${characters.length} characters: ${characters.map(c => c.name).join(', ')}`);
       if (characters.length === 0) return;
       await this.prisma.episode.update({
@@ -93,7 +100,7 @@ export class CharacterExtractionService {
     }
   }
 
-  private async callHaiku(title: string, content: string): Promise<ExtractedCharacter[]> {
+  private async callHaiku(title: string, content: string, knownNames: string[] = []): Promise<ExtractedCharacter[]> {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) {
       this.logger.warn('No API key available for character extraction');
@@ -126,6 +133,11 @@ export class CharacterExtractionService {
 - 手紙・メッセージの送り主（その場にいない場合）
 - ナレーションで言及されるだけの人物
 - 既に死亡・退場しておりそのシーンに物理的にいない人物
+
+【重要】
+- 一人称の「わたし」「僕」「俺」等で語る人物も、登録名がある場合はその名前で返してください。
+- 「先生」「お兄ちゃん」等の呼称ではなく、可能な限り本名で返してください。
+${knownNames.length > 0 ? `- この作品の登録キャラクター名: ${knownNames.join('、')}。テキスト中の人物がこのリストに該当する場合、必ずこのリストの名前を使ってください。` : ''}
 
 JSON配列のみを返してください。説明は不要です。
 形式: [{"name": "キャラ名", "role": "主人公/ヒロイン/仲間/敵/脇役 等"}]`,

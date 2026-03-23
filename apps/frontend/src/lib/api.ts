@@ -659,8 +659,11 @@ class ApiClient {
     return this.request<{ success: boolean }>('/billing/cancel', { method: 'POST' });
   }
 
-  async purchaseCredits() {
-    return this.request<{ url: string }>('/billing/credits/purchase', { method: 'POST' });
+  async purchaseCredits(tier?: 'free_500' | 'free_1000') {
+    return this.request<{ url: string }>('/billing/credits/purchase', {
+      method: 'POST',
+      body: JSON.stringify(tier ? { tier } : {}),
+    });
   }
 
   async getTransactions(page?: number, limit?: number) {
@@ -1081,8 +1084,9 @@ class ApiClient {
   }
 
   // Character Talk
-  async getCharacterTalkCharacters(workId: string) {
-    return this.request<{ data: TalkableCharacter[] }>(`/ai/character-talk/${workId}/characters`);
+  async getCharacterTalkCharacters(workId: string, episodeId?: string) {
+    const qs = episodeId ? `?episodeId=${episodeId}` : '';
+    return this.request<{ data: TalkableCharacter[] }>(`/ai/character-talk/${workId}/characters${qs}`);
   }
 
   async getCharacterTalkConversations(workId: string) {
@@ -1516,6 +1520,7 @@ export interface AdminUser {
   createdAt: string;
   _count: { works: number; reviews: number };
   subscription?: { plan: string; status: string; grantedBy?: string | null } | null;
+  creditBalance?: { balance: number; monthlyBalance: number; purchasedBalance: number } | null;
 }
 
 export interface AdminWork {

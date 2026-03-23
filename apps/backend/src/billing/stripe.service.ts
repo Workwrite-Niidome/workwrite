@@ -27,6 +27,8 @@ export class StripeService {
   private creditPurchasePrices: Record<string, CreditPurchaseConfig> = {
     standard: { priceId: '', amount: 100, priceJpy: 980 },
     pro: { priceId: '', amount: 100, priceJpy: 880 },
+    free_500: { priceId: '', amount: 50, priceJpy: 500 },
+    free_1000: { priceId: '', amount: 100, priceJpy: 1000 },
   };
 
   constructor(
@@ -46,8 +48,12 @@ export class StripeService {
       // Credit purchase prices (per plan)
       const creditStd = this.config.get<string>('STRIPE_CREDIT_PURCHASE_STANDARD_PRICE_ID');
       const creditPro = this.config.get<string>('STRIPE_CREDIT_PURCHASE_PRO_PRICE_ID');
+      const creditFree500 = this.config.get<string>('STRIPE_CREDIT_PURCHASE_FREE_500_PRICE_ID');
+      const creditFree1000 = this.config.get<string>('STRIPE_CREDIT_PURCHASE_FREE_1000_PRICE_ID');
       if (creditStd) this.creditPurchasePrices.standard.priceId = creditStd;
       if (creditPro) this.creditPurchasePrices.pro.priceId = creditPro;
+      if (creditFree500) this.creditPurchasePrices.free_500.priceId = creditFree500;
+      if (creditFree1000) this.creditPurchasePrices.free_1000.priceId = creditFree1000;
     } else {
       this.logger.warn('STRIPE_SECRET_KEY not set — Stripe features disabled');
     }
@@ -122,16 +128,27 @@ export class StripeService {
   async createCreditPurchaseSession(
     userId: string,
     email: string,
+    tier?: 'free_500' | 'free_1000',
   ): Promise<{ url: string }> {
     const stripe = this.ensureStripe();
     const customerId = await this.getOrCreateCustomer(userId, email);
 
-    // Determine price based on user's current plan
+    // Determine price based on user's current plan and requested tier
     const sub = await this.prisma.subscription.findUnique({
       where: { userId },
     });
-    const userPlan = sub?.status === 'active' ? sub.plan : 'standard';
-    const purchaseConfig = this.creditPurchasePrices[userPlan] || this.creditPurchasePrices.standard;
+    const isSubscribed = sub?.status === 'active';
+    let purchaseKey: string;
+    if (tier && !isSubscribed) {
+      // Free user selecting a specific tier
+      purchaseKey = tier;
+    } else if (isSubscribed) {
+      purchaseKey = sub!.plan;
+    } else {
+      // Free user without tier specified — default to free_1000
+      purchaseKey = 'free_1000';
+    }
+    const purchaseConfig = this.creditPurchasePrices[purchaseKey] || this.creditPurchasePrices.free_1000;
 
     if (!purchaseConfig.priceId) {
       throw new BadRequestException('クレジット追加購入の価格が設定されていません。管理者にお問い合わせください。');

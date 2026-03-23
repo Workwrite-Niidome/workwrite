@@ -11,7 +11,7 @@ import {
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { BillingService } from './billing.service';
 import { StripeService } from './stripe.service';
-import { CreateCheckoutDto, GetTransactionsDto } from './dto/billing.dto';
+import { CreateCheckoutDto, GetTransactionsDto, PurchaseCreditsDto } from './dto/billing.dto';
 import { CreditService } from './credit.service';
 
 @Controller('billing')
@@ -56,10 +56,11 @@ export class BillingController {
   }
 
   @Post('credits/purchase')
-  async purchaseCredits(@Req() req: any) {
+  async purchaseCredits(@Req() req: any, @Body() dto: PurchaseCreditsDto) {
     return this.stripeService.createCreditPurchaseSession(
       req.user.id,
       req.user.email,
+      dto.tier,
     );
   }
 

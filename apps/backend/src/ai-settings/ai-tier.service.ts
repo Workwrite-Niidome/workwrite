@@ -29,6 +29,8 @@ const LIGHT_FEATURES = new Set([
 
 // Free tier weekly limit for AI reading companion
 const FREE_WEEKLY_COMPANION_LIMIT = 5;
+// Paid tier daily limit for AI reading companion (prevent API cost runaway)
+const PAID_DAILY_COMPANION_LIMIT = 50;
 
 @Injectable()
 export class AiTierService {
@@ -139,28 +141,46 @@ export class AiTierService {
     return tier;
   }
 
-  /** Check if free user can use companion (weekly limit) */
+  /** Check if user can use companion (weekly limit for free, daily limit for paid) */
   async assertCanUseCompanion(userId: string): Promise<AiTier> {
     const tier = await this.getUserTier(userId);
 
-    if (tier.plan !== 'free') return tier;
+    if (tier.plan === 'free') {
+      // Free tier: check weekly companion usage
+      const weekAgo = new Date();
+      weekAgo.setDate(weekAgo.getDate() - 7);
 
-    // Free tier: check weekly companion usage
-    const weekAgo = new Date();
-    weekAgo.setDate(weekAgo.getDate() - 7);
+      const weeklyUsage = await this.prisma.aiUsageLog.count({
+        where: {
+          userId,
+          feature: { in: ['companion', 'book_companion', 'character_talk'] },
+          createdAt: { gte: weekAgo },
+        },
+      });
 
-    const weeklyUsage = await this.prisma.aiUsageLog.count({
-      where: {
-        userId,
-        feature: { in: ['companion', 'book_companion', 'character_talk'] },
-        createdAt: { gte: weekAgo },
-      },
-    });
+      if (weeklyUsage >= FREE_WEEKLY_COMPANION_LIMIT) {
+        throw new ForbiddenException(
+          '無料プランのAI読書コンパニオンの週間使用回数の上限（5回）に達しました。プランをアップグレードすると無制限にご利用いただけます。',
+        );
+      }
+    } else {
+      // Paid tier: daily limit to prevent API cost runaway
+      const todayStart = new Date();
+      todayStart.setHours(0, 0, 0, 0);
 
-    if (weeklyUsage >= FREE_WEEKLY_COMPANION_LIMIT) {
-      throw new ForbiddenException(
-        '無料プランのAI読書コンパニオンの週間使用回数の上限（5回）に達しました。プランをアップグレードすると無制限にご利用いただけます。',
-      );
+      const dailyUsage = await this.prisma.aiUsageLog.count({
+        where: {
+          userId,
+          feature: { in: ['companion', 'book_companion'] },
+          createdAt: { gte: todayStart },
+        },
+      });
+
+      if (dailyUsage >= PAID_DAILY_COMPANION_LIMIT) {
+        throw new ForbiddenException(
+          '本日のAI読書コンパニオンの使用回数上限（50回/日）に達しました。明日またご利用ください。',
+        );
+      }
     }
 
     return tier;

@@ -104,6 +104,7 @@ export default function AdminUsersPage() {
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Email</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Role</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">プラン</th>
+                <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">クレジット</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Works</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Status</th>
                 <th className="text-left px-4 py-3 font-medium text-xs text-muted-foreground uppercase tracking-wider">Actions</th>
@@ -113,7 +114,7 @@ export default function AdminUsersPage() {
               {loading ? (
                 Array.from({ length: 5 }).map((_, i) => (
                   <tr key={i} className="border-b border-border">
-                    {Array.from({ length: 7 }).map((_, j) => (
+                    {Array.from({ length: 8 }).map((_, j) => (
                       <td key={j} className="px-4 py-3"><Skeleton className="h-4 w-20" /></td>
                     ))}
                   </tr>
@@ -161,6 +162,18 @@ export default function AdminUsersPage() {
                       </select>
                       {user.subscription?.plan === 'premium' && <Crown className="inline h-3 w-3 ml-1 text-amber-500" />}
                       {user.subscription?.plan === 'standard' && <Star className="inline h-3 w-3 ml-1 text-blue-500" />}
+                    </td>
+                    <td className="px-4 py-3">
+                      {user.creditBalance ? (
+                        <div className="text-xs">
+                          <span className="font-medium">{user.creditBalance.balance}cr</span>
+                          <span className="text-muted-foreground ml-1">
+                            (月{user.creditBalance.monthlyBalance} / 購入{user.creditBalance.purchasedBalance})
+                          </span>
+                        </div>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">-</span>
+                      )}
                     </td>
                     <td className="px-4 py-3 text-muted-foreground">{user._count.works}</td>
                     <td className="px-4 py-3">

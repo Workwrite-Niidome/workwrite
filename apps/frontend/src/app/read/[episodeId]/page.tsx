@@ -750,7 +750,7 @@ export default function ReaderPage() {
       {isMobile ? (
         <BottomSheet open={showCompanion} onClose={() => setShowCompanion(false)} title="キャラクタートーク">
           <div className="h-[60vh]">
-            <CharacterTalkChat workId={episode.workId} />
+            <CharacterTalkChat workId={episode.workId} episodeId={episodeId} />
           </div>
         </BottomSheet>
       ) : showCompanion ? (
@@ -762,7 +762,7 @@ export default function ReaderPage() {
             </Button>
           </div>
           <div className="flex-1 overflow-hidden">
-            <CharacterTalkChat workId={episode.workId} />
+            <CharacterTalkChat workId={episode.workId} episodeId={episodeId} />
           </div>
         </div>
       ) : null}

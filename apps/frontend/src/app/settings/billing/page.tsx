@@ -113,9 +113,9 @@ export default function BillingPage() {
     setCancelLoading(false);
   }
 
-  async function handlePurchaseCredits() {
+  async function handlePurchaseCredits(tier?: 'free_500' | 'free_1000') {
     try {
-      const res = await api.purchaseCredits();
+      const res = await api.purchaseCredits(tier);
       const url = (res as any)?.url ?? (res as any)?.data?.url;
       if (url) window.location.href = url;
     } catch (err: any) {
@@ -229,24 +229,49 @@ export default function BillingPage() {
         })}
       </div>
 
-      {/* Credit Purchase (Standard/Pro only) */}
-      {currentPlan !== 'free' && (
-        <Card className="mb-8">
-          <CardContent className="pt-6">
+      {/* Credit Purchase */}
+      <Card className="mb-8">
+        <CardContent className="pt-6">
+          {currentPlan !== 'free' ? (
             <div className="flex items-center justify-between">
               <div>
-                <p className="text-sm font-medium">{'\u30AF\u30EC\u30B8\u30C3\u30C8\u8FFD\u52A0\u8CFC\u5165'}</p>
+                <p className="text-sm font-medium">{'クレジット追加購入'}</p>
                 <p className="text-xs text-muted-foreground mt-0.5">
-                  100cr = {currentPlan === 'pro' ? '\u00A5880' : '\u00A5980'}
+                  100cr = {currentPlan === 'pro' ? '¥880' : '¥980'}
                 </p>
               </div>
-              <Button size="sm" onClick={handlePurchaseCredits}>
-                {'\u8CFC\u5165\u3059\u308B'}
+              <Button size="sm" onClick={() => handlePurchaseCredits()}>
+                {'購入する'}
               </Button>
             </div>
-          </CardContent>
-        </Card>
-      )}
+          ) : (
+            <div>
+              <p className="text-sm font-medium mb-1">{'クレジット購入'}</p>
+              <p className="text-xs text-muted-foreground mb-4">
+                {'購入したクレジットは有効期限なし。サブスク会員はさらにお得に購入できます。'}
+              </p>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  onClick={() => handlePurchaseCredits('free_500')}
+                  className="rounded-lg border border-border p-4 text-left hover:border-foreground transition-colors"
+                >
+                  <p className="text-lg font-serif font-medium">¥500</p>
+                  <p className="text-sm text-muted-foreground">50cr</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">¥10 / cr</p>
+                </button>
+                <button
+                  onClick={() => handlePurchaseCredits('free_1000')}
+                  className="rounded-lg border border-border p-4 text-left hover:border-foreground transition-colors"
+                >
+                  <p className="text-lg font-serif font-medium">¥1,000</p>
+                  <p className="text-sm text-muted-foreground">100cr</p>
+                  <p className="text-[10px] text-muted-foreground mt-1">¥10 / cr</p>
+                </button>
+              </div>
+            </div>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Transaction History */}
       <Card className="mb-8">
