@@ -396,9 +396,9 @@ ${workText}`;
   }
 
   /**
-   * Get characters available for talk.
-   * Shows ONLY characters from the reader's most recently read episode.
-   * This keeps the experience immersive — dead/absent characters don't linger.
+   * Get characters available for talk from the reader's most recently read episode.
+   * Priority: episodeAnalysis.characters (free) → extractedCharacters (Haiku fallback).
+   * Only characters with StoryCharacter settings are talkable.
    */
   async getAvailableCharacters(userId: string, workId: string) {
     const [work, allCharacters] = await Promise.all([
@@ -407,7 +407,12 @@ ${workText}`;
         select: {
           episodes: {
             where: { publishedAt: { not: null } },
-            select: { id: true, orderIndex: true, extractedCharacters: true },
+            select: {
+              id: true,
+              orderIndex: true,
+              extractedCharacters: true,
+              aiAnalysis: { select: { characters: true } },
+            },
             orderBy: { orderIndex: 'asc' },
           },
         },
@@ -421,14 +426,7 @@ ${workText}`;
 
     if (!work) throw new NotFoundException('Work not found');
 
-    // If no extraction data exists yet, trigger batch extraction
-    const hasAnyExtraction = work.episodes.some((ep) => ep.extractedCharacters != null);
-    if (!hasAnyExtraction) {
-      this.characterExtraction.triggerWorkExtraction(workId);
-      return [];
-    }
-
-    // Find the most recently read episode (highest orderIndex with reading progress)
+    // Find the most recently read episode
     const progress = await this.prisma.readingProgress.findMany({
       where: { userId, workId },
       select: { episodeId: true },
@@ -444,41 +442,40 @@ ${workText}`;
       }
     }
 
-    // No reading progress — nothing to show
     if (!latestReadEpisode) {
       return [];
     }
 
-    // Get characters from that episode only
-    const chars = latestReadEpisode.extractedCharacters as any[] | null;
-    if (!Array.isArray(chars) || chars.length === 0) {
-      // Not yet extracted — trigger extraction for this episode and return empty for now
-      this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
-      return [];
+    // Priority 1: episodeAnalysis.characters (already available from scoring, free)
+    const analysisChars = latestReadEpisode.aiAnalysis?.characters as any[] | null;
+    if (Array.isArray(analysisChars) && analysisChars.length > 0) {
+      const names = new Set(analysisChars.map((c: any) => c.name).filter(Boolean));
+      return this.matchStoryCharacters(allCharacters, names);
     }
 
-    const currentNames = new Set(chars.map((c: any) => c.name).filter(Boolean));
+    // Priority 2: extractedCharacters (Haiku lightweight extraction)
+    const extractedChars = latestReadEpisode.extractedCharacters as any[] | null;
+    if (Array.isArray(extractedChars) && extractedChars.length > 0) {
+      const names = new Set(extractedChars.map((c: any) => c.name).filter(Boolean));
+      return this.matchStoryCharacters(allCharacters, names);
+    }
 
-    // Match against StoryCharacter (fuzzy: substring match)
-    const matched = allCharacters.filter((c) => {
-      for (const name of currentNames) {
+    // Neither exists — trigger lightweight extraction, return empty for now
+    this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
+    return [];
+  }
+
+  /** Match extracted character names against StoryCharacter settings (fuzzy) */
+  private matchStoryCharacters(
+    allCharacters: { id: string; name: string; role: string; personality: string | null; speechStyle: string | null }[],
+    names: Set<string>,
+  ) {
+    return allCharacters.filter((c) => {
+      for (const name of names) {
         if (c.name === name || c.name.includes(name) || name.includes(c.name)) return true;
       }
       return false;
     });
-
-    // If StoryCharacter has no matches, build from extracted data directly
-    if (matched.length === 0) {
-      return [...currentNames].map((name) => ({
-        id: `extracted:${name}`,
-        name,
-        role: '登場人物',
-        personality: null,
-        speechStyle: null,
-      }));
-    }
-
-    return matched;
   }
 
   /**
