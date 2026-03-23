@@ -266,7 +266,7 @@ export default function WorkDetailPage() {
                   <span className="text-border">·</span>
                   <span>拍手 {workReactions.totalClaps.toLocaleString()}</span>
                 </div>
-                {Object.keys(workReactions.emotions).length > 0 && (
+                {workReactions.emotions && Object.keys(workReactions.emotions).length > 0 && (
                   <div className="flex flex-wrap gap-2">
                     {Object.entries(workReactions.emotions)
                       .sort(([, a], [, b]) => b - a)
@@ -281,7 +281,7 @@ export default function WorkDetailPage() {
                   </div>
                 )}
                 {/* Episode reaction highlights */}
-                {workReactions.byEpisode.filter(e => e.totalClaps > 0).length > 0 && (
+                {workReactions.byEpisode?.filter(e => e.totalClaps > 0).length > 0 && (
                   <div className="space-y-1 pt-1">
                     <p className="text-xs text-muted-foreground">話ごとの反応</p>
                     {workReactions.byEpisode
