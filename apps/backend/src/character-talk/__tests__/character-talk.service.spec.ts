@@ -524,13 +524,13 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
     });
   });
 
-  // ─── 5. Priority 1: episodeAnalysis.characters ────────────────────────────
+  // ─── 5. Priority: extractedCharacters over aiAnalysis ──────────────────
 
-  describe('when aiAnalysis.characters is present', () => {
-    it('returns matched StoryCharacters from aiAnalysis (priority 1)', async () => {
+  describe('when both extractedCharacters and aiAnalysis are present', () => {
+    it('uses extractedCharacters (priority 1) over aiAnalysis', async () => {
       const ep = makeEpisode('ep-1', 1, {
+        extractedCharacters: [{ name: 'Charlie' }],
         aiAnalysis: { characters: [{ name: 'Alice' }, { name: 'Bob' }] },
-        extractedCharacters: [{ name: 'Charlie' }], // should be ignored
       });
       const alice = makeChar('c1', 'Alice');
       const charlie = makeChar('c2', 'Charlie');
@@ -541,11 +541,13 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      // Alice matches; Charlie is in extractedChars only, not aiAnalysis → excluded
-      expect(result).toEqual([alice]);
+      // Charlie from extractedCharacters; Alice from aiAnalysis is ignored
+      expect(result).toEqual([charlie]);
     });
+  });
 
-    it('does not call triggerIfNeeded when aiAnalysis data is present', async () => {
+  describe('when only aiAnalysis is present (fallback)', () => {
+    it('uses aiAnalysis and triggers extraction for future accuracy', async () => {
       const ep = makeEpisode('ep-1', 1, {
         aiAnalysis: { characters: [{ name: 'Alice' }] },
       });
@@ -554,9 +556,10 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
       prisma.storyCharacter.findMany.mockResolvedValue([makeChar('c1', 'Alice')]);
       prisma.readingProgress.findMany.mockResolvedValue([{ episodeId: 'ep-1' }]);
 
-      await service.getAvailableCharacters(USER_ID, WORK_ID);
+      const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(extraction.triggerIfNeeded).not.toHaveBeenCalled();
+      expect(result).toEqual([makeChar('c1', 'Alice')]);
+      expect(extraction.triggerIfNeeded).toHaveBeenCalledWith('ep-1');
     });
   });
 
