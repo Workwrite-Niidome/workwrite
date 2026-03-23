@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Delete, Param, Body, Res, UseGuards } from '@nestjs/common';
+import { Controller, Post, Get, Delete, Param, Body, Query, Res, UseGuards } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { CharacterTalkService } from './character-talk.service';
@@ -70,8 +70,9 @@ export class CharacterTalkController {
   getAvailableCharacters(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
+    @Query('episodeId') episodeId?: string,
   ) {
-    return this.characterTalkService.getAvailableCharacters(userId, workId);
+    return this.characterTalkService.getAvailableCharacters(userId, workId, episodeId);
   }
 
   @Get(':workId/conversations')

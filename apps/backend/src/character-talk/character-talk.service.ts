@@ -416,7 +416,7 @@ ${workText}`;
    * Priority: episodeAnalysis.characters (free) → extractedCharacters (Haiku fallback).
    * Only characters with StoryCharacter settings are talkable.
    */
-  async getAvailableCharacters(userId: string, workId: string) {
+  async getAvailableCharacters(userId: string, workId: string, episodeId?: string) {
     const [work, allCharacters] = await Promise.all([
       this.prisma.work.findUnique({
         where: { id: workId },
@@ -444,47 +444,55 @@ ${workText}`;
     if (!work) throw new NotFoundException('Work not found');
     if (!work.enableCharacterTalk) return [];
 
-    // Find the most recently read episode
-    const progress = await this.prisma.readingProgress.findMany({
-      where: { userId, workId },
-      select: { episodeId: true },
-    });
-    const readEpisodeIds = new Set(progress.map((p) => p.episodeId));
+    // Use specified episode, or fall back to most recently read
+    let targetEpisode: typeof work.episodes[number] | null = null;
 
-    let latestReadEpisode: typeof work.episodes[number] | null = null;
-    for (const ep of work.episodes) {
-      if (readEpisodeIds.has(ep.id)) {
-        if (!latestReadEpisode || ep.orderIndex > latestReadEpisode.orderIndex) {
-          latestReadEpisode = ep;
+    if (episodeId) {
+      targetEpisode = work.episodes.find((ep) => ep.id === episodeId) || null;
+    }
+
+    if (!targetEpisode) {
+      // Fall back to most recently read episode
+      const progress = await this.prisma.readingProgress.findMany({
+        where: { userId, workId },
+        select: { episodeId: true },
+      });
+      const readEpisodeIds = new Set(progress.map((p) => p.episodeId));
+
+      for (const ep of work.episodes) {
+        if (readEpisodeIds.has(ep.id)) {
+          if (!targetEpisode || ep.orderIndex > targetEpisode.orderIndex) {
+            targetEpisode = ep;
+          }
         }
       }
     }
 
-    if (!latestReadEpisode) {
+    if (!targetEpisode) {
       return [];
     }
 
     // Priority 1: extractedCharacters (dedicated Haiku extraction — most accurate)
-    const extractedChars = latestReadEpisode.extractedCharacters as any[] | null;
+    const extractedChars = targetEpisode.extractedCharacters as any[] | null;
     if (Array.isArray(extractedChars) && extractedChars.length > 0) {
       const names = new Set(extractedChars.map((c: any) => c.name).filter(Boolean));
       const matched = this.matchStoryCharacters(allCharacters, names);
-      this.logger.log(`[charTalk] ep=${latestReadEpisode.id} extracted=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] matched=${matched.length}`);
+      this.logger.log(`[charTalk] ep=${targetEpisode.id} extracted=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] matched=${matched.length}`);
       return matched;
     }
 
     // Priority 2: episodeAnalysis.characters (from scoring, free fallback)
-    const analysisChars = latestReadEpisode.aiAnalysis?.characters as any[] | null;
+    const analysisChars = targetEpisode.aiAnalysis?.characters as any[] | null;
     if (Array.isArray(analysisChars) && analysisChars.length > 0) {
       const names = new Set(analysisChars.map((c: any) => c.name).filter(Boolean));
-      this.logger.log(`[charTalk] ep=${latestReadEpisode.id} analysis=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] (fallback)`);
-      this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
+      this.logger.log(`[charTalk] ep=${targetEpisode.id} analysis=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] (fallback)`);
+      this.characterExtraction.triggerIfNeeded(targetEpisode.id);
       return this.matchStoryCharacters(allCharacters, names);
     }
 
     // Neither exists — trigger extraction, return empty for now
-    this.logger.log(`[charTalk] ep=${latestReadEpisode.id} no character data, triggering extraction`);
-    this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
+    this.logger.log(`[charTalk] ep=${targetEpisode.id} no character data, triggering extraction`);
+    this.characterExtraction.triggerIfNeeded(targetEpisode.id);
     return [];
   }
 

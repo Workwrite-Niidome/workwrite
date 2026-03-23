@@ -10,9 +10,10 @@ import { useAuth } from '@/lib/auth-context';
 
 interface CharacterTalkChatProps {
   workId: string;
+  episodeId?: string;
 }
 
-export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
+export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps) {
   const { isAuthenticated } = useAuth();
   const [phase, setPhase] = useState<'select' | 'chat'>('select');
   const [mode, setMode] = useState<'companion' | 'character'>('companion');
@@ -35,7 +36,7 @@ export function CharacterTalkChat({ workId }: CharacterTalkChatProps) {
     }
 
     Promise.all([
-      api.getCharacterTalkCharacters(workId).catch(() => ({ data: [] })),
+      api.getCharacterTalkCharacters(workId, episodeId).catch(() => ({ data: [] })),
       api.getAiStatus().catch(() => ({ data: { available: false, model: '', tier: undefined } })),
       api.getCharacterTalkConversations(workId).catch(() => ({ data: [] })),
     ]).then(([charsRes, statusRes, convsRes]) => {

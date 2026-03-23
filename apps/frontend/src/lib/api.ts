@@ -1084,8 +1084,9 @@ class ApiClient {
   }
 
   // Character Talk
-  async getCharacterTalkCharacters(workId: string) {
-    return this.request<{ data: TalkableCharacter[] }>(`/ai/character-talk/${workId}/characters`);
+  async getCharacterTalkCharacters(workId: string, episodeId?: string) {
+    const qs = episodeId ? `?episodeId=${episodeId}` : '';
+    return this.request<{ data: TalkableCharacter[] }>(`/ai/character-talk/${workId}/characters${qs}`);
   }
 
   async getCharacterTalkConversations(workId: string) {
