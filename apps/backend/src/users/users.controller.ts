@@ -78,9 +78,11 @@ export class UsersController {
     @UploadedFile() file: Express.Multer.File,
   ) {
     if (!file) throw new BadRequestException('ファイルが選択されていません');
-    const baseUrl = process.env.API_BASE_URL || `http://localhost:${process.env.PORT || 3001}`;
+    const baseUrl = process.env.API_BASE_URL
+      || (process.env.RAILWAY_PUBLIC_DOMAIN ? `https://${process.env.RAILWAY_PUBLIC_DOMAIN}` : null)
+      || `http://localhost:${process.env.PORT || 3001}`;
     const avatarUrl = `${baseUrl}/uploads/avatars/${file.filename}`;
-    return this.usersService.updateProfile(userId, { avatarUrl });
+    return this.usersService.updateAvatar(userId, avatarUrl);
   }
 
   @Delete('me')
