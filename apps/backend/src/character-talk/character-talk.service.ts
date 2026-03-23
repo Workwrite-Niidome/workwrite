@@ -468,21 +468,32 @@ ${workText}`;
     const extractedChars = latestReadEpisode.extractedCharacters as any[] | null;
     if (Array.isArray(extractedChars) && extractedChars.length > 0) {
       const names = new Set(extractedChars.map((c: any) => c.name).filter(Boolean));
-      return this.matchStoryCharacters(allCharacters, names);
+      const matched = this.matchStoryCharacters(allCharacters, names);
+      this.logger.log(`[charTalk] ep=${latestReadEpisode.id} extracted=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] matched=${matched.length}`);
+      return matched;
     }
 
     // Priority 2: episodeAnalysis.characters (from scoring, free fallback)
     const analysisChars = latestReadEpisode.aiAnalysis?.characters as any[] | null;
     if (Array.isArray(analysisChars) && analysisChars.length > 0) {
       const names = new Set(analysisChars.map((c: any) => c.name).filter(Boolean));
-      // Also trigger dedicated extraction for future accuracy
+      this.logger.log(`[charTalk] ep=${latestReadEpisode.id} analysis=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] (fallback)`);
       this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
       return this.matchStoryCharacters(allCharacters, names);
     }
 
     // Neither exists — trigger extraction, return empty for now
+    this.logger.log(`[charTalk] ep=${latestReadEpisode.id} no character data, triggering extraction`);
     this.characterExtraction.triggerIfNeeded(latestReadEpisode.id);
     return [];
+  }
+
+  /** Normalize a name for matching: strip spaces, parenthetical readings, punctuation */
+  private normalizeName(name: string): string {
+    return name
+      .replace(/[（(][^）)]*[）)]/g, '') // Remove parenthetical readings e.g. （あやせ うた）
+      .replace(/[\s　・]/g, '')           // Remove spaces, fullwidth spaces, middle dots
+      .trim();
   }
 
   /** Match extracted character names against StoryCharacter settings (fuzzy) */
@@ -490,9 +501,20 @@ ${workText}`;
     allCharacters: { id: string; name: string; role: string; personality: string | null; speechStyle: string | null }[],
     names: Set<string>,
   ) {
+    const normalizedNames = [...names].map((n) => this.normalizeName(n));
+
     return allCharacters.filter((c) => {
-      for (const name of names) {
-        if (c.name === name || c.name.includes(name) || name.includes(c.name)) return true;
+      const normalizedChar = this.normalizeName(c.name);
+
+      for (let i = 0; i < normalizedNames.length; i++) {
+        const extractedName = normalizedNames[i];
+        const rawName = [...names][i];
+        // Exact match (original or normalized)
+        if (c.name === rawName || normalizedChar === extractedName) return true;
+        // Substring match (original)
+        if (c.name.includes(rawName) || rawName.includes(c.name)) return true;
+        // Substring match (normalized)
+        if (normalizedChar.includes(extractedName) || extractedName.includes(normalizedChar)) return true;
       }
       return false;
     });
