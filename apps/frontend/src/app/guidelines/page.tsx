@@ -33,6 +33,22 @@ export default function GuidelinesPage() {
         </ul>
       </section>
 
+      <section className="mb-8">
+        <h2 className="text-xl font-semibold mb-3">レーティングについて</h2>
+        <p className="text-muted-foreground leading-relaxed mb-3">
+          Workwriteでは作品の対象年齢に応じたレーティングを設定できます。
+          ただし、<strong className="text-destructive">アダルト（R18）コンテンツの投稿は一切禁止</strong>です。
+        </p>
+        <ul className="space-y-2 text-muted-foreground">
+          <li><strong className="text-foreground">全年齢</strong> - どなたでも安心して読める内容</li>
+          <li><strong className="text-foreground">R15</strong> - 軽度の暴力表現・恋愛描写を含む作品。15歳以上推奨</li>
+        </ul>
+        <p className="text-sm text-destructive/80 mt-3">
+          性的な描写・過度にグロテスクな表現を含む作品は掲載できません。
+          違反が確認された場合、作品の非公開化またはアカウント停止の対象となります。
+        </p>
+      </section>
+
       <section>
         <h2 className="text-xl font-semibold mb-3">AIスコアリングについて</h2>
         <p className="text-muted-foreground leading-relaxed">
