@@ -628,7 +628,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               <p className="text-xs font-medium text-muted-foreground">
                 生成する文字数: <span className="text-foreground">{charCount.toLocaleString()}字</span>
               </p>
-              <input type="range" min={300} max={3000} step={100} value={charCount}
+              <input type="range" min={300} max={5000} step={100} value={charCount}
                 onChange={(e) => setCharCount(Number(e.target.value))} className="w-full h-1.5 accent-foreground" />
               <div className="flex justify-between text-[10px] text-muted-foreground"><span>短め</span><span>長め</span></div>
             </div>
@@ -651,6 +651,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               >
                 <FileText className="h-5 w-5 text-primary" />
                 <span className="text-xs font-medium">章の書き出し</span>
+                <span className="text-[10px] text-muted-foreground">{charCount.toLocaleString()}字</span>
               </button>
               <button
                 onClick={() => handleQuickAction('continue-writing')}
@@ -659,6 +660,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               >
                 <PenLine className="h-5 w-5 text-primary" />
                 <span className="text-xs font-medium">続きを書く</span>
+                <span className="text-[10px] text-muted-foreground">{charCount.toLocaleString()}字</span>
               </button>
               <button
                 onClick={() => handleQuickAction('proofread')}
