@@ -58,7 +58,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     slug: string;
     vars: Record<string, string>;
     aiMode: AiMode;
-    estimate: { credits: number; balance: { total: number }; isLightFeature: boolean };
+    estimate: { credits: number; balance: { total: number }; isLightFeature: boolean; inputChars: number; outputTokens: number };
     followUpMessage?: string;
   } | null>(null);
   const [estimatingCost, setEstimatingCost] = useState(false);
@@ -328,7 +328,13 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           slug,
           vars,
           aiMode,
-          estimate: { credits: res.estimate.credits, balance: res.balance, isLightFeature: false },
+          estimate: {
+            credits: res.estimate.credits,
+            balance: res.balance,
+            isLightFeature: false,
+            inputChars: res.estimate.breakdown.inputChars,
+            outputTokens: res.estimate.breakdown.estimatedOutputTokens,
+          },
         });
       }
     } catch (e: any) {
@@ -361,7 +367,13 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           slug: currentSlug || 'free-prompt',
           vars,
           aiMode,
-          estimate: { credits: res.estimate.credits, balance: res.balance, isLightFeature: false },
+          estimate: {
+            credits: res.estimate.credits,
+            balance: res.balance,
+            isLightFeature: false,
+            inputChars: res.estimate.breakdown.inputChars,
+            outputTokens: res.estimate.breakdown.estimatedOutputTokens,
+          },
           followUpMessage: msg,
         });
       }
@@ -552,9 +564,15 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         {pendingAction && (
           <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 space-y-2">
             <p className="text-xs font-medium">コスト確認</p>
-            <div className="text-xs text-muted-foreground">
-              消費クレジット: <span className="font-bold text-foreground">{pendingAction.estimate.credits}cr</span>
-              <span className="ml-2">（残高: {pendingAction.estimate.balance.total}cr）</span>
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              <p>
+                入力: 約{Math.round(pendingAction.estimate.inputChars / 1000 * 10) / 10}K文字
+                {' / '}生成: 約{Math.round(pendingAction.estimate.outputTokens / 2000 * 10) / 10}K文字
+              </p>
+              <p>
+                消費クレジット: <span className="font-bold text-foreground">{pendingAction.estimate.credits}cr</span>
+                <span className="ml-2">（残高: {pendingAction.estimate.balance.total}cr）</span>
+              </p>
             </div>
             {pendingAction.estimate.balance.total < pendingAction.estimate.credits && (
               <p className="text-xs text-destructive">
