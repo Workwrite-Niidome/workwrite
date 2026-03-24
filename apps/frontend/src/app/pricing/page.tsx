@@ -21,7 +21,7 @@ const PLANS = [
     ctaHref: '/register',
     features: [
       '作品の執筆・公開・閲覧',
-      'AI執筆アシスト（通常 1cr〜/回）',
+      'AI執筆アシスト（簡易 1cr〜/回）',
       'AIスコアリング（1cr〜/回）',
       '読書進捗・統計',
       'レター（月3通まで無料）',
@@ -46,8 +46,8 @@ const PLANS = [
     ctaHref: '/register',
     features: [
       'Freeプランの全機能',
-      'AI執筆アシスト（じっくりモード）',
-      'AI執筆アシスト（高精度モード）',
+      'AI執筆アシスト（通常モード 2cr〜/回）',
+      'AI執筆アシスト（高精度モード 30cr〜/回）',
       'AI読書コンパニオン 無制限',
       'クレジット追加購入（100cr = ¥980）',
       '7日間の無料トライアル',
@@ -76,9 +76,9 @@ const PLANS = [
 ];
 
 const CREDIT_TABLE = [
-  { action: 'AI執筆アシスト（通常）', credits: '1cr〜', note: '入力文字数に応じて変動' },
-  { action: 'AI執筆アシスト（じっくり）', credits: '2cr〜', note: 'より深い思考で回答 — Standard以上' },
-  { action: 'AI執筆アシスト（高精度）', credits: '30cr〜', note: '最高品質の回答 — Standard以上' },
+  { action: 'AI執筆アシスト（簡易）', credits: '1cr〜', note: '入力文字数に応じて変動' },
+  { action: 'AI執筆アシスト（通常）', credits: '2cr〜', note: '入力文字数に応じて変動 — Standard以上' },
+  { action: 'AI執筆アシスト（高精度）', credits: '30cr〜', note: '入力文字数に応じて変動 — Standard以上' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
   { action: 'AIスコアリング（作品品質分析）', credits: '1cr〜', note: '作品の文字数に応じて変動（実行前に見積もり表示）' },
   { action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
