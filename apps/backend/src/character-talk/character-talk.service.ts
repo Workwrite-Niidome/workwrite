@@ -157,16 +157,22 @@ export class CharacterTalkService {
     // Build structured context (spoiler-safe)
     const structuredParts: string[] = [];
 
-    // If unread, use all public characters (no spoiler risk since no story context is given)
-    // If read, filter to only characters that appeared in read episodes (fuzzy name match)
-    const safeChars = hasReadAnything && appearedCharNames.size > 0
-      ? this.matchStoryCharactersForContext(publicCharacters, appearedCharNames)
-      : publicCharacters;
-    if (safeChars.length > 0) {
-      const charLines = safeChars.map((c) =>
-        `- ${c.name} (${c.role}): ${[c.personality, c.motivation, c.speechStyle ? `口調:${c.speechStyle}` : ''].filter(Boolean).join('、')}`,
-      ).join('\n');
-      structuredParts.push(`【登場人物情報】\n${charLines}`);
+    if (mode === 'character' && characterId) {
+      // Character mode: other characters listed briefly (name + role only)
+      // Target character's full details are in the system prompt header
+      const otherChars = publicCharacters.filter((c) => c.id !== characterId);
+      if (otherChars.length > 0) {
+        const charLines = otherChars.map((c) => `- ${c.name} (${c.role})`).join('\n');
+        structuredParts.push(`【他の登場人物】\n${charLines}`);
+      }
+    } else {
+      // Companion mode: all characters with full details
+      if (publicCharacters.length > 0) {
+        const charLines = publicCharacters.map((c) =>
+          `- ${c.name} (${c.role}): ${[c.personality, c.motivation, c.speechStyle ? `口調:${c.speechStyle}` : ''].filter(Boolean).join('、')}`,
+        ).join('\n');
+        structuredParts.push(`【登場人物情報】\n${charLines}`);
+      }
     }
 
     const wb = creationPlan?.worldBuildingData as any;
