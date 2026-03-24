@@ -277,18 +277,12 @@ export class DiscoverService {
   /** Roles that would spoil the story — exclude these (exact word match, not substring) */
   private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵役', '悪役'];
 
-  // Cache for character matches (invalidated on character/work changes)
-  private characterMatchCache: any[] | null = null;
-
-  /** Call this when characters are created/updated/deleted or work publish status changes */
+  /** No-op: kept for API compatibility with callers (story-structure, works services) */
   invalidateCharacterMatchCache() {
-    this.characterMatchCache = null;
+    // No-op: cache removed — DB is queried on every request
   }
 
   private async getAllPublicCharacters() {
-    if (this.characterMatchCache) {
-      return this.characterMatchCache;
-    }
 
     const characters = await this.prisma.storyCharacter.findMany({
       where: {
@@ -345,7 +339,6 @@ export class DiscoverService {
       },
     }));
 
-    this.characterMatchCache = mapped;
     return mapped;
   }
 
