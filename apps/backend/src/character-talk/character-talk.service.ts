@@ -158,11 +158,13 @@ export class CharacterTalkService {
     const structuredParts: string[] = [];
 
     if (mode === 'character' && characterId) {
-      // Character mode: other characters listed briefly (name + role only)
-      // Target character's full details are in the system prompt header
+      // Character mode: other characters with name + role + personality (no speechStyle/motivation to avoid AI confusion)
+      // Target character's full details including speechStyle are in the system prompt header
       const otherChars = publicCharacters.filter((c) => c.id !== characterId);
       if (otherChars.length > 0) {
-        const charLines = otherChars.map((c) => `- ${c.name} (${c.role})`).join('\n');
+        const charLines = otherChars.map((c) =>
+          `- ${c.name} (${c.role})${c.personality ? `: ${c.personality}` : ''}`,
+        ).join('\n');
         structuredParts.push(`【他の登場人物】\n${charLines}`);
       }
     } else {
