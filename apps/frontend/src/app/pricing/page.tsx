@@ -79,6 +79,7 @@ const CREDIT_TABLE = [
   { action: 'AI執筆アシスト（簡易）', credits: '1cr〜', note: '入力文字数に応じて変動' },
   { action: 'AI執筆アシスト（通常）', credits: '5cr〜', note: '入力文字数に応じて変動 — Standard以上' },
   { action: 'AI執筆アシスト（高精度）', credits: '30cr〜', note: '入力文字数に応じて変動 — Standard以上' },
+  { action: 'エディターモード（1話あたり）', credits: '2cr〜', note: '設計書と文字数に応じて変動' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
   { action: 'AIスコアリング（作品品質分析）', credits: '1cr〜', note: '作品の文字数に応じて変動（実行前に見積もり表示）' },
   { action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
@@ -95,7 +96,7 @@ const CREDIT_TABLE = [
 const FAQS = [
   {
     q: 'クレジットとは何ですか？',
-    a: 'クレジットはAI機能の利用に消費されるプラットフォーム内の単位です。AI執筆アシストやスコアリングは入力文字数に応じて消費量が変動し、実行前に見積もりが表示されます。校正・あらすじ生成・ハイライト解説などの軽量処理はクレジットを消費しません。',
+    a: 'クレジットはAI機能の利用に消費されるプラットフォーム内の単位です。AI執筆アシスト・スコアリング・エディターモードは入力文字数に応じて消費量が変動し、実行前に見積もりが表示されます。校正・あらすじ生成・ハイライト解説などの軽量処理はクレジットを消費しません。',
   },
   {
     q: 'クレジットは翌月に繰り越せますか？',
@@ -328,7 +329,7 @@ export default function PricingPage() {
             クレジット消費テーブル
           </h2>
           <p className="text-xs text-muted-foreground text-center mb-10 max-w-md mx-auto">
-            AI執筆アシスト・スコアリング・インポートがクレジットを消費します。校正・あらすじ・解説などの軽量処理は無料です。
+            AI執筆アシスト・スコアリング・エディターモードがクレジットを消費します。校正・あらすじ・解説などの軽量処理は無料です。
           </p>
           <div className="rounded-lg border border-border overflow-hidden">
             <table className="w-full text-sm">
@@ -445,7 +446,7 @@ export default function PricingPage() {
             まずは無料で始めてみませんか
           </h2>
           <p className="text-sm text-muted-foreground mb-8 max-w-md mx-auto leading-relaxed">
-            Free プランでAI執筆アシスト月20回、AI読書コンパニオン週5回が利用できます。
+            Free プランでAI執筆アシスト月2〜5回、AI読書コンパニオン週5回が利用できます。
             <br />
             もっと使いたくなったら、いつでもアップグレード。
           </p>
