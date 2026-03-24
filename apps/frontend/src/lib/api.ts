@@ -606,12 +606,13 @@ class ApiClient {
 
   // Scoring
   async estimateScoringCost(workId: string) {
-    return this.request<{
+    const res = await this.request<{ data: {
       estimate: { credits: number; breakdown: { model: string; inputChars: number; estimatedInputTokens: number; estimatedOutputTokens: number; estimatedApiCostYen: number } };
       balance: { total: number; monthly: number; purchased: number };
       totalChars: number;
       episodeCount: number;
-    }>(`/scoring/works/${workId}/estimate`);
+    } }>(`/scoring/works/${workId}/estimate`);
+    return res.data;
   }
 
   async triggerScoring(workId: string) {
@@ -631,14 +632,15 @@ class ApiClient {
     conversationId?: string;
     followUpMessage?: string;
   }) {
-    return this.request<{
+    const res = await this.request<{ data: {
       estimate: { credits: number; breakdown: { model: string; inputChars: number; estimatedInputTokens: number; estimatedOutputTokens: number; estimatedApiCostYen: number } };
       balance: { total: number; monthly: number; purchased: number };
       isLightFeature: boolean;
-    }>('/ai/estimate-cost', {
+    } }>('/ai/estimate-cost', {
       method: 'POST',
       body: JSON.stringify(dto),
     });
+    return res.data;
   }
 
   // Notifications
