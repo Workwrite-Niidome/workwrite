@@ -207,26 +207,26 @@ function CharacterCard({ character }: { character: CharacterMatch }) {
   return (
     <div className="flex-shrink-0 w-64 border border-border rounded-xl p-4 hover:border-primary/20 hover:shadow-sm transition-all bg-card">
       {/* Character header */}
-      <div className="flex items-start justify-between mb-2">
-        <div>
-          <h3 className="font-medium text-sm">{c.name}</h3>
-          <div className="flex gap-1 mt-1 flex-wrap">
-            {c.gender && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.gender}</Badge>}
-            {c.age && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.age}</Badge>}
-          </div>
+      <div className="mb-2">
+        <div className="flex items-center gap-1.5">
+          <h3 className="font-medium text-sm truncate">{c.name}</h3>
+          {c.firstPerson && (
+            <span className="text-[10px] text-muted-foreground shrink-0 max-w-[4em] truncate">
+              {c.firstPerson}
+            </span>
+          )}
         </div>
-        {c.firstPerson && (
-          <span className="text-xs text-muted-foreground shrink-0">
-            {c.firstPerson}
-          </span>
-        )}
+        <div className="flex gap-1 mt-1">
+          {c.gender && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.gender}</Badge>}
+          {c.age && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.age}</Badge>}
+        </div>
       </div>
 
       {/* Personality + Speech style */}
       {(personalitySnippet || c.speechStyle) && (
         <div className="text-xs text-muted-foreground mb-3 space-y-1">
           {personalitySnippet && <p className="line-clamp-2">{personalitySnippet}</p>}
-          {c.speechStyle && <p className="text-[10px]">口調: {c.speechStyle}</p>}
+          {c.speechStyle && <p className="text-[10px] truncate">口調: {c.speechStyle}</p>}
         </div>
       )}
 
