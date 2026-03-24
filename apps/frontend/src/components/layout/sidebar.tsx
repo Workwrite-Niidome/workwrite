@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import {
   House,
+  Compass,
   Search,
   MessageCircle,
   BookOpen,
@@ -33,7 +34,8 @@ interface NavItem {
 const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'ホーム', icon: House },
   { href: '/timeline', label: 'タイムライン', icon: MessageCircle },
-  { href: '/discover', label: '探す', icon: Search },
+  { href: '/discover', label: '探す', icon: Compass },
+  { href: '/search', label: '検索', icon: Search },
   { href: '/bookshelf', label: '本棚', icon: BookOpen, authRequired: true },
   { href: '/bookmarks', label: 'しおり', icon: Bookmark, authRequired: true },
   { href: '/notifications', label: '通知', icon: Bell, authRequired: true },
