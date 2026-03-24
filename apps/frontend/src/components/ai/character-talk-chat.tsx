@@ -38,6 +38,32 @@ export function CharacterTalkChat({ workId, episodeId, initialCharacterId, initi
       return;
     }
 
+    // Fast path: skip character extraction when coming from match card
+    if (initialCharacterId && !initialHandled.current) {
+      initialHandled.current = true;
+      Promise.all([
+        api.getAiStatus().catch(() => ({ data: { available: false, model: '', tier: undefined } })),
+        api.getCharacterTalkHistory(workId, initialCharacterId).catch(() => ({ data: { messages: [] } })),
+      ]).then(([statusRes, histRes]) => {
+        const statusData = (statusRes as any).data || statusRes;
+        if (statusData.tier?.credits) {
+          setCredits(statusData.tier.credits);
+        }
+        // Set up chat directly without extraction
+        setSelectedCharacter({ id: initialCharacterId, name: '' } as TalkableCharacter);
+        setMode('character');
+        setPhase('chat');
+        if (initialMessage) {
+          setInput(initialMessage);
+        }
+        const raw = histRes as any;
+        const msgs = raw?.data?.messages || raw?.messages || raw?.data || [];
+        setMessages(Array.isArray(msgs) ? msgs : []);
+      }).finally(() => setLoading(false));
+      return;
+    }
+
+    // Normal path: extract characters
     Promise.all([
       api.getCharacterTalkCharacters(workId, episodeId).catch(() => ({ data: [] })),
       api.getAiStatus().catch(() => ({ data: { available: false, model: '', tier: undefined } })),
@@ -54,28 +80,6 @@ export function CharacterTalkChat({ workId, episodeId, initialCharacterId, initi
 
       const convs = (convsRes as any).data || [];
       setConversations(Array.isArray(convs) ? convs : []);
-
-      // Auto-select character and set initial message from match card
-      if (initialCharacterId && !initialHandled.current) {
-        initialHandled.current = true;
-        const targetChar = charList.find((c) => c.id === initialCharacterId);
-        if (targetChar) {
-          setSelectedCharacter(targetChar);
-          setMode('character');
-          setPhase('chat');
-          if (initialMessage) {
-            setInput(initialMessage);
-          }
-          // Load history
-          api.getCharacterTalkHistory(workId, targetChar.id)
-            .then((histRes) => {
-              const raw = histRes as any;
-              const msgs = raw?.data?.messages || raw?.messages || raw?.data || [];
-              setMessages(Array.isArray(msgs) ? msgs : []);
-            })
-            .catch(() => {});
-        }
-      }
     }).finally(() => setLoading(false));
   }, [workId, isAuthenticated]);
 
