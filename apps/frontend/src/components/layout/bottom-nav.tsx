@@ -8,7 +8,7 @@ import { useAuth } from '@/lib/auth-context';
 
 const NAV_ITEMS = [
   { href: '/', icon: House },
-  { href: '/search', icon: Search },
+  { href: '/discover', icon: Search },
   { href: '/compose', icon: PenSquare, isCompose: true },
   { href: '/timeline', icon: MessageCircle },
   { href: '/profile', icon: User },
