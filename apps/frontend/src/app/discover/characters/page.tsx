@@ -36,9 +36,8 @@ export default function DiscoverCharactersPage() {
         page,
         limit: PAGE_SIZE,
       });
-      const raw = (res as any).data || res;
-      setCharacters(Array.isArray(raw?.data) ? raw.data : []);
-      setTotal(raw?.total || 0);
+      setCharacters(Array.isArray(res?.data) ? res.data : []);
+      setTotal(res?.total || 0);
     } catch {
       setCharacters([]);
       setTotal(0);

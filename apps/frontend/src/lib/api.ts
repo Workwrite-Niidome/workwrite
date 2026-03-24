@@ -528,7 +528,7 @@ class ApiClient {
     if (options?.page) qs.set('page', String(options.page));
     if (options?.limit) qs.set('limit', String(options.limit));
     const query = qs.toString();
-    return this.request<{ data: { data: CharacterMatch[]; total: number; page: number; limit: number } }>(`/discover/character-matches${query ? `?${query}` : ''}`);
+    return this.request<{ data: CharacterMatch[]; total: number; page: number; limit: number }>(`/discover/character-matches${query ? `?${query}` : ''}`);
   }
 
   // Emotion Tags

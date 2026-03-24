@@ -40,8 +40,7 @@ export function CharacterMatchCarousel({ limit = 10 }: CharacterMatchCarouselPro
         genre: genre || undefined,
         limit,
       });
-      const raw = (res as any).data || res;
-      const items = raw?.data || raw;
+      const items = (res as any)?.data || [];
       setCharacters(Array.isArray(items) ? items : []);
     } catch {
       setCharacters([]);
