@@ -357,11 +357,6 @@ export class DiscoverService {
             qualityScore: { select: { overall: true } },
           },
         },
-        dialogueSamples: {
-          take: 3,
-          orderBy: { episodeOrder: 'asc' },
-          select: { line: true, emotion: true },
-        },
       },
     });
 
@@ -403,8 +398,6 @@ export class DiscoverService {
       speechStyle: c.speechStyle,
       firstPerson: c.firstPerson,
       appearance: c.appearance ? c.appearance.slice(0, 80) : null,
-      motivation: c.motivation ? c.motivation.slice(0, 80) : null,
-      sampleLine: c.dialogueSamples[0]?.line || null,
       work: {
         id: c.work.id,
         title: c.work.title,

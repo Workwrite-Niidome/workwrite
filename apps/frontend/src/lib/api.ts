@@ -1567,8 +1567,6 @@ export interface CharacterMatch {
   speechStyle: string | null;
   firstPerson: string | null;
   appearance: string | null;
-  motivation: string | null;
-  sampleLine: string | null;
   work: {
     id: string;
     title: string;

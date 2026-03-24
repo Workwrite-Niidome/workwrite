@@ -222,16 +222,12 @@ function CharacterCard({ character }: { character: CharacterMatch }) {
         )}
       </div>
 
-      {/* Sample line */}
-      {c.sampleLine && (
-        <blockquote className="text-xs text-muted-foreground italic border-l-2 border-primary/30 pl-2 my-2 line-clamp-2">
-          &ldquo;{c.sampleLine}&rdquo;
-        </blockquote>
-      )}
-
-      {/* Personality */}
-      {personalitySnippet && (
-        <p className="text-xs text-muted-foreground mb-3 line-clamp-2">{personalitySnippet}</p>
+      {/* Personality + Speech style */}
+      {(personalitySnippet || c.speechStyle) && (
+        <div className="text-xs text-muted-foreground mb-3 space-y-1">
+          {personalitySnippet && <p className="line-clamp-2">{personalitySnippet}</p>}
+          {c.speechStyle && <p className="text-[10px]">口調: {c.speechStyle}</p>}
+        </div>
       )}
 
       {/* Work info */}
