@@ -604,7 +604,7 @@ describe('CreationWizardService', () => {
       expect(call.update.plotOutline).toBeUndefined();
     });
 
-    it('handles null values by converting them to undefined', async () => {
+    it('handles null values by passing them through to clear fields', async () => {
       prisma.workCreationPlan.upsert.mockResolvedValue({ workId: 'work-1' });
 
       await service.saveCreationPlan('work-1', {
@@ -615,10 +615,10 @@ describe('CreationWizardService', () => {
       });
 
       const call = prisma.workCreationPlan.upsert.mock.calls[0][0];
-      expect(call.update.characters).toBeUndefined();
-      expect(call.update.plotOutline).toBeUndefined();
-      expect(call.update.customFieldDefinitions).toBeUndefined();
-      expect(call.update.worldBuildingData).toBeUndefined();
+      expect(call.update.characters).toBeNull();
+      expect(call.update.plotOutline).toBeNull();
+      expect(call.update.customFieldDefinitions).toBeNull();
+      expect(call.update.worldBuildingData).toBeNull();
     });
 
     it('returns the upserted plan', async () => {
