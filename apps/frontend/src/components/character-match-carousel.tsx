@@ -66,32 +66,29 @@ export function CharacterMatchCarousel({ limit = 10 }: CharacterMatchCarouselPro
   return (
     <section>
       <div className="flex items-center justify-between mb-3">
-        <div>
-          <div className="flex items-center gap-2">
-            <h2 className="text-sm font-medium">キャラクターと出会う</h2>
-            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-primary/30 text-primary">Beta</span>
-          </div>
-          <p className="text-xs text-muted-foreground mt-0.5">
-            気になるキャラクターから、作品を見つけよう
-          </p>
+        <div className="flex items-center gap-2">
+          <h2 className="text-sm font-medium">キャラクターと出会う</h2>
+          <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-primary/30 text-primary">Beta</span>
         </div>
-        <Link href="/discover/characters" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 shrink-0">
-          もっと見る <ArrowRight className="h-3 w-3" />
-        </Link>
-        <Button
-          variant="ghost"
-          size="sm"
-          className={cn('h-8 text-xs gap-1', hasFilter && 'text-primary')}
-          onClick={() => setShowFilter(!showFilter)}
-        >
-          <Filter className="h-3.5 w-3.5" />
-          絞り込み
-          {hasFilter && (
-            <span className="bg-primary text-primary-foreground rounded-full h-4 w-4 text-[10px] flex items-center justify-center">
-              {[gender, ageRange, genre].filter(Boolean).length}
-            </span>
-          )}
-        </Button>
+        <div className="flex items-center gap-2 shrink-0">
+          <Button
+            variant="ghost"
+            size="sm"
+            className={cn('h-8 text-xs gap-1', hasFilter && 'text-primary')}
+            onClick={() => setShowFilter(!showFilter)}
+          >
+            <Filter className="h-3.5 w-3.5" />
+            絞り込み
+            {hasFilter && (
+              <span className="bg-primary text-primary-foreground rounded-full h-4 w-4 text-[10px] flex items-center justify-center">
+                {[gender, ageRange, genre].filter(Boolean).length}
+              </span>
+            )}
+          </Button>
+          <Link href="/discover/characters" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            もっと見る <ArrowRight className="h-3 w-3" />
+          </Link>
+        </div>
       </div>
 
       {/* Filter Bar */}
