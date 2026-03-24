@@ -742,15 +742,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   {/* Other templates */}
                   <TemplateSelector
                     templates={templates}
-                    onGenerate={(slug, vars) => {
-                      setChatMessages([]);
-                      setCurrentSlug(slug);
-                      setNewChars(null);
-                      reset();
-                      const contextVars = buildContextVars();
-                      generate(slug, { ...contextVars, ...vars }, undefined, aiMode);
+                    onGenerate={(slug) => {
+                      handleQuickAction(slug);
                     }}
-                    isStreaming={isStreaming}
+                    isStreaming={isStreaming || estimatingCost}
                     currentContent={selectedText || currentContent}
                   />
                 </div>
