@@ -213,22 +213,10 @@ export class CharacterTalkService {
         throw new NotFoundException('Character not found');
       }
 
-      // For readers who have read AND episodeAnalysis data exists: verify character appeared in read range
-      // Skip check if: unread, or no episodeAnalysis data (not yet scored)
-      if (hasReadAnything && appearedCharNames.size > 0) {
-        const normalizedCharName = this.normalizeName(character.name);
-        const charAppeared = [...appearedCharNames].some((name) => {
-          const normalizedName = this.normalizeName(name);
-          return character.name === name
-            || normalizedCharName === normalizedName
-            || normalizedCharName.includes(normalizedName)
-            || normalizedName.includes(normalizedCharName);
-        });
-        if (!charAppeared) {
-          await this.creditService.refundTransaction(transactionId);
-          throw new ForbiddenException('このキャラクターはまだ読んだエピソードに登場していません');
-        }
-      }
+      // Spoiler protection is handled by:
+      // 1. isPublic flag (author controls character visibility)
+      // 2. System prompt (tells AI the reader's progress)
+      // 3. Work text limited to read episodes only
 
       const readStatusNote = hasReadAnything
         ? `- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降の展開は知らないものとして振る舞ってください。`
