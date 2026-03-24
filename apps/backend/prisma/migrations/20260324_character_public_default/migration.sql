@@ -1,5 +1,2 @@
--- Change default for isPublic from false to true
+-- Change default for isPublic to true (new characters are public by default)
 ALTER TABLE "StoryCharacter" ALTER COLUMN "isPublic" SET DEFAULT true;
-
--- Update all existing non-public characters to public
-UPDATE "StoryCharacter" SET "isPublic" = true WHERE "isPublic" = false;

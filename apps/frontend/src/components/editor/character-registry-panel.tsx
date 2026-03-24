@@ -635,6 +635,16 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
         </button>
       </div>
 
+      {/* Public notice */}
+      {characters.length > 0 && (
+        <div className="mx-2 mt-1 mb-0 px-3 py-2 rounded-lg bg-primary/5 border border-primary/15">
+          <p className="text-[11px] text-primary leading-relaxed">
+            <Eye className="h-3 w-3 inline-block mr-1 -mt-0.5" />
+            <strong>「読者に公開」をON</strong>にすると、キャラクターマッチに表示され、読者がキャラクターと会話できるようになります
+          </p>
+        </div>
+      )}
+
       {/* Character list */}
       <div className="flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden" style={{ WebkitOverflowScrolling: 'touch' }}>
         {characters.length === 0 && !showAiPanel && (
