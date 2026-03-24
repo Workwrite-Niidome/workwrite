@@ -577,12 +577,14 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
-        {/* Main actions — large, clear buttons */}
-        {!hasConversation && !pendingAction && (
+        {/* Main actions — always visible */}
+        {!pendingAction && (
           <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">
-              {estimatingCost ? '見積もり取得中...' : '何をしますか？'}
-            </p>
+            {!hasConversation && (
+              <p className="text-xs font-medium text-muted-foreground">
+                {estimatingCost ? '見積もり取得中...' : '何をしますか？'}
+              </p>
+            )}
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleQuickAction('chapter-opening')}
