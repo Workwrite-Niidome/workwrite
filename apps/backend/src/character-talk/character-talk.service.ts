@@ -158,9 +158,9 @@ export class CharacterTalkService {
     const structuredParts: string[] = [];
 
     // If unread, use all public characters (no spoiler risk since no story context is given)
-    // If read, filter to only characters that appeared in read episodes
-    const safeChars = hasReadAnything
-      ? publicCharacters.filter((c) => appearedCharNames.has(c.name))
+    // If read, filter to only characters that appeared in read episodes (fuzzy name match)
+    const safeChars = hasReadAnything && appearedCharNames.size > 0
+      ? this.matchStoryCharactersForContext(publicCharacters, appearedCharNames)
       : publicCharacters;
     if (safeChars.length > 0) {
       const charLines = safeChars.map((c) =>
@@ -216,9 +216,14 @@ export class CharacterTalkService {
       // For readers who have read AND episodeAnalysis data exists: verify character appeared in read range
       // Skip check if: unread, or no episodeAnalysis data (not yet scored)
       if (hasReadAnything && appearedCharNames.size > 0) {
-        const charAppeared = [...appearedCharNames].some((name) =>
-          character.name === name || character.name.includes(name) || name.includes(character.name),
-        );
+        const normalizedCharName = this.normalizeName(character.name);
+        const charAppeared = [...appearedCharNames].some((name) => {
+          const normalizedName = this.normalizeName(name);
+          return character.name === name
+            || normalizedCharName === normalizedName
+            || normalizedCharName.includes(normalizedName)
+            || normalizedName.includes(normalizedCharName);
+        });
         if (!charAppeared) {
           await this.creditService.refundTransaction(transactionId);
           throw new ForbiddenException('このキャラクターはまだ読んだエピソードに登場していません');
@@ -632,6 +637,25 @@ ${structuredContext ? `\n${structuredContext}\n` : ''}${workText ? `\n作品テ�
         readProgress: progress || null,
         updatedAt: c.updatedAt,
       };
+    });
+  }
+
+  /** Filter characters by fuzzy matching against appeared names (for system prompt context) */
+  private matchStoryCharactersForContext(
+    characters: { id: string; name: string; role: string; personality: string | null; motivation: string | null; speechStyle: string | null; firstPerson: string | null; background: string | null }[],
+    names: Set<string>,
+  ) {
+    const normalizedNames = [...names].map((n) => this.normalizeName(n));
+    return characters.filter((c) => {
+      const normalizedChar = this.normalizeName(c.name);
+      for (let i = 0; i < normalizedNames.length; i++) {
+        const extractedName = normalizedNames[i];
+        const rawName = [...names][i];
+        if (c.name === rawName || normalizedChar === extractedName) return true;
+        if (c.name.includes(rawName) || rawName.includes(c.name)) return true;
+        if (normalizedChar.includes(extractedName) || extractedName.includes(normalizedChar)) return true;
+      }
+      return false;
     });
   }
 
