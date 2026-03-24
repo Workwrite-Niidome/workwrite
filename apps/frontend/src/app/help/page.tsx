@@ -141,7 +141,7 @@ export default function HelpPage() {
         <p className="text-sm text-muted-foreground mb-2">他にご質問がありますか？</p>
         <p className="text-sm text-muted-foreground">
           <Link href="/guidelines" className="underline hover:text-foreground transition-colors">投稿ガイドライン</Link>をご覧いただくか、
-          お問い合わせ：<span className="text-foreground">support@workwrite.app</span>
+          お問い合わせ：<a href="mailto:info@workwrite.co.jp" className="text-foreground underline hover:opacity-80">info@workwrite.co.jp</a>
         </p>
       </div>
     </div>
