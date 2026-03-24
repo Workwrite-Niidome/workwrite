@@ -277,14 +277,17 @@ export class DiscoverService {
   /** Roles that would spoil the story — exclude these */
   private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵', '敵役', '悪役'];
 
-  // Cache for character matches (refreshed every 10 minutes)
-  private characterMatchCache: { data: any[]; updatedAt: number } | null = null;
-  private static CACHE_TTL_MS = 10 * 60 * 1000;
+  // Cache for character matches (invalidated on character/work changes)
+  private characterMatchCache: any[] | null = null;
+
+  /** Call this when characters are created/updated/deleted or work publish status changes */
+  invalidateCharacterMatchCache() {
+    this.characterMatchCache = null;
+  }
 
   private async getAllPublicCharacters() {
-    const now = Date.now();
-    if (this.characterMatchCache && now - this.characterMatchCache.updatedAt < DiscoverService.CACHE_TTL_MS) {
-      return this.characterMatchCache.data;
+    if (this.characterMatchCache) {
+      return this.characterMatchCache;
     }
 
     const characters = await this.prisma.storyCharacter.findMany({
@@ -342,7 +345,7 @@ export class DiscoverService {
       },
     }));
 
-    this.characterMatchCache = { data: mapped, updatedAt: now };
+    this.characterMatchCache = mapped;
     return mapped;
   }
 

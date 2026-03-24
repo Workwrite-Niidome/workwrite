@@ -1,5 +1,6 @@
 import { Injectable, Logger, NotFoundException, ForbiddenException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { DiscoverService } from '../discover/discover.service';
 import {
   CreateCharacterDto, UpdateCharacterDto, SetRelationDto,
   UpsertArcDto, CreateSceneDto, UpdateSceneDto,
@@ -8,7 +9,10 @@ import {
 @Injectable()
 export class StoryStructureService {
   private readonly logger = new Logger(StoryStructureService.name);
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private discoverService: DiscoverService,
+  ) {}
 
   /** Verify the authenticated user owns the work. Throws ForbiddenException if not. */
   private async verifyOwnership(workId: string, userId: string) {
@@ -54,20 +58,24 @@ export class StoryStructureService {
       where: { workId },
       _max: { sortOrder: true },
     });
-    return this.prisma.storyCharacter.create({
+    const result = await this.prisma.storyCharacter.create({
       data: {
         workId,
         ...dto,
         sortOrder: dto.sortOrder ?? (maxOrder._max.sortOrder ?? -1) + 1,
       },
     });
+    this.discoverService.invalidateCharacterMatchCache();
+    return result;
   }
 
   async updateCharacter(workId: string, id: string, userId: string, dto: UpdateCharacterDto) {
     await this.verifyOwnership(workId, userId);
     const char = await this.prisma.storyCharacter.findUnique({ where: { id } });
     if (!char || char.workId !== workId) throw new NotFoundException();
-    return this.prisma.storyCharacter.update({ where: { id }, data: dto });
+    const result = await this.prisma.storyCharacter.update({ where: { id }, data: dto });
+    this.discoverService.invalidateCharacterMatchCache();
+    return result;
   }
 
   async deleteCharacter(workId: string, id: string, userId: string) {
@@ -75,6 +83,7 @@ export class StoryStructureService {
     const char = await this.prisma.storyCharacter.findUnique({ where: { id } });
     if (!char || char.workId !== workId) throw new NotFoundException();
     await this.prisma.storyCharacter.delete({ where: { id } });
+    this.discoverService.invalidateCharacterMatchCache();
     return { deleted: true };
   }
 
@@ -143,6 +152,7 @@ export class StoryStructureService {
       });
       migrated++;
     }
+    if (migrated > 0) this.discoverService.invalidateCharacterMatchCache();
     return { migrated };
   }
 

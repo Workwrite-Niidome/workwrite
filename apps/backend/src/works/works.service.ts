@@ -6,6 +6,7 @@ import { SearchService } from '../search/search.service';
 import { EmotionsService } from '../emotions/emotions.service';
 import { EmotionMappingService } from '../emotions/emotion-mapping.service';
 import { EpisodeAnalysisService } from '../ai-assist/episode-analysis.service';
+import { DiscoverService } from '../discover/discover.service';
 import { CreateWorkDto, UpdateWorkDto } from './dto/work.dto';
 import { PaginationDto } from '../common/dto/pagination.dto';
 import { PostType } from '@prisma/client';
@@ -22,6 +23,7 @@ export class WorksService {
     private emotionsService: EmotionsService,
     private emotionMappingService: EmotionMappingService,
     private episodeAnalysisService: EpisodeAnalysisService,
+    private discoverService: DiscoverService,
   ) {}
 
   async create(authorId: string, dto: CreateWorkDto) {
@@ -176,6 +178,11 @@ export class WorksService {
       where: { id },
       data: updateData,
     });
+
+    // Invalidate character match cache when publish status changes
+    if (dto.status !== undefined) {
+      this.discoverService.invalidateCharacterMatchCache();
+    }
 
     if (dto.tags) {
       await this.prisma.workTag.deleteMany({ where: { workId: id, type: 'KEYWORD' } });

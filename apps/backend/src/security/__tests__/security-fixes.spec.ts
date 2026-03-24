@@ -100,7 +100,7 @@ describe('StoryStructureService — ownership enforcement', () => {
 
   beforeEach(() => {
     prisma = buildPrismaMock();
-    service = new StoryStructureService(prisma);
+    service = new StoryStructureService(prisma, { invalidateCharacterMatchCache: jest.fn() } as any);
   });
 
   // Helper: make prisma.work.findUnique return a work owned by OWNER_ID
