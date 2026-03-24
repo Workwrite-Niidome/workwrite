@@ -385,15 +385,22 @@ export class DiscoverService {
       results = results.filter((c) => c.personality?.toLowerCase().includes(p));
     }
 
-    // Exclude works the user already read
+    // Exclude works the user already completed (but keep own works)
     if (options.userId) {
-      const readWorks = await this.prisma.bookshelfEntry.findMany({
-        where: { userId: options.userId, status: 'COMPLETED' },
-        select: { workId: true },
-      });
+      const [readWorks, ownWorks] = await Promise.all([
+        this.prisma.bookshelfEntry.findMany({
+          where: { userId: options.userId, status: 'COMPLETED' },
+          select: { workId: true },
+        }),
+        this.prisma.work.findMany({
+          where: { authorId: options.userId },
+          select: { id: true },
+        }),
+      ]);
+      const ownWorkIds = new Set(ownWorks.map((w) => w.id));
       const readIds = new Set(readWorks.map((r) => r.workId));
       if (readIds.size > 0) {
-        results = results.filter((c) => !readIds.has(c.work.id));
+        results = results.filter((c) => ownWorkIds.has(c.work.id) || !readIds.has(c.work.id));
       }
 
       // Boost preferred genres to top
