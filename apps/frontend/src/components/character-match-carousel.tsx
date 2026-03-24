@@ -67,7 +67,10 @@ export function CharacterMatchCarousel({ limit = 10 }: CharacterMatchCarouselPro
     <section>
       <div className="flex items-center justify-between mb-3">
         <div>
-          <h2 className="text-sm font-medium">キャラクターと出会う</h2>
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-medium">キャラクターと出会う</h2>
+            <span className="text-[10px] px-1.5 py-0.5 rounded-full border border-primary/30 text-primary">Beta</span>
+          </div>
           <p className="text-xs text-muted-foreground mt-0.5">
             気になるキャラクターから、作品を見つけよう
           </p>
