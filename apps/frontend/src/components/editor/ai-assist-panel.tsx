@@ -604,7 +604,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                     }`}
                   >
                     通常
-                    <span className="block text-[10px] opacity-60 mt-0.5">2cr〜</span>
+                    <span className="block text-[10px] opacity-60 mt-0.5">5cr〜</span>
                   </button>
                 )}
                 {tier?.canUseOpus && (

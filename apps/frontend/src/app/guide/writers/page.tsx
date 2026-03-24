@@ -449,9 +449,9 @@ export default function WritersGuidePage() {
             </h4>
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>
-                <strong className="text-foreground">じっくりモード（Standard以上）</strong>
+                <strong className="text-foreground">通常モード（Standard以上）</strong>
                 ：AIがより深く思考してから回答します。複雑なプロット展開や繊細な心情描写に最適です。
-                <span className="font-mono ml-1">2cr〜/回</span>
+                <span className="font-mono ml-1">5cr〜/回</span>
               </p>
               <p>
                 <strong className="text-foreground">高精度モード（Proのみ）</strong>
@@ -691,7 +691,7 @@ export default function WritersGuidePage() {
                   <tbody className="text-sm">
                     {[
                       { feature: 'AI執筆アシスト（通常）', cost: '1cr〜' },
-                      { feature: 'AI執筆アシスト（じっくり）', cost: '2cr〜' },
+                      { feature: 'AI執筆アシスト（通常）', cost: '5cr〜' },
                       { feature: 'AI執筆アシスト（高精度）', cost: '30cr〜' },
                       { feature: 'Creation Wizard（各ステップ）', cost: '1cr' },
                       { feature: 'AIスコアリング', cost: '1cr〜' },
