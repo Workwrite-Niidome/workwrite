@@ -158,15 +158,9 @@ export class CharacterTalkService {
     const structuredParts: string[] = [];
 
     if (mode === 'character' && characterId) {
-      // Character mode: other characters with name + role + personality (no speechStyle/motivation to avoid AI confusion)
-      // Target character's full details including speechStyle are in the system prompt header
-      const otherChars = publicCharacters.filter((c) => c.id !== characterId);
-      if (otherChars.length > 0) {
-        const charLines = otherChars.map((c) =>
-          `- ${c.name} (${c.role})${c.personality ? `: ${c.personality}` : ''}`,
-        ).join('\n');
-        structuredParts.push(`【他の登場人物】\n${charLines}`);
-      }
+      // Character mode: no character info in structured context
+      // Target character's full details are in the system prompt header
+      // Other character names are listed there too
     } else {
       // Companion mode: all characters with full details
       if (publicCharacters.length > 0) {
@@ -230,6 +224,12 @@ export class CharacterTalkService {
         ? `- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降の展開は知らないものとして振る舞ってください。`
         : `- 読者はまだ作品を読んでいません。物語の具体的な展開やネタバレは一切話さないでください。読者が興味を持つように、あなた自身のことや世界観について話してください。`;
 
+      // Character mode: only target character's data + world setting. No work text.
+      const otherNames = publicCharacters
+        .filter((c) => c.id !== characterId)
+        .map((c) => c.name)
+        .join('、');
+
       systemPrompt = `あなたは${character.name}です。「${work.title}」の世界に生きています。
 
 話しかけてくるのは、あなたの物語を読んでいる一人の読者です。作者ではありません。
@@ -243,6 +243,7 @@ export class CharacterTalkService {
 - 口調: ${character.speechStyle}
 - 動機: ${character.motivation}
 - 背景: ${character.background}
+${otherNames ? `\n【あなたの周りの人物】\n${otherNames}` : ''}
 
 【守ること】
 - 最初から${character.name}として自然に話してください。「${character.name}として答えます」のような前置きは絶対にしないでください。
@@ -253,7 +254,7 @@ export class CharacterTalkService {
 ${readStatusNote}
 - 日本語で会話してください。
 
-${structuredContext}${workText ? `\n\n作品テキスト（読者の既読範囲）:\n${workText}` : ''}`;
+${structuredContext}`;
     } else {
       // Companion mode
       const readStatusNote = hasReadAnything
