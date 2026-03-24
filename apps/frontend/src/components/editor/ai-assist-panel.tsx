@@ -592,7 +592,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   }`}
                 >
                   簡易
-                  <span className="block text-[10px] opacity-60 mt-0.5">1クレジット</span>
+                  <span className="block text-[10px] opacity-60 mt-0.5">1cr〜</span>
                 </button>
                 {tier?.canUseThinking && (
                   <button
@@ -604,7 +604,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                     }`}
                   >
                     通常
-                    <span className="block text-[10px] opacity-60 mt-0.5">2クレジット</span>
+                    <span className="block text-[10px] opacity-60 mt-0.5">2cr〜</span>
                   </button>
                 )}
                 {tier?.canUseOpus && (
@@ -618,7 +618,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   >
                     <Crown className="h-3 w-3 inline mr-0.5" />
                     高精度
-                    <span className="block text-[10px] opacity-60 mt-0.5">5クレジット</span>
+                    <span className="block text-[10px] opacity-60 mt-0.5">5cr〜</span>
                   </button>
                 )}
               </div>

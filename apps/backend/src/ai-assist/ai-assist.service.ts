@@ -164,7 +164,7 @@ export class AiAssistService {
 
     const requestedChars = variables.char_count ? parseInt(variables.char_count, 10) : 1000;
     const baseMaxTokens = Math.max(4000, Math.min(12000, requestedChars * 3));
-    const maxOutputTokens = modelConfig.thinking ? 8000 : baseMaxTokens;
+    const maxOutputTokens = baseMaxTokens;
 
     // Determine min credits based on mode
     let minCredits = 1;
