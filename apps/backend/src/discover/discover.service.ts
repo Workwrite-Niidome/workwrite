@@ -274,8 +274,8 @@ export class DiscoverService {
 
   // ─── Character Match ─────────────────────────────────────
 
-  /** Safe roles that won't spoil the story */
-  private static SAFE_ROLES = ['主人公', 'ヒロイン', 'ヒーロー', 'サブキャラクター', '脇役', 'メンター'];
+  /** Roles that would spoil the story — exclude these */
+  private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵', '敵役', '悪役'];
 
   async getCharacterMatches(options: {
     gender?: string;
@@ -302,7 +302,7 @@ export class DiscoverService {
       where.gender = options.gender;
     }
 
-    if (options.role && DiscoverService.SAFE_ROLES.includes(options.role)) {
+    if (options.role) {
       where.role = options.role;
     }
 
@@ -360,9 +360,9 @@ export class DiscoverService {
       },
     });
 
-    // Filter to safe roles only (in case role filter was not applied)
+    // Exclude spoiler roles
     const safeCharacters = characters.filter(
-      (c) => DiscoverService.SAFE_ROLES.includes(c.role),
+      (c) => !DiscoverService.SPOILER_ROLES.includes(c.role),
     );
 
     // Shuffle and take limit
