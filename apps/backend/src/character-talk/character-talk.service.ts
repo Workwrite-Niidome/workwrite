@@ -524,6 +524,101 @@ ${workText}`;
   }
 
   /**
+   * Get all conversations across all works for a user.
+   * Includes work info, character name, last message, and reading progress.
+   */
+  async getAllConversations(userId: string) {
+    const conversations = await this.prisma.aiConversation.findMany({
+      where: { userId },
+      select: {
+        id: true,
+        workId: true,
+        mode: true,
+        characterId: true,
+        messageCount: true,
+        messages: true,
+        updatedAt: true,
+      },
+      orderBy: { updatedAt: 'desc' },
+      take: 50, // Limit to prevent excessive memory usage
+    });
+
+    if (conversations.length === 0) return [];
+
+    // Collect unique workIds and characterIds
+    const workIds = [...new Set(conversations.map((c) => c.workId))];
+    const characterIds = conversations
+      .map((c) => c.characterId)
+      .filter((id): id is string => !!id);
+
+    // Parallel fetch: works, characters, reading progress
+    const [works, characters, progressRecords] = await Promise.all([
+      this.prisma.work.findMany({
+        where: { id: { in: workIds } },
+        select: {
+          id: true,
+          title: true,
+          episodes: {
+            where: { publishedAt: { not: null } },
+            select: { id: true, orderIndex: true },
+            orderBy: { orderIndex: 'asc' },
+          },
+        },
+      }),
+      characterIds.length > 0
+        ? this.prisma.storyCharacter.findMany({
+            where: { id: { in: characterIds } },
+            select: { id: true, name: true },
+          })
+        : [],
+      this.prisma.readingProgress.findMany({
+        where: { userId, workId: { in: workIds } },
+        select: { workId: true, episodeId: true },
+      }),
+    ]);
+
+    const workMap = new Map(works.map((w) => [w.id, w]));
+    const charMap = new Map(characters.map((c) => [c.id, c.name]));
+
+    // Calculate reading progress per work
+    const readProgressMap = new Map<string, { readCount: number; totalCount: number }>();
+    for (const w of works) {
+      const readEpisodeIds = new Set(
+        progressRecords.filter((p) => p.workId === w.id).map((p) => p.episodeId),
+      );
+      readProgressMap.set(w.id, {
+        readCount: readEpisodeIds.size,
+        totalCount: w.episodes.length,
+      });
+    }
+
+    return conversations.map((c) => {
+      const work = workMap.get(c.workId);
+      const msgs = Array.isArray(c.messages) ? c.messages as any[] : [];
+      const lastMessage = msgs.length > 0 ? msgs[msgs.length - 1] : null;
+      const progress = readProgressMap.get(c.workId);
+
+      return {
+        id: c.id,
+        workId: c.workId,
+        workTitle: work?.title || null,
+        mode: c.mode,
+        characterId: c.characterId,
+        characterName: c.characterId ? charMap.get(c.characterId) || null : null,
+        messageCount: c.messageCount,
+        lastMessage: lastMessage ? {
+          role: lastMessage.role,
+          content: typeof lastMessage.content === 'string'
+            ? lastMessage.content.slice(0, 100)
+            : '',
+        } : null,
+        readProgress: progress || null,
+        updatedAt: c.updatedAt,
+      };
+    });
+  }
+
+  /**
    * Get all conversations for a user + work.
    */
   async getConversations(userId: string, workId: string) {

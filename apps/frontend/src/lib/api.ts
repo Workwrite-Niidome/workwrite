@@ -1162,6 +1162,10 @@ class ApiClient {
     return this.request<{ data: CharacterTalkEarnings }>('/ai/character-talk/earnings');
   }
 
+  async getAllCharacterTalkConversations() {
+    return this.request<{ data: AllConversationItem[] }>('/ai/character-talk/all-conversations');
+  }
+
   // AI Highlight Explanation
   async explainHighlight(highlightId: string) {
     return this.request<{ data: { explanation: string } }>(`/reading/highlights/${highlightId}/ai-explain`, { method: 'POST' });
@@ -1577,6 +1581,19 @@ export interface CharacterMatch {
     author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
     qualityScore: { overall: number } | null;
   };
+}
+
+export interface AllConversationItem {
+  id: string;
+  workId: string;
+  workTitle: string | null;
+  mode: string;
+  characterId: string | null;
+  characterName: string | null;
+  messageCount: number;
+  lastMessage: { role: string; content: string } | null;
+  readProgress: { readCount: number; totalCount: number } | null;
+  updatedAt: string;
 }
 
 export interface AdminStats {

@@ -18,6 +18,7 @@ import {
   Feather,
   Crown,
   Megaphone,
+  MessagesSquare,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
@@ -35,6 +36,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/', label: 'ホーム', icon: House },
   { href: '/timeline', label: 'タイムライン', icon: MessageCircle },
   { href: '/discover', label: '探す', icon: Compass },
+  { href: '/character-talks', label: 'キャラクタートーク', icon: MessagesSquare, authRequired: true },
   { href: '/bookshelf', label: '本棚', icon: BookOpen, authRequired: true },
   { href: '/bookmarks', label: 'しおり', icon: Bookmark, authRequired: true },
   { href: '/notifications', label: '通知', icon: Bell, authRequired: true },

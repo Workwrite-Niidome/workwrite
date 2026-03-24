@@ -16,13 +16,21 @@ export class CharacterTalkController {
     private revenueService: CharacterTalkRevenueService,
   ) {}
 
-  // Static route must come before parameterized :workId routes
+  // Static routes must come before parameterized :workId routes
   @Get('earnings')
   @ApiOperation({ summary: 'Get author earnings from character talk' })
   getEarnings(
     @CurrentUser('id') userId: string,
   ) {
     return this.revenueService.getAuthorEarnings(userId);
+  }
+
+  @Get('all-conversations')
+  @ApiOperation({ summary: 'Get all character talk conversations across all works' })
+  getAllConversations(
+    @CurrentUser('id') userId: string,
+  ) {
+    return this.characterTalkService.getAllConversations(userId);
   }
 
   @Post(':workId/chat')

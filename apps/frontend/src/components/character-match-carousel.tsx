@@ -2,14 +2,14 @@
 
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { MessageCircle, BookOpen, ChevronLeft, ChevronRight, Filter, X, Send, ArrowRight } from 'lucide-react';
+import { MessageCircle, BookOpen, ChevronLeft, ChevronRight, Filter, X, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, type CharacterMatch } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { GENRE_LABELS } from '@/lib/constants';
+import { CharacterChatPopup } from '@/components/ai/character-chat-popup';
 
 const GENDERS = [
   { value: '男性', label: '男性' },
@@ -184,118 +184,78 @@ export function CharacterMatchCarousel({ limit = 10 }: CharacterMatchCarouselPro
   );
 }
 
-const PRESET_MESSAGES = [
-  'あなたはどんな人？',
-  'あなたの世界ってどんなところ？',
-  '最近どんなことがあった？',
-];
-
 export function CharacterCard({ character }: { character: CharacterMatch }) {
   const c = character;
-  const router = useRouter();
-  const [freeText, setFreeText] = useState('');
-  const [showTalk, setShowTalk] = useState(false);
+  const [chatOpen, setChatOpen] = useState(false);
   const personalitySnippet = c.personality
     ? c.personality.length > 60 ? c.personality.slice(0, 60) + '...' : c.personality
     : null;
 
-  function goToTalk(message: string) {
-    const params = new URLSearchParams();
-    params.set('characterId', c.id);
-    params.set('message', message);
-    router.push(`/works/${c.work.id}/character-talk?${params.toString()}`);
-  }
-
   return (
-    <div className="border border-border rounded-xl p-4 hover:border-primary/20 hover:shadow-sm transition-all bg-card">
-      {/* Character header */}
-      <div className="mb-2">
-        <div className="flex items-center gap-1.5">
-          <h3 className="font-medium text-sm truncate">{c.name}</h3>
-          {c.firstPerson && (
-            <span className="text-[10px] text-muted-foreground shrink-0 max-w-[4em] truncate">
-              {c.firstPerson}
-            </span>
-          )}
+    <>
+      <div className="border border-border rounded-xl p-4 hover:border-primary/20 hover:shadow-sm transition-all bg-card">
+        {/* Character header */}
+        <div className="mb-2">
+          <div className="flex items-center gap-1.5">
+            <h3 className="font-medium text-sm truncate">{c.name}</h3>
+            {c.firstPerson && (
+              <span className="text-[10px] text-muted-foreground shrink-0 max-w-[4em] truncate">
+                {c.firstPerson}
+              </span>
+            )}
+          </div>
+          <div className="flex gap-1 mt-1">
+            {c.gender && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.gender}</Badge>}
+            {c.age && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.age}</Badge>}
+          </div>
         </div>
-        <div className="flex gap-1 mt-1">
-          {c.gender && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.gender}</Badge>}
-          {c.age && <Badge variant="outline" className="text-[10px] px-1.5 py-0">{c.age}</Badge>}
-        </div>
-      </div>
 
-      {/* Personality + Speech style */}
-      {(personalitySnippet || c.speechStyle) && (
-        <div className="text-xs text-muted-foreground mb-3 space-y-1">
-          {personalitySnippet && <p className="line-clamp-2">{personalitySnippet}</p>}
-          {c.speechStyle && <p className="text-[10px] truncate">口調: {c.speechStyle}</p>}
-        </div>
-      )}
-
-      {/* Work info */}
-      <div className="border-t border-border pt-2 mt-auto">
-        <Link href={`/works/${c.work.id}`} className="group/work">
-          <p className="text-xs font-medium truncate group-hover/work:text-primary transition-colors">
-            {c.work.title}
-          </p>
-          <p className="text-[10px] text-muted-foreground">
-            {c.work.author.displayName || c.work.author.name}
-          </p>
-        </Link>
-      </div>
-
-      {/* Actions */}
-      <div className="mt-3 space-y-1.5">
-        {c.work.enableCharacterTalk && !showTalk && (
-          <Button
-            variant="outline"
-            size="sm"
-            className="w-full h-7 text-xs gap-1"
-            onClick={() => setShowTalk(true)}
-          >
-            <MessageCircle className="h-3 w-3" /> 話してみる
-          </Button>
-        )}
-
-        {c.work.enableCharacterTalk && showTalk && (
-          <div className="space-y-1">
-            {PRESET_MESSAGES.map((msg) => (
-              <button
-                key={msg}
-                onClick={() => goToTalk(msg)}
-                className="w-full text-left text-xs px-2 py-1.5 rounded-md border border-border hover:bg-secondary hover:border-primary/20 transition-colors truncate"
-              >
-                {msg}
-              </button>
-            ))}
-            <div className="flex gap-1">
-              <input
-                type="text"
-                value={freeText}
-                onChange={(e) => setFreeText(e.target.value)}
-                onKeyDown={(e) => { if (e.key === 'Enter' && freeText.trim()) goToTalk(freeText.trim()); }}
-                placeholder="自由に聞く..."
-                className="flex-1 h-7 rounded-md border border-border bg-transparent px-2 text-xs focus:outline-none focus:ring-1 focus:ring-primary/40"
-              />
-              <Button
-                variant="ghost"
-                size="sm"
-                className="h-7 w-7 p-0"
-                disabled={!freeText.trim()}
-                onClick={() => freeText.trim() && goToTalk(freeText.trim())}
-              >
-                <Send className="h-3 w-3" />
-              </Button>
-            </div>
+        {/* Personality + Speech style */}
+        {(personalitySnippet || c.speechStyle) && (
+          <div className="text-xs text-muted-foreground mb-3 space-y-1">
+            {personalitySnippet && <p className="line-clamp-2">{personalitySnippet}</p>}
+            {c.speechStyle && <p className="text-[10px] truncate">口調: {c.speechStyle}</p>}
           </div>
         )}
 
-        <Link href={`/works/${c.work.id}`} className="block">
-          <Button variant="ghost" size="sm" className="w-full h-7 text-xs gap-1">
-            <BookOpen className="h-3 w-3" /> 作品を見る
-          </Button>
-        </Link>
+        {/* Work info */}
+        <div className="border-t border-border pt-2 mt-auto">
+          <Link href={`/works/${c.work.id}`} className="group/work">
+            <p className="text-xs font-medium truncate group-hover/work:text-primary transition-colors">
+              {c.work.title}
+            </p>
+            <p className="text-[10px] text-muted-foreground">
+              {c.work.author.displayName || c.work.author.name}
+            </p>
+          </Link>
+        </div>
+
+        {/* Actions */}
+        <div className="mt-3 space-y-1.5">
+          {c.work.enableCharacterTalk && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full h-7 text-xs gap-1"
+              onClick={() => setChatOpen(true)}
+            >
+              <MessageCircle className="h-3 w-3" /> 話してみる
+            </Button>
+          )}
+
+          <Link href={`/works/${c.work.id}`} className="block">
+            <Button variant="ghost" size="sm" className="w-full h-7 text-xs gap-1">
+              <BookOpen className="h-3 w-3" /> 作品を見る
+            </Button>
+          </Link>
+        </div>
       </div>
-    </div>
+
+      <CharacterChatPopup
+        character={c}
+        open={chatOpen}
+        onClose={() => setChatOpen(false)}
+      />
+    </>
   );
 }
