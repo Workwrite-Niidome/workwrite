@@ -274,8 +274,8 @@ export class DiscoverService {
 
   // ─── Character Match ─────────────────────────────────────
 
-  /** Roles that would spoil the story — exclude these */
-  private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵', '敵役', '悪役'];
+  /** Roles that would spoil the story — exclude these (exact word match, not substring) */
+  private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵役', '悪役'];
 
   // Cache for character matches (invalidated on character/work changes)
   private characterMatchCache: any[] | null = null;
@@ -370,7 +370,19 @@ export class DiscoverService {
       results = results.filter((c) => c.gender?.toLowerCase().includes(g));
     }
     if (options.ageRange) {
-      results = results.filter((c) => c.age?.includes(options.ageRange!));
+      const ageNum = parseInt(options.ageRange, 10); // "20代" → 20
+      results = results.filter((c) => {
+        if (!c.age) return false;
+        // Direct match: "20代", "20代後半" etc.
+        if (c.age.includes(options.ageRange!)) return true;
+        // Numeric match: "17歳" → 10代, "25歳" → 20代
+        const match = c.age.match(/(\d+)歳/);
+        if (match && !isNaN(ageNum)) {
+          const decade = Math.floor(parseInt(match[1], 10) / 10) * 10;
+          return decade === ageNum;
+        }
+        return false;
+      });
     }
     if (options.genre) {
       results = results.filter((c) => c.work.genre === options.genre);
