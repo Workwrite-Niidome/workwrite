@@ -1,7 +1,7 @@
 import { Injectable, Logger, ServiceUnavailableException } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
-import { AiTierService } from '../ai-settings/ai-tier.service';
+import { AiTierService, CreditEstimate } from '../ai-settings/ai-tier.service';
 import { PromptTemplatesService } from '../prompt-templates/prompt-templates.service';
 import { AiContextBuilderService } from './ai-context-builder.service';
 import { CreditService } from '../billing/credit.service';
@@ -57,38 +57,12 @@ export class AiAssistService {
     return true;
   }
 
-  async *streamAssist(
-    userId: string,
+  /** Build the prompt from a template + variables (shared by streamAssist and estimateCost) */
+  private async buildPrompt(
     templateSlug: string,
     variables: Record<string, string>,
-    premiumMode: boolean = false,
-    conversationId?: string,
-    followUpMessage?: string,
-    episodeId?: string,
-    aiMode?: 'normal' | 'thinking' | 'premium',
-  ): AsyncGenerator<string> {
-    const enabled = await this.aiSettings.isAiEnabled();
-    if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
-
-    const apiKey = await this.aiSettings.getApiKey();
-    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
-
-    if (!this.checkRateLimit(userId)) {
-      throw new ServiceUnavailableException('Rate limit exceeded. Please try again later.');
-    }
-
+  ): Promise<{ prompt: string; structuralContext: string | null }> {
     const template = await this.templates.findBySlug(templateSlug);
-
-    // Check AI tier and get model config (pass slug for model routing)
-    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug, aiMode);
-
-    // Calculate credit cost
-    const creditCost = this.aiTier.getCreditCost(
-      templateSlug,
-      premiumMode,
-      modelConfig.model.includes('opus'),
-      aiMode,
-    );
 
     // Auto-inject structural context if workId is provided
     if (variables.workId && !variables.structural_context) {
@@ -109,10 +83,9 @@ export class AiAssistService {
       }
     }
 
-    // Build prompt from template
     let prompt = template.prompt;
 
-    // Handle conditional sections: {{#key}}...{{/key}} - include block only if variable exists
+    // Handle conditional sections
     for (const [key, value] of Object.entries(variables)) {
       const sectionRegex = new RegExp(`\\{\\{#${key}\\}\\}([\\s\\S]*?)\\{\\{/${key}\\}\\}`, 'g');
       if (value && value.trim()) {
@@ -125,7 +98,7 @@ export class AiAssistService {
 
     // Replace variable placeholders
     for (const [key, value] of Object.entries(variables)) {
-      const truncated = key === 'content' ? value.slice(0, MAX_CONTENT_LENGTH) : value.slice(0, MAX_CONTENT_LENGTH);
+      const truncated = value.slice(0, MAX_CONTENT_LENGTH);
       prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), truncated);
     }
 
@@ -133,19 +106,125 @@ export class AiAssistService {
       prompt += `\n\n【著者からの追加指示】\n${variables.custom_instruction}`;
     }
 
+    return { prompt, structuralContext: variables.structural_context || null };
+  }
+
+  /** Estimate credit cost for a writing assist call (no LLM call) */
+  async estimateCost(
+    userId: string,
+    templateSlug: string,
+    variables: Record<string, string>,
+    premiumMode: boolean = false,
+    aiMode?: 'normal' | 'thinking' | 'premium',
+    conversationId?: string,
+    followUpMessage?: string,
+  ): Promise<{
+    estimate: CreditEstimate;
+    balance: { total: number; monthly: number; purchased: number };
+    isLightFeature: boolean;
+  }> {
+    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug, aiMode);
+
+    // Light features are free — return 0
+    const isLightFeature = this.aiTier.getCreditCost(templateSlug, false, false) === 0;
+    if (isLightFeature) {
+      const balance = await this.creditService.getBalance(userId);
+      return {
+        estimate: {
+          credits: 0,
+          breakdown: {
+            model: modelConfig.model,
+            inputChars: 0,
+            estimatedInputTokens: 0,
+            estimatedOutputTokens: 0,
+            estimatedApiCostYen: 0,
+          },
+        },
+        balance,
+        isLightFeature: true,
+      };
+    }
+
+    // Build the prompt to measure actual size
+    const varsCopy = { ...variables };
+    const { prompt, structuralContext } = await this.buildPrompt(templateSlug, varsCopy);
+
+    // For follow-ups, account for conversation history
+    let totalPromptChars = prompt.length;
+    if (conversationId && followUpMessage) {
+      const existing = await this.prisma.aiGenerationHistory.findUnique({
+        where: { id: conversationId },
+      });
+      if (existing) {
+        const historyChars = (existing.messages as any[])
+          .reduce((sum: number, m: any) => sum + (m.content?.length || 0), 0);
+        totalPromptChars = historyChars + followUpMessage.length;
+      }
+    }
+
+    const requestedChars = variables.char_count ? parseInt(variables.char_count, 10) : 1000;
+    const baseMaxTokens = Math.max(4000, Math.min(12000, requestedChars * 3));
+    const maxOutputTokens = modelConfig.thinking ? 8000 : baseMaxTokens;
+
+    // Determine min credits based on mode
+    let minCredits = 1;
+    if (aiMode === 'thinking' || (premiumMode && !modelConfig.model.includes('opus'))) minCredits = 2;
+    if (aiMode === 'premium' || modelConfig.model.includes('opus')) minCredits = 5;
+
+    const estimate = this.aiTier.estimateCreditCost({
+      model: modelConfig.model,
+      inputChars: totalPromptChars,
+      structuralContextChars: structuralContext?.length || 0,
+      maxOutputTokens,
+      thinkingBudgetTokens: modelConfig.budgetTokens,
+      minCredits,
+    });
+
+    const balance = await this.creditService.getBalance(userId);
+
+    return { estimate, balance, isLightFeature: false };
+  }
+
+  async *streamAssist(
+    userId: string,
+    templateSlug: string,
+    variables: Record<string, string>,
+    premiumMode: boolean = false,
+    conversationId?: string,
+    followUpMessage?: string,
+    episodeId?: string,
+    aiMode?: 'normal' | 'thinking' | 'premium',
+  ): AsyncGenerator<string> {
+    const enabled = await this.aiSettings.isAiEnabled();
+    if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    if (!this.checkRateLimit(userId)) {
+      throw new ServiceUnavailableException('Rate limit exceeded. Please try again later.');
+    }
+
+    // Check AI tier and get model config
+    const modelConfig = await this.aiTier.getModelConfig(userId, premiumMode, templateSlug, aiMode);
+
+    // Load template for logging metadata
+    const template = await this.templates.findBySlug(templateSlug);
+
+    // Build prompt (also injects structural context into variables)
+    const { prompt, structuralContext } = await this.buildPrompt(templateSlug, variables);
+
     // Build messages array: new conversation or follow-up
     let existingConversation: any = null;
     let messages: { role: string; content: string }[];
 
     if (conversationId && followUpMessage) {
-      // Follow-up: load existing conversation and append
       existingConversation = await this.prisma.aiGenerationHistory.findUnique({
         where: { id: conversationId },
       });
       if (existingConversation && existingConversation.userId === userId) {
         messages = [...(existingConversation.messages as any[]), { role: 'user', content: followUpMessage }];
       } else {
-        // Fallback: treat as new conversation
         messages = [{ role: 'user', content: prompt }];
       }
     } else {
@@ -157,16 +236,16 @@ export class AiAssistService {
     let outputTokens = 0;
     let fullOutput = '';
 
-    // Scale max_tokens based on requested char_count (Japanese ~2 tokens/char)
+    // Scale max_tokens based on requested char_count
     const requestedChars = variables.char_count ? parseInt(variables.char_count, 10) : 1000;
     const baseMaxTokens = Math.max(4000, Math.min(12000, requestedChars * 3));
 
     // Separate structural context as a cacheable system prompt
     const systemParts: { type: string; text: string; cache_control?: { type: string } }[] = [];
-    if (variables.structural_context) {
+    if (structuralContext) {
       systemParts.push({
         type: 'text',
-        text: variables.structural_context,
+        text: structuralContext,
         cache_control: { type: 'ephemeral' },
       });
     }
@@ -184,6 +263,26 @@ export class AiAssistService {
         type: 'enabled',
         budget_tokens: modelConfig.budgetTokens,
       };
+    }
+
+    // Dynamic credit cost based on content size
+    const isLightFeature = this.aiTier.getCreditCost(templateSlug, false, false) === 0;
+    let creditCost = 0;
+    if (!isLightFeature) {
+      const totalPromptChars = messages.reduce((sum, m) => sum + m.content.length, 0);
+      const maxOutputTokens = modelConfig.thinking ? 8000 : baseMaxTokens;
+      let minCredits = 1;
+      if (aiMode === 'thinking' || (premiumMode && !modelConfig.model.includes('opus'))) minCredits = 2;
+      if (aiMode === 'premium' || modelConfig.model.includes('opus')) minCredits = 5;
+
+      creditCost = this.aiTier.estimateCreditCost({
+        model: modelConfig.model,
+        inputChars: totalPromptChars,
+        structuralContextChars: structuralContext?.length || 0,
+        maxOutputTokens,
+        thinkingBudgetTokens: modelConfig.budgetTokens,
+        minCredits,
+      }).credits;
     }
 
     // Credit consumption: PENDING phase

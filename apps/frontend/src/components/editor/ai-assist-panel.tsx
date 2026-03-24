@@ -52,6 +52,17 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [showHistory, setShowHistory] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
 
+  // Cost estimation & confirmation state
+  const [pendingAction, setPendingAction] = useState<{
+    type: 'quick' | 'followUp' | 'freePrompt';
+    slug: string;
+    vars: Record<string, string>;
+    aiMode: AiMode;
+    estimate: { credits: number; balance: { total: number }; isLightFeature: boolean };
+    followUpMessage?: string;
+  } | null>(null);
+  const [estimatingCost, setEstimatingCost] = useState(false);
+
   const { result, isStreaming, error, conversationId, generate, generateFollowUp, abort, reset } = useAiStream();
 
   const TEMPLATE_LABELS: Record<string, string> = {
@@ -298,28 +309,107 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     return vars;
   }
 
-  function handleQuickAction(slug: string) {
-    setChatMessages([]);
-    setCurrentSlug(slug);
-    setNewChars(null);
-    reset();
-    generate(slug, buildContextVars(), undefined, aiMode);
+  async function handleQuickAction(slug: string) {
+    setEstimatingCost(true);
+    setPendingAction(null);
+    const vars = buildContextVars();
+    try {
+      const res = await api.estimateAiCost({ templateSlug: slug, variables: vars, aiMode });
+      if (res.isLightFeature || res.estimate.credits === 0) {
+        // Free feature — skip confirmation
+        setChatMessages([]);
+        setCurrentSlug(slug);
+        setNewChars(null);
+        reset();
+        generate(slug, vars, undefined, aiMode);
+      } else {
+        setPendingAction({
+          type: 'quick',
+          slug,
+          vars,
+          aiMode,
+          estimate: { credits: res.estimate.credits, balance: res.balance, isLightFeature: false },
+        });
+      }
+    } catch {
+      // Fallback: proceed without estimate
+      setChatMessages([]);
+      setCurrentSlug(slug);
+      setNewChars(null);
+      reset();
+      generate(slug, vars, undefined, aiMode);
+    }
+    setEstimatingCost(false);
   }
 
-  function handleFollowUp() {
+  async function handleFollowUp() {
     if (!followUpInput.trim() || !conversationId || isStreaming) return;
-    commitResult();
     const msg = followUpInput.trim();
+    setEstimatingCost(true);
+    setPendingAction(null);
+    const vars = buildContextVars();
+    try {
+      const res = await api.estimateAiCost({
+        templateSlug: currentSlug || 'free-prompt',
+        variables: vars,
+        aiMode,
+        conversationId,
+        followUpMessage: msg,
+      });
+      if (res.isLightFeature || res.estimate.credits === 0) {
+        executeFollowUp(msg, vars);
+      } else {
+        setPendingAction({
+          type: 'followUp',
+          slug: currentSlug || 'free-prompt',
+          vars,
+          aiMode,
+          estimate: { credits: res.estimate.credits, balance: res.balance, isLightFeature: false },
+          followUpMessage: msg,
+        });
+      }
+    } catch {
+      executeFollowUp(msg, vars);
+    }
+    setEstimatingCost(false);
+  }
+
+  function executeFollowUp(msg: string, vars: Record<string, string>) {
+    commitResult();
     setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
     setFollowUpInput('');
     setNewChars(null);
     generateFollowUp({
       templateSlug: currentSlug || 'free-prompt',
-      variables: buildContextVars(),
+      variables: vars,
       aiMode,
-      conversationId,
+      conversationId: conversationId || undefined,
       followUpMessage: msg,
     });
+  }
+
+  function confirmPendingAction() {
+    if (!pendingAction) return;
+    if (pendingAction.type === 'quick') {
+      setChatMessages([]);
+      setCurrentSlug(pendingAction.slug);
+      setNewChars(null);
+      reset();
+      generate(pendingAction.slug, pendingAction.vars, undefined, pendingAction.aiMode);
+    } else if (pendingAction.type === 'followUp' && pendingAction.followUpMessage) {
+      executeFollowUp(pendingAction.followUpMessage, pendingAction.vars);
+    } else if (pendingAction.type === 'freePrompt') {
+      setChatMessages([]);
+      setCurrentSlug(pendingAction.slug);
+      setNewChars(null);
+      reset();
+      generate(pendingAction.slug, pendingAction.vars, undefined, pendingAction.aiMode);
+    }
+    setPendingAction(null);
+  }
+
+  function cancelPendingAction() {
+    setPendingAction(null);
   }
 
   function handleNewConversation() {
@@ -348,8 +438,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     reset();
   }
 
-  // Credit cost label
-  const creditLabel = aiMode === 'premium' ? '5' : aiMode === 'thinking' ? '2' : '1';
+  // Credit cost label (minimum estimate for display)
+  const creditLabel = pendingAction
+    ? String(pendingAction.estimate.credits)
+    : aiMode === 'premium' ? '5+' : aiMode === 'thinking' ? '2+' : '1+';
 
   if (available === false || (tier && !tier.canUseAi)) {
     const isQuotaExhausted = tier && !tier.canUseAi;
@@ -459,14 +551,45 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
+        {/* Cost confirmation bar */}
+        {pendingAction && (
+          <div className="p-3 bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800 space-y-2">
+            <p className="text-xs font-medium">コスト確認</p>
+            <div className="text-xs text-muted-foreground">
+              消費クレジット: <span className="font-bold text-foreground">{pendingAction.estimate.credits}cr</span>
+              <span className="ml-2">（残高: {pendingAction.estimate.balance.total}cr）</span>
+            </div>
+            {pendingAction.estimate.balance.total < pendingAction.estimate.credits && (
+              <p className="text-xs text-destructive">
+                クレジット不足です。<a href="/settings/billing" className="underline ml-1">クレジットを追加</a>
+              </p>
+            )}
+            <div className="flex gap-2">
+              <Button
+                size="sm"
+                onClick={confirmPendingAction}
+                disabled={pendingAction.estimate.balance.total < pendingAction.estimate.credits}
+                className="h-7 text-xs"
+              >
+                {pendingAction.estimate.credits}cr で実行
+              </Button>
+              <Button size="sm" variant="ghost" onClick={cancelPendingAction} className="h-7 text-xs">
+                キャンセル
+              </Button>
+            </div>
+          </div>
+        )}
+
         {/* Main actions — large, clear buttons */}
-        {!hasConversation && (
+        {!hasConversation && !pendingAction && (
           <div className="space-y-3">
-            <p className="text-xs font-medium text-muted-foreground">何をしますか？</p>
+            <p className="text-xs font-medium text-muted-foreground">
+              {estimatingCost ? '見積もり取得中...' : '何をしますか？'}
+            </p>
             <div className="grid grid-cols-2 gap-2">
               <button
                 onClick={() => handleQuickAction('chapter-opening')}
-                disabled={isStreaming}
+                disabled={isStreaming || estimatingCost}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
               >
                 <FileText className="h-5 w-5 text-primary" />
@@ -474,7 +597,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               </button>
               <button
                 onClick={() => handleQuickAction('continue-writing')}
-                disabled={isStreaming || !currentContent.trim()}
+                disabled={isStreaming || estimatingCost || !currentContent.trim()}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
               >
                 <PenLine className="h-5 w-5 text-primary" />
@@ -482,7 +605,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               </button>
               <button
                 onClick={() => handleQuickAction('proofread')}
-                disabled={isStreaming || !currentContent.trim()}
+                disabled={isStreaming || estimatingCost || !currentContent.trim()}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
               >
                 <BookCheck className="h-5 w-5 text-primary" />
@@ -490,7 +613,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               </button>
               <button
                 onClick={() => handleQuickAction('style-adjust')}
-                disabled={isStreaming || !currentContent.trim()}
+                disabled={isStreaming || estimatingCost || !currentContent.trim()}
                 className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
               >
                 <Wand2 className="h-5 w-5 text-primary" />
@@ -504,31 +627,21 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               <div className="flex gap-1.5">
                 <textarea value={freePrompt} onChange={(e) => setFreePrompt(e.target.value)}
                   onKeyDown={(e) => {
-                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming) {
+                    if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming && !estimatingCost) {
                       e.preventDefault();
-                      setChatMessages([]);
-                      setCurrentSlug('free-prompt');
-                      setNewChars(null);
                       const vars = buildContextVars();
                       vars.user_prompt = freePrompt.trim();
-                      reset();
-                      generate('free-prompt', vars, undefined, aiMode);
-                      setFreePrompt('');
+                      handleQuickAction('free-prompt');
                     }
                   }}
                   placeholder="例: 主人公の心情をもっと丁寧に描写して..."
                   rows={2} className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
                 <Button size="sm" variant="default" className="self-end h-9 px-3"
-                  disabled={!freePrompt.trim() || isStreaming}
+                  disabled={!freePrompt.trim() || isStreaming || estimatingCost}
                   onClick={() => {
-                    setChatMessages([]);
-                    setCurrentSlug('free-prompt');
-                    setNewChars(null);
                     const vars = buildContextVars();
                     vars.user_prompt = freePrompt.trim();
-                    reset();
-                    generate('free-prompt', vars, undefined, aiMode);
-                    setFreePrompt('');
+                    handleQuickAction('free-prompt');
                   }}
                 >
                   <Send className="h-4 w-4" />
@@ -810,13 +923,13 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                     className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
                   />
                   <Button size="sm" variant="default" className="self-end h-9 px-3"
-                    disabled={!followUpInput.trim() || isStreaming}
+                    disabled={!followUpInput.trim() || isStreaming || estimatingCost}
                     onClick={handleFollowUp}>
                     <Send className="h-4 w-4" />
                   </Button>
                 </div>
                 <p className="text-xs text-muted-foreground">
-                  {creditLabel}クレジット/回
+                  約{creditLabel}クレジット/回（実行前に確認あり）
                 </p>
               </div>
             )}

@@ -197,4 +197,122 @@ describe('AiTierService', () => {
       expect(tier.canUseOpus).toBe(false);
     });
   });
+
+  // ─── estimateCreditCost ─────────────────────────────────────────────────────
+
+  describe('estimateCreditCost', () => {
+    it('returns minCredits for very small input', () => {
+      const result = service.estimateCreditCost({
+        model: 'claude-haiku-4-5-20251001',
+        inputChars: 500,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      expect(result.credits).toBeGreaterThanOrEqual(1);
+      expect(result.breakdown.model).toBe('claude-haiku-4-5-20251001');
+      expect(result.breakdown.estimatedInputTokens).toBe(1000); // 500 × 2
+    });
+
+    it('scales with input size for Haiku scoring', () => {
+      const small = service.estimateCreditCost({
+        model: 'claude-haiku-4-5-20251001',
+        inputChars: 5000,
+        systemPromptChars: 11000,
+        maxOutputTokens: 8192,
+        minCredits: 1,
+      });
+      const large = service.estimateCreditCost({
+        model: 'claude-haiku-4-5-20251001',
+        inputChars: 150000,
+        systemPromptChars: 11000,
+        maxOutputTokens: 8192,
+        minCredits: 1,
+      });
+      expect(large.credits).toBeGreaterThan(small.credits);
+    });
+
+    it('uses higher margin for Sonnet than Opus', () => {
+      // Same input/output, different model → Sonnet has 1.6x margin, Opus has 1.4x
+      const sonnet = service.estimateCreditCost({
+        model: 'claude-sonnet-4-6',
+        inputChars: 10000,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      const opus = service.estimateCreditCost({
+        model: 'claude-opus-4-6',
+        inputChars: 10000,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      // Opus has higher rates but lower margin; it should still cost more
+      expect(opus.credits).toBeGreaterThan(sonnet.credits);
+      expect(sonnet.breakdown.estimatedApiCostYen).toBeLessThan(opus.breakdown.estimatedApiCostYen);
+    });
+
+    it('includes thinking budget in output tokens', () => {
+      const noThinking = service.estimateCreditCost({
+        model: 'claude-sonnet-4-6',
+        inputChars: 5000,
+        maxOutputTokens: 8000,
+        thinkingBudgetTokens: 0,
+        minCredits: 1,
+      });
+      const withThinking = service.estimateCreditCost({
+        model: 'claude-sonnet-4-6',
+        inputChars: 5000,
+        maxOutputTokens: 8000,
+        thinkingBudgetTokens: 10000,
+        minCredits: 2,
+      });
+      expect(withThinking.credits).toBeGreaterThan(noThinking.credits);
+      expect(withThinking.breakdown.estimatedOutputTokens).toBe(18000);
+      expect(noThinking.breakdown.estimatedOutputTokens).toBe(8000);
+    });
+
+    it('includes structural context in input calculation', () => {
+      const without = service.estimateCreditCost({
+        model: 'claude-sonnet-4-6',
+        inputChars: 5000,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      const withCtx = service.estimateCreditCost({
+        model: 'claude-sonnet-4-6',
+        inputChars: 5000,
+        structuralContextChars: 20000,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      expect(withCtx.credits).toBeGreaterThan(without.credits);
+      expect(withCtx.breakdown.inputChars).toBe(25000);
+    });
+
+    it('never returns below minCredits', () => {
+      const result = service.estimateCreditCost({
+        model: 'claude-haiku-4-5-20251001',
+        inputChars: 100,
+        maxOutputTokens: 100,
+        minCredits: 5,
+      });
+      expect(result.credits).toBe(5);
+    });
+
+    it('uses default rates for unknown models', () => {
+      const result = service.estimateCreditCost({
+        model: 'unknown-model',
+        inputChars: 10000,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      // Should use Sonnet rates as fallback
+      const sonnet = service.estimateCreditCost({
+        model: 'claude-sonnet-4-6',
+        inputChars: 10000,
+        maxOutputTokens: 4000,
+        minCredits: 1,
+      });
+      expect(result.credits).toBe(sonnet.credits);
+    });
+  });
 });

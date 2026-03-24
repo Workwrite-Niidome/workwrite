@@ -15,6 +15,12 @@ interface ScoreCardProps {
   onScoreUpdate?: (score: QualityScoreDetail) => void;
 }
 
+interface CostEstimate {
+  credits: number;
+  totalChars: number;
+  balance: { total: number };
+}
+
 const ALL_AXES = [
   { key: 'immersion', label: '没入力', desc: '読者を引き込む力', angle: -90 },
   { key: 'transformation', label: '変容力', desc: '心に残る読後感', angle: -30 },
@@ -85,24 +91,59 @@ function RadarChart({ score }: { score: QualityScoreDetail }) {
   );
 }
 
+function formatChars(chars: number): string {
+  if (chars >= 10000) return `${Math.round(chars / 1000) / 10}万`;
+  if (chars >= 1000) return `${Math.round(chars / 100) / 10}千`;
+  return `${chars}`;
+}
+
 export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCardProps) {
   const [scoring, setScoring] = useState(false);
+  const [estimating, setEstimating] = useState(false);
+  const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
   const [error, setError] = useState('');
+  const [lastCreditCost, setLastCreditCost] = useState<number | null>(null);
 
-  async function handleScore() {
+  async function handleEstimate() {
+    if (!workId) return;
+    setEstimating(true);
+    setError('');
+    setCostEstimate(null);
+    try {
+      const res = await api.estimateScoringCost(workId);
+      setCostEstimate({
+        credits: res.estimate.credits,
+        totalChars: res.totalChars,
+        balance: res.balance,
+      });
+    } catch (e: any) {
+      setError(e?.message || '見積もりの取得に失敗しました');
+    }
+    setEstimating(false);
+  }
+
+  async function handleConfirmScore() {
     if (!workId) return;
     setScoring(true);
     setError('');
     try {
       const res = await api.triggerScoring(workId);
       if (res.data) {
+        setLastCreditCost(costEstimate?.credits || null);
         onScoreUpdate?.(res.data);
       }
     } catch (e: any) {
       setError(e?.message || 'スコアリングに失敗しました');
     }
     setScoring(false);
+    setCostEstimate(null);
   }
+
+  function handleCancel() {
+    setCostEstimate(null);
+  }
+
+  const insufficientCredits = costEstimate && costEstimate.balance.total < costEstimate.credits;
 
   return (
     <Card>
@@ -112,19 +153,56 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             <Zap className="h-4 w-4" />
             AI品質スコア
           </span>
-          {workId && (
+          {workId && !costEstimate && (
             <Button
               variant="outline"
               size="sm"
-              onClick={handleScore}
-              disabled={scoring}
+              onClick={handleEstimate}
+              disabled={scoring || estimating}
               className="text-xs h-7"
             >
-              {scoring ? 'スコアリング中...' : score ? '再スコアリング' : 'スコアリング実行'}
+              {estimating ? '見積もり中...' : scoring ? 'スコアリング中...' : score ? '再スコアリング' : 'スコアリング実行'}
             </Button>
           )}
         </CardTitle>
         {error && <p className="text-xs text-destructive">{error}</p>}
+
+        {/* Cost confirmation dialog */}
+        {costEstimate && (
+          <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border space-y-2">
+            <p className="text-xs font-medium">スコアリングのコスト確認</p>
+            <div className="text-xs text-muted-foreground space-y-0.5">
+              <p>作品文字数: 約{formatChars(costEstimate.totalChars)}文字</p>
+              <p>消費クレジット: <span className="font-bold text-foreground">{costEstimate.credits}cr</span></p>
+              <p>残高: {costEstimate.balance.total}cr</p>
+            </div>
+            {insufficientCredits && (
+              <p className="text-xs text-destructive">
+                クレジットが不足しています。
+                <a href="/settings/billing" className="underline ml-1">クレジットを追加</a>
+              </p>
+            )}
+            <div className="flex gap-2 pt-1">
+              <Button
+                size="sm"
+                onClick={handleConfirmScore}
+                disabled={scoring || !!insufficientCredits}
+                className="text-xs h-7"
+              >
+                {scoring ? 'スコアリング中...' : `${costEstimate.credits}cr で実行`}
+              </Button>
+              <Button
+                size="sm"
+                variant="ghost"
+                onClick={handleCancel}
+                disabled={scoring}
+                className="text-xs h-7"
+              >
+                キャンセル
+              </Button>
+            </div>
+          </div>
+        )}
       </CardHeader>
       <CardContent className="space-y-4">
         {score ? (
@@ -205,7 +283,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             <div className="flex items-center justify-between">
               <p className="text-[10px] text-muted-foreground">
                 スコアリング: {new Date(score.scoredAt).toLocaleDateString('ja-JP')}
-                {' '}(1クレジット消費)
+                {lastCreditCost != null && ` (${lastCreditCost}クレジット消費)`}
               </p>
               {workId && (
                 <ShareScoreButton
@@ -221,7 +299,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             <p className="text-sm text-muted-foreground mb-2">まだスコアリングされていません</p>
             {workId && (
               <p className="text-xs text-muted-foreground">
-                上のボタンからAIスコアリングを実行できます（1クレジット）
+                上のボタンからAIスコアリングを実行できます（文字数に応じたクレジット消費）
               </p>
             )}
           </div>

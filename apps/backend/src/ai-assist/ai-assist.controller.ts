@@ -31,6 +31,25 @@ export class AiAssistController {
     return this.aiAssist.checkStatus(userId);
   }
 
+  @Post('ai/estimate-cost')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Estimate credit cost for AI writing assist' })
+  async estimateCost(
+    @CurrentUser('id') userId: string,
+    @Body() dto: AiAssistDto,
+  ) {
+    return this.aiAssist.estimateCost(
+      userId,
+      dto.templateSlug,
+      dto.variables,
+      dto.premiumMode,
+      dto.aiMode,
+      dto.conversationId,
+      dto.followUpMessage,
+    );
+  }
+
   @Post('ai/assist')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

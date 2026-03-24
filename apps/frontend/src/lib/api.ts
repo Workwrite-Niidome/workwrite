@@ -605,12 +605,40 @@ class ApiClient {
   }
 
   // Scoring
+  async estimateScoringCost(workId: string) {
+    return this.request<{
+      estimate: { credits: number; breakdown: { model: string; inputChars: number; estimatedInputTokens: number; estimatedOutputTokens: number; estimatedApiCostYen: number } };
+      balance: { total: number; monthly: number; purchased: number };
+      totalChars: number;
+      episodeCount: number;
+    }>(`/scoring/works/${workId}/estimate`);
+  }
+
   async triggerScoring(workId: string) {
     return this.request<{ data: QualityScoreDetail | null }>(`/scoring/works/${workId}`, { method: 'POST' });
   }
 
   async getScoreAnalysis(workId: string) {
     return this.request<{ data: QualityScoreDetail | null }>(`/scoring/works/${workId}/analysis`);
+  }
+
+  // AI Cost Estimation
+  async estimateAiCost(dto: {
+    templateSlug: string;
+    variables: Record<string, string>;
+    premiumMode?: boolean;
+    aiMode?: string;
+    conversationId?: string;
+    followUpMessage?: string;
+  }) {
+    return this.request<{
+      estimate: { credits: number; breakdown: { model: string; inputChars: number; estimatedInputTokens: number; estimatedOutputTokens: number; estimatedApiCostYen: number } };
+      balance: { total: number; monthly: number; purchased: number };
+      isLightFeature: boolean;
+    }>('/ai/estimate-cost', {
+      method: 'POST',
+      body: JSON.stringify(dto),
+    });
   }
 
   // Notifications

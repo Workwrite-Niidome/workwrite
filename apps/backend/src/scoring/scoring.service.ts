@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { AiSettingsService } from '../ai-settings/ai-settings.service';
+import { AiTierService, CreditEstimate } from '../ai-settings/ai-tier.service';
 import { CreditService } from '../billing/credit.service';
 import { TextAnalyzerService } from './text-analyzer.service';
 import { StructuralDataBuilderService } from './structural-data-builder.service';
@@ -12,21 +13,71 @@ import { ScoringResult, ScoringInput } from './types';
 // Re-export for backward compatibility
 export type { ScoringResult } from './types';
 
+const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const SCORING_MAX_TOKENS = 8192;
+const MAX_SCORING_CHARS = 150_000;
+// Approximate size of SCORING_SYSTEM_PROMPT in characters
+const SCORING_SYSTEM_PROMPT_CHARS = 11_000;
+
 @Injectable()
 export class ScoringService {
   private readonly logger = new Logger(ScoringService.name);
 
-  private static readonly SCORING_CREDIT_COST = 1;
-
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private aiTier: AiTierService,
     private creditService: CreditService,
     private textAnalyzer: TextAnalyzerService,
     private structuralDataBuilder: StructuralDataBuilderService,
     private sampleExtractor: SampleExtractorService,
     private structureExtractor: WorkStructureExtractorService,
   ) {}
+
+  /** Estimate the credit cost for scoring a work (no LLM call) */
+  async estimateScoringCost(workId: string, userId: string): Promise<{
+    estimate: CreditEstimate;
+    balance: { total: number; monthly: number; purchased: number };
+    totalChars: number;
+    episodeCount: number;
+  }> {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      include: { episodes: { select: { content: true } } },
+    });
+
+    if (!work || work.episodes.length === 0) {
+      const balance = await this.creditService.getBalance(userId);
+      const estimate = this.aiTier.estimateCreditCost({
+        model: HAIKU_MODEL,
+        inputChars: 0,
+        systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
+        maxOutputTokens: SCORING_MAX_TOKENS,
+        minCredits: 1,
+      });
+      return { estimate, balance, totalChars: 0, episodeCount: 0 };
+    }
+
+    const totalChars = work.episodes.reduce((sum, ep) => sum + ep.content.length, 0);
+    const cappedChars = Math.min(totalChars, MAX_SCORING_CHARS);
+
+    const estimate = this.aiTier.estimateCreditCost({
+      model: HAIKU_MODEL,
+      inputChars: cappedChars,
+      systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
+      maxOutputTokens: SCORING_MAX_TOKENS,
+      minCredits: 1,
+    });
+
+    const balance = await this.creditService.getBalance(userId);
+
+    return {
+      estimate,
+      balance,
+      totalChars,
+      episodeCount: work.episodes.length,
+    };
+  }
 
   async scoreWork(workId: string, userId?: string): Promise<ScoringResult | null> {
     const work = await this.prisma.work.findUnique({
@@ -39,15 +90,26 @@ export class ScoringService {
 
     if (!work || work.episodes.length === 0) return null;
 
+    // Dynamic credit cost based on content size
+    const totalChars = work.episodes.reduce((sum, ep) => sum + ep.content.length, 0);
+    const cappedChars = Math.min(totalChars, MAX_SCORING_CHARS);
+    const { credits: creditCost } = this.aiTier.estimateCreditCost({
+      model: HAIKU_MODEL,
+      inputChars: cappedChars,
+      systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
+      maxOutputTokens: SCORING_MAX_TOKENS,
+      minCredits: 1,
+    });
+
     // Credit consumption
     let transactionId: string | null = null;
-    if (userId && ScoringService.SCORING_CREDIT_COST > 0) {
+    if (userId && creditCost > 0) {
       try {
         const result = await this.creditService.consumeCredits(
           userId,
-          ScoringService.SCORING_CREDIT_COST,
+          creditCost,
           'scoring',
-          'claude-haiku-4-5-20251001',
+          HAIKU_MODEL,
         );
         transactionId = result.transactionId;
       } catch (e) {
@@ -66,10 +128,9 @@ export class ScoringService {
       }));
 
       // Limit to 150K chars (~小説1冊分) for scoring accuracy
-      const MAX_SCORING_CHARS = 150_000;
       let episodes = allEpisodes;
-      const totalChars = allEpisodes.reduce((s, ep) => s + ep.content.length, 0);
-      const isLongWork = totalChars > MAX_SCORING_CHARS;
+      const allTotalChars = allEpisodes.reduce((s, ep) => s + ep.content.length, 0);
+      const isLongWork = allTotalChars > MAX_SCORING_CHARS;
 
       if (isLongWork) {
         // Long work mode: use distributed sampling across the entire work
@@ -83,7 +144,7 @@ export class ScoringService {
           charCount += ep.content.length;
         }
         this.logger.log(
-          `Work ${workId}: ${totalChars} chars exceeds ${MAX_SCORING_CHARS} limit. ` +
+          `Work ${workId}: ${allTotalChars} chars exceeds ${MAX_SCORING_CHARS} limit. ` +
           `Long work mode: metrics from first ${limited.length}/${allEpisodes.length} episodes, ` +
           `but text samples distributed across all ${allEpisodes.length} episodes.`,
         );
@@ -136,7 +197,7 @@ export class ScoringService {
         structure,
         isLongWork,
         totalEpisodeCount: isLongWork ? allEpisodes.length : undefined,
-        totalCharCount: isLongWork ? totalChars : undefined,
+        totalCharCount: isLongWork ? allTotalChars : undefined,
       };
 
       this.logger.log(

@@ -8,10 +8,19 @@ import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 export class ScoringController {
   constructor(private scoringService: ScoringService) {}
 
+  @Get('works/:workId/estimate')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Estimate credit cost for scoring a work' })
+  async estimateCost(@Param('workId') workId: string, @Req() req: any) {
+    const userId = req.user?.id || req.user?.sub;
+    return this.scoringService.estimateScoringCost(workId, userId);
+  }
+
   @Post('works/:workId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Trigger AI scoring for a work (1 credit)' })
+  @ApiOperation({ summary: 'Trigger AI scoring for a work (dynamic credit cost)' })
   async scoreWork(@Param('workId') workId: string, @Req() req: any) {
     const userId = req.user?.id || req.user?.sub;
     const result = await this.scoringService.scoreWork(workId, userId);

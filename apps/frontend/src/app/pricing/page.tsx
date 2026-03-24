@@ -14,15 +14,15 @@ const PLANS = [
     price: '¥0',
     period: '',
     credits: '10cr / 月',
-    creditsNote: '通常アシスト 10回相当',
+    creditsNote: '通常アシスト約2〜5回相当',
     icon: Sparkles,
     highlight: false,
     cta: '無料で始める',
     ctaHref: '/register',
     features: [
       '作品の執筆・公開・閲覧',
-      'AI執筆アシスト（通常 1cr/回）',
-      'AIスコアリング（1cr/回）',
+      'AI執筆アシスト（通常 1cr〜/回）',
+      'AIスコアリング（1cr〜/回）',
       '読書進捗・統計',
       'レター（月3通まで無料）',
       'ハイライト・しおり機能',
@@ -39,7 +39,7 @@ const PLANS = [
     price: '¥2,980',
     period: '/ 月',
     credits: '200cr / 月',
-    creditsNote: '通常アシスト 200回 or 高精度 40回相当',
+    creditsNote: '通常アシスト約33〜100回相当',
     icon: Zap,
     highlight: true,
     cta: 'Standard を始める',
@@ -59,7 +59,7 @@ const PLANS = [
     price: '¥7,980',
     period: '/ 月',
     credits: '600cr / 月',
-    creditsNote: '通常アシスト 600回 or 高精度 120回相当',
+    creditsNote: '通常アシスト約100〜300回相当',
     icon: Crown,
     highlight: false,
     cta: 'Pro を始める',
@@ -76,11 +76,11 @@ const PLANS = [
 ];
 
 const CREDIT_TABLE = [
-  { action: 'AI執筆アシスト（通常）', credits: '1cr', note: '素早い応答（Sonnet）' },
-  { action: 'AI執筆アシスト（じっくり）', credits: '2cr', note: 'より深い思考で回答（Sonnet + Thinking）' },
-  { action: 'AI執筆アシスト（高精度）', credits: '5cr', note: '最高品質の回答（Opus） — Standard以上' },
+  { action: 'AI執筆アシスト（通常）', credits: '1cr〜', note: '入力文字数に応じて変動（Sonnet）' },
+  { action: 'AI執筆アシスト（じっくり）', credits: '2cr〜', note: '入力文字数に応じて変動（Sonnet + Thinking）' },
+  { action: 'AI執筆アシスト（高精度）', credits: '5cr〜', note: '入力文字数に応じて変動（Opus）— Standard以上' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
-  { action: 'AIスコアリング（作品品質分析）', credits: '1cr', note: '6軸評価 + 構造解析 + 改善提案' },
+  { action: 'AIスコアリング（作品品質分析）', credits: '1cr〜', note: '作品の文字数に応じて変動（実行前に見積もり表示）' },
   { action: 'URLインポート + 自動スコアリング', credits: '1cr', note: '小説家になろう・カクヨムからの作品取り込み' },
   { action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
   { action: '校正・推敲', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
@@ -96,7 +96,7 @@ const CREDIT_TABLE = [
 const FAQS = [
   {
     q: 'クレジットとは何ですか？',
-    a: 'クレジットはAI機能の利用に消費されるプラットフォーム内の単位です。AI執筆アシストは回答モードによって消費量が異なります（通常: 1cr、じっくり: 2cr、高精度: 5cr）。AIスコアリングやURLインポートは各1cr。校正・あらすじ生成・ハイライト解説などの軽量処理はクレジットを消費しません。',
+    a: 'クレジットはAI機能の利用に消費されるプラットフォーム内の単位です。AI執筆アシストやスコアリングは入力文字数に応じて消費量が変動し、実行前に見積もりが表示されます。校正・あらすじ生成・ハイライト解説などの軽量処理はクレジットを消費しません。',
   },
   {
     q: 'クレジットは翌月に繰り越せますか？',

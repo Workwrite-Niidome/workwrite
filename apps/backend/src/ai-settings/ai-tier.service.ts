@@ -5,6 +5,31 @@ import { CreditService } from '../billing/credit.service';
 
 export type PlanType = 'free' | 'standard' | 'pro';
 
+// ─── Dynamic Credit Pricing ─────────────────────────────
+// Token estimation: Japanese text ≈ 2 tokens/char
+// Prices: JPY per 1K tokens (1 USD ≈ 150 JPY)
+const MODEL_RATES: Record<string, { inputPerK: number; outputPerK: number }> = {
+  'claude-haiku-4-5-20251001': { inputPerK: 0.12, outputPerK: 0.60 },
+  'claude-sonnet-4-6': { inputPerK: 0.45, outputPerK: 2.25 },
+  'claude-opus-4-6': { inputPerK: 2.25, outputPerK: 11.25 },
+};
+const DEFAULT_RATES = { inputPerK: 0.45, outputPerK: 2.25 }; // fallback to Sonnet
+
+const CREDIT_VALUE_YEN = 10;
+const PROFIT_MARGIN = 1.6;
+const OPUS_PROFIT_MARGIN = 1.4; // Opus is expensive; use thinner margin for Pro users
+
+export interface CreditEstimate {
+  credits: number;
+  breakdown: {
+    model: string;
+    inputChars: number;
+    estimatedInputTokens: number;
+    estimatedOutputTokens: number;
+    estimatedApiCostYen: number;
+  };
+}
+
 export interface AiTier {
   plan: PlanType;
   canUseAi: boolean;
@@ -258,6 +283,55 @@ export class AiTierService {
       model: HAIKU_MODEL,
       thinking: false,
       budgetTokens: 0,
+    };
+  }
+
+  /**
+   * Estimate dynamic credit cost based on actual content size.
+   * Used for scoring and writing assist only.
+   * Formula: credits = max(min, ceil(apiCostYen / CREDIT_VALUE_YEN * PROFIT_MARGIN))
+   */
+  estimateCreditCost(params: {
+    model: string;
+    inputChars: number;
+    systemPromptChars?: number;
+    structuralContextChars?: number;
+    maxOutputTokens: number;
+    thinkingBudgetTokens?: number;
+    minCredits?: number;
+  }): CreditEstimate {
+    const {
+      model,
+      inputChars,
+      systemPromptChars = 0,
+      structuralContextChars = 0,
+      maxOutputTokens,
+      thinkingBudgetTokens = 0,
+      minCredits = 1,
+    } = params;
+
+    const totalInputChars = inputChars + systemPromptChars + structuralContextChars;
+    const estimatedInputTokens = Math.ceil(totalInputChars * 2);
+    const estimatedOutputTokens = maxOutputTokens + thinkingBudgetTokens;
+
+    const rates = MODEL_RATES[model] || DEFAULT_RATES;
+    const estimatedApiCostYen =
+      (estimatedInputTokens / 1000) * rates.inputPerK +
+      (estimatedOutputTokens / 1000) * rates.outputPerK;
+
+    const margin = model.includes('opus') ? OPUS_PROFIT_MARGIN : PROFIT_MARGIN;
+    const rawCredits = (estimatedApiCostYen / CREDIT_VALUE_YEN) * margin;
+    const credits = Math.max(minCredits, Math.round(rawCredits));
+
+    return {
+      credits,
+      breakdown: {
+        model,
+        inputChars: totalInputChars,
+        estimatedInputTokens,
+        estimatedOutputTokens,
+        estimatedApiCostYen: Math.round(estimatedApiCostYen * 100) / 100,
+      },
     };
   }
 

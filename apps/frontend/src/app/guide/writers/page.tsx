@@ -451,12 +451,12 @@ export default function WritersGuidePage() {
               <p>
                 <strong className="text-foreground">じっくりモード（Standard以上）</strong>
                 ：AIがより深く思考してから回答します。複雑なプロット展開や繊細な心情描写に最適です。
-                <span className="font-mono ml-1">2cr/回</span>
+                <span className="font-mono ml-1">2cr〜/回</span>
               </p>
               <p>
                 <strong className="text-foreground">高精度モード（Proのみ）</strong>
                 ：最高精度のAIモデル（Opus）を使用します。文学的な表現や高度な構成の作品に。
-                <span className="font-mono ml-1">5cr/回</span>
+                <span className="font-mono ml-1">5cr〜/回</span>
               </p>
             </div>
           </div>
@@ -690,11 +690,11 @@ export default function WritersGuidePage() {
                   </thead>
                   <tbody className="text-sm">
                     {[
-                      { feature: 'AI執筆アシスト（通常）', cost: '1cr' },
-                      { feature: 'AI執筆アシスト（じっくり）', cost: '2cr' },
-                      { feature: 'AI執筆アシスト（高精度）', cost: '5cr' },
+                      { feature: 'AI執筆アシスト（通常）', cost: '1cr〜' },
+                      { feature: 'AI執筆アシスト（じっくり）', cost: '2cr〜' },
+                      { feature: 'AI執筆アシスト（高精度）', cost: '5cr〜' },
                       { feature: 'Creation Wizard（各ステップ）', cost: '1cr' },
-                      { feature: 'AIスコアリング', cost: '1cr' },
+                      { feature: 'AIスコアリング', cost: '1cr〜' },
                       { feature: 'URLインポート', cost: '1cr' },
                       { feature: '読書タイプ再診断', cost: '1cr' },
                       { feature: '校正・推敲', cost: '0cr' },
@@ -721,21 +721,21 @@ export default function WritersGuidePage() {
                     price: '¥0',
                     credits: '10cr/月',
                     icon: Sparkles,
-                    features: ['通常アシスト 10回相当', 'スコアリング無制限', 'AI読書コンパニオン週5回'],
+                    features: ['通常アシスト約2〜5回相当', 'スコアリング無制限', 'AI読書コンパニオン週5回'],
                   },
                   {
                     name: 'Standard',
                     price: '¥2,980/月',
                     credits: '200cr/月',
                     icon: Zap,
-                    features: ['通常アシスト 200回相当', 'じっくりモード対応', 'クレジット追加購入可', '初回7日間無料'],
+                    features: ['通常アシスト約33〜100回相当', 'じっくりモード対応', 'クレジット追加購入可', '初回7日間無料'],
                   },
                   {
                     name: 'Pro',
-                    price: '¥9,800/月',
+                    price: '¥7,980/月',
                     credits: '600cr/月',
                     icon: Crown,
-                    features: ['通常アシスト 600回相当', '高精度モード（Opus）', 'じっくりモード対応', 'クレジット追加購入可', '初回7日間無料'],
+                    features: ['通常アシスト約100〜300回相当', '高精度モード（Opus）', 'じっくりモード対応', 'クレジット追加購入可', '初回7日間無料'],
                   },
                 ].map((plan) => (
                   <div
