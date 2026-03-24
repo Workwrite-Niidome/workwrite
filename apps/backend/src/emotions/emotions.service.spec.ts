@@ -28,6 +28,7 @@ const mockPrismaService = () => ({
 
 const mockCreditService = () => ({
   ensureCreditBalance: jest.fn().mockResolvedValue({}),
+  grantRewardCredits: jest.fn().mockResolvedValue(true),
 });
 
 // ---------------------------------------------------------------------------
@@ -158,57 +159,37 @@ describe('EmotionsService', () => {
       });
 
       it('increments balance by 1 (EMOTION_TAG_REWARD_CR)', async () => {
-        const fakeTxBalanceUpdate = jest.fn().mockResolvedValue({ balance: 3 });
-        prisma.$transaction.mockImplementation(async (fn) => {
-          const fakeTx = {
-            $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-            creditTransaction: { findFirst: jest.fn().mockResolvedValue(null), create: jest.fn().mockResolvedValue({}) },
-            creditBalance: { update: fakeTxBalanceUpdate },
-          };
-          return fn(fakeTx);
-        });
-
         await service.addMultipleEmotionTags('user-1', 'work-1', [{ tagId: 'tag-1' }]);
 
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(fakeTxBalanceUpdate).toHaveBeenCalledWith({
-          where: { userId: 'user-1' },
-          data: {
-            balance: { increment: 1 },
-            purchasedBalance: { increment: 1 },
-          },
-        });
+        expect(creditService.grantRewardCredits).toHaveBeenCalledWith(
+          'user-1',
+          1,
+          'REVIEW_REWARD',
+          '感情タグ報酬 (work-1)',
+          5,
+          '感情タグ報酬',
+        );
       });
 
       it('creates creditTransaction with REVIEW_REWARD type and correct description', async () => {
-        const fakeTxCreate = jest.fn().mockResolvedValue({});
-        prisma.$transaction.mockImplementation(async (fn) => {
-          const fakeTx = {
-            $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-            creditTransaction: { findFirst: jest.fn().mockResolvedValue(null), create: fakeTxCreate },
-            creditBalance: { update: jest.fn().mockResolvedValue({ balance: 3 }) },
-          };
-          return fn(fakeTx);
-        });
-
         await service.addMultipleEmotionTags('user-1', 'work-42', [{ tagId: 'tag-1' }]);
 
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(fakeTxCreate).toHaveBeenCalledWith({
-          data: expect.objectContaining({
-            userId: 'user-1',
-            amount: 1,
-            type: 'REVIEW_REWARD',
-            status: 'confirmed',
-            description: '感情タグ報酬 (work-42)',
-          }),
-        });
+        expect(creditService.grantRewardCredits).toHaveBeenCalledWith(
+          'user-1',
+          1,
+          'REVIEW_REWARD',
+          '感情タグ報酬 (work-42)',
+          5,
+          '感情タグ報酬',
+        );
       });
     });
 
@@ -239,26 +220,9 @@ describe('EmotionsService', () => {
     });
 
     describe('duplicate reward prevention', () => {
-      it('skips balance update when a duplicate transaction exists inside $transaction', async () => {
+      it('calls grantRewardCredits which handles duplicate prevention internally', async () => {
         prisma.userEmotionTag.upsert.mockResolvedValue(makeTag('tag-1'));
-
-        prisma.$transaction.mockImplementation(async (fn) => {
-          const fakeTx = {
-            $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-            creditTransaction: {
-              findFirst: jest.fn().mockResolvedValue({
-                id: 'tx-existing',
-                description: '感情タグ報酬 (work-1)',
-              }),
-              create: jest.fn(),
-            },
-            creditBalance: {
-              update: jest.fn(),
-            },
-          };
-          await fn(fakeTx);
-          return fakeTx;
-        });
+        creditService.grantRewardCredits.mockResolvedValue(false); // duplicate found
 
         await service.addMultipleEmotionTags('user-1', 'work-1', [{ tagId: 'tag-1' }]);
 
@@ -266,9 +230,10 @@ describe('EmotionsService', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        // ensureCreditBalance is still called, but balance update is skipped inside tx
+        // ensureCreditBalance is still called
         expect(creditService.ensureCreditBalance).toHaveBeenCalledWith('user-1');
-        expect(prisma.creditBalance.update).not.toHaveBeenCalled();
+        // grantRewardCredits was called (it returns false when duplicate exists)
+        expect(creditService.grantRewardCredits).toHaveBeenCalled();
       });
     });
   });

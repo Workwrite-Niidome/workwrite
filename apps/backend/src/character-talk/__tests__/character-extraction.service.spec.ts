@@ -12,6 +12,9 @@ const mockPrismaService = () => ({
     findMany: jest.fn(),
     update: jest.fn(),
   },
+  storyCharacter: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
 });
 
 const mockAiSettingsService = () => ({

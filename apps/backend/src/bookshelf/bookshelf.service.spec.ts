@@ -38,6 +38,7 @@ const mockPostsService = () => ({
 
 const mockCreditService = () => ({
   ensureCreditBalance: jest.fn().mockResolvedValue({}),
+  grantRewardCredits: jest.fn().mockResolvedValue(true),
 });
 
 // ---------------------------------------------------------------------------
@@ -236,30 +237,20 @@ describe('BookshelfService', () => {
         prisma.bookshelfEntry.upsert.mockResolvedValue({ status: 'COMPLETED' });
         prisma.work.findUnique.mockResolvedValue({ title: 'Some Work' });
 
-        const fakeTxBalanceUpdate = jest.fn().mockResolvedValue({ balance: 5 });
-        const fakeTxTransactionCreate = jest.fn().mockResolvedValue({});
-        prisma.$transaction.mockImplementation(async (fn) => {
-          const fakeTx = {
-            $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-            creditTransaction: { findFirst: jest.fn().mockResolvedValue(null), create: fakeTxTransactionCreate },
-            creditBalance: { update: fakeTxBalanceUpdate },
-          };
-          return fn(fakeTx);
-        });
-
         await service.updateStatus('user-1', 'work-1', 'COMPLETED' as any);
 
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(fakeTxBalanceUpdate).toHaveBeenCalledWith({
-          where: { userId: 'user-1' },
-          data: {
-            balance: { increment: 1 },
-            purchasedBalance: { increment: 1 },
-          },
-        });
+        expect(creditService.grantRewardCredits).toHaveBeenCalledWith(
+          'user-1',
+          1,
+          'REVIEW_REWARD',
+          '読了報酬 (work-1)',
+          5,
+          '読了報酬',
+        );
       });
 
       it('creates creditTransaction with REVIEW_REWARD type and correct description', async () => {
@@ -267,31 +258,20 @@ describe('BookshelfService', () => {
         prisma.bookshelfEntry.upsert.mockResolvedValue({ status: 'COMPLETED' });
         prisma.work.findUnique.mockResolvedValue({ title: 'Some Work' });
 
-        const fakeTxTransactionCreate = jest.fn().mockResolvedValue({});
-        prisma.$transaction.mockImplementation(async (fn) => {
-          const fakeTx = {
-            $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-            creditTransaction: { findFirst: jest.fn().mockResolvedValue(null), create: fakeTxTransactionCreate },
-            creditBalance: { update: jest.fn().mockResolvedValue({ balance: 5 }) },
-          };
-          return fn(fakeTx);
-        });
-
         await service.updateStatus('user-1', 'work-1', 'COMPLETED' as any);
 
         await Promise.resolve();
         await Promise.resolve();
         await Promise.resolve();
 
-        expect(fakeTxTransactionCreate).toHaveBeenCalledWith({
-          data: expect.objectContaining({
-            userId: 'user-1',
-            amount: 1,
-            type: 'REVIEW_REWARD',
-            status: 'confirmed',
-            description: '読了報酬 (work-1)',
-          }),
-        });
+        expect(creditService.grantRewardCredits).toHaveBeenCalledWith(
+          'user-1',
+          1,
+          'REVIEW_REWARD',
+          '読了報酬 (work-1)',
+          5,
+          '読了報酬',
+        );
       });
 
       it('does NOT grant Cr when previous status was already COMPLETED', async () => {
@@ -339,29 +319,11 @@ describe('BookshelfService', () => {
         expect(creditService.ensureCreditBalance).toHaveBeenCalledWith('user-1');
       });
 
-      it('skips balance update when duplicate transaction already exists (inside $transaction)', async () => {
+      it('calls grantRewardCredits which handles duplicate prevention internally', async () => {
         prisma.bookshelfEntry.findUnique.mockResolvedValue({ status: 'READING' });
         prisma.bookshelfEntry.upsert.mockResolvedValue({ status: 'COMPLETED' });
         prisma.work.findUnique.mockResolvedValue({ title: 'Work' });
-
-        // Simulate: $transaction calls the callback and the callback finds a duplicate
-        prisma.$transaction.mockImplementation(async (fn) => {
-          const fakeTx = {
-            $queryRawUnsafe: jest.fn().mockResolvedValue([]),
-            creditTransaction: {
-              findFirst: jest.fn().mockResolvedValue({
-                id: 'tx-existing',
-                description: '読了報酬 (work-1)',
-              }),
-              create: jest.fn(),
-            },
-            creditBalance: {
-              update: jest.fn(),
-            },
-          };
-          await fn(fakeTx);
-          return fakeTx;
-        });
+        creditService.grantRewardCredits.mockResolvedValue(false); // duplicate found
 
         await service.updateStatus('user-1', 'work-1', 'COMPLETED' as any);
 
@@ -369,9 +331,11 @@ describe('BookshelfService', () => {
         await Promise.resolve();
         await Promise.resolve();
 
-        // ensureCreditBalance is still called, but inside transaction no balance update
+        // ensureCreditBalance is still called
         expect(creditService.ensureCreditBalance).toHaveBeenCalledWith('user-1');
-        // The outer prisma.creditBalance.update should NOT be called (duplicate guard)
+        // grantRewardCredits was called (returns false when duplicate exists)
+        expect(creditService.grantRewardCredits).toHaveBeenCalled();
+        // The prisma.creditBalance.update should NOT be called directly
         expect(prisma.creditBalance.update).not.toHaveBeenCalled();
       });
 

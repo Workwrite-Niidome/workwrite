@@ -31,6 +31,7 @@ const mockPrismaService = () => ({
 function makeBalance(overrides: Partial<{
   balance: number;
   monthlyBalance: number;
+  rewardBalance: number;
   purchasedBalance: number;
   monthlyGranted: number;
   userId: string;
@@ -39,6 +40,7 @@ function makeBalance(overrides: Partial<{
     userId: 'user-1',
     balance: 20,
     monthlyBalance: 20,
+    rewardBalance: 0,
     purchasedBalance: 0,
     monthlyGranted: 20,
     lastGrantedAt: new Date(),
@@ -124,7 +126,7 @@ describe('CreditService', () => {
 
       const result = await service.getBalance('user-1');
 
-      expect(result).toEqual({ total: 40, monthly: 30, purchased: 10 });
+      expect(result).toEqual({ total: 40, monthly: 30, reward: 0, purchased: 10 });
     });
 
     it('returns all zeros when balance is freshly created', async () => {
@@ -134,7 +136,7 @@ describe('CreditService', () => {
 
       const result = await service.getBalance('user-1');
 
-      expect(result).toEqual({ total: 0, monthly: 0, purchased: 0 });
+      expect(result).toEqual({ total: 0, monthly: 0, reward: 0, purchased: 0 });
     });
   });
 

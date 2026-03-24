@@ -32,6 +32,7 @@ const mockAiTierService = () => ({
     budgetTokens: 0,
   }),
   getCreditCost: jest.fn().mockReturnValue(1),
+  estimateCreditCost: jest.fn().mockReturnValue({ credits: 1, breakdown: {} }),
   assertCanUseAi: jest.fn().mockResolvedValue(undefined),
 });
 

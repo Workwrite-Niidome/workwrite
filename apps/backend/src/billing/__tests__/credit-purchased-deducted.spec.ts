@@ -31,6 +31,7 @@ const mockPrismaService = () => ({
 function makeBalance(overrides: Partial<{
   balance: number;
   monthlyBalance: number;
+  rewardBalance: number;
   purchasedBalance: number;
   monthlyGranted: number;
   userId: string;
@@ -39,6 +40,7 @@ function makeBalance(overrides: Partial<{
     userId: 'user-1',
     balance: 20,
     monthlyBalance: 20,
+    rewardBalance: 0,
     purchasedBalance: 0,
     monthlyGranted: 20,
     lastGrantedAt: new Date(),

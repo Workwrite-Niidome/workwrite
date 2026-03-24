@@ -79,15 +79,15 @@ describe('CharacterTalkRevenueService', () => {
       expect(prisma.characterTalkRevenue.create).not.toHaveBeenCalled();
     });
 
-    it('calculates revenueYen as Math.floor(purchasedCreditsUsed * 9.8 * 0.4)', async () => {
+    it('calculates revenueYen as Math.floor(purchasedCreditsUsed * 9.8 * 0.3)', async () => {
       prisma.characterTalkRevenue.create.mockResolvedValue({});
 
-      // 1 credit: Math.floor(1 * 9.8 * 0.4) = Math.floor(3.92) = 3
+      // 1 credit: Math.floor(1 * 9.8 * 0.3) = Math.floor(2.94) = 2
       await service.recordRevenue('author-1', 'reader-1', 'work-1', null, 'companion', 1, 1);
 
       expect(prisma.characterTalkRevenue.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ revenueYen: 3 }),
+          data: expect.objectContaining({ revenueYen: 2 }),
         }),
       );
     });
@@ -95,12 +95,12 @@ describe('CharacterTalkRevenueService', () => {
     it('calculates revenueYen correctly for 5 purchased credits', async () => {
       prisma.characterTalkRevenue.create.mockResolvedValue({});
 
-      // 5 credits: Math.floor(5 * 9.8 * 0.4) = Math.floor(19.6) = 19
+      // 5 credits: Math.floor(5 * 9.8 * 0.3) = Math.floor(14.7) = 14
       await service.recordRevenue('author-1', 'reader-1', 'work-1', null, 'companion', 5, 5);
 
       expect(prisma.characterTalkRevenue.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ revenueYen: 19 }),
+          data: expect.objectContaining({ revenueYen: 14 }),
         }),
       );
     });
@@ -108,12 +108,12 @@ describe('CharacterTalkRevenueService', () => {
     it('calculates revenueYen correctly for 10 purchased credits', async () => {
       prisma.characterTalkRevenue.create.mockResolvedValue({});
 
-      // 10 credits: Math.floor(10 * 9.8 * 0.4) = Math.floor(39.2) = 39
+      // 10 credits: Math.floor(10 * 9.8 * 0.3) = Math.floor(29.4) = 29
       await service.recordRevenue('author-1', 'reader-1', 'work-1', null, 'companion', 10, 10);
 
       expect(prisma.characterTalkRevenue.create).toHaveBeenCalledWith(
         expect.objectContaining({
-          data: expect.objectContaining({ revenueYen: 39 }),
+          data: expect.objectContaining({ revenueYen: 29 }),
         }),
       );
     });
@@ -140,7 +140,7 @@ describe('CharacterTalkRevenueService', () => {
           characterId: 'char-42',
           mode: 'character',
           creditAmount: 1,
-          revenueYen: 3,
+          revenueYen: 2,
           creditTxId: 'tx-999',
         }),
       });
@@ -194,18 +194,18 @@ describe('CharacterTalkRevenueService', () => {
         monthlyRevenue: 300,
         totalSessions: 10,
         monthlySessions: 3,
-        platformCutRate: 0.6,
+        platformCutRate: 0.7,
       });
     });
 
-    it('always returns platformCutRate of 0.6', async () => {
+    it('always returns platformCutRate of 0.7', async () => {
       prisma.$queryRaw
         .mockResolvedValueOnce([{ sum: 0, count: BigInt(0) }])
         .mockResolvedValueOnce([{ sum: 0, count: BigInt(0) }]);
 
       const result = await service.getAuthorEarnings('author-1');
 
-      expect(result.platformCutRate).toBe(0.6);
+      expect(result.platformCutRate).toBe(0.7);
     });
 
     it('returns 0 for all numeric fields when no revenue records exist', async () => {
