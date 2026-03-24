@@ -299,11 +299,11 @@ export class DiscoverService {
     };
 
     if (options.gender) {
-      where.gender = options.gender;
+      where.gender = { contains: options.gender, mode: 'insensitive' };
     }
 
     if (options.role) {
-      where.role = options.role;
+      where.role = { contains: options.role, mode: 'insensitive' };
     }
 
     // Age range filter: 10代, 20代, 30代, etc.
@@ -330,11 +330,10 @@ export class DiscoverService {
       }
     }
 
-    // Fetch characters with work info and a sample dialogue
+    // Fetch all matching characters, then shuffle client-side
     const characters = await this.prisma.storyCharacter.findMany({
       where,
-      take: limit * 3, // Over-fetch for randomization
-      orderBy: { sortOrder: 'asc' },
+      take: 200,
       select: {
         id: true,
         name: true,
@@ -360,9 +359,9 @@ export class DiscoverService {
       },
     });
 
-    // Exclude spoiler roles
+    // Exclude spoiler roles (partial match to catch variants)
     const safeCharacters = characters.filter(
-      (c) => !DiscoverService.SPOILER_ROLES.includes(c.role),
+      (c) => !DiscoverService.SPOILER_ROLES.some((sr) => c.role.includes(sr)),
     );
 
     // Shuffle and take limit
