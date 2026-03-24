@@ -695,7 +695,6 @@ export default function WritersGuidePage() {
                       { feature: 'AI執筆アシスト（高精度）', cost: '5cr〜' },
                       { feature: 'Creation Wizard（各ステップ）', cost: '1cr' },
                       { feature: 'AIスコアリング', cost: '1cr〜' },
-                      { feature: 'URLインポート', cost: '1cr' },
                       { feature: '読書タイプ再診断', cost: '1cr' },
                       { feature: '校正・推敲', cost: '0cr' },
                       { feature: 'あらすじ自動生成', cost: '0cr' },
