@@ -158,9 +158,15 @@ export class CharacterTalkService {
     const structuredParts: string[] = [];
 
     if (mode === 'character' && characterId) {
-      // Character mode: no character info in structured context
-      // Target character's full details are in the system prompt header
-      // Other character names are listed there too
+      // Character mode: other characters listed with personality (but NOT speechStyle)
+      // Target character is the center; others are context they can reference
+      const otherChars = publicCharacters.filter((c) => c.id !== characterId);
+      if (otherChars.length > 0) {
+        const charLines = otherChars.map((c) =>
+          `- ${c.name} (${c.role})${c.personality ? `: ${c.personality}` : ''}`,
+        ).join('\n');
+        structuredParts.push(`【他の登場人物】\n${charLines}`);
+      }
     } else {
       // Companion mode: all characters with full details
       if (publicCharacters.length > 0) {
@@ -224,18 +230,12 @@ export class CharacterTalkService {
         ? `- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降の展開は知らないものとして振る舞ってください。`
         : `- 読者はまだ作品を読んでいません。物語の具体的な展開やネタバレは一切話さないでください。読者が興味を持つように、あなた自身のことや世界観について話してください。`;
 
-      // Character mode: only target character's data + world setting. No work text.
-      const otherNames = publicCharacters
-        .filter((c) => c.id !== characterId)
-        .map((c) => c.name)
-        .join('、');
+      systemPrompt = `# あなたは「${character.name}」です
 
-      systemPrompt = `あなたは${character.name}です。「${work.title}」の世界に生きています。
+あなたは「${work.title}」に登場する「${character.name}」本人です。
+以下はあなた自身の情報です。この人物として一貫して振る舞ってください。
 
-話しかけてくるのは、あなたの物語を読んでいる一人の読者です。作者ではありません。
-あなたはこの読者と初めて会話しています。自然に、${character.name}らしく振る舞ってください。
-
-【あなた自身のこと】
+## あなた自身
 - 名前: ${character.name}
 - 役割: ${character.role}
 - 一人称: ${character.firstPerson || '私'}
@@ -243,18 +243,19 @@ export class CharacterTalkService {
 - 口調: ${character.speechStyle}
 - 動機: ${character.motivation}
 - 背景: ${character.background}
-${otherNames ? `\n【あなたの周りの人物】\n${otherNames}` : ''}
 
-【守ること】
-- 最初から${character.name}として自然に話してください。「${character.name}として答えます」のような前置きは絶対にしないでください。
-- 他のキャラクターになりきったり、他のキャラクターの台詞を代弁しないでください。
-- 会話相手は読者一人だけです。他の登場人物との会話を始めないでください。
-- 一人称は「${character.firstPerson || '私'}」を使ってください。
-- あなたがAIであること、フィクションのキャラクターであることには言及しないでください。
+## 絶対に守ること
+- あなたは「${character.name}」です。他のキャラクターではありません。
+- 一人称は必ず「${character.firstPerson || '私'}」を使ってください。
+- 口調は上記の通りに話してください。
+- 他のキャラクターになりきらないでください。
+- あなたがAIやフィクションのキャラクターであることには言及しないでください。
 ${readStatusNote}
 - 日本語で会話してください。
 
-${structuredContext}`;
+## あなたが知っている世界と人物
+${structuredContext}
+${workText ? `\n## あなたが経験した物語（参考情報）\n${workText}` : ''}`;
     } else {
       // Companion mode
       const readStatusNote = hasReadAnything
