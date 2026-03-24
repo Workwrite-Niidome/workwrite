@@ -3,7 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { MessageCircle, BookOpen, ChevronLeft, ChevronRight, Filter, X, Send } from 'lucide-react';
+import { MessageCircle, BookOpen, ChevronLeft, ChevronRight, Filter, X, Send, ArrowRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -75,6 +75,9 @@ export function CharacterMatchCarousel({ limit = 10 }: CharacterMatchCarouselPro
             気になるキャラクターから、作品を見つけよう
           </p>
         </div>
+        <Link href="/discover/characters" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1 shrink-0">
+          もっと見る <ArrowRight className="h-3 w-3" />
+        </Link>
         <Button
           variant="ghost"
           size="sm"
@@ -166,7 +169,9 @@ export function CharacterMatchCarousel({ limit = 10 }: CharacterMatchCarouselPro
             </div>
           ) : (
             characters.map((char) => (
-              <CharacterCard key={char.id} character={char} />
+              <div key={char.id} className="flex-shrink-0 w-64">
+                <CharacterCard character={char} />
+              </div>
             ))
           )}
         </div>
@@ -188,7 +193,7 @@ const PRESET_MESSAGES = [
   '最近どんなことがあった？',
 ];
 
-function CharacterCard({ character }: { character: CharacterMatch }) {
+export function CharacterCard({ character }: { character: CharacterMatch }) {
   const c = character;
   const router = useRouter();
   const [freeText, setFreeText] = useState('');
@@ -205,7 +210,7 @@ function CharacterCard({ character }: { character: CharacterMatch }) {
   }
 
   return (
-    <div className="flex-shrink-0 w-64 border border-border rounded-xl p-4 hover:border-primary/20 hover:shadow-sm transition-all bg-card">
+    <div className="border border-border rounded-xl p-4 hover:border-primary/20 hover:shadow-sm transition-all bg-card">
       {/* Character header */}
       <div className="mb-2">
         <div className="flex items-center gap-1.5">

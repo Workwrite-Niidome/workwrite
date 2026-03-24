@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight, Bot } from 'lucide-react';
+import { Search, ArrowRight, Bot, Users } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -141,6 +141,15 @@ export default function DiscoverPage() {
           >
             作品
           </button>
+          <Link
+            href="/discover/characters"
+            className={cn(
+              'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+              'border-transparent text-muted-foreground hover:text-foreground',
+            )}
+          >
+            <Users className="h-3.5 w-3.5" /> キャラクター
+          </Link>
           <button
             onClick={() => {
               setActiveTab('ai-works');
