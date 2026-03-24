@@ -456,7 +456,7 @@ export default function WritersGuidePage() {
               <p>
                 <strong className="text-foreground">高精度モード（Proのみ）</strong>
                 ：最高精度のAIモデル（Opus）を使用します。文学的な表現や高度な構成の作品に。
-                <span className="font-mono ml-1">5cr〜/回</span>
+                <span className="font-mono ml-1">30cr〜/回</span>
               </p>
             </div>
           </div>
@@ -692,7 +692,7 @@ export default function WritersGuidePage() {
                     {[
                       { feature: 'AI執筆アシスト（通常）', cost: '1cr〜' },
                       { feature: 'AI執筆アシスト（じっくり）', cost: '2cr〜' },
-                      { feature: 'AI執筆アシスト（高精度）', cost: '5cr〜' },
+                      { feature: 'AI執筆アシスト（高精度）', cost: '30cr〜' },
                       { feature: 'Creation Wizard（各ステップ）', cost: '1cr' },
                       { feature: 'AIスコアリング', cost: '1cr〜' },
                       { feature: '読書タイプ再診断', cost: '1cr' },

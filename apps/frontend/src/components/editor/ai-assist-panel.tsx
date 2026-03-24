@@ -618,7 +618,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   >
                     <Crown className="h-3 w-3 inline mr-0.5" />
                     高精度
-                    <span className="block text-[10px] opacity-60 mt-0.5">5cr〜</span>
+                    <span className="block text-[10px] opacity-60 mt-0.5">30cr〜</span>
                   </button>
                 )}
               </div>
