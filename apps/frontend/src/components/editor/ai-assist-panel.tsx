@@ -577,6 +577,64 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
+        {/* AI quality mode + character count — always visible at top */}
+        {!pendingAction && (
+          <div className="space-y-3">
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">生成品質</p>
+              <div className="flex gap-1.5">
+                <button
+                  onClick={() => setAiMode('normal')}
+                  className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                    aiMode === 'normal'
+                      ? 'bg-primary/10 border-primary/30 text-primary'
+                      : 'border-border text-muted-foreground hover:border-primary/30'
+                  }`}
+                >
+                  簡易
+                  <span className="block text-[10px] opacity-60 mt-0.5">1クレジット</span>
+                </button>
+                {tier?.canUseThinking && (
+                  <button
+                    onClick={() => setAiMode('thinking')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      aiMode === 'thinking'
+                        ? 'bg-primary/10 border-primary/30 text-primary'
+                        : 'border-border text-muted-foreground hover:border-primary/30'
+                    }`}
+                  >
+                    通常
+                    <span className="block text-[10px] opacity-60 mt-0.5">2クレジット</span>
+                  </button>
+                )}
+                {tier?.canUseOpus && (
+                  <button
+                    onClick={() => setAiMode('premium')}
+                    className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
+                      aiMode === 'premium'
+                        ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
+                        : 'border-border text-muted-foreground hover:border-amber-500/30'
+                    }`}
+                  >
+                    <Crown className="h-3 w-3 inline mr-0.5" />
+                    高精度
+                    <span className="block text-[10px] opacity-60 mt-0.5">5クレジット</span>
+                  </button>
+                )}
+              </div>
+            </div>
+
+            <div className="space-y-1.5">
+              <p className="text-xs font-medium text-muted-foreground">
+                生成する文字数: <span className="text-foreground">{charCount.toLocaleString()}字</span>
+              </p>
+              <input type="range" min={300} max={3000} step={100} value={charCount}
+                onChange={(e) => setCharCount(Number(e.target.value))} className="w-full h-1.5 accent-foreground" />
+              <div className="flex justify-between text-[10px] text-muted-foreground"><span>短め</span><span>長め</span></div>
+            </div>
+          </div>
+        )}
+
         {/* Main actions — always visible */}
         {!pendingAction && (
           <div className="space-y-3">
@@ -660,61 +718,6 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
 
               {showAdvanced && (
                 <div className="mt-3 space-y-3">
-                  {/* AI quality mode */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">生成品質</p>
-                    <div className="flex gap-1.5">
-                      <button
-                        onClick={() => setAiMode('normal')}
-                        className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                          aiMode === 'normal'
-                            ? 'bg-primary/10 border-primary/30 text-primary'
-                            : 'border-border text-muted-foreground hover:border-primary/30'
-                        }`}
-                      >
-                        簡易
-                        <span className="block text-[10px] opacity-60 mt-0.5">1クレジット</span>
-                      </button>
-                      {tier?.canUseThinking && (
-                        <button
-                          onClick={() => setAiMode('thinking')}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                            aiMode === 'thinking'
-                              ? 'bg-primary/10 border-primary/30 text-primary'
-                              : 'border-border text-muted-foreground hover:border-primary/30'
-                          }`}
-                        >
-                          通常
-                          <span className="block text-[10px] opacity-60 mt-0.5">2クレジット</span>
-                        </button>
-                      )}
-                      {tier?.canUseOpus && (
-                        <button
-                          onClick={() => setAiMode('premium')}
-                          className={`flex-1 px-3 py-2 rounded-lg text-xs font-medium border transition-colors ${
-                            aiMode === 'premium'
-                              ? 'bg-amber-500/10 border-amber-500/30 text-amber-600'
-                              : 'border-border text-muted-foreground hover:border-amber-500/30'
-                          }`}
-                        >
-                          <Crown className="h-3 w-3 inline mr-0.5" />
-                          高精度
-                          <span className="block text-[10px] opacity-60 mt-0.5">5クレジット</span>
-                        </button>
-                      )}
-                    </div>
-                  </div>
-
-                  {/* Character count */}
-                  <div className="space-y-1.5">
-                    <p className="text-xs font-medium text-muted-foreground">
-                      生成する文字数: <span className="text-foreground">{charCount.toLocaleString()}字</span>
-                    </p>
-                    <input type="range" min={300} max={3000} step={100} value={charCount}
-                      onChange={(e) => setCharCount(Number(e.target.value))} className="w-full h-1.5 accent-foreground" />
-                    <div className="flex justify-between text-[10px] text-muted-foreground"><span>短め</span><span>長め</span></div>
-                  </div>
-
                   {/* Custom instruction */}
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-muted-foreground">追加の指示</p>
