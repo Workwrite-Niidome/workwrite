@@ -15,6 +15,26 @@ import { ScoreCard } from '@/components/scoring/score-card';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work, type QualityScoreDetail } from '@/lib/api';
 import { CharacterRegistryPanel } from '@/components/editor/character-registry-panel';
+import { cn } from '@/lib/utils';
+
+const MAIN_GENRES = [
+  { key: 'fantasy', label: 'ファンタジー' },
+  { key: 'sf', label: 'SF・近未来' },
+  { key: 'modern', label: '現代・日常' },
+  { key: 'historical', label: '歴史・時代' },
+];
+
+const SUB_GENRE_OPTIONS = [
+  { key: 'romance', label: '恋愛' },
+  { key: 'mystery', label: 'ミステリー' },
+  { key: 'horror', label: 'ホラー' },
+  { key: 'action', label: 'アクション' },
+  { key: 'drama', label: 'ヒューマンドラマ' },
+  { key: 'comedy', label: 'コメディ' },
+  { key: 'adventure', label: '冒険' },
+  { key: 'literary', label: '文芸' },
+  { key: 'thriller', label: 'サスペンス' },
+];
 
 interface EpisodeItem {
   id: string;
@@ -40,6 +60,8 @@ export default function EditWorkPage() {
   const [title, setTitle] = useState('');
   const [synopsis, setSynopsis] = useState('');
   const [hasPrologue, setHasPrologue] = useState(false);
+  const [genre, setGenre] = useState('');
+  const [subGenreTags, setSubGenreTags] = useState<string[]>([]);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
   const [scoreDetail, setScoreDetail] = useState<QualityScoreDetail | null>(null);
@@ -63,6 +85,14 @@ export default function EditWorkPage() {
         setWork(res.data);
         setTitle(res.data.title);
         setSynopsis(res.data.synopsis || '');
+        setGenre(res.data.genre || '');
+        // Extract sub-genre tags from work tags (stored as KEYWORD but matching known sub-genre keys)
+        const knownSubGenres = SUB_GENRE_OPTIONS.map((g) => g.key);
+        setSubGenreTags(
+          (res.data.tags || [])
+            .filter((t: any) => knownSubGenres.includes(t.tag))
+            .map((t: any) => t.tag)
+        );
         setHasPrologue(!!res.data.prologue);
         if (res.data.episodes) {
           setEpisodes(res.data.episodes as EpisodeItem[]);
@@ -83,7 +113,13 @@ export default function EditWorkPage() {
     setSaving(true);
     setMessage('');
     try {
-      const res = await api.updateWork(workId, { title, synopsis } as Partial<Work>);
+      // Merge sub-genre tags with existing non-sub-genre keyword tags
+      const knownSubGenres = SUB_GENRE_OPTIONS.map((g) => g.key);
+      const existingNonGenreTags = (work?.tags || [])
+        .filter((t) => !knownSubGenres.includes(t.tag))
+        .map((t) => t.tag);
+      const mergedTags = [...new Set([...subGenreTags, ...existingNonGenreTags])];
+      const res = await api.updateWork(workId, { title, synopsis, genre: genre || null, tags: mergedTags } as any);
       setWork(res.data);
       setMessage('保存しました');
     } catch {
@@ -255,6 +291,57 @@ export default function EditWorkPage() {
               rows={5}
             />
           </div>
+
+          {/* Genre */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">大ジャンル（舞台）</label>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+              {MAIN_GENRES.map((g) => (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => setGenre(genre === g.key ? '' : g.key)}
+                  className={cn(
+                    'px-3 py-2 rounded-lg text-sm font-medium border transition-all',
+                    genre === g.key
+                      ? 'bg-primary text-primary-foreground border-primary shadow-sm'
+                      : 'border-border hover:border-primary/50 text-foreground hover:bg-muted/50',
+                  )}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Sub Genres */}
+          <div className="space-y-2">
+            <label className="text-sm font-medium">サブジャンル（テーマ・複数選択可）</label>
+            <div className="flex flex-wrap gap-2">
+              {SUB_GENRE_OPTIONS.map((g) => (
+                <button
+                  key={g.key}
+                  type="button"
+                  onClick={() => {
+                    setSubGenreTags((prev) =>
+                      prev.includes(g.key)
+                        ? prev.filter((k) => k !== g.key)
+                        : [...prev, g.key]
+                    );
+                  }}
+                  className={cn(
+                    'px-3 py-1.5 rounded-full text-sm border transition-colors',
+                    subGenreTags.includes(g.key)
+                      ? 'bg-primary/10 text-primary border-primary/30 font-medium'
+                      : 'border-border hover:border-primary/50 text-foreground',
+                  )}
+                >
+                  {g.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
           <Button onClick={handleSave} disabled={saving}>
             {saving ? '保存中...' : '保存'}
           </Button>
