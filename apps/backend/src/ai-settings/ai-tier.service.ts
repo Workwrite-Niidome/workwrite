@@ -242,7 +242,7 @@ export class AiTierService {
         return {
           model: baseSonnet,
           thinking: true,
-          budgetTokens: 10000,
+          budgetTokens: 16000,
         };
       }
     }
@@ -252,7 +252,7 @@ export class AiTierService {
       return {
         model: baseSonnet,
         thinking: true,
-        budgetTokens: 10000,
+        budgetTokens: 16000,
       };
     }
 
