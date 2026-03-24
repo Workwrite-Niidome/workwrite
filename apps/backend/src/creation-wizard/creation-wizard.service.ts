@@ -685,24 +685,28 @@ ${episodeContent.slice(0, 5000)}`;
   // ─── Plan CRUD ───────────────────────────────────────────────
 
   async saveCreationPlan(workId: string, dto: SaveCreationPlanDto) {
+    // Use Prisma.JsonNull for explicit null (clear field), undefined to skip update
+    const resolve = (val: any) =>
+      val === null ? null : (val !== undefined ? val : undefined);
+
     const result = await this.prisma.workCreationPlan.upsert({
       where: { workId },
       update: {
-        characters: dto.characters ?? undefined,
-        plotOutline: dto.plotOutline ?? undefined,
-        emotionBlueprint: dto.emotionBlueprint ?? undefined,
-        chapterOutline: dto.chapterOutline ?? undefined,
-        customFieldDefinitions: dto.customFieldDefinitions ?? undefined,
-        worldBuildingData: dto.worldBuildingData ?? undefined,
+        characters: resolve(dto.characters),
+        plotOutline: resolve(dto.plotOutline),
+        emotionBlueprint: resolve(dto.emotionBlueprint),
+        chapterOutline: resolve(dto.chapterOutline),
+        customFieldDefinitions: resolve(dto.customFieldDefinitions),
+        worldBuildingData: resolve(dto.worldBuildingData),
       },
       create: {
         workId,
-        characters: dto.characters ?? undefined,
-        plotOutline: dto.plotOutline ?? undefined,
-        emotionBlueprint: dto.emotionBlueprint ?? undefined,
-        chapterOutline: dto.chapterOutline ?? undefined,
-        customFieldDefinitions: dto.customFieldDefinitions ?? undefined,
-        worldBuildingData: dto.worldBuildingData ?? undefined,
+        characters: resolve(dto.characters),
+        plotOutline: resolve(dto.plotOutline),
+        emotionBlueprint: resolve(dto.emotionBlueprint),
+        chapterOutline: resolve(dto.chapterOutline),
+        customFieldDefinitions: resolve(dto.customFieldDefinitions),
+        worldBuildingData: resolve(dto.worldBuildingData),
       },
     });
 

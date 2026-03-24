@@ -431,6 +431,7 @@ function CreationPlanCard({
   const [open, setOpen] = useState(false);
   const [editing, setEditing] = useState(false);
   const [saving, setSaving] = useState(false);
+  const [saveMessage, setSaveMessage] = useState('');
 
   // Editable state
   const [coreMessage, setCoreMessage] = useState('');
@@ -484,25 +485,29 @@ function CreationPlanCard({
 
   async function handleSave() {
     setSaving(true);
+    setSaveMessage('');
     try {
-      const plan: any = {};
-      if (coreMessage || targetEmotions || readerJourney) {
-        plan.emotionBlueprint = { coreMessage, targetEmotions, readerJourney };
-      }
-      if (plotText.trim()) {
-        plan.plotOutline = { text: plotText, aiAssisted: false };
-      }
-      if (worldText.trim()) {
-        plan.worldBuildingData = { freeText: worldText };
-      }
-      if (chapters.length > 0) {
-        plan.chapterOutline = chapters.filter((ch) => ch.title.trim());
-      }
+      // Send all fields explicitly — null to clear, value to update
+      const plan: any = {
+        emotionBlueprint: (coreMessage || targetEmotions || readerJourney)
+          ? { coreMessage, targetEmotions, readerJourney }
+          : null,
+        plotOutline: plotText.trim()
+          ? { text: plotText, aiAssisted: false }
+          : null,
+        worldBuildingData: worldText.trim()
+          ? { freeText: worldText }
+          : null,
+        chapterOutline: chapters.filter((ch) => ch.title.trim()).length > 0
+          ? chapters.filter((ch) => ch.title.trim())
+          : null,
+      };
       await api.saveCreationPlan(workId, plan);
       onSaved({ ...creationPlan, ...plan });
+      setSaveMessage('保存しました');
       setEditing(false);
-    } catch {
-      // silently fail
+    } catch (err: any) {
+      setSaveMessage(err?.message || '保存に失敗しました');
     } finally {
       setSaving(false);
     }
@@ -662,14 +667,19 @@ function CreationPlanCard({
               </div>
 
               {/* Save / Cancel */}
-              <div className="flex gap-2 pt-2 border-t border-border">
+              <div className="flex items-center gap-2 pt-2 border-t border-border">
                 <Button size="sm" onClick={handleSave} disabled={saving} className="gap-1 text-xs">
                   <Save className="h-3 w-3" />
                   {saving ? '保存中...' : '保存'}
                 </Button>
-                <Button variant="ghost" size="sm" onClick={() => setEditing(false)} className="gap-1 text-xs">
+                <Button variant="ghost" size="sm" onClick={() => { setEditing(false); setSaveMessage(''); }} className="gap-1 text-xs">
                   <X className="h-3 w-3" /> キャンセル
                 </Button>
+                {saveMessage && (
+                  <span className={`text-xs ${saveMessage.includes('失敗') ? 'text-destructive' : 'text-green-600'}`}>
+                    {saveMessage}
+                  </span>
+                )}
               </div>
             </>
           ) : (
