@@ -168,8 +168,8 @@ export class AiAssistService {
 
     // Determine min credits based on mode
     let minCredits = 1;
-    if (aiMode === 'thinking' || (premiumMode && !modelConfig.model.includes('opus'))) minCredits = 2;
-    if (aiMode === 'premium' || modelConfig.model.includes('opus')) minCredits = 5;
+    if (aiMode === 'thinking' || (premiumMode && !modelConfig.model.includes('opus'))) minCredits = 5;
+    if (aiMode === 'premium' || modelConfig.model.includes('opus')) minCredits = 30;
 
     const estimate = this.aiTier.estimateCreditCost({
       model: modelConfig.model,
@@ -270,16 +270,15 @@ export class AiAssistService {
     let creditCost = 0;
     if (!isLightFeature) {
       const totalPromptChars = messages.reduce((sum, m) => sum + m.content.length, 0);
-      const maxOutputTokens = modelConfig.thinking ? 8000 : baseMaxTokens;
       let minCredits = 1;
-      if (aiMode === 'thinking' || (premiumMode && !modelConfig.model.includes('opus'))) minCredits = 2;
-      if (aiMode === 'premium' || modelConfig.model.includes('opus')) minCredits = 5;
+      if (aiMode === 'thinking' || (premiumMode && !modelConfig.model.includes('opus'))) minCredits = 5;
+      if (aiMode === 'premium' || modelConfig.model.includes('opus')) minCredits = 30;
 
       creditCost = this.aiTier.estimateCreditCost({
         model: modelConfig.model,
         inputChars: totalPromptChars,
         structuralContextChars: structuralContext?.length || 0,
-        maxOutputTokens,
+        maxOutputTokens: baseMaxTokens,
         thinkingBudgetTokens: modelConfig.budgetTokens,
         minCredits,
       }).credits;
