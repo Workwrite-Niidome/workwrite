@@ -213,9 +213,9 @@ export class CharacterTalkService {
         throw new NotFoundException('Character not found');
       }
 
-      // For readers who have read: verify character appeared in read range
-      // For unread readers: allow any isPublic character (they're browsing from match cards)
-      if (hasReadAnything) {
+      // For readers who have read AND episodeAnalysis data exists: verify character appeared in read range
+      // Skip check if: unread, or no episodeAnalysis data (not yet scored)
+      if (hasReadAnything && appearedCharNames.size > 0) {
         const charAppeared = [...appearedCharNames].some((name) =>
           character.name === name || character.name.includes(name) || name.includes(character.name),
         );
