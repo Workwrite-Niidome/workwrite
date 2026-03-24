@@ -331,13 +331,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           estimate: { credits: res.estimate.credits, balance: res.balance, isLightFeature: false },
         });
       }
-    } catch {
-      // Fallback: proceed without estimate
-      setChatMessages([]);
-      setCurrentSlug(slug);
-      setNewChars(null);
-      reset();
-      generate(slug, vars, undefined, aiMode);
+    } catch (e: any) {
+      console.error('estimateAiCost failed:', e);
+      // Show error instead of silently proceeding
+      setChatMessages([{ role: 'system', content: `見積もり取得に失敗しました: ${e?.message || '不明なエラー'}` }]);
     }
     setEstimatingCost(false);
   }
@@ -353,7 +350,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         templateSlug: currentSlug || 'free-prompt',
         variables: vars,
         aiMode,
-        conversationId,
+        conversationId: conversationId || undefined,
         followUpMessage: msg,
       });
       if (res.isLightFeature || res.estimate.credits === 0) {
@@ -368,8 +365,8 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           followUpMessage: msg,
         });
       }
-    } catch {
-      executeFollowUp(msg, vars);
+    } catch (e: any) {
+      console.error('estimateAiCost failed:', e);
     }
     setEstimatingCost(false);
   }
