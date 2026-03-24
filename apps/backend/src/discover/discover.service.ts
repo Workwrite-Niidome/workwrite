@@ -1,6 +1,7 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { SearchService } from '../search/search.service';
+import { isCharacterMatchSafe } from '../character-talk/character-role-filter';
 
 @Injectable()
 export class DiscoverService {
@@ -274,8 +275,7 @@ export class DiscoverService {
 
   // ─── Character Match ─────────────────────────────────────
 
-  /** Roles that would spoil the story — exclude these (exact word match, not substring) */
-  private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵役', '悪役'];
+  // Role filtering moved to character-role-filter.ts
 
   /** No-op: kept for API compatibility with callers (story-structure, works services) */
   invalidateCharacterMatchCache() {
@@ -313,10 +313,8 @@ export class DiscoverService {
       },
     });
 
-    // Exclude spoiler roles (partial match)
-    const safe = characters.filter(
-      (c) => !DiscoverService.SPOILER_ROLES.some((sr) => c.role.includes(sr)),
-    );
+    // Exclude minor roles and spoiler roles
+    const safe = characters.filter((c) => isCharacterMatchSafe(c.role));
 
     const mapped = safe.map((c) => ({
       id: c.id,

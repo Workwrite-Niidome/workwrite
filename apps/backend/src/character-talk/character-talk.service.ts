@@ -4,6 +4,7 @@ import { AiSettingsService } from '../ai-settings/ai-settings.service';
 import { CreditService } from '../billing/credit.service';
 import { CharacterTalkRevenueService } from './character-talk-revenue.service';
 import { CharacterExtractionService } from './character-extraction.service';
+import { isMainCharacterRole } from './character-role-filter';
 
 const HAIKU = 'claude-haiku-4-5-20251001';
 const MAX_WORK_TEXT_LENGTH = 20000;
@@ -554,6 +555,9 @@ ${structuredContext ? `\n${structuredContext}\n` : ''}${workText ? `\n作品テ�
     const normalizedNames = [...names].map((n) => this.normalizeName(n));
 
     return allCharacters.filter((c) => {
+      // Filter out minor/background characters
+      if (!isMainCharacterRole(c.role)) return false;
+
       const normalizedChar = this.normalizeName(c.name);
 
       for (let i = 0; i < normalizedNames.length; i++) {
