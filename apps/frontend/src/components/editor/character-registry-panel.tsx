@@ -51,10 +51,19 @@ const ROLE_COLORS: Record<string, string> = {
   '元恋人': 'bg-pink-100 text-pink-800 dark:bg-pink-900/40 dark:text-pink-300',
   '語り手': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
   '狂言回し': 'bg-purple-100 text-purple-800 dark:bg-purple-900/40 dark:text-purple-300',
-  '脇役': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
-  'モブ': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
-  'その他': 'bg-gray-100 text-gray-600 dark:bg-gray-800/40 dark:text-gray-400',
+  '脇役': 'bg-gray-200 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300',
+  'モブ': 'bg-gray-200 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300',
+  'その他': 'bg-gray-200 text-gray-700 dark:bg-gray-700/50 dark:text-gray-300',
 };
+
+/** Resolve role color with partial match fallback (e.g. "主人公の幼馴染" → "主人公" color) */
+function getRoleColor(role: string): string {
+  if (ROLE_COLORS[role]) return ROLE_COLORS[role];
+  for (const key of Object.keys(ROLE_COLORS)) {
+    if (key !== 'その他' && role.includes(key)) return ROLE_COLORS[key];
+  }
+  return ROLE_COLORS['その他'];
+}
 
 interface AiSuggestedChar {
   name: string;
@@ -113,7 +122,7 @@ function RoleInput({ value, onChange, onBlur }: { value: string; onChange: (v: s
                 r === inputValue && 'bg-secondary font-medium',
               )}
             >
-              <span className={cn('w-2 h-2 rounded-full flex-shrink-0', (ROLE_COLORS[r] || ROLE_COLORS['その他']).split(' ')[0])} />
+              <span className={cn('w-2 h-2 rounded-full flex-shrink-0', getRoleColor(r).split(' ')[0])} />
               {r}
             </button>
           ))}
@@ -673,7 +682,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
         <div className="p-2 space-y-1">
           {characters.map((char) => {
             const isExpanded = expandedId === char.id;
-            const roleColor = ROLE_COLORS[char.role] || ROLE_COLORS['その他'];
+            const roleColor = getRoleColor(char.role);
             const summary = [char.personality, char.speechStyle && `口調: ${char.speechStyle}`].filter(Boolean).join(' / ');
 
             return (
@@ -771,7 +780,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
                       <div className="flex items-center justify-between">
                         <div className="flex items-center gap-2">
                           <span className="text-sm font-medium">{ai.name}</span>
-                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', ROLE_COLORS[ai.role] || ROLE_COLORS['その他'])}>
+                          <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', getRoleColor(ai.role))}>
                             {ai.role}
                           </span>
                         </div>
@@ -834,7 +843,7 @@ export function CharacterRegistryPanel({ workId, onClose }: Props) {
                     <div className="flex items-center gap-2">
                       <span className="text-sm font-medium">{ex.name}</span>
                       {ex.role && (
-                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', ROLE_COLORS[ex.role] || ROLE_COLORS['その他'])}>
+                        <span className={cn('text-[10px] px-1.5 py-0.5 rounded-full font-medium', getRoleColor(ex.role))}>
                           {ex.role}
                         </span>
                       )}
