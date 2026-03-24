@@ -1,11 +1,13 @@
 'use client';
 
-import { useEffect, useState } from 'react';
+import { useEffect, useState, useCallback } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/lib/auth-context';
 import { api } from '@/lib/api';
-import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText, Megaphone } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { BarChart3, Users, BookOpen, MessageSquare, Sparkles, FileText, Megaphone, Lock } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 const NAV_ITEMS = [
@@ -18,11 +20,24 @@ const NAV_ITEMS = [
   { href: '/admin/ai/templates', label: 'テンプレート', icon: FileText },
 ];
 
+const ADMIN_VERIFIED_KEY = 'admin_panel_verified';
+
 export default function AdminLayout({ children }: { children: React.ReactNode }) {
   const { user, isLoading, isAuthenticated } = useAuth();
   const router = useRouter();
   const pathname = usePathname();
   const [serverVerified, setServerVerified] = useState(false);
+  const [passwordVerified, setPasswordVerified] = useState(false);
+  const [password, setPassword] = useState('');
+  const [passwordError, setPasswordError] = useState('');
+  const [verifying, setVerifying] = useState(false);
+
+  // Check sessionStorage on mount
+  useEffect(() => {
+    if (typeof window !== 'undefined' && sessionStorage.getItem(ADMIN_VERIFIED_KEY) === 'true') {
+      setPasswordVerified(true);
+    }
+  }, []);
 
   useEffect(() => {
     if (!isLoading && (!isAuthenticated || user?.role !== 'ADMIN')) {
@@ -30,8 +45,6 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
       return;
     }
 
-    // Server-side verification: call an admin-only endpoint to confirm
-    // the user truly has ADMIN role (prevents client-side role tampering)
     if (!isLoading && isAuthenticated && user?.role === 'ADMIN') {
       api.getAdminStats()
         .then(() => setServerVerified(true))
@@ -42,10 +55,52 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
   }, [isLoading, isAuthenticated, user, router]);
 
+  const handlePasswordSubmit = useCallback(async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!password.trim()) return;
+    setVerifying(true);
+    setPasswordError('');
+    try {
+      await api.verifyAdminPassword(password);
+      sessionStorage.setItem(ADMIN_VERIFIED_KEY, 'true');
+      setPasswordVerified(true);
+    } catch {
+      setPasswordError('パスワードが正しくありません');
+    }
+    setVerifying(false);
+  }, [password]);
+
   if (isLoading || !isAuthenticated || user?.role !== 'ADMIN' || !serverVerified) {
     return (
       <div className="flex items-center justify-center min-h-[60vh]">
         <p className="text-sm text-muted-foreground">Loading...</p>
+      </div>
+    );
+  }
+
+  if (!passwordVerified) {
+    return (
+      <div className="flex items-center justify-center min-h-[60vh]">
+        <form onSubmit={handlePasswordSubmit} className="w-full max-w-sm space-y-4">
+          <div className="text-center mb-6">
+            <Lock className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
+            <h2 className="text-lg font-semibold">管理画面</h2>
+            <p className="text-sm text-muted-foreground mt-1">管理パスワードを入力してください</p>
+          </div>
+          <Input
+            type="password"
+            value={password}
+            onChange={(e) => { setPassword(e.target.value); setPasswordError(''); }}
+            placeholder="管理パスワード"
+            autoFocus
+          />
+          {passwordError && (
+            <p className="text-sm text-destructive">{passwordError}</p>
+          )}
+          <Button type="submit" className="w-full" disabled={verifying || !password.trim()}>
+            {verifying ? '確認中...' : 'ログイン'}
+          </Button>
+        </form>
       </div>
     );
   }

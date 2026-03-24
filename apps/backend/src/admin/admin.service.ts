@@ -177,7 +177,7 @@ export class AdminService {
       select: { id: true, name: true },
     });
     if (!user) throw new NotFoundException('User not found');
-    if (amount < 1 || amount > 10000) throw new BadRequestException('amount must be 1-10000');
+    if (amount < 1 || amount > 1000) throw new BadRequestException('amount must be 1-1000');
 
     // Ensure CreditBalance exists
     await this.creditService.ensureCreditBalance(userId);

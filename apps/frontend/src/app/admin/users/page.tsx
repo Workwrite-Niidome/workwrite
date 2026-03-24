@@ -6,7 +6,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ConfirmDialog } from '@/components/ui/dialog';
-import { Search, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck, Crown, Star } from 'lucide-react';
+import { Dialog } from '@/components/ui/dialog';
+import { Search, ChevronLeft, ChevronRight, ShieldAlert, ShieldCheck, Crown, Star, Gift } from 'lucide-react';
 
 const ROLES = ['READER', 'AUTHOR', 'EDITOR', 'ADMIN'] as const;
 const PAGE_SIZE = 20;
@@ -34,6 +35,10 @@ export default function AdminUsersPage() {
   const [pendingRole, setPendingRole] = useState<{ userId: string; role: string } | null>(null);
   const [pendingBan, setPendingBan] = useState<AdminUser | null>(null);
   const [pendingPlan, setPendingPlan] = useState<{ userId: string; plan: 'standard' | 'premium' | 'revoke' } | null>(null);
+  const [creditGrant, setCreditGrant] = useState<{ userId: string; userName: string } | null>(null);
+  const [creditAmount, setCreditAmount] = useState(10);
+  const [creditDescription, setCreditDescription] = useState('');
+  const [creditGranting, setCreditGranting] = useState(false);
 
   async function handleRoleChange() {
     if (!pendingRole) return;
@@ -51,6 +56,19 @@ export default function AdminUsersPage() {
       fetchUsers();
     } catch {}
     setPendingBan(null);
+  }
+
+  async function handleCreditGrant() {
+    if (!creditGrant || creditAmount < 1 || creditAmount > 1000) return;
+    setCreditGranting(true);
+    try {
+      await api.grantCredits(creditGrant.userId, creditAmount, creditDescription || undefined);
+      fetchUsers();
+    } catch {}
+    setCreditGranting(false);
+    setCreditGrant(null);
+    setCreditAmount(10);
+    setCreditDescription('');
   }
 
   async function handlePlanChange() {
@@ -184,18 +202,28 @@ export default function AdminUsersPage() {
                       )}
                     </td>
                     <td className="px-4 py-3">
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        className="h-8 text-xs gap-1"
-                        onClick={() => setPendingBan(user)}
-                      >
-                        {user.isBanned ? (
-                          <><ShieldCheck className="h-3.5 w-3.5" /> 解除</>
-                        ) : (
-                          <><ShieldAlert className="h-3.5 w-3.5" /> 凍結</>
-                        )}
-                      </Button>
+                      <div className="flex gap-1">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs gap-1"
+                          onClick={() => setCreditGrant({ userId: user.id, userName: user.displayName || user.name })}
+                        >
+                          <Gift className="h-3.5 w-3.5" /> 付与
+                        </Button>
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="h-8 text-xs gap-1"
+                          onClick={() => setPendingBan(user)}
+                        >
+                          {user.isBanned ? (
+                            <><ShieldCheck className="h-3.5 w-3.5" /> 解除</>
+                          ) : (
+                            <><ShieldAlert className="h-3.5 w-3.5" /> 凍結</>
+                          )}
+                        </Button>
+                      </div>
                     </td>
                   </tr>
                 ))
@@ -232,6 +260,44 @@ export default function AdminUsersPage() {
         confirmLabel="変更する"
         onConfirm={handlePlanChange}
       />
+
+      <Dialog open={!!creditGrant} onOpenChange={(v) => { if (!v) { setCreditGrant(null); setCreditAmount(10); setCreditDescription(''); } }}>
+        <h3 className="text-lg font-medium mb-1">クレジット付与</h3>
+        <p className="text-sm text-muted-foreground mb-4">
+          {creditGrant?.userName} にクレジットを付与します。有償扱い（期間無制限）として加算されます。
+        </p>
+        <div className="space-y-3">
+          <div>
+            <label className="text-sm font-medium mb-1 block">付与数 (1〜1000)</label>
+            <Input
+              type="number"
+              min={1}
+              max={1000}
+              value={creditAmount}
+              onChange={(e) => setCreditAmount(Math.max(1, Math.min(1000, Number(e.target.value) || 1)))}
+            />
+          </div>
+          <div>
+            <label className="text-sm font-medium mb-1 block">理由（任意）</label>
+            <Input
+              value={creditDescription}
+              onChange={(e) => setCreditDescription(e.target.value)}
+              placeholder="例: 障害補填、テスト用"
+            />
+          </div>
+        </div>
+        <div className="flex justify-end gap-2 mt-6">
+          <Button variant="ghost" onClick={() => { setCreditGrant(null); setCreditAmount(10); setCreditDescription(''); }}>
+            キャンセル
+          </Button>
+          <Button
+            onClick={handleCreditGrant}
+            disabled={creditGranting || creditAmount < 1 || creditAmount > 1000}
+          >
+            {creditGranting ? '付与中...' : `${creditAmount}cr を付与する`}
+          </Button>
+        </div>
+      </Dialog>
 
       {/* Pagination */}
       {totalPages > 1 && (

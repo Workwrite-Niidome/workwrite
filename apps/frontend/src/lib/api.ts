@@ -721,6 +721,13 @@ class ApiClient {
   }
 
   // Admin
+  async verifyAdminPassword(password: string) {
+    return this.request<{ verified: boolean }>('/admin/verify-password', {
+      method: 'POST',
+      body: JSON.stringify({ password }),
+    });
+  }
+
   async getAdminStats() {
     return this.request<{ data: AdminStats }>('/admin/stats');
   }
@@ -761,6 +768,13 @@ class ApiClient {
     return this.request<{ data: { revoked: boolean } }>(
       `/admin/users/${userId}/plan`,
       { method: 'DELETE' },
+    );
+  }
+
+  async grantCredits(userId: string, amount: number, description?: string) {
+    return this.request<{ granted: number; userId: string; userName: string; newBalance: number; newPurchasedBalance: number }>(
+      `/admin/users/${userId}/credits`,
+      { method: 'POST', body: JSON.stringify({ amount, description }) },
     );
   }
 

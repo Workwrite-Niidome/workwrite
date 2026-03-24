@@ -1,6 +1,6 @@
 import {
   Controller, Get, Patch, Post, Delete, Param, Body, Query, UseGuards,
-  ParseIntPipe, DefaultValuePipe, Logger,
+  ParseIntPipe, DefaultValuePipe, Logger, UnauthorizedException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
@@ -31,6 +31,19 @@ export class AdminController {
     private aiRecommendations: AiRecommendationsService,
     private prisma: PrismaService,
   ) {}
+
+  @Post('verify-password')
+  @ApiOperation({ summary: 'Verify admin panel password' })
+  verifyPassword(@Body() body: { password: string }) {
+    const adminPassword = process.env.ADMIN_PANEL_PASSWORD;
+    if (!adminPassword) {
+      throw new UnauthorizedException('ADMIN_PANEL_PASSWORD is not configured');
+    }
+    if (body.password !== adminPassword) {
+      throw new UnauthorizedException('Invalid admin password');
+    }
+    return { verified: true };
+  }
 
   @Get('stats')
   @ApiOperation({ summary: 'Get admin dashboard statistics' })
