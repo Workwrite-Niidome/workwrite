@@ -277,63 +277,21 @@ export class DiscoverService {
   /** Roles that would spoil the story — exclude these */
   private static SPOILER_ROLES = ['黒幕', '裏切り者', '真犯人', 'ラスボス', '敵', '敵役', '悪役'];
 
-  async getCharacterMatches(options: {
-    gender?: string;
-    ageRange?: string;
-    personality?: string;
-    role?: string;
-    genre?: string;
-    limit?: number;
-    userId?: string;
-  } = {}) {
-    const limit = options.limit || 10;
+  // Cache for character matches (refreshed every 10 minutes)
+  private characterMatchCache: { data: any[]; updatedAt: number } | null = null;
+  private static CACHE_TTL_MS = 10 * 60 * 1000;
 
-    // Build character filter
-    const workWhere: Record<string, unknown> = { status: 'PUBLISHED' };
-    if (options.genre) {
-      workWhere.genre = options.genre;
-    }
-    const where: Record<string, unknown> = {
-      isPublic: true,
-      work: workWhere,
-    };
-
-    if (options.gender) {
-      where.gender = { contains: options.gender, mode: 'insensitive' };
+  private async getAllPublicCharacters() {
+    const now = Date.now();
+    if (this.characterMatchCache && now - this.characterMatchCache.updatedAt < DiscoverService.CACHE_TTL_MS) {
+      return this.characterMatchCache.data;
     }
 
-    if (options.role) {
-      where.role = { contains: options.role, mode: 'insensitive' };
-    }
-
-    // Age range filter: 10代, 20代, 30代, etc.
-    if (options.ageRange) {
-      where.age = { contains: options.ageRange, mode: 'insensitive' };
-    }
-
-    // Personality keyword filter
-    if (options.personality) {
-      where.personality = { contains: options.personality, mode: 'insensitive' };
-    }
-
-    // Exclude works the user already read
-    let excludeWorkIds: string[] = [];
-    if (options.userId) {
-      const readWorks = await this.prisma.bookshelfEntry.findMany({
-        where: { userId: options.userId, status: 'COMPLETED' },
-        select: { workId: true },
-        take: 200,
-      });
-      excludeWorkIds = readWorks.map((r) => r.workId);
-      if (excludeWorkIds.length > 0) {
-        where.workId = { notIn: excludeWorkIds };
-      }
-    }
-
-    // Fetch all matching characters, then shuffle client-side
     const characters = await this.prisma.storyCharacter.findMany({
-      where,
-      take: 200,
+      where: {
+        isPublic: true,
+        work: { status: 'PUBLISHED' },
+      },
       select: {
         id: true,
         name: true,
@@ -344,7 +302,6 @@ export class DiscoverService {
         speechStyle: true,
         firstPerson: true,
         appearance: true,
-        motivation: true,
         work: {
           select: {
             id: true,
@@ -359,35 +316,12 @@ export class DiscoverService {
       },
     });
 
-    // Exclude spoiler roles (partial match to catch variants)
-    const safeCharacters = characters.filter(
+    // Exclude spoiler roles (partial match)
+    const safe = characters.filter(
       (c) => !DiscoverService.SPOILER_ROLES.some((sr) => c.role.includes(sr)),
     );
 
-    // Shuffle and take limit
-    const shuffled = safeCharacters.sort(() => Math.random() - 0.5);
-
-    // If user has reading history, boost characters from works matching their taste
-    if (options.userId && shuffled.length > limit) {
-      const emotionTags = await this.prisma.userEmotionTag.findMany({
-        where: { userId: options.userId },
-        select: { work: { select: { genre: true } } },
-        take: 50,
-      });
-      const preferredGenres = new Set(
-        emotionTags.map((t) => t.work.genre).filter(Boolean),
-      );
-
-      if (preferredGenres.size > 0) {
-        shuffled.sort((a, b) => {
-          const aMatch = preferredGenres.has(a.work.genre) ? 1 : 0;
-          const bMatch = preferredGenres.has(b.work.genre) ? 1 : 0;
-          return bMatch - aMatch;
-        });
-      }
-    }
-
-    return shuffled.slice(0, limit).map((c) => ({
+    const mapped = safe.map((c) => ({
       id: c.id,
       name: c.name,
       role: c.role,
@@ -407,6 +341,76 @@ export class DiscoverService {
         qualityScore: c.work.qualityScore,
       },
     }));
+
+    this.characterMatchCache = { data: mapped, updatedAt: now };
+    return mapped;
+  }
+
+  async getCharacterMatches(options: {
+    gender?: string;
+    ageRange?: string;
+    personality?: string;
+    role?: string;
+    genre?: string;
+    page?: number;
+    limit?: number;
+    userId?: string;
+  } = {}) {
+    const page = options.page || 1;
+    const limit = options.limit || 20;
+
+    let results = await this.getAllPublicCharacters();
+
+    // Apply filters
+    if (options.gender) {
+      const g = options.gender.toLowerCase();
+      results = results.filter((c) => c.gender?.toLowerCase().includes(g));
+    }
+    if (options.ageRange) {
+      results = results.filter((c) => c.age?.includes(options.ageRange!));
+    }
+    if (options.genre) {
+      results = results.filter((c) => c.work.genre === options.genre);
+    }
+    if (options.personality) {
+      const p = options.personality.toLowerCase();
+      results = results.filter((c) => c.personality?.toLowerCase().includes(p));
+    }
+
+    // Exclude works the user already read
+    if (options.userId) {
+      const readWorks = await this.prisma.bookshelfEntry.findMany({
+        where: { userId: options.userId, status: 'COMPLETED' },
+        select: { workId: true },
+      });
+      const readIds = new Set(readWorks.map((r) => r.workId));
+      if (readIds.size > 0) {
+        results = results.filter((c) => !readIds.has(c.work.id));
+      }
+
+      // Boost preferred genres to top
+      const emotionTags = await this.prisma.userEmotionTag.findMany({
+        where: { userId: options.userId },
+        select: { work: { select: { genre: true } } },
+        take: 50,
+      });
+      const preferredGenres = new Set(
+        emotionTags.map((t) => t.work.genre).filter(Boolean),
+      );
+      if (preferredGenres.size > 0) {
+        results.sort((a, b) => {
+          const aMatch = preferredGenres.has(a.work.genre) ? 1 : 0;
+          const bMatch = preferredGenres.has(b.work.genre) ? 1 : 0;
+          return bMatch - aMatch;
+        });
+      }
+    }
+
+    const total = results.length;
+    const start = (page - 1) * limit;
+    const data = results.slice(start, start + limit);
+
+    return { data, total, page, limit };
   }
 
   async getWorksByGenre(genre: string, limit = 20, cursor?: string) {

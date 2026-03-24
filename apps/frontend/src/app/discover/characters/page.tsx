@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ChevronLeft, Filter, X } from 'lucide-react';
+import { ChevronLeft, ChevronRight, X } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { CharacterCard } from '@/components/character-match-carousel';
@@ -15,9 +15,12 @@ const GENDERS = [
   { value: 'その他', label: 'その他' },
 ];
 const AGE_RANGES = ['10代', '20代', '30代', '40代', '50代'];
+const PAGE_SIZE = 20;
 
 export default function DiscoverCharactersPage() {
   const [characters, setCharacters] = useState<CharacterMatch[]>([]);
+  const [total, setTotal] = useState(0);
+  const [page, setPage] = useState(1);
   const [loading, setLoading] = useState(true);
   const [gender, setGender] = useState('');
   const [ageRange, setAgeRange] = useState('');
@@ -30,19 +33,28 @@ export default function DiscoverCharactersPage() {
         gender: gender || undefined,
         ageRange: ageRange || undefined,
         genre: genre || undefined,
-        limit: 30,
+        page,
+        limit: PAGE_SIZE,
       });
-      const data = (res as any).data || res;
-      setCharacters(Array.isArray(data) ? data : []);
+      const raw = (res as any).data || res;
+      setCharacters(Array.isArray(raw?.data) ? raw.data : []);
+      setTotal(raw?.total || 0);
     } catch {
       setCharacters([]);
+      setTotal(0);
     }
     setLoading(false);
-  }, [gender, ageRange, genre]);
+  }, [gender, ageRange, genre, page]);
 
   useEffect(() => { fetchCharacters(); }, [fetchCharacters]);
 
   const hasFilter = !!(gender || ageRange || genre);
+  const totalPages = Math.ceil(total / PAGE_SIZE);
+
+  function applyFilter(setter: (v: string) => void, value: string) {
+    setter(value);
+    setPage(1);
+  }
 
   return (
     <div className="px-4 md:px-6 py-8">
@@ -65,7 +77,7 @@ export default function DiscoverCharactersPage() {
       <div className="flex flex-wrap gap-2 mb-6">
         <select
           value={gender}
-          onChange={(e) => setGender(e.target.value)}
+          onChange={(e) => applyFilter(setGender, e.target.value)}
           className="h-9 rounded-lg border border-border bg-transparent px-3 text-sm"
           aria-label="性別"
         >
@@ -74,7 +86,7 @@ export default function DiscoverCharactersPage() {
         </select>
         <select
           value={ageRange}
-          onChange={(e) => setAgeRange(e.target.value)}
+          onChange={(e) => applyFilter(setAgeRange, e.target.value)}
           className="h-9 rounded-lg border border-border bg-transparent px-3 text-sm"
           aria-label="年代"
         >
@@ -83,7 +95,7 @@ export default function DiscoverCharactersPage() {
         </select>
         <select
           value={genre}
-          onChange={(e) => setGenre(e.target.value)}
+          onChange={(e) => applyFilter(setGenre, e.target.value)}
           className="h-9 rounded-lg border border-border bg-transparent px-3 text-sm"
           aria-label="ジャンル"
         >
@@ -97,10 +109,15 @@ export default function DiscoverCharactersPage() {
             variant="ghost"
             size="sm"
             className="h-9 text-sm gap-1"
-            onClick={() => { setGender(''); setAgeRange(''); setGenre(''); }}
+            onClick={() => { setGender(''); setAgeRange(''); setGenre(''); setPage(1); }}
           >
             <X className="h-3.5 w-3.5" /> クリア
           </Button>
+        )}
+        {!loading && (
+          <span className="flex items-center text-xs text-muted-foreground ml-auto">
+            {total}件
+          </span>
         )}
       </div>
 
@@ -125,6 +142,22 @@ export default function DiscoverCharactersPage() {
           ))
         )}
       </div>
+
+      {/* Pagination */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between mt-8">
+          <p className="text-xs text-muted-foreground">{total}件中 {(page - 1) * PAGE_SIZE + 1}〜{Math.min(page * PAGE_SIZE, total)}件</p>
+          <div className="flex items-center gap-2">
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+              <ChevronLeft className="h-4 w-4" />
+            </Button>
+            <span className="text-xs text-muted-foreground">{page} / {totalPages}</span>
+            <Button variant="ghost" size="icon" className="h-8 w-8" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+              <ChevronRight className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }

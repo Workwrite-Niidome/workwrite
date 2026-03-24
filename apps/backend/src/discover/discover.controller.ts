@@ -126,6 +126,7 @@ export class DiscoverController {
   @ApiQuery({ name: 'personality', required: false })
   @ApiQuery({ name: 'role', required: false })
   @ApiQuery({ name: 'genre', required: false })
+  @ApiQuery({ name: 'page', required: false })
   @ApiQuery({ name: 'limit', required: false })
   getCharacterMatches(
     @Query('gender') gender?: string,
@@ -133,6 +134,7 @@ export class DiscoverController {
     @Query('personality') personality?: string,
     @Query('role') role?: string,
     @Query('genre') genre?: string,
+    @Query('page') page?: string,
     @Query('limit') limit?: string,
     @Req() req?: any,
   ) {
@@ -143,6 +145,7 @@ export class DiscoverController {
       personality,
       role,
       genre,
+      page: page ? parseInt(page, 10) : undefined,
       limit: limit ? parseInt(limit, 10) : undefined,
       userId,
     });

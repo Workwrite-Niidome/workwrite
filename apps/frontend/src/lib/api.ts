@@ -518,16 +518,17 @@ class ApiClient {
     return this.request<{ data: Work[] }>(`/discover/emotion/${tagName}`);
   }
 
-  async getCharacterMatches(options?: { gender?: string; ageRange?: string; personality?: string; role?: string; genre?: string; limit?: number }) {
+  async getCharacterMatches(options?: { gender?: string; ageRange?: string; personality?: string; role?: string; genre?: string; page?: number; limit?: number }) {
     const qs = new URLSearchParams();
     if (options?.gender) qs.set('gender', options.gender);
     if (options?.ageRange) qs.set('ageRange', options.ageRange);
     if (options?.personality) qs.set('personality', options.personality);
     if (options?.role) qs.set('role', options.role);
     if (options?.genre) qs.set('genre', options.genre);
+    if (options?.page) qs.set('page', String(options.page));
     if (options?.limit) qs.set('limit', String(options.limit));
     const query = qs.toString();
-    return this.request<{ data: CharacterMatch[] }>(`/discover/character-matches${query ? `?${query}` : ''}`);
+    return this.request<{ data: { data: CharacterMatch[]; total: number; page: number; limit: number } }>(`/discover/character-matches${query ? `?${query}` : ''}`);
   }
 
   // Emotion Tags
