@@ -1,9 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
-import { Search, ArrowRight, Bot, Users } from 'lucide-react';
+import { Search, ArrowRight, Bot, Users, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -29,19 +28,38 @@ const MOOD_CARDS = [
 ];
 
 const GENRES = Object.keys(GENRE_LABELS);
+const SORT_OPTIONS = [
+  { value: 'relevance', label: '関連度' },
+  { value: 'newest', label: '新しい順' },
+  { value: 'score', label: 'スコア順' },
+  { value: 'popular', label: '人気順' },
+];
+const PAGE_SIZE = 20;
 
 export default function DiscoverPage() {
-  const router = useRouter();
   const [data, setData] = useState<TopPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'works' | 'ai-works'>('works');
   const [aiWorks, setAiWorks] = useState<Work[]>([]);
   const [aiWorksLoading, setAiWorksLoading] = useState(false);
+
+  // Search + filter state
   const [searchQuery, setSearchQuery] = useState('');
+  const [genre, setGenre] = useState('');
+  const [sortBy, setSortBy] = useState('relevance');
+  const [category, setCategory] = useState('');
+  const [searchResults, setSearchResults] = useState<Work[] | null>(null);
+  const [searchTotal, setSearchTotal] = useState(0);
+  const [searchPage, setSearchPage] = useState(0);
+  const [searching, setSearching] = useState(false);
+
+  // Autocomplete
   const [autocompleteResults, setAutocompleteResults] = useState<{ id: string; title: string; author: { name: string; displayName: string | null } }[]>([]);
   const [showAutocomplete, setShowAutocomplete] = useState(false);
   const autocompleteTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const autocompleteRef = useRef<HTMLDivElement>(null);
+
+  const isFiltering = !!(searchQuery.trim() || genre || sortBy !== 'relevance' || category);
 
   useEffect(() => {
     api.getTopPage()
@@ -59,6 +77,36 @@ export default function DiscoverPage() {
     document.addEventListener('mousedown', handleClickOutside);
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
+
+  const doSearch = useCallback(async (q: string, pageNum: number, opts?: { genre?: string; sort?: string; category?: string }) => {
+    const g = opts?.genre ?? genre;
+    const s = opts?.sort ?? sortBy;
+    const c = opts?.category ?? category;
+
+    // If no filters active, clear search results to show browse mode
+    if (!q.trim() && !g && s === 'relevance' && !c) {
+      setSearchResults(null);
+      return;
+    }
+
+    setSearching(true);
+    try {
+      const res = await api.searchWorks(q, {
+        genre: g || undefined,
+        sort: s !== 'relevance' ? s : undefined,
+        category: c || undefined,
+        limit: PAGE_SIZE,
+        offset: pageNum * PAGE_SIZE,
+      } as any);
+      setSearchResults(res.data.hits);
+      setSearchTotal(res.data.total);
+      setSearchPage(pageNum);
+    } catch {
+      setSearchResults([]);
+    } finally {
+      setSearching(false);
+    }
+  }, [genre, sortBy, category]);
 
   function handleSearchInput(value: string) {
     setSearchQuery(value);
@@ -82,27 +130,50 @@ export default function DiscoverPage() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setShowAutocomplete(false);
-    if (searchQuery.trim()) {
-      router.push(`/search?q=${encodeURIComponent(searchQuery)}`);
-    }
+    doSearch(searchQuery, 0);
   }
+
+  function handleGenreChange(value: string) {
+    setGenre(value);
+    doSearch(searchQuery, 0, { genre: value });
+  }
+
+  function handleSortChange(value: string) {
+    setSortBy(value);
+    doSearch(searchQuery, 0, { sort: value });
+  }
+
+  function handleCategoryChange(value: string) {
+    setCategory(value);
+    doSearch(searchQuery, 0, { category: value });
+  }
+
+  function clearFilters() {
+    setSearchQuery('');
+    setGenre('');
+    setSortBy('relevance');
+    setCategory('');
+    setSearchResults(null);
+  }
+
+  const totalPages = Math.ceil(searchTotal / PAGE_SIZE);
 
   return (
     <div className="px-4 md:px-6 py-8 space-y-12">
-      {/* Header + Search */}
+      {/* Header + Search + Filters */}
       <div>
-        <h1 className="text-xl font-bold mb-1">作品を探す</h1>
-        <p className="text-sm text-muted-foreground mb-6">
-          気分やジャンルから、あなたにぴったりの一冊を見つけましょう
+        <h1 className="text-xl font-bold mb-1">探す</h1>
+        <p className="text-sm text-muted-foreground mb-4">
+          キャラクター、気分、ジャンルから、あなたにぴったりの一冊を
         </p>
-        <form onSubmit={handleSearch} className="flex gap-2 max-w-lg">
+        <form onSubmit={handleSearch} className="flex gap-2 max-w-2xl mb-3">
           <div className="relative flex-1" ref={autocompleteRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
               value={searchQuery}
               onChange={(e) => handleSearchInput(e.target.value)}
               onFocus={() => autocompleteResults.length > 0 && setShowAutocomplete(true)}
-              placeholder="タイトル、著者、キャラクター名で検索..."
+              placeholder="タイトル、著者、タグで検索..."
               className="pl-9"
             />
             {showAutocomplete && (
@@ -127,174 +198,227 @@ export default function DiscoverPage() {
             <Search className="h-4 w-4" />
           </Button>
         </form>
-      </div>
 
-      {/* Tab Bar */}
-      <div className="border-b border-border">
-        <div className="flex gap-4">
-          <button
-            onClick={() => setActiveTab('works')}
-            className={cn(
-              'pb-2 text-sm font-medium border-b-2 transition-colors',
-              activeTab === 'works' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
+        {/* Filters */}
+        <div className="flex flex-wrap items-center gap-2">
+          <select
+            value={genre}
+            onChange={(e) => handleGenreChange(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
+            aria-label="ジャンル"
           >
-            作品
-          </button>
-          <Link
-            href="/discover/characters"
-            className={cn(
-              'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
-              'border-transparent text-muted-foreground hover:text-foreground',
-            )}
+            <option value="">すべてのジャンル</option>
+            {GENRES.map((g) => <option key={g} value={g}>{GENRE_LABELS[g]}</option>)}
+          </select>
+          <select
+            value={sortBy}
+            onChange={(e) => handleSortChange(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
+            aria-label="並べ替え"
           >
-            <Users className="h-3.5 w-3.5" /> キャラクター
-          </Link>
-          <button
-            onClick={() => {
-              setActiveTab('ai-works');
-              if (aiWorks.length === 0 && !aiWorksLoading) {
-                setAiWorksLoading(true);
-                api.searchWorks('', { aiGenerated: true })
-                  .then((res: any) => {
-                    const hits = res?.data?.hits || res?.hits || [];
-                    setAiWorks(Array.isArray(hits) ? hits : []);
-                  })
-                  .catch(() => {})
-                  .finally(() => setAiWorksLoading(false));
-              }
-            }}
-            className={cn(
-              'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
-              activeTab === 'ai-works' ? 'border-indigo-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
-            )}
+            {SORT_OPTIONS.map((o) => <option key={o.value} value={o.value}>{o.label}</option>)}
+          </select>
+          <select
+            value={category}
+            onChange={(e) => handleCategoryChange(e.target.value)}
+            className="h-8 rounded-lg border border-border bg-transparent px-2 text-xs"
+            aria-label="カテゴリ"
           >
-            <Bot className="h-3.5 w-3.5" /> AI作品
-          </button>
+            <option value="">すべて</option>
+            <option value="hidden-gems">埋もれた名作</option>
+            <option value="ai">AI作品</option>
+          </select>
+          {isFiltering && (
+            <button
+              onClick={clearFilters}
+              className="h-8 px-2 text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1"
+            >
+              <X className="h-3 w-3" /> クリア
+            </button>
+          )}
         </div>
       </div>
 
-      {activeTab === 'ai-works' && (
-        <section>
-          <h2 className="text-sm font-medium mb-4">AI生成作品</h2>
-          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {aiWorksLoading
-              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
-              : aiWorks.map((work) => <WorkCard key={work.id} work={work} />)}
-            {!aiWorksLoading && aiWorks.length === 0 && (
-              <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
-                AI作品はまだありません
-              </p>
-            )}
-          </div>
-        </section>
+      {/* Search Results Mode */}
+      {searchResults !== null && (
+        <>
+          {searching ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)}
+            </div>
+          ) : searchResults.length > 0 ? (
+            <div>
+              <p className="text-xs text-muted-foreground mb-4">{searchTotal}件の結果</p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+                {searchResults.map((work) => <WorkCard key={work.id} work={work} />)}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 mt-6">
+                  <Button variant="outline" size="sm" disabled={searchPage === 0} onClick={() => doSearch(searchQuery, searchPage - 1)}>
+                    <ChevronLeft className="h-4 w-4" />
+                  </Button>
+                  <span className="text-sm text-muted-foreground">{searchPage + 1} / {totalPages}</span>
+                  <Button variant="outline" size="sm" disabled={searchPage >= totalPages - 1} onClick={() => doSearch(searchQuery, searchPage + 1)}>
+                    <ChevronRight className="h-4 w-4" />
+                  </Button>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div className="text-center py-16">
+              <p className="text-sm text-muted-foreground">検索結果はありません</p>
+              <p className="text-xs text-muted-foreground mt-2">別のキーワードやフィルターをお試しください</p>
+            </div>
+          )}
+        </>
       )}
 
-      {activeTab === 'works' && <>
-      {/* Character Match */}
-      <CharacterMatchCarousel limit={10} />
-
-      {/* Trending Reactions */}
-      <TrendingReactionsSection />
-
-      {/* Mood Discovery */}
-      <section>
-        <h2 className="text-sm font-medium mb-4">今の気分で探す</h2>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
-          {MOOD_CARDS.map((card) => (
-            <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
-              <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
-                {card.label}
-              </div>
+      {/* Browse Mode (no filters active) */}
+      {searchResults === null && <>
+        {/* Tab Bar */}
+        <div className="border-b border-border">
+          <div className="flex gap-4">
+            <button
+              onClick={() => setActiveTab('works')}
+              className={cn(
+                'pb-2 text-sm font-medium border-b-2 transition-colors',
+                activeTab === 'works' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              作品
+            </button>
+            <Link
+              href="/discover/characters"
+              className={cn(
+                'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+                'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Users className="h-3.5 w-3.5" /> キャラクター
             </Link>
-          ))}
+            <button
+              onClick={() => {
+                setActiveTab('ai-works');
+                if (aiWorks.length === 0 && !aiWorksLoading) {
+                  setAiWorksLoading(true);
+                  api.searchWorks('', { aiGenerated: true })
+                    .then((res: any) => {
+                      const hits = res?.data?.hits || res?.hits || [];
+                      setAiWorks(Array.isArray(hits) ? hits : []);
+                    })
+                    .catch(() => {})
+                    .finally(() => setAiWorksLoading(false));
+                }
+              }}
+              className={cn(
+                'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+                activeTab === 'ai-works' ? 'border-indigo-500 text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+              )}
+            >
+              <Bot className="h-3.5 w-3.5" /> AI作品
+            </button>
+          </div>
         </div>
-      </section>
 
-      {/* Genre Browse */}
-      <section>
-        <h2 className="text-sm font-medium mb-4">ジャンルで探す</h2>
-        <div className="flex flex-wrap gap-2">
-          {GENRES.map((g) => (
-            <Link key={g} href={`/search?q=&genre=${g}`}>
-              <Badge variant="outline" className="cursor-pointer hover:bg-secondary transition-colors px-3 py-1.5">
-                {GENRE_LABELS[g]}
-              </Badge>
-            </Link>
-          ))}
-        </div>
-      </section>
+        {activeTab === 'ai-works' && (
+          <section>
+            <h2 className="text-sm font-medium mb-4">AI生成作品</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+              {aiWorksLoading
+                ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+                : aiWorks.map((work) => <WorkCard key={work.id} work={work} />)}
+              {!aiWorksLoading && aiWorks.length === 0 && (
+                <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
+                  AI作品はまだありません
+                </p>
+              )}
+            </div>
+          </section>
+        )}
 
-      {/* Popular */}
-      <section>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-sm font-medium">人気作品</h2>
-          <Link href="/search?q=&sort=score" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-            すべて見る <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {loading
-            ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
-            : data?.popular.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
-          {!loading && data?.popular.length === 0 && (
-            <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
-              まだ作品が投稿されていません
-            </p>
-          )}
-        </div>
-      </section>
+        {activeTab === 'works' && <>
+        {/* Character Match */}
+        <CharacterMatchCarousel limit={10} />
 
-      {/* Hidden Gems */}
-      <section>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-sm font-medium">埋もれた名作</h2>
-          <Link href="/search?q=" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-            すべて見る <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {loading
-            ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
-            : data?.hiddenGems.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
-          {!loading && data?.hiddenGems.length === 0 && (
-            <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
-              まだデータがありません
-            </p>
-          )}
-        </div>
-      </section>
+        {/* Trending Reactions */}
+        <TrendingReactionsSection />
 
-      {/* Recent */}
-      <section>
-        <div className="flex justify-between items-center mb-4">
-          <h2 className="text-sm font-medium">新着</h2>
-          <Link href="/search?q=&sort=newest" className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
-            すべて見る <ArrowRight className="h-3 w-3" />
-          </Link>
-        </div>
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-          {loading
-            ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
-            : data?.recent.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
-        </div>
-      </section>
-
-      {/* Emotion Tags */}
-      {data?.trendingTags && data.trendingTags.length > 0 && (
+        {/* Mood Discovery */}
         <section>
-          <h2 className="text-sm font-medium mb-4">感情タグ</h2>
-          <div className="flex flex-wrap gap-2">
-            {data.trendingTags.map((tag) => (
-              <Link key={tag.id} href={`/discover/emotion/${tag.name}`}>
-                <Badge variant="outline" className="cursor-pointer hover:bg-secondary transition-colors">
-                  {tag.nameJa} ({tag.count})
-                </Badge>
+          <h2 className="text-sm font-medium mb-4">今の気分で探す</h2>
+          <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-2">
+            {MOOD_CARDS.map((card) => (
+              <Link key={card.mood} href={`/discover/emotion/${card.mood}`}>
+                <div className="border border-border rounded-lg px-4 py-3 text-center text-sm transition-all hover:bg-secondary hover:border-foreground/10 cursor-pointer">
+                  {card.label}
+                </div>
               </Link>
             ))}
           </div>
         </section>
-      )}
+
+        {/* Popular */}
+        <section>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-medium">人気作品</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loading
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : data?.popular.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
+            {!loading && data?.popular.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
+                まだ作品が投稿されていません
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Hidden Gems */}
+        <section>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-medium">埋もれた名作</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loading
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : data?.hiddenGems.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
+            {!loading && data?.hiddenGems.length === 0 && (
+              <p className="col-span-full text-center text-muted-foreground py-12 text-sm">
+                まだデータがありません
+              </p>
+            )}
+          </div>
+        </section>
+
+        {/* Recent */}
+        <section>
+          <div className="flex justify-between items-center mb-4">
+            <h2 className="text-sm font-medium">新着</h2>
+          </div>
+          <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
+            {loading
+              ? Array.from({ length: 6 }).map((_, i) => <WorkCardSkeleton key={i} />)
+              : data?.recent.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
+          </div>
+        </section>
+
+        {/* Emotion Tags */}
+        {data?.trendingTags && data.trendingTags.length > 0 && (
+          <section>
+            <h2 className="text-sm font-medium mb-4">感情タグ</h2>
+            <div className="flex flex-wrap gap-2">
+              {data.trendingTags.map((tag) => (
+                <Link key={tag.id} href={`/discover/emotion/${tag.name}`}>
+                  <Badge variant="outline" className="cursor-pointer hover:bg-secondary transition-colors">
+                    {tag.nameJa} ({tag.count})
+                  </Badge>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
+        </>}
       </>}
     </div>
   );
