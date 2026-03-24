@@ -1,6 +1,6 @@
 'use client';
 import { useState, useRef, useEffect } from 'react';
-import { Send, Trash2, ArrowLeft, MessageCircle, Sparkles, Crown, Users, Lock } from 'lucide-react';
+import { Send, Trash2, ArrowLeft, MessageCircle, Sparkles, Users, Lock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -11,9 +11,11 @@ import { useAuth } from '@/lib/auth-context';
 interface CharacterTalkChatProps {
   workId: string;
   episodeId?: string;
+  initialCharacterId?: string;
+  initialMessage?: string;
 }
 
-export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps) {
+export function CharacterTalkChat({ workId, episodeId, initialCharacterId, initialMessage }: CharacterTalkChatProps) {
   const { isAuthenticated } = useAuth();
   const [phase, setPhase] = useState<'select' | 'chat'>('select');
   const [mode, setMode] = useState<'companion' | 'character'>('companion');
@@ -25,9 +27,10 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
   const [streaming, setStreaming] = useState(false);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
-  const [useOpus, setUseOpus] = useState(false);
+  const [useSonnet, setUseSonnet] = useState(false);
   const [credits, setCredits] = useState<{ total: number; monthly: number; purchased: number } | null>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
+  const initialHandled = useRef(false);
 
   useEffect(() => {
     if (!isAuthenticated) {
@@ -41,7 +44,8 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
       api.getCharacterTalkConversations(workId).catch(() => ({ data: [] })),
     ]).then(([charsRes, statusRes, convsRes]) => {
       const chars = (charsRes as any).data || [];
-      setCharacters(Array.isArray(chars) ? chars : []);
+      const charList: TalkableCharacter[] = Array.isArray(chars) ? chars : [];
+      setCharacters(charList);
 
       const statusData = (statusRes as any).data || statusRes;
       if (statusData.tier?.credits) {
@@ -50,6 +54,28 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
 
       const convs = (convsRes as any).data || [];
       setConversations(Array.isArray(convs) ? convs : []);
+
+      // Auto-select character and set initial message from match card
+      if (initialCharacterId && !initialHandled.current) {
+        initialHandled.current = true;
+        const targetChar = charList.find((c) => c.id === initialCharacterId);
+        if (targetChar) {
+          setSelectedCharacter(targetChar);
+          setMode('character');
+          setPhase('chat');
+          if (initialMessage) {
+            setInput(initialMessage);
+          }
+          // Load history
+          api.getCharacterTalkHistory(workId, targetChar.id)
+            .then((histRes) => {
+              const raw = histRes as any;
+              const msgs = raw?.data?.messages || raw?.messages || raw?.data || [];
+              setMessages(Array.isArray(msgs) ? msgs : []);
+            })
+            .catch(() => {});
+        }
+      }
     }).finally(() => setLoading(false));
   }, [workId, isAuthenticated]);
 
@@ -112,7 +138,7 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
         message: userMsg.content,
         mode,
         characterId: selectedCharacter?.id,
-        useOpus,
+        useSonnet,
       });
 
       await consumeSSEStream(response, (parsed) => {
@@ -272,7 +298,7 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
 
   // Chat phase
   const chatTitle = selectedCharacter ? selectedCharacter.name : 'コンパニオン';
-  const costPerMessage = useOpus ? 5 : 1;
+  const costPerMessage = useSonnet ? 2 : 1;
 
   return (
     <div className="flex flex-col h-full">
@@ -290,20 +316,21 @@ export function CharacterTalkChat({ workId, episodeId }: CharacterTalkChatProps)
           </Button>
         </div>
         <div className="flex items-center gap-2 mt-1 ml-10">
-          {credits && credits.purchased > 0 && (
-            <Button
-              variant={useOpus ? 'default' : 'outline'}
-              size="sm"
-              className="h-6 text-[10px] gap-1"
-              onClick={() => setUseOpus(!useOpus)}
-            >
-              <Crown className="h-3 w-3" />
-              Opus
-            </Button>
-          )}
+          <button
+            onClick={() => setUseSonnet(false)}
+            className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${!useSonnet ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+          >
+            少し話してみる
+          </button>
+          <button
+            onClick={() => setUseSonnet(true)}
+            className={`px-2 py-0.5 rounded-full text-[10px] border transition-colors ${useSonnet ? 'bg-primary text-primary-foreground border-primary' : 'border-border text-muted-foreground hover:text-foreground'}`}
+          >
+            じっくり会話する
+          </button>
           {credits && (
             <span className="text-[11px] text-muted-foreground">
-              {costPerMessage}cr/回 | 残{credits.total}
+              残{credits.total}cr
             </span>
           )}
         </div>

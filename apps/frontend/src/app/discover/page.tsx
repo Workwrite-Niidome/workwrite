@@ -10,6 +10,7 @@ import { Input } from '@/components/ui/input';
 import { api, type Work, type TopPageData } from '@/lib/api';
 import { cn } from '@/lib/utils';
 import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
+import { CharacterMatchCarousel } from '@/components/character-match-carousel';
 import { GENRE_LABELS } from '@/lib/constants';
 
 const MOOD_CARDS = [
@@ -181,6 +182,9 @@ export default function DiscoverPage() {
       )}
 
       {activeTab === 'works' && <>
+      {/* Character Match */}
+      <CharacterMatchCarousel limit={10} />
+
       {/* Trending Reactions */}
       <TrendingReactionsSection />
 

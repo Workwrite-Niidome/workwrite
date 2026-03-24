@@ -6,7 +6,6 @@ import { CharacterTalkRevenueService } from './character-talk-revenue.service';
 import { CharacterExtractionService } from './character-extraction.service';
 
 const HAIKU = 'claude-haiku-4-5-20251001';
-const OPUS = 'claude-opus-4-6';
 const MAX_WORK_TEXT_LENGTH = 20000;
 const MAX_STRUCTURED_CONTEXT_LENGTH = 3000;
 
@@ -18,7 +17,7 @@ interface ChatMessage {
 interface StreamChatOptions {
   mode: 'character' | 'companion';
   characterId?: string;
-  useOpus?: boolean;
+  useSonnet?: boolean;
 }
 
 @Injectable()
@@ -39,7 +38,7 @@ export class CharacterTalkService {
     userMessage: string,
     options: StreamChatOptions,
   ): AsyncGenerator<string> {
-    const { mode, characterId, useOpus } = options;
+    const { mode, characterId, useSonnet } = options;
 
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
@@ -56,18 +55,14 @@ export class CharacterTalkService {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    // Determine model based on credit balance
-    const balance = await this.creditService.getBalance(userId);
+    // User chooses: Haiku (1cr) or Sonnet (3cr)
     let model: string;
     let cost: number;
 
-    if (useOpus && balance.purchased > 0) {
-      model = OPUS;
-      cost = 5;
-    } else if (balance.purchased > 0) {
+    if (useSonnet) {
       const sonnet = await this.aiSettings.getModel();
       model = sonnet;
-      cost = 1;
+      cost = 2;
     } else {
       model = HAIKU;
       cost = 1;

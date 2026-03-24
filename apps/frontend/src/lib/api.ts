@@ -518,6 +518,18 @@ class ApiClient {
     return this.request<{ data: Work[] }>(`/discover/emotion/${tagName}`);
   }
 
+  async getCharacterMatches(options?: { gender?: string; ageRange?: string; personality?: string; role?: string; genre?: string; limit?: number }) {
+    const qs = new URLSearchParams();
+    if (options?.gender) qs.set('gender', options.gender);
+    if (options?.ageRange) qs.set('ageRange', options.ageRange);
+    if (options?.personality) qs.set('personality', options.personality);
+    if (options?.role) qs.set('role', options.role);
+    if (options?.genre) qs.set('genre', options.genre);
+    if (options?.limit) qs.set('limit', String(options.limit));
+    const query = qs.toString();
+    return this.request<{ data: CharacterMatch[] }>(`/discover/character-matches${query ? `?${query}` : ''}`);
+  }
+
   // Emotion Tags
   async getEmotionTags() {
     return this.request<{ data: EmotionTag[] }>('/emotions/tags');
@@ -1543,6 +1555,29 @@ export interface NotificationItem {
   data: Record<string, unknown> | null;
   read: boolean;
   createdAt: string;
+}
+
+export interface CharacterMatch {
+  id: string;
+  name: string;
+  role: string;
+  gender: string | null;
+  age: string | null;
+  personality: string | null;
+  speechStyle: string | null;
+  firstPerson: string | null;
+  appearance: string | null;
+  motivation: string | null;
+  sampleLine: string | null;
+  work: {
+    id: string;
+    title: string;
+    genre: string | null;
+    synopsis: string | null;
+    enableCharacterTalk: boolean;
+    author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
+    qualityScore: { overall: number } | null;
+  };
 }
 
 export interface AdminStats {

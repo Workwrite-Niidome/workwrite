@@ -30,7 +30,7 @@ export class CharacterTalkController {
   async chat(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
-    @Body() body: { message: string; mode?: 'character' | 'companion'; characterId?: string; useOpus?: boolean },
+    @Body() body: { message: string; mode?: 'character' | 'companion'; characterId?: string; useSonnet?: boolean },
     @Res() res: Response,
   ) {
     const mode = body.mode || 'companion';
@@ -49,7 +49,7 @@ export class CharacterTalkController {
       const stream = this.characterTalkService.streamChat(userId, workId, body.message, {
         mode,
         characterId: body.characterId,
-        useOpus: body.useOpus,
+        useSonnet: body.useSonnet,
       });
       for await (const chunk of stream) {
         if (res.destroyed) break;

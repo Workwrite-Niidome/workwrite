@@ -11,6 +11,7 @@ import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime } from '@/lib/utils';
 import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
+import { CharacterMatchCarousel } from '@/components/character-match-carousel';
 import { api, type Work, type TopPageData, type ContinueReadingItem } from '@/lib/api';
 
 function FollowingFeedSection() {
@@ -143,6 +144,9 @@ export default function Home() {
       </section>
 
       <div className="px-4 md:px-6 py-12 space-y-16">
+        {/* Character Match */}
+        <CharacterMatchCarousel limit={10} />
+
         {/* Following feed */}
         {isAuthenticated && <FollowingFeedSection />}
 

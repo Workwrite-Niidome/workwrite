@@ -1,7 +1,8 @@
-import { Controller, Get, Query, Param, UseGuards } from '@nestjs/common';
+import { Controller, Get, Query, Param, UseGuards, Req } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiQuery, ApiBearerAuth } from '@nestjs/swagger';
 import { DiscoverService } from './discover.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OptionalJwtAuthGuard } from '../auth/guards/optional-jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
 @ApiTags('Discover')
@@ -115,5 +116,35 @@ export class DiscoverController {
     @Query('cursor') cursor?: string,
   ) {
     return this.discoverService.getWorksByGenre(genre, limit ? parseInt(limit, 10) : undefined, cursor);
+  }
+
+  @Get('character-matches')
+  @UseGuards(OptionalJwtAuthGuard)
+  @ApiOperation({ summary: 'Get character matches for discovery' })
+  @ApiQuery({ name: 'gender', required: false })
+  @ApiQuery({ name: 'ageRange', required: false })
+  @ApiQuery({ name: 'personality', required: false })
+  @ApiQuery({ name: 'role', required: false })
+  @ApiQuery({ name: 'genre', required: false })
+  @ApiQuery({ name: 'limit', required: false })
+  getCharacterMatches(
+    @Query('gender') gender?: string,
+    @Query('ageRange') ageRange?: string,
+    @Query('personality') personality?: string,
+    @Query('role') role?: string,
+    @Query('genre') genre?: string,
+    @Query('limit') limit?: string,
+    @Req() req?: any,
+  ) {
+    const userId = req?.user?.id;
+    return this.discoverService.getCharacterMatches({
+      gender,
+      ageRange,
+      personality,
+      role,
+      genre,
+      limit: limit ? parseInt(limit, 10) : undefined,
+      userId,
+    });
   }
 }

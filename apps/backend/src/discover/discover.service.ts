@@ -272,6 +272,151 @@ export class DiscoverService {
     });
   }
 
+  // ─── Character Match ─────────────────────────────────────
+
+  /** Safe roles that won't spoil the story */
+  private static SAFE_ROLES = ['主人公', 'ヒロイン', 'ヒーロー', 'サブキャラクター', '脇役', 'メンター'];
+
+  async getCharacterMatches(options: {
+    gender?: string;
+    ageRange?: string;
+    personality?: string;
+    role?: string;
+    genre?: string;
+    limit?: number;
+    userId?: string;
+  } = {}) {
+    const limit = options.limit || 10;
+
+    // Build character filter
+    const workWhere: Record<string, unknown> = { status: 'PUBLISHED' };
+    if (options.genre) {
+      workWhere.genre = options.genre;
+    }
+    const where: Record<string, unknown> = {
+      isPublic: true,
+      work: workWhere,
+    };
+
+    if (options.gender) {
+      where.gender = options.gender;
+    }
+
+    if (options.role && DiscoverService.SAFE_ROLES.includes(options.role)) {
+      where.role = options.role;
+    }
+
+    // Age range filter: 10代, 20代, 30代, etc.
+    if (options.ageRange) {
+      where.age = { contains: options.ageRange, mode: 'insensitive' };
+    }
+
+    // Personality keyword filter
+    if (options.personality) {
+      where.personality = { contains: options.personality, mode: 'insensitive' };
+    }
+
+    // Exclude works the user already read
+    let excludeWorkIds: string[] = [];
+    if (options.userId) {
+      const readWorks = await this.prisma.bookshelfEntry.findMany({
+        where: { userId: options.userId, status: 'COMPLETED' },
+        select: { workId: true },
+        take: 200,
+      });
+      excludeWorkIds = readWorks.map((r) => r.workId);
+      if (excludeWorkIds.length > 0) {
+        where.workId = { notIn: excludeWorkIds };
+      }
+    }
+
+    // Fetch characters with work info and a sample dialogue
+    const characters = await this.prisma.storyCharacter.findMany({
+      where,
+      take: limit * 3, // Over-fetch for randomization
+      orderBy: { sortOrder: 'asc' },
+      select: {
+        id: true,
+        name: true,
+        role: true,
+        gender: true,
+        age: true,
+        personality: true,
+        speechStyle: true,
+        firstPerson: true,
+        appearance: true,
+        motivation: true,
+        work: {
+          select: {
+            id: true,
+            title: true,
+            genre: true,
+            synopsis: true,
+            enableCharacterTalk: true,
+            author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+            qualityScore: { select: { overall: true } },
+          },
+        },
+        dialogueSamples: {
+          take: 3,
+          orderBy: { episodeOrder: 'asc' },
+          select: { line: true, emotion: true },
+        },
+      },
+    });
+
+    // Filter to safe roles only (in case role filter was not applied)
+    const safeCharacters = characters.filter(
+      (c) => DiscoverService.SAFE_ROLES.includes(c.role),
+    );
+
+    // Shuffle and take limit
+    const shuffled = safeCharacters.sort(() => Math.random() - 0.5);
+
+    // If user has reading history, boost characters from works matching their taste
+    if (options.userId && shuffled.length > limit) {
+      const emotionTags = await this.prisma.userEmotionTag.findMany({
+        where: { userId: options.userId },
+        select: { work: { select: { genre: true } } },
+        take: 50,
+      });
+      const preferredGenres = new Set(
+        emotionTags.map((t) => t.work.genre).filter(Boolean),
+      );
+
+      if (preferredGenres.size > 0) {
+        shuffled.sort((a, b) => {
+          const aMatch = preferredGenres.has(a.work.genre) ? 1 : 0;
+          const bMatch = preferredGenres.has(b.work.genre) ? 1 : 0;
+          return bMatch - aMatch;
+        });
+      }
+    }
+
+    return shuffled.slice(0, limit).map((c) => ({
+      id: c.id,
+      name: c.name,
+      role: c.role,
+      gender: c.gender,
+      age: c.age,
+      personality: c.personality ? c.personality.slice(0, 100) : null,
+      speechStyle: c.speechStyle,
+      firstPerson: c.firstPerson,
+      appearance: c.appearance ? c.appearance.slice(0, 80) : null,
+      motivation: c.motivation ? c.motivation.slice(0, 80) : null,
+      sampleLine: c.dialogueSamples[0]?.line || null,
+      work: {
+        id: c.work.id,
+        title: c.work.title,
+        genre: c.work.genre,
+        synopsis: c.work.synopsis ? c.work.synopsis.slice(0, 100) : null,
+        enableCharacterTalk: c.work.enableCharacterTalk,
+        author: c.work.author,
+        qualityScore: c.work.qualityScore,
+      },
+    }));
+  }
+
   async getWorksByGenre(genre: string, limit = 20, cursor?: string) {
     return this.prisma.work.findMany({
       where: { status: 'PUBLISHED', genre },

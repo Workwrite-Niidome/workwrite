@@ -1,5 +1,5 @@
 'use client';
-import { useParams } from 'next/navigation';
+import { useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { ChevronLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -7,7 +7,10 @@ import { CharacterTalkChat } from '@/components/ai/character-talk-chat';
 
 export default function CharacterTalkPage() {
   const params = useParams();
+  const searchParams = useSearchParams();
   const workId = params.id as string;
+  const characterId = searchParams.get('characterId') || undefined;
+  const message = searchParams.get('message') || undefined;
 
   return (
     <div className="flex flex-col h-[calc(100vh-48px)]">
@@ -19,7 +22,11 @@ export default function CharacterTalkPage() {
         </Link>
       </div>
       <div className="flex-1 overflow-hidden">
-        <CharacterTalkChat workId={workId} />
+        <CharacterTalkChat
+          workId={workId}
+          initialCharacterId={characterId}
+          initialMessage={message}
+        />
       </div>
     </div>
   );
