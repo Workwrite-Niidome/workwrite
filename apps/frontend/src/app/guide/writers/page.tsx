@@ -718,9 +718,9 @@ export default function WritersGuidePage() {
                   {
                     name: 'Free',
                     price: '¥0',
-                    credits: '10cr/月',
+                    credits: '初月20cr / 以降10cr',
                     icon: Sparkles,
-                    features: ['通常アシスト約2〜5回相当', 'スコアリング無制限', 'AI読書コンパニオン週5回'],
+                    features: ['簡易アシスト約3〜10回相当', 'スコアリング無制限', 'AI読書コンパニオン週5回'],
                   },
                   {
                     name: 'Standard',
