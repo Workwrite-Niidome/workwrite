@@ -1197,6 +1197,7 @@ ${episode.content}
             firstPerson: char.firstPerson || '',
             background: char.background || '',
             sortOrder: i,
+            isPublic: true,
           },
         });
       }

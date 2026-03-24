@@ -872,7 +872,7 @@ model StoryCharacter {
   motivation   String?
   arc          String?              // キャラクターアーク（成長・変化の方向）
   notes        String?   @db.Text   // 著者メモ
-  isPublic     Boolean  @default(false)
+  isPublic     Boolean  @default(true)
   sortOrder    Int      @default(0)
   createdAt    DateTime @default(now())
   updatedAt    DateTime @updatedAt
