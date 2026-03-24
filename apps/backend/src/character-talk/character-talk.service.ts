@@ -131,20 +131,25 @@ export class CharacterTalkService {
     }
 
     // Calculate reading progress
-    const currentEpisodeIndex = Math.max(
-      ...progress.map((p) => {
-        const ep = work.episodes.find((e) => e.id === p.episodeId);
-        return ep ? ep.orderIndex : 0;
-      }),
-      0,
-    );
+    const hasReadAnything = progress.length > 0;
+    const currentEpisodeIndex = hasReadAnything
+      ? Math.max(
+          ...progress.map((p) => {
+            const ep = work.episodes.find((e) => e.id === p.episodeId);
+            return ep ? ep.orderIndex : 0;
+          }),
+          0,
+        )
+      : -1; // -1 means not read at all
 
     // Collect character names from all episodes up to reader's progress
     const appearedCharNames = new Set<string>();
-    for (const ea of episodeAnalyses) {
-      if (ea.episode.orderIndex <= currentEpisodeIndex && Array.isArray(ea.characters)) {
-        for (const c of ea.characters as any[]) {
-          if (c.name) appearedCharNames.add(c.name);
+    if (hasReadAnything) {
+      for (const ea of episodeAnalyses) {
+        if (ea.episode.orderIndex <= currentEpisodeIndex && Array.isArray(ea.characters)) {
+          for (const c of ea.characters as any[]) {
+            if (c.name) appearedCharNames.add(c.name);
+          }
         }
       }
     }
@@ -152,7 +157,11 @@ export class CharacterTalkService {
     // Build structured context (spoiler-safe)
     const structuredParts: string[] = [];
 
-    const safeChars = publicCharacters.filter((c) => appearedCharNames.has(c.name));
+    // If unread, use all public characters (no spoiler risk since no story context is given)
+    // If read, filter to only characters that appeared in read episodes
+    const safeChars = hasReadAnything
+      ? publicCharacters.filter((c) => appearedCharNames.has(c.name))
+      : publicCharacters;
     if (safeChars.length > 0) {
       const charLines = safeChars.map((c) =>
         `- ${c.name} (${c.role}): ${[c.personality, c.motivation, c.speechStyle ? `口調:${c.speechStyle}` : ''].filter(Boolean).join('、')}`,
@@ -186,10 +195,13 @@ export class CharacterTalkService {
 
     const structuredContext = structuredParts.join('\n\n').slice(0, MAX_STRUCTURED_CONTEXT_LENGTH);
 
-    // Build work text (reader's read range only)
-    const readEpisodes = work.episodes.filter((e) => e.orderIndex <= currentEpisodeIndex);
-    const fullText = readEpisodes.map((e) => e.content).join('\n\n');
-    const workText = fullText.slice(0, MAX_WORK_TEXT_LENGTH);
+    // Build work text (reader's read range only; empty if unread)
+    let workText = '';
+    if (hasReadAnything) {
+      const readEpisodes = work.episodes.filter((e) => e.orderIndex <= currentEpisodeIndex);
+      const fullText = readEpisodes.map((e) => e.content).join('\n\n');
+      workText = fullText.slice(0, MAX_WORK_TEXT_LENGTH);
+    }
 
     // Build system prompt based on mode
     let systemPrompt: string;
@@ -201,14 +213,21 @@ export class CharacterTalkService {
         throw new NotFoundException('Character not found');
       }
 
-      // Verify character appeared in reader's read range (fuzzy match)
-      const charAppeared = [...appearedCharNames].some((name) =>
-        character.name === name || character.name.includes(name) || name.includes(character.name),
-      );
-      if (!charAppeared) {
-        await this.creditService.refundTransaction(transactionId);
-        throw new ForbiddenException('このキャラクターはまだ読んだエピソードに登場していません');
+      // For readers who have read: verify character appeared in read range
+      // For unread readers: allow any isPublic character (they're browsing from match cards)
+      if (hasReadAnything) {
+        const charAppeared = [...appearedCharNames].some((name) =>
+          character.name === name || character.name.includes(name) || name.includes(character.name),
+        );
+        if (!charAppeared) {
+          await this.creditService.refundTransaction(transactionId);
+          throw new ForbiddenException('このキャラクターはまだ読んだエピソードに登場していません');
+        }
       }
+
+      const readStatusNote = hasReadAnything
+        ? `- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降の展開は知らないものとして振る舞ってください。`
+        : `- 読者はまだ作品を読んでいません。物語の具体的な展開やネタバレは一切話さないでください。読者が興味を持つように、あなた自身のことや世界観について話してください。`;
 
       systemPrompt = `あなたは${character.name}です。「${work.title}」の世界に生きています。
 
@@ -230,27 +249,25 @@ export class CharacterTalkService {
 - 会話相手は読者一人だけです。他の登場人物との会話を始めないでください。
 - 一人称は「${character.firstPerson || '私'}」を使ってください。
 - あなたがAIであること、フィクションのキャラクターであることには言及しないでください。
-- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降の展開は知らないものとして振る舞ってください。
+${readStatusNote}
 - 日本語で会話してください。
 
-${structuredContext}
-
-作品テキスト（読者の既読範囲）:
-${workText}`;
+${structuredContext}${workText ? `\n\n作品テキスト（読者の既読範囲）:\n${workText}` : ''}`;
     } else {
-      // Companion mode (same as ai-companion.service.ts)
+      // Companion mode
+      const readStatusNote = hasReadAnything
+        ? `- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降のネタバレは絶対にしないでください。\n- 読者が読んだ範囲の内容について、深い考察や感想を共有してください。`
+        : `- 読者はまだ作品を読んでいません。ネタバレは一切しないでください。\n- 作品の雰囲気やジャンル、読み始めるきっかけになるような話をしてください。`;
+
       systemPrompt = `あなたは「${work.title}」の読書コンパニオンAIです。読者と作品について語り合います。
 
 重要なルール:
-- 読者は第${currentEpisodeIndex + 1}話まで読んでいます。それ以降のネタバレは絶対にしないでください。
-- 読者が読んだ範囲の内容について、深い考察や感想を共有してください。
+${readStatusNote}
 - 質問には親切に、しかし未読部分の内容は明かさないでください。
 - 登場人物の名前、性格、口調を以下の情報から正確に参照してください。
 - 世界観の用語や設定を正確に使用してください。
 - 日本語で回答してください。
-${structuredContext ? `\n${structuredContext}\n` : ''}
-作品テキスト（読者の既読範囲）:
-${workText}`;
+${structuredContext ? `\n${structuredContext}\n` : ''}${workText ? `\n作品テキスト（読者の既読範囲）:\n${workText}` : ''}`;
     }
 
     // Build messages array for Claude
