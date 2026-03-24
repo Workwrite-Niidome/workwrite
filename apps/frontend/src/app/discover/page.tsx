@@ -361,6 +361,9 @@ export default function DiscoverPage() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">人気作品</h2>
+            <button onClick={() => { setSortBy('popular'); doSearch('', 0, { sort: 'popular' }); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              すべて見る <ArrowRight className="h-3 w-3" />
+            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading
@@ -378,6 +381,9 @@ export default function DiscoverPage() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">埋もれた名作</h2>
+            <button onClick={() => { setCategory('hidden-gems'); setSortBy('score'); doSearch('', 0, { category: 'hidden-gems', sort: 'score' }); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              すべて見る <ArrowRight className="h-3 w-3" />
+            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading
@@ -395,6 +401,9 @@ export default function DiscoverPage() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">新着</h2>
+            <button onClick={() => { setSortBy('newest'); doSearch('', 0, { sort: 'newest' }); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+              すべて見る <ArrowRight className="h-3 w-3" />
+            </button>
           </div>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
             {loading
