@@ -20,6 +20,8 @@ const ICON_MAP: Record<string, React.ElementType> = {
   new_episode: BookOpen,
   letter: Mail,
   digest: Sparkles,
+  digest_new_works: Sparkles,
+  digest_updates: BookOpen,
   announcement: Megaphone,
   editor_mode: BookOpen,
 };
@@ -45,6 +47,8 @@ function getNotificationLink(n: NotificationItem): string | null {
     case 'letter':
       return '/dashboard/letters/received';
     case 'digest':
+    case 'digest_new_works':
+    case 'digest_updates':
       return null; // Handled inline with expanded cards
     case 'announcement':
       return '/announcements';
@@ -294,7 +298,7 @@ export default function NotificationsPage() {
         ) : (
           notifications.map((n) => {
             const link = getNotificationLink(n);
-            const isDigest = n.type === 'digest';
+            const isDigest = n.type.startsWith('digest');
             return (
               <div
                 key={n.id}

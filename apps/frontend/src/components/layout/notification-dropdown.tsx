@@ -117,7 +117,7 @@ export function NotificationDropdown() {
                   key={n.id}
                   onClick={() => {
                     if (!n.read) handleMarkRead(n.id);
-                    if (n.type === 'digest') {
+                    if (n.type.startsWith('digest')) {
                       setOpen(false);
                       router.push('/notifications');
                     }
