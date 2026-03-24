@@ -314,7 +314,7 @@ export class DiscoverService {
     });
 
     // Exclude minor roles and spoiler roles
-    const safe = characters.filter((c) => isCharacterMatchSafe(c.role));
+    const safe = characters.filter((c) => isCharacterMatchSafe(c.role, c.name));
 
     const mapped = safe.map((c) => ({
       id: c.id,
