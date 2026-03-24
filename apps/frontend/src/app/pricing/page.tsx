@@ -76,18 +76,18 @@ const PLANS = [
 ];
 
 const CREDIT_TABLE = [
-  { action: 'AI執筆アシスト（通常）', credits: '1cr〜', note: '入力文字数に応じて変動（Sonnet）' },
-  { action: 'AI執筆アシスト（じっくり）', credits: '2cr〜', note: '入力文字数に応じて変動（Sonnet + Thinking）' },
-  { action: 'AI執筆アシスト（高精度）', credits: '5cr〜', note: '入力文字数に応じて変動（Opus）— Standard以上' },
+  { action: 'AI執筆アシスト（通常）', credits: '1cr〜', note: '入力文字数に応じて変動' },
+  { action: 'AI執筆アシスト（じっくり）', credits: '2cr〜', note: 'より深い思考で回答 — Standard以上' },
+  { action: 'AI執筆アシスト（高精度）', credits: '5cr〜', note: '最高品質の回答 — Standard以上' },
   { action: 'Creation Wizard（各ステップ）', credits: '1cr', note: 'キャラクター・プロット・感情・章立て' },
   { action: 'AIスコアリング（作品品質分析）', credits: '1cr〜', note: '作品の文字数に応じて変動（実行前に見積もり表示）' },
-{ action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
-  { action: '校正・推敲', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
-  { action: 'あらすじ自動生成', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
-  { action: 'ハイライトAI解説', credits: '0cr', note: 'プラットフォーム負担（Haiku）' },
+  { action: '読書タイプ再診断', credits: '1cr', note: '初回は無料、2回目以降' },
+  { action: '校正・推敲', credits: '0cr', note: 'プラットフォーム負担' },
+  { action: 'あらすじ自動生成', credits: '0cr', note: 'プラットフォーム負担' },
+  { action: 'ハイライトAI解説', credits: '0cr', note: 'プラットフォーム負担' },
   { action: 'AI読書コンパニオン', credits: '0cr', note: 'Free: 週5回 / Standard以上: 無制限' },
-  { action: 'AI作品分析（インサイト）', credits: '0cr', note: 'プラットフォーム負担（キャッシュ利用）' },
-  { action: 'AI類似作品レコメンド', credits: '0cr', note: 'プラットフォーム負担（キャッシュ利用）' },
+  { action: 'AI作品分析（インサイト）', credits: '0cr', note: 'プラットフォーム負担' },
+  { action: 'AI類似作品レコメンド', credits: '0cr', note: 'プラットフォーム負担' },
   { action: '構造解析・キャラクター抽出', credits: '0cr', note: 'プラットフォーム負担' },
   { action: 'エンベディング生成', credits: '0cr', note: 'プラットフォーム負担' },
 ];
