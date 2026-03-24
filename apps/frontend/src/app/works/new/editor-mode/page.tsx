@@ -555,25 +555,20 @@ function EditorModeDesignContent() {
           <Card className="border-indigo-400/30 bg-indigo-50/10 dark:bg-indigo-950/10">
             <CardContent className="pt-6">
               <h3 className="text-sm font-medium mb-2">推定クレジット消費</h3>
+              <p className="text-xs text-muted-foreground mb-2">設計書の内容と文字数に応じて1話ごとに動的に消費されます</p>
               <div className="grid grid-cols-2 gap-4 text-sm">
                 <div>
-                  <p className="text-muted-foreground">通常モード（Sonnet）</p>
-                  <p className="font-bold">{design.episodeCount} x 1 = {design.episodeCount}cr</p>
+                  <p className="text-muted-foreground">簡易モード</p>
+                  <p className="font-bold">{design.episodeCount}話 × 2〜6cr</p>
                 </div>
                 <div>
-                  <p className="text-muted-foreground">高精度モード（Opus）</p>
-                  <p className="font-bold">{design.episodeCount} x 5 = {design.episodeCount * 5}cr</p>
+                  <p className="text-muted-foreground">高精度モード</p>
+                  <p className="font-bold">{design.episodeCount}話 × 30〜60cr</p>
                 </div>
               </div>
               {creditsRemaining !== null && (
                 <p className="text-sm mt-2">
                   残りクレジット: <span className="font-bold">{creditsRemaining}cr</span>
-                  {creditsRemaining < (aiMode === 'premium' ? design.episodeCount * 5 : design.episodeCount) && (
-                    <span className="text-destructive ml-2">
-                      クレジットが不足しています。
-                      <a href="/settings/billing" className="underline ml-1">追加購入</a>
-                    </span>
-                  )}
                 </p>
               )}
             </CardContent>
@@ -768,7 +763,7 @@ function ModeSelector({ aiMode, onModeChange }: { aiMode: 'normal' | 'premium'; 
             : 'border-border text-muted-foreground hover:border-primary/30',
         )}
       >
-        通常 <span className="opacity-60">1cr</span>
+        簡易 <span className="opacity-60">2cr〜</span>
       </button>
       <button
         onClick={() => onModeChange('premium')}
@@ -780,7 +775,7 @@ function ModeSelector({ aiMode, onModeChange }: { aiMode: 'normal' | 'premium'; 
         )}
       >
         <Crown className="h-2.5 w-2.5" />
-        高精度 <span className="opacity-60">5cr</span>
+        高精度 <span className="opacity-60">30cr〜</span>
       </button>
     </div>
   );

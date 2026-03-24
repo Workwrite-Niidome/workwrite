@@ -66,9 +66,6 @@ export class EditorModeService {
     _aiMode: 'normal' | 'premium' = 'premium',
     designState?: any,
   ): AsyncGenerator<string> {
-    // Always use premium (Opus) for editor mode
-    const { apiKey, model } = await this.getApiConfigForMode(userId, 'editor_mode_chat', 'premium');
-
     // Load existing job or create
     let job: Awaited<ReturnType<typeof this.prisma.editorModeJob.findUnique>>;
     const existing = await this.prisma.editorModeJob.findUnique({ where: { workId } });
@@ -84,7 +81,6 @@ export class EditorModeService {
 
     // Detect if this is the first message (no assistant messages yet)
     const isFirstMessage = !history.some(h => h.role === 'assistant');
-    const creditCost = isFirstMessage ? 10 : 5;
 
     history.push({ role: 'user', content: message });
 
@@ -237,6 +233,13 @@ __END_UPDATE__
 
 対話は自然に、編集者としての経験に基づいた具体的な提案を交えて進めてください。`;
     }
+
+    // Dynamic credit cost based on actual prompt size
+    const historyChars = history.reduce((sum, h) => sum + h.content.length, 0);
+    const { apiKey, model, creditCost } = await this.getApiConfigForMode(
+      userId, 'editor_mode_chat', 'premium',
+      systemPrompt.length + historyChars, maxTokens,
+    );
 
     let transactionId: string | null = null;
     let contentDelivered = false;
@@ -442,14 +445,16 @@ __END_UPDATE__
   ): AsyncGenerator<string> {
     const job = await this.getJobWithOwnerCheck(workId, userId);
 
-    const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_generate', aiMode);
-
     const plan = await this.prisma.workCreationPlan.findUnique({ where: { workId } });
     const designData = this.extractLatestDesignUpdate((job.designChatHistory as any[]) || []);
 
     const systemPrompt = this.buildEpisodeGenerationPrompt(designData, plan, [], 1, job.totalEpisodes);
-
     const userPrompt = `第1話を執筆してください。物語の冒頭として読者を引き込む魅力的な導入にしてください。`;
+
+    const { apiKey, model, creditCost } = await this.getApiConfigForMode(
+      userId, 'editor_mode_generate', aiMode,
+      systemPrompt.length + userPrompt.length, 8000,
+    );
 
     let fullOutput = '';
     for await (const chunk of this.streamFromClaude(
@@ -573,8 +578,6 @@ __END_UPDATE__
     if (!episode) throw new NotFoundException('Episode not found');
     if (episode.workId !== workId) throw new NotFoundException('Episode not found');
 
-    const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_revise', aiMode);
-
     const systemPrompt = `あなたは小説の編集者からの修正指示を受けて原稿を修正するプロの作家です。
 元の文体・トーン・キャラクターの声を維持しながら、指示に従って修正してください。
 修正後の全文を出力してください（修正部分だけでなく全文）。`;
@@ -586,6 +589,11 @@ ${episode.content}
 ${instruction}
 
 上記の修正指示に従って、原稿を修正してください。全文を出力してください。`;
+
+    const { apiKey, model, creditCost } = await this.getApiConfigForMode(
+      userId, 'editor_mode_revise', aiMode,
+      systemPrompt.length + userPrompt.length, 8000,
+    );
 
     let fullOutput = '';
     for await (const chunk of this.streamFromClaude(
@@ -620,8 +628,6 @@ ${instruction}
     if (!episode) throw new NotFoundException('Episode not found');
     if (episode.workId !== workId) throw new NotFoundException('Episode not found');
 
-    const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_generate', aiMode);
-
     const plan = await this.prisma.workCreationPlan.findUnique({ where: { workId } });
     const designData = this.extractLatestDesignUpdate((job.designChatHistory as any[]) || []);
 
@@ -641,6 +647,11 @@ ${instruction}
     const episodeNumber = episode.orderIndex + 1;
     const systemPrompt = this.buildEpisodeGenerationPrompt(designData, plan, episodeSummaries, episodeNumber, job.totalEpisodes);
     const userPrompt = `第${episodeNumber}話を最初から書き直してください。`;
+
+    const { apiKey, model, creditCost } = await this.getApiConfigForMode(
+      userId, 'editor_mode_generate', aiMode,
+      systemPrompt.length + userPrompt.length, 8000,
+    );
 
     let fullOutput = '';
     for await (const chunk of this.streamFromClaude(
@@ -673,8 +684,6 @@ ${instruction}
     const episode = await this.prisma.episode.findUnique({ where: { id: episodeId } });
     if (!episode) throw new NotFoundException('Episode not found');
     if (episode.workId !== workId) throw new NotFoundException('Episode not found');
-
-    const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_revise', aiMode);
 
     const designData = this.extractLatestDesignUpdate((job.designChatHistory as any[]) || []);
 
@@ -734,6 +743,11 @@ __END_REPORT__
 ${episode.content}
 
 上記のエピソードを前後の文脈と設計情報に照合し、整合性を修正してください。`;
+
+    const { apiKey, model, creditCost } = await this.getApiConfigForMode(
+      userId, 'editor_mode_revise', aiMode,
+      systemPrompt.length + userPrompt.length, 8000,
+    );
 
     let fullOutput = '';
     for await (const chunk of this.streamFromClaude(
@@ -891,26 +905,7 @@ ${episode.content}
       const aiMode = job.aiMode as 'normal' | 'premium';
 
       try {
-        const { apiKey, model, creditCost } = await this.getApiConfigForMode(userId, 'editor_mode_generate', aiMode);
-
-        // Check credits before generating
-        const balance = await this.creditService.getBalance(userId);
-        if (balance.total < creditCost) {
-          this.logger.warn(`Insufficient credits for work ${workId}, pausing`);
-          await this.prisma.editorModeJob.update({
-            where: { workId },
-            data: { status: 'paused' },
-          });
-          await this.notifications.createNotification(userId, {
-            type: 'editor_mode',
-            title: 'クレジット不足で生成が停止しました',
-            body: `第${nextEpisodeIndex + 1}話以降の生成にはクレジットの追加が必要です。`,
-            data: { workId },
-          }).catch(() => {});
-          break;
-        }
-
-        // Get context
+        // Build prompt first to measure size for dynamic cost
         const plan = await this.prisma.workCreationPlan.findUnique({ where: { workId } });
         const designData = this.extractLatestDesignUpdate((job.designChatHistory as any[]) || []);
         const previousEpisodes = await this.prisma.episode.findMany({
@@ -928,6 +923,28 @@ ${episode.content}
         const episodeNumber = nextEpisodeIndex + 1;
         const systemPrompt = this.buildEpisodeGenerationPrompt(designData, plan, episodeSummaries, episodeNumber, job.totalEpisodes);
         const userPrompt = `第${episodeNumber}話を執筆してください。`;
+
+        const { apiKey, model, creditCost } = await this.getApiConfigForMode(
+          userId, 'editor_mode_generate', aiMode,
+          systemPrompt.length + userPrompt.length, 8000,
+        );
+
+        // Check credits before generating
+        const balance = await this.creditService.getBalance(userId);
+        if (balance.total < creditCost) {
+          this.logger.warn(`Insufficient credits for work ${workId}, pausing`);
+          await this.prisma.editorModeJob.update({
+            where: { workId },
+            data: { status: 'paused' },
+          });
+          await this.notifications.createNotification(userId, {
+            type: 'editor_mode',
+            title: 'クレジット不足で生成が停止しました',
+            body: `第${nextEpisodeIndex + 1}話以降の生成にはクレジットの追加が必要です。`,
+            data: { workId },
+          }).catch(() => {});
+          break;
+        }
 
         // Generate (non-streaming for background loop — faster & more reliable)
         const fullOutput = await this.callClaudeNonStreaming(
@@ -1217,6 +1234,8 @@ ${episode.content}
     userId: string,
     feature: string,
     aiMode: 'normal' | 'premium' = 'normal',
+    inputChars: number = 0,
+    maxOutputTokens: number = 8000,
   ): Promise<{ apiKey: string; model: string; creditCost: number }> {
     const enabled = await this.aiSettings.isAiEnabled();
     if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
@@ -1227,7 +1246,15 @@ ${episode.content}
     await this.aiTier.assertCanUseAi(userId);
 
     const modelConfig = await this.aiTier.getModelConfig(userId, false, feature, aiMode);
-    const creditCost = this.aiTier.getCreditCost(feature, false, false, aiMode);
+
+    // Dynamic credit cost based on content size
+    const { credits: creditCost } = this.aiTier.estimateCreditCost({
+      model: modelConfig.model,
+      inputChars,
+      maxOutputTokens,
+      thinkingBudgetTokens: modelConfig.budgetTokens,
+      minCredits: 1,
+    });
 
     return { apiKey, model: modelConfig.model, creditCost };
   }
