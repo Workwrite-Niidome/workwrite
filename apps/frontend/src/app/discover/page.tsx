@@ -2,6 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, ArrowRight, Bot, Users, X, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -37,21 +38,28 @@ const SORT_OPTIONS = [
 const PAGE_SIZE = 20;
 
 export default function DiscoverPage() {
+  const router = useRouter();
+  const searchParams = useSearchParams();
+
   const [data, setData] = useState<TopPageData | null>(null);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'works' | 'ai-works'>('works');
   const [aiWorks, setAiWorks] = useState<Work[]>([]);
   const [aiWorksLoading, setAiWorksLoading] = useState(false);
 
-  // Search + filter state
-  const [searchQuery, setSearchQuery] = useState('');
-  const [genre, setGenre] = useState('');
-  const [sortBy, setSortBy] = useState('relevance');
-  const [category, setCategory] = useState('');
+  // Read filter state from URL searchParams
+  const searchQuery = searchParams.get('q') || '';
+  const genre = searchParams.get('genre') || '';
+  const sortBy = searchParams.get('sort') || 'relevance';
+  const category = searchParams.get('category') || '';
+  const searchPage = parseInt(searchParams.get('page') || '0', 10);
+
   const [searchResults, setSearchResults] = useState<Work[] | null>(null);
   const [searchTotal, setSearchTotal] = useState(0);
-  const [searchPage, setSearchPage] = useState(0);
   const [searching, setSearching] = useState(false);
+
+  // Local input state for controlled search field (synced to URL on submit)
+  const [searchInput, setSearchInput] = useState(searchQuery);
 
   // Autocomplete
   const [autocompleteResults, setAutocompleteResults] = useState<{ id: string; title: string; author: { name: string; displayName: string | null } }[]>([]);
@@ -61,12 +69,52 @@ export default function DiscoverPage() {
 
   const isFiltering = !!(searchQuery.trim() || genre || sortBy !== 'relevance' || category);
 
+  // Helper: update URL searchParams without full page reload
+  const updateParams = useCallback((updates: Record<string, string>) => {
+    const params = new URLSearchParams(searchParams.toString());
+    for (const [key, value] of Object.entries(updates)) {
+      if (value && !(key === 'sort' && value === 'relevance') && !(key === 'page' && value === '0')) {
+        params.set(key, value);
+      } else {
+        params.delete(key);
+      }
+    }
+    const qs = params.toString();
+    router.replace(qs ? `/discover?${qs}` : '/discover', { scroll: false });
+  }, [searchParams, router]);
+
   useEffect(() => {
     api.getTopPage()
       .then((res) => setData(res.data))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, []);
+
+  // Run search whenever URL params change and filters are active
+  useEffect(() => {
+    if (!isFiltering) {
+      setSearchResults(null);
+      return;
+    }
+    let cancelled = false;
+    setSearching(true);
+    api.searchWorks(searchQuery, {
+      genre: genre || undefined,
+      sort: sortBy !== 'relevance' ? sortBy : undefined,
+      category: category || undefined,
+      limit: PAGE_SIZE,
+      offset: searchPage * PAGE_SIZE,
+    } as any)
+      .then((res) => {
+        if (!cancelled) {
+          setSearchResults(res.data.hits);
+          setSearchTotal(res.data.total);
+        }
+      })
+      .catch(() => { if (!cancelled) setSearchResults([]); })
+      .finally(() => { if (!cancelled) setSearching(false); });
+    return () => { cancelled = true; };
+  }, [searchQuery, genre, sortBy, category, searchPage, isFiltering]);
 
   useEffect(() => {
     function handleClickOutside(e: MouseEvent) {
@@ -78,38 +126,13 @@ export default function DiscoverPage() {
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, []);
 
-  const doSearch = useCallback(async (q: string, pageNum: number, opts?: { genre?: string; sort?: string; category?: string }) => {
-    const g = opts?.genre ?? genre;
-    const s = opts?.sort ?? sortBy;
-    const c = opts?.category ?? category;
-
-    // If no filters active, clear search results to show browse mode
-    if (!q.trim() && !g && s === 'relevance' && !c) {
-      setSearchResults(null);
-      return;
-    }
-
-    setSearching(true);
-    try {
-      const res = await api.searchWorks(q, {
-        genre: g || undefined,
-        sort: s !== 'relevance' ? s : undefined,
-        category: c || undefined,
-        limit: PAGE_SIZE,
-        offset: pageNum * PAGE_SIZE,
-      } as any);
-      setSearchResults(res.data.hits);
-      setSearchTotal(res.data.total);
-      setSearchPage(pageNum);
-    } catch {
-      setSearchResults([]);
-    } finally {
-      setSearching(false);
-    }
-  }, [genre, sortBy, category]);
+  // Keep local input in sync when URL changes (e.g. browser back)
+  useEffect(() => {
+    setSearchInput(searchQuery);
+  }, [searchQuery]);
 
   function handleSearchInput(value: string) {
-    setSearchQuery(value);
+    setSearchInput(value);
     if (autocompleteTimer.current) clearTimeout(autocompleteTimer.current);
     if (value.trim().length < 2) {
       setAutocompleteResults([]);
@@ -130,30 +153,24 @@ export default function DiscoverPage() {
   function handleSearch(e: React.FormEvent) {
     e.preventDefault();
     setShowAutocomplete(false);
-    doSearch(searchQuery, 0);
+    updateParams({ q: searchInput.trim(), page: '0' });
   }
 
   function handleGenreChange(value: string) {
-    setGenre(value);
-    doSearch(searchQuery, 0, { genre: value });
+    updateParams({ genre: value, page: '0' });
   }
 
   function handleSortChange(value: string) {
-    setSortBy(value);
-    doSearch(searchQuery, 0, { sort: value });
+    updateParams({ sort: value, page: '0' });
   }
 
   function handleCategoryChange(value: string) {
-    setCategory(value);
-    doSearch(searchQuery, 0, { category: value });
+    updateParams({ category: value, page: '0' });
   }
 
   function clearFilters() {
-    setSearchQuery('');
-    setGenre('');
-    setSortBy('relevance');
-    setCategory('');
-    setSearchResults(null);
+    setSearchInput('');
+    router.replace('/discover', { scroll: false });
   }
 
   const totalPages = Math.ceil(searchTotal / PAGE_SIZE);
@@ -170,7 +187,7 @@ export default function DiscoverPage() {
           <div className="relative flex-1" ref={autocompleteRef}>
             <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
             <Input
-              value={searchQuery}
+              value={searchInput}
               onChange={(e) => handleSearchInput(e.target.value)}
               onFocus={() => autocompleteResults.length > 0 && setShowAutocomplete(true)}
               placeholder="タイトル、著者、タグで検索..."
@@ -254,11 +271,11 @@ export default function DiscoverPage() {
               </div>
               {totalPages > 1 && (
                 <div className="flex items-center justify-center gap-2 mt-6">
-                  <Button variant="outline" size="sm" disabled={searchPage === 0} onClick={() => doSearch(searchQuery, searchPage - 1)}>
+                  <Button variant="outline" size="sm" disabled={searchPage === 0} onClick={() => updateParams({ page: String(searchPage - 1) })}>
                     <ChevronLeft className="h-4 w-4" />
                   </Button>
                   <span className="text-sm text-muted-foreground">{searchPage + 1} / {totalPages}</span>
-                  <Button variant="outline" size="sm" disabled={searchPage >= totalPages - 1} onClick={() => doSearch(searchQuery, searchPage + 1)}>
+                  <Button variant="outline" size="sm" disabled={searchPage >= totalPages - 1} onClick={() => updateParams({ page: String(searchPage + 1) })}>
                     <ChevronRight className="h-4 w-4" />
                   </Button>
                 </div>
@@ -361,7 +378,7 @@ export default function DiscoverPage() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">人気作品</h2>
-            <button onClick={() => { setSortBy('popular'); doSearch('', 0, { sort: 'popular' }); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <button onClick={() => updateParams({ sort: 'popular', q: '', genre: '', category: '', page: '0' })} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               すべて見る <ArrowRight className="h-3 w-3" />
             </button>
           </div>
@@ -381,7 +398,7 @@ export default function DiscoverPage() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">埋もれた名作</h2>
-            <button onClick={() => { setCategory('hidden-gems'); setSortBy('score'); doSearch('', 0, { category: 'hidden-gems', sort: 'score' }); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <button onClick={() => updateParams({ category: 'hidden-gems', sort: 'score', q: '', genre: '', page: '0' })} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               すべて見る <ArrowRight className="h-3 w-3" />
             </button>
           </div>
@@ -401,7 +418,7 @@ export default function DiscoverPage() {
         <section>
           <div className="flex justify-between items-center mb-4">
             <h2 className="text-sm font-medium">新着</h2>
-            <button onClick={() => { setSortBy('newest'); doSearch('', 0, { sort: 'newest' }); }} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
+            <button onClick={() => updateParams({ sort: 'newest', q: '', genre: '', category: '', page: '0' })} className="text-xs text-muted-foreground hover:text-foreground transition-colors flex items-center gap-1">
               すべて見る <ArrowRight className="h-3 w-3" />
             </button>
           </div>

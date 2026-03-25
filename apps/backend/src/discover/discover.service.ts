@@ -27,17 +27,20 @@ export class DiscoverService {
   }
 
   async getPopularWorks(limit = 10) {
-    // Popular = most reading activity in last 30 days
+    // Popular = most DISTINCT readers in last 30 days
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    const recentActivity = await this.prisma.readingProgress.groupBy({
-      by: ['workId'],
-      where: { updatedAt: { gte: thirtyDaysAgo } },
-      _count: { userId: true },
-      orderBy: { _count: { userId: 'desc' } },
-      take: limit * 2,
-    });
+    const recentActivity = await this.prisma.$queryRaw<
+      { workId: string; userCount: bigint }[]
+    >`
+      SELECT "workId", COUNT(DISTINCT "userId") AS "userCount"
+      FROM "ReadingProgress"
+      WHERE "updatedAt" >= ${thirtyDaysAgo}
+      GROUP BY "workId"
+      ORDER BY "userCount" DESC
+      LIMIT ${limit * 2}
+    `;
 
     if (recentActivity.length === 0) {
       return this.prisma.work.findMany({
