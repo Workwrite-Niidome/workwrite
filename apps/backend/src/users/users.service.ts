@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, UnauthorizedException } from '@nestjs/common';
 import * as bcrypt from 'bcrypt';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { UpdateProfileDto } from './dto/update-profile.dto';
@@ -6,6 +6,8 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 
 @Injectable()
 export class UsersService {
+  private readonly logger = new Logger(UsersService.name);
+
   constructor(private prisma: PrismaService) {}
 
   async getProfile(userId: string) {
@@ -114,7 +116,34 @@ export class UsersService {
   }
 
   async deleteAccount(userId: string) {
+    this.logger.log(`Account deletion requested: ${userId}`);
+
+    // 1. Cancel active Stripe subscription if exists
+    try {
+      const sub = await this.prisma.subscription.findUnique({
+        where: { userId },
+      });
+      if (sub?.stripeSubId && sub.status !== 'canceled') {
+        // Dynamic import to avoid circular dependency
+        const Stripe = (await import('stripe')).default;
+        const stripeKey = process.env.STRIPE_SECRET_KEY;
+        if (stripeKey) {
+          const stripe = new Stripe(stripeKey);
+          await stripe.subscriptions.cancel(sub.stripeSubId).catch((e) =>
+            this.logger.warn(`Stripe subscription cancel failed: ${e.message}`),
+          );
+          this.logger.log(`Stripe subscription ${sub.stripeSubId} cancelled`);
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Subscription cleanup failed: ${e}`);
+      // Continue with deletion even if Stripe fails
+    }
+
+    // 2. Delete user (cascades to all related data via onDelete: Cascade)
     await this.prisma.user.delete({ where: { id: userId } });
+
+    this.logger.log(`Account deleted: ${userId}`);
     return { deleted: true };
   }
 }

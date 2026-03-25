@@ -154,7 +154,7 @@ model Work {
   publishedAt DateTime?
 
   // Relations
-  author         User              @relation(fields: [authorId], references: [id])
+  author         User              @relation(fields: [authorId], references: [id], onDelete: Cascade)
   episodes       Episode[]
   tags           WorkTag[]
   emotionTags    UserEmotionTag[]
@@ -236,7 +236,7 @@ model Episode {
   updatedAt   DateTime @updatedAt
 
   work   Work @relation(fields: [workId], references: [id], onDelete: Cascade)
-  author User @relation(fields: [authorId], references: [id])
+  author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
   contentVersion      Int      @default(0)
   extractedCharacters Json?    // [{name, role}] — auto-extracted by Haiku on first read
@@ -399,8 +399,8 @@ model Letter {
   moderationReason String?      // 検閲拒否理由
   createdAt        DateTime     @default(now())
 
-  sender    User    @relation("lettersSent", fields: [senderId], references: [id])
-  recipient User    @relation("lettersReceived", fields: [recipientId], references: [id])
+  sender    User    @relation("lettersSent", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User    @relation("lettersReceived", fields: [recipientId], references: [id], onDelete: Cascade)
   episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 
   @@index([episodeId])
@@ -432,8 +432,8 @@ model PendingLetter {
   expiresAt        DateTime
   createdAt        DateTime   @default(now())
 
-  sender    User    @relation("pendingLettersSent", fields: [senderId], references: [id])
-  recipient User    @relation("pendingLettersReceived", fields: [recipientId], references: [id])
+  sender    User    @relation("pendingLettersSent", fields: [senderId], references: [id], onDelete: Cascade)
+  recipient User    @relation("pendingLettersReceived", fields: [recipientId], references: [id], onDelete: Cascade)
   episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
 
   @@index([senderId])
@@ -1301,7 +1301,7 @@ model EditorModeJob {
   updatedAt         DateTime @updatedAt
 
   work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
-  user User @relation(fields: [userId], references: [id])
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
 
   @@index([userId])
 }
