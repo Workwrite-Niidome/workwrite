@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift, Coins } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
@@ -47,7 +47,20 @@ export default function DashboardPage() {
   const [loading, setLoading] = useState(true);
   const [drafts, setDrafts] = useState<WizardDraft[]>([]);
   const [editorModeWorks, setEditorModeWorks] = useState<EditorModeWork[]>([]);
+  const [monthlyEarnings, setMonthlyEarnings] = useState<number | null>(null);
   const [confirmDeleteDraftId, setConfirmDeleteDraftId] = useState<string | null>(null);
+
+  useEffect(() => {
+    // Fetch monthly earnings for the stat card
+    Promise.all([
+      api.getLetterEarnings().catch(() => null),
+      api.getCharacterTalkEarnings().catch(() => null),
+    ]).then(([letterRes, talkRes]) => {
+      const letterMonthly = (letterRes as any)?.data?.monthlyEarnings ?? (letterRes as any)?.monthlyEarnings ?? 0;
+      const talkMonthly = (talkRes as any)?.data?.monthlyRevenue ?? (talkRes as any)?.monthlyRevenue ?? 0;
+      setMonthlyEarnings(letterMonthly + talkMonthly);
+    });
+  }, []);
 
   useEffect(() => {
     setDrafts(loadDrafts());
@@ -129,16 +142,13 @@ export default function DashboardPage() {
         <Link href="/dashboard/letters/sent">
           <Button variant="outline" size="sm"><Send className="h-4 w-4 mr-1.5" /> 送信レター</Button>
         </Link>
-        <Link href="/dashboard/earnings">
-          <Button variant="outline" size="sm"><DollarSign className="h-4 w-4 mr-1.5" /> 収益</Button>
-        </Link>
         <Link href="/dashboard/referral">
           <Button variant="outline" size="sm"><Gift className="h-4 w-4 mr-1.5" /> 招待</Button>
         </Link>
       </div>
 
       {/* Stats Grid */}
-      <div className="grid gap-4 md:grid-cols-4 mb-8">
+      <div className="grid gap-4 grid-cols-2 md:grid-cols-5 mb-8">
         <Card>
           <CardContent className="pt-6">
             <div className="flex items-center gap-2">
@@ -175,6 +185,19 @@ export default function DashboardPage() {
             <p className="text-2xl font-bold mt-1">{overview.avgScore || '-'}</p>
           </CardContent>
         </Card>
+        <Link href="/dashboard/earnings" className="col-span-2 md:col-span-1">
+          <Card className="h-full hover:shadow-md hover:border-green-200 transition-all cursor-pointer">
+            <CardContent className="pt-6">
+              <div className="flex items-center gap-2">
+                <Coins className="h-4 w-4 text-green-600" />
+                <span className="text-sm text-muted-foreground">今月の収益</span>
+              </div>
+              <p className="text-2xl font-bold mt-1 text-green-600">
+                {monthlyEarnings !== null ? `¥${monthlyEarnings.toLocaleString()}` : '-'}
+              </p>
+            </CardContent>
+          </Card>
+        </Link>
       </div>
 
       {/* Cr Earning Guide */}
