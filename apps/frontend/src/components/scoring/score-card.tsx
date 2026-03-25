@@ -17,9 +17,12 @@ interface ScoreCardProps {
 
 interface CostEstimate {
   credits: number;
+  sonnetCredits?: number;
   totalChars: number;
   balance: { total: number };
 }
+
+type ScoringModel = 'haiku' | 'sonnet';
 
 const ALL_AXES = [
   { key: 'immersion', label: '没入力', desc: '読者を引き込む力', angle: -90 },
@@ -101,6 +104,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
   const [scoring, setScoring] = useState(false);
   const [estimating, setEstimating] = useState(false);
   const [costEstimate, setCostEstimate] = useState<CostEstimate | null>(null);
+  const [selectedModel, setSelectedModel] = useState<ScoringModel>('haiku');
   const [error, setError] = useState('');
   const [lastCreditCost, setLastCreditCost] = useState<number | null>(null);
 
@@ -113,6 +117,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
       const res = await api.estimateScoringCost(workId);
       setCostEstimate({
         credits: res.estimate.credits,
+        sonnetCredits: res.sonnetEstimate?.credits,
         totalChars: res.totalChars,
         balance: res.balance,
       });
@@ -122,14 +127,18 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
     setEstimating(false);
   }
 
+  const currentCredits = selectedModel === 'sonnet' && costEstimate?.sonnetCredits
+    ? costEstimate.sonnetCredits
+    : costEstimate?.credits || 0;
+
   async function handleConfirmScore() {
     if (!workId) return;
     setScoring(true);
     setError('');
     try {
-      const res = await api.triggerScoring(workId);
+      const res = await api.triggerScoring(workId, selectedModel);
       if (res.data) {
-        setLastCreditCost(costEstimate?.credits || null);
+        setLastCreditCost(currentCredits || null);
         onScoreUpdate?.(res.data);
       }
     } catch (e: any) {
@@ -143,7 +152,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
     setCostEstimate(null);
   }
 
-  const insufficientCredits = costEstimate && costEstimate.balance.total < costEstimate.credits;
+  const insufficientCredits = costEstimate && costEstimate.balance.total < currentCredits;
 
   return (
     <Card>
@@ -171,9 +180,43 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
         {costEstimate && (
           <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border space-y-2">
             <p className="text-xs font-medium">スコアリングのコスト確認</p>
+
+            {/* Model selection */}
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setSelectedModel('haiku')}
+                className={`flex-1 px-3 py-2 rounded-md border text-xs transition-colors ${
+                  selectedModel === 'haiku'
+                    ? 'border-primary bg-primary/10 text-foreground'
+                    : 'border-border bg-background text-muted-foreground hover:bg-secondary'
+                }`}
+              >
+                <span className="font-medium block">Standard</span>
+                <span className="block mt-0.5">{costEstimate.credits}cr</span>
+              </button>
+              {costEstimate.sonnetCredits && (
+                <button
+                  type="button"
+                  onClick={() => setSelectedModel('sonnet')}
+                  className={`flex-1 px-3 py-2 rounded-md border text-xs transition-colors ${
+                    selectedModel === 'sonnet'
+                      ? 'border-primary bg-primary/10 text-foreground'
+                      : 'border-border bg-background text-muted-foreground hover:bg-secondary'
+                  }`}
+                >
+                  <span className="font-medium block">Pro</span>
+                  <span className="block mt-0.5">{costEstimate.sonnetCredits}cr</span>
+                </button>
+              )}
+            </div>
+            {selectedModel === 'sonnet' && (
+              <p className="text-[10px] text-muted-foreground">より精度の高い分析と具体的な改善提案が得られます。</p>
+            )}
+
             <div className="text-xs text-muted-foreground space-y-0.5">
               <p>作品文字数: 約{formatChars(costEstimate.totalChars)}文字</p>
-              <p>消費クレジット: <span className="font-bold text-foreground">{costEstimate.credits}cr</span></p>
+              <p>消費クレジット: <span className="font-bold text-foreground">{currentCredits}cr</span></p>
               <p>残高: {costEstimate.balance.total}cr</p>
             </div>
             {insufficientCredits && (
@@ -189,7 +232,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
                 disabled={scoring || !!insufficientCredits}
                 className="text-xs h-7"
               >
-                {scoring ? 'スコアリング中...' : `${costEstimate.credits}cr で実行`}
+                {scoring ? 'スコアリング中...' : `${currentCredits}cr で実行`}
               </Button>
               <Button
                 size="sm"

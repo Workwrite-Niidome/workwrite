@@ -14,8 +14,15 @@ import { ScoringResult, ScoringInput } from './types';
 export type { ScoringResult } from './types';
 
 const HAIKU_MODEL = 'claude-haiku-4-5-20251001';
+const SONNET_MODEL = 'claude-sonnet-4-6';
 const SCORING_MAX_TOKENS = 8192;
 const MAX_SCORING_CHARS = 150_000;
+
+type ScoringModel = 'haiku' | 'sonnet';
+const MODEL_MAP: Record<ScoringModel, string> = {
+  haiku: HAIKU_MODEL,
+  sonnet: SONNET_MODEL,
+};
 // Approximate size of SCORING_SYSTEM_PROMPT in characters
 const SCORING_SYSTEM_PROMPT_CHARS = 11_000;
 
@@ -35,8 +42,9 @@ export class ScoringService {
   ) {}
 
   /** Estimate the credit cost for scoring a work (no LLM call) */
-  async estimateScoringCost(workId: string, userId: string): Promise<{
+  async estimateScoringCost(workId: string, userId: string, model: ScoringModel = 'haiku'): Promise<{
     estimate: CreditEstimate;
+    sonnetEstimate?: CreditEstimate;
     balance: { total: number; monthly: number; purchased: number };
     totalChars: number;
     episodeCount: number;
@@ -49,7 +57,7 @@ export class ScoringService {
     if (!work || work.episodes.length === 0) {
       const balance = await this.creditService.getBalance(userId);
       const estimate = this.aiTier.estimateCreditCost({
-        model: HAIKU_MODEL,
+        model: MODEL_MAP[model],
         inputChars: 0,
         systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
         maxOutputTokens: SCORING_MAX_TOKENS,
@@ -62,7 +70,15 @@ export class ScoringService {
     const cappedChars = Math.min(totalChars, MAX_SCORING_CHARS);
 
     const estimate = this.aiTier.estimateCreditCost({
-      model: HAIKU_MODEL,
+      model: MODEL_MAP['haiku'],
+      inputChars: cappedChars,
+      systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
+      maxOutputTokens: SCORING_MAX_TOKENS,
+      minCredits: 1,
+    });
+
+    const sonnetEstimate = this.aiTier.estimateCreditCost({
+      model: MODEL_MAP['sonnet'],
       inputChars: cappedChars,
       systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
       maxOutputTokens: SCORING_MAX_TOKENS,
@@ -73,13 +89,14 @@ export class ScoringService {
 
     return {
       estimate,
+      sonnetEstimate,
       balance,
       totalChars,
       episodeCount: work.episodes.length,
     };
   }
 
-  async scoreWork(workId: string, userId?: string): Promise<ScoringResult | null> {
+  async scoreWork(workId: string, userId?: string, model: ScoringModel = 'haiku'): Promise<ScoringResult | null> {
     const work = await this.prisma.work.findUnique({
       where: { id: workId },
       include: {
@@ -93,8 +110,9 @@ export class ScoringService {
     // Dynamic credit cost based on content size
     const totalChars = work.episodes.reduce((sum, ep) => sum + ep.content.length, 0);
     const cappedChars = Math.min(totalChars, MAX_SCORING_CHARS);
+    const selectedModel = MODEL_MAP[model];
     const { credits: creditCost } = this.aiTier.estimateCreditCost({
-      model: HAIKU_MODEL,
+      model: selectedModel,
       inputChars: cappedChars,
       systemPromptChars: SCORING_SYSTEM_PROMPT_CHARS,
       maxOutputTokens: SCORING_MAX_TOKENS,
@@ -109,7 +127,7 @@ export class ScoringService {
           userId,
           creditCost,
           'scoring',
-          HAIKU_MODEL,
+          selectedModel,
         );
         transactionId = result.transactionId;
       } catch (e) {
@@ -207,7 +225,7 @@ export class ScoringService {
       );
 
       // ── Phase 2: LLM Scoring (single call with structured data) ──
-      const result = await this.callLlmForScoring(scoringInput);
+      const result = await this.callLlmForScoring(scoringInput, selectedModel);
 
       await this.prisma.qualityScore.upsert({
         where: { workId },
@@ -258,7 +276,7 @@ export class ScoringService {
     }
   }
 
-  private async callLlmForScoring(input: ScoringInput): Promise<ScoringResult> {
+  private async callLlmForScoring(input: ScoringInput, modelId: string = HAIKU_MODEL): Promise<ScoringResult> {
     const apiKey = await this.aiSettings.getApiKey();
 
     if (!apiKey) {
@@ -277,7 +295,7 @@ export class ScoringService {
         'anthropic-beta': 'prompt-caching-2024-07-31',
       },
       body: JSON.stringify({
-        model: 'claude-haiku-4-5-20251001',
+        model: modelId,
         max_tokens: 8192,
         system: [
           {

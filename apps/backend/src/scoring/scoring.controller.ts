@@ -1,5 +1,5 @@
-import { Controller, Get, Post, Param, UseGuards, Req } from '@nestjs/common';
-import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
+import { Controller, Get, Post, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ScoringService } from './scoring.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 
@@ -12,18 +12,28 @@ export class ScoringController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Estimate credit cost for scoring a work' })
-  async estimateCost(@Param('workId') workId: string, @Req() req: any) {
+  @ApiQuery({ name: 'model', required: false, enum: ['haiku', 'sonnet'] })
+  async estimateCost(
+    @Param('workId') workId: string,
+    @Req() req: any,
+    @Query('model') model?: 'haiku' | 'sonnet',
+  ) {
     const userId = req.user?.id || req.user?.sub;
-    return this.scoringService.estimateScoringCost(workId, userId);
+    return this.scoringService.estimateScoringCost(workId, userId, model || 'haiku');
   }
 
   @Post('works/:workId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Trigger AI scoring for a work (dynamic credit cost)' })
-  async scoreWork(@Param('workId') workId: string, @Req() req: any) {
+  @ApiQuery({ name: 'model', required: false, enum: ['haiku', 'sonnet'] })
+  async scoreWork(
+    @Param('workId') workId: string,
+    @Req() req: any,
+    @Query('model') model?: 'haiku' | 'sonnet',
+  ) {
     const userId = req.user?.id || req.user?.sub;
-    const result = await this.scoringService.scoreWork(workId, userId);
+    const result = await this.scoringService.scoreWork(workId, userId, model || 'haiku');
     if (!result) return { data: null };
     return {
       data: {

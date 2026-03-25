@@ -622,6 +622,7 @@ class ApiClient {
   async estimateScoringCost(workId: string) {
     const res = await this.request<{ data: {
       estimate: { credits: number; breakdown: { model: string; inputChars: number; estimatedInputTokens: number; estimatedOutputTokens: number; estimatedApiCostYen: number } };
+      sonnetEstimate?: { credits: number };
       balance: { total: number; monthly: number; purchased: number };
       totalChars: number;
       episodeCount: number;
@@ -629,8 +630,9 @@ class ApiClient {
     return res.data;
   }
 
-  async triggerScoring(workId: string) {
-    return this.request<{ data: QualityScoreDetail | null }>(`/scoring/works/${workId}`, { method: 'POST' });
+  async triggerScoring(workId: string, model?: 'haiku' | 'sonnet') {
+    const query = model ? `?model=${model}` : '';
+    return this.request<{ data: QualityScoreDetail | null }>(`/scoring/works/${workId}${query}`, { method: 'POST' });
   }
 
   async getScoreAnalysis(workId: string) {
