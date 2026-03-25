@@ -447,4 +447,20 @@ export class StripeService {
 
     return { transferId: transfer.id };
   }
+
+  /**
+   * Refund a payment via Stripe.
+   * Used for unclaimed letter payouts after the retention period.
+   */
+  async refundPayment(
+    paymentIntentId: string,
+    metadata?: Record<string, string>,
+  ): Promise<{ refundId: string }> {
+    const stripe = this.ensureStripe();
+    const refund = await stripe.refunds.create({
+      payment_intent: paymentIntentId,
+      metadata,
+    });
+    return { refundId: refund.id };
+  }
 }
