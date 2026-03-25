@@ -270,8 +270,8 @@ export class BillingService {
             isHighlighted: pending.type === 'PREMIUM' || pending.type === 'GIFT',
             paymentId: payment.id,
             payoutStatus: 'pending',
-            moderationStatus: pending.moderationStatus,
-            moderationReason: pending.moderationReason,
+            // Payment completed = letter is approved (moderation was advisory, not blocking)
+            moderationStatus: 'approved',
           },
         });
 
