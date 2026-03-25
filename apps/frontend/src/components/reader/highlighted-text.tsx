@@ -1,6 +1,41 @@
 'use client';
-import { useMemo } from 'react';
+import { useMemo, Fragment } from 'react';
 import type { Highlight } from '@/lib/api';
+
+/**
+ * Convert ruby notation ｜漢字《ルビ》 to <ruby> elements.
+ * Also supports the shorter form without ｜ for single kanji words: 漢字《ルビ》
+ * Returns an array of React nodes (strings and <ruby> elements).
+ */
+function renderWithRuby(text: string): React.ReactNode[] {
+  // Pattern: ｜漢字《ルビ》 or just 漢字《ルビ》(where 漢字 is 1+ kanji/kana before 《)
+  const rubyPattern = /[｜|]([^｜|《》\n]+)《([^》\n]+)》|([一-龥々〇ヶ]+)《([^》\n]+)》/g;
+  const result: React.ReactNode[] = [];
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+
+  while ((match = rubyPattern.exec(text)) !== null) {
+    // Add text before match
+    if (match.index > lastIndex) {
+      result.push(text.slice(lastIndex, match.index));
+    }
+    const base = match[1] || match[3];
+    const ruby = match[2] || match[4];
+    result.push(
+      <ruby key={match.index}>
+        {base}<rp>(</rp><rt>{ruby}</rt><rp>)</rp>
+      </ruby>
+    );
+    lastIndex = match.index + match[0].length;
+  }
+
+  // Add remaining text
+  if (lastIndex < text.length) {
+    result.push(text.slice(lastIndex));
+  }
+
+  return result.length > 0 ? result : [text];
+}
 
 const HIGHLIGHT_COLORS: Record<string, string> = {
   yellow: 'bg-yellow-200/60 dark:bg-yellow-800/40',
@@ -46,10 +81,10 @@ export function HighlightedText({ text, highlights, onHighlightClick }: Highligh
             onClick={(e) => onHighlightClick?.(seg.highlight!, e)}
             title={seg.highlight.memo || undefined}
           >
-            {seg.text}
+            {renderWithRuby(seg.text)}
           </mark>
         ) : (
-          <span key={i}>{seg.text}</span>
+          <Fragment key={i}>{renderWithRuby(seg.text)}</Fragment>
         ),
       )}
     </>

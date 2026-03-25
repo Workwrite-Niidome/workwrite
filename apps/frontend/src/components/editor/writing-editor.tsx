@@ -12,7 +12,7 @@ import { ReferencePanel } from './reference-panel';
 import { AiConsistencyCheck } from './ai-consistency-check';
 import { useAutosave } from '@/lib/use-autosave';
 import { api } from '@/lib/api';
-import { Sparkles, Maximize2, Minimize2, History, BookOpen, HelpCircle } from 'lucide-react';
+import { Sparkles, Maximize2, Minimize2, History, BookOpen, HelpCircle, Type } from 'lucide-react';
 
 interface WritingEditorProps {
   workId: string;
@@ -125,6 +125,40 @@ export function WritingEditor({
     }, 0);
   }, [content]);
 
+  const handleInsertRuby = useCallback(() => {
+    const textarea = textareaRef.current;
+    if (!textarea) return;
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const selected = content.slice(start, end);
+
+    if (!selected) {
+      // No selection: insert template
+      const template = '｜漢字《ルビ》';
+      const before = content.slice(0, start);
+      const after = content.slice(end);
+      setContent(before + template + after);
+      setTimeout(() => {
+        textarea.focus();
+        // Select "漢字" part for easy replacement
+        textarea.setSelectionRange(start + 1, start + 3);
+      }, 0);
+      return;
+    }
+
+    const reading = prompt('ルビ（読み仮名）を入力してください', '');
+    if (reading === null || reading === '') return;
+
+    const ruby = `｜${selected}《${reading}》`;
+    const before = content.slice(0, start);
+    const after = content.slice(end);
+    setContent(before + ruby + after);
+    setTimeout(() => {
+      textarea.focus();
+      textarea.setSelectionRange(start + ruby.length, start + ruby.length);
+    }, 0);
+  }, [content]);
+
   const handleReplaceSelection = useCallback((newText: string) => {
     const textarea = textareaRef.current;
     if (!textarea) return;
@@ -209,6 +243,16 @@ export function WritingEditor({
             {saveStatus === 'error' && <span className="text-destructive">保存エラー</span>}
           </span>
           <div className="flex-1" />
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={handleInsertRuby}
+            className="text-xs"
+            title="ルビを振る"
+          >
+            <Type className="h-3.5 w-3.5 mr-1" />
+            <span className="hidden sm:inline">ルビ</span>
+          </Button>
           {!focusMode && (
             <Button
               size="sm"
