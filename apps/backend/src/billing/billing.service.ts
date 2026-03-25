@@ -451,7 +451,7 @@ export class BillingService {
           authorAmount,
           author.stripeAccountId,
           { type: 'letter_payout', letterId: letter.id, recipientId: authorId },
-          `letter_payout_${letter.id}`,
+          `letter_payout_v2_${letter.id}`,
           payment?.stripePaymentId || undefined,
         );
 
