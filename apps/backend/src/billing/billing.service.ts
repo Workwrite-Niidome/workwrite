@@ -238,15 +238,7 @@ export class BillingService {
     });
 
     if (pending) {
-      // Check if author has Stripe Connect set up → immediate transfer or pending payout
-      const recipient = await this.prisma.user.findUnique({
-        where: { id: pending.recipientId },
-        select: { stripeAccountId: true },
-      });
-      let payoutStatus = 'pending';
-      let payoutTransferId: string | null = null;
-
-      // Normal path: PendingLetter exists → create Payment + Letter atomically
+      // Create Payment + Letter atomically. Payout handled by daily scheduler.
       await this.prisma.$transaction(async (tx) => {
         const payment = await tx.payment.create({
           data: {
@@ -270,7 +262,6 @@ export class BillingService {
             isHighlighted: pending.type === 'PREMIUM' || pending.type === 'GIFT',
             paymentId: payment.id,
             payoutStatus: 'pending',
-            // Payment completed = letter is approved (moderation was advisory, not blocking)
             moderationStatus: 'approved',
           },
         });
@@ -280,38 +271,6 @@ export class BillingService {
         });
       });
 
-      // If author has Connect account, attempt immediate transfer
-      if (recipient?.stripeAccountId) {
-        try {
-          const connectStatus = await this.stripeService.getConnectStatus(pending.recipientId);
-          if (connectStatus.chargesEnabled) {
-            const authorAmount = Math.floor(pending.amount * 0.8); // 80% to author
-            const { transferId } = await this.stripeService.createTransfer(
-              authorAmount,
-              recipient.stripeAccountId,
-              { type: 'letter_payout', recipientId: pending.recipientId },
-              `letter_payout_${paymentIntentId}`,
-              paymentIntentId || undefined,
-            );
-            payoutStatus = 'transferred';
-            payoutTransferId = transferId;
-
-            // Update letter payout status
-            const letter = await this.prisma.letter.findFirst({
-              where: { paymentId: { not: null }, senderId: pending.senderId, recipientId: pending.recipientId, createdAt: { gte: new Date(Date.now() - 60000) } },
-            });
-            if (letter) {
-              await this.prisma.letter.update({
-                where: { id: letter.id },
-                data: { payoutStatus: 'transferred', payoutTransferId: transferId },
-              });
-            }
-          }
-        } catch (e: any) {
-          this.logger.warn(`Immediate letter payout failed for ${pending.recipientId}, will retry later: ${e.message}`);
-        }
-      }
-
       // Notify author
       try {
         const sender = await this.prisma.user.findUnique({
@@ -319,9 +278,7 @@ export class BillingService {
           select: { name: true, displayName: true },
         });
         const senderName = sender?.displayName || sender?.name || '匿名';
-        const notifyBody = payoutStatus === 'transferred'
-          ? `${senderName}さんから¥${pending.amount}のレターが届きました`
-          : `${senderName}さんから¥${pending.amount}のレターが届きました。収益を受け取るにはStripe設定を完了してください。`;
+        const notifyBody = `${senderName}さんから¥${pending.amount}のレターが届きました。収益は毎朝自動で送金されます。`;
         await this.notifications.createNotification(pending.recipientId, {
           type: 'letter',
           title: 'レターが届きました',
@@ -332,7 +289,7 @@ export class BillingService {
         this.logger.error(`Failed to notify author about letter: ${e.message}`);
       }
 
-      this.logger.log(`Letter created from PendingLetter ${pendingLetterId} (payout: ${payoutStatus}, payment_intent: ${paymentIntentId})`);
+      this.logger.log(`Letter created from PendingLetter ${pendingLetterId} (payment_intent: ${paymentIntentId})`);
     } else {
       // Fallback path: PendingLetter missing (expired/cascade-deleted) but payment succeeded
       // Reconstruct minimal Letter from Stripe session metadata to prevent money loss
@@ -440,19 +397,12 @@ export class BillingService {
 
     for (const letter of pendingLetters) {
       try {
-        // Get the original charge ID to use as source_transaction
-        // This allows transfer even when platform balance is pending
-        const payment = letter.paymentId
-          ? await this.prisma.payment.findUnique({ where: { id: letter.paymentId } })
-          : null;
-
         const authorAmount = Math.floor(letter.amount * 0.8);
         const { transferId } = await this.stripeService.createTransfer(
           authorAmount,
           author.stripeAccountId,
           { type: 'letter_payout', letterId: letter.id, recipientId: authorId },
-          `letter_payout_v2_${letter.id}`,
-          payment?.stripePaymentId || undefined,
+          `letter_payout_v3_${letter.id}`,
         );
 
         await this.prisma.letter.update({

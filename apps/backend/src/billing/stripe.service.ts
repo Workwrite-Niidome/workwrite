@@ -432,25 +432,16 @@ export class StripeService {
     destinationAccountId: string,
     metadata: Record<string, string>,
     idempotencyKey?: string,
-    sourceTransaction?: string,
   ): Promise<{ transferId: string }> {
     const stripe = this.ensureStripe();
 
-    const transferData: Record<string, unknown> = {
-      amount,
-      currency: 'jpy',
-      destination: destinationAccountId,
-      metadata,
-    };
-
-    // source_transaction links to the original charge, allowing transfer
-    // even when platform available balance is insufficient (pending funds)
-    if (sourceTransaction) {
-      transferData.source_transaction = sourceTransaction;
-    }
-
     const transfer = await stripe.transfers.create(
-      transferData as any,
+      {
+        amount,
+        currency: 'jpy',
+        destination: destinationAccountId,
+        metadata,
+      },
       idempotencyKey ? { idempotencyKey } : undefined,
     );
 

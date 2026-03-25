@@ -55,13 +55,13 @@ function PendingPayoutBanner({ amount, count, expiresAt, connectReady, onClaimed
     try {
       const res = await api.claimLetterPayouts();
       if (res.transferred > 0) {
-        setResult(`¥${res.totalAmount.toLocaleString()}を送金しました`);
+        setResult(`¥${res.totalAmount.toLocaleString()}の送金手続きが完了しました。Stripeの処理後、自動的にアカウントに反映されます。`);
         onClaimed();
       } else {
-        setResult('送金可能な保留金はありません');
+        setResult('Stripe決済の処理待ちです。毎朝9:00の自動処理で送金されます。しばらくお待ちください。');
       }
     } catch (e: any) {
-      setResult(e?.message || '送金に失敗しました');
+      setResult('現在Stripe決済の処理待ちです。毎朝9:00の自動処理で送金されます。しばらくお待ちください。');
     }
     setClaiming(false);
   }
@@ -77,18 +77,22 @@ function PendingPayoutBanner({ amount, count, expiresAt, connectReady, onClaimed
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {connectReady
-                ? '「受け取る」ボタンでStripeアカウントに送金できます'
-                : 'Stripe Connect設定を完了すると受け取れます'}
+                ? '毎朝9:00に自動送金されます。「今すぐ受け取る」で即時送金も可能です。'
+                : 'Stripe Connect設定を完了すると受け取れます。'}
               {expiresAt && (
-                <span className="ml-1">/ 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</span>
+                <> 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</>
               )}
             </p>
-            {result && <p className="text-xs mt-1 font-medium text-green-600">{result}</p>}
+            {result && (
+              <p className={`text-xs mt-1.5 font-medium ${result.includes('完了') ? 'text-green-600' : 'text-amber-600'}`}>
+                {result}
+              </p>
+            )}
           </div>
           {connectReady && (
             <Button size="sm" onClick={handleClaim} disabled={claiming} className="ml-4 shrink-0">
               <Banknote className="h-3.5 w-3.5 mr-1" />
-              {claiming ? '送金中...' : '受け取る'}
+              {claiming ? '処理中...' : '今すぐ受け取る'}
             </Button>
           )}
         </div>
