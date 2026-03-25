@@ -59,6 +59,17 @@ async function ensureSchema() {
     // Work enableCharacterTalk column (added 2026-03-23)
     await prisma.$executeRawUnsafe(`ALTER TABLE "Work" ADD COLUMN IF NOT EXISTS "enableCharacterTalk" BOOLEAN NOT NULL DEFAULT true`);
 
+    // Letter payout tracking columns (added 2026-03-26)
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Letter" ADD COLUMN IF NOT EXISTS "payoutStatus" TEXT NOT NULL DEFAULT 'pending'`);
+    await prisma.$executeRawUnsafe(`ALTER TABLE "Letter" ADD COLUMN IF NOT EXISTS "payoutTransferId" TEXT`);
+    await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Letter_payoutStatus_idx" ON "Letter"("payoutStatus")`);
+
+    // Backfill: existing paid letters = already transferred (destination charge era)
+    await prisma.$executeRawUnsafe(`UPDATE "Letter" SET "payoutStatus" = 'transferred' WHERE "paymentId" IS NOT NULL AND "payoutStatus" = 'pending'`);
+
+    // Fix: paid letters stuck with moderationStatus='pending' should be 'approved'
+    await prisma.$executeRawUnsafe(`UPDATE "Letter" SET "moderationStatus" = 'approved' WHERE "paymentId" IS NOT NULL AND "moderationStatus" = 'pending'`);
+
     console.log('[ensure-schema] Schema verified successfully');
   } catch (error) {
     console.error('[ensure-schema] ERROR:', error.message, error.stack);
