@@ -27,6 +27,7 @@ import {
   Mail,
   DollarSign,
   Share2,
+  Upload,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
@@ -38,7 +39,10 @@ import { cn } from '@/lib/utils';
 const SECTIONS = [
   { id: 'intro', label: 'Workwriteとは', icon: BookOpen },
   { id: 'create', label: '作品を作る', icon: PenTool },
-{ id: 'write', label: 'エピソードを書く', icon: FileText },
+  { id: 'import', label: 'インポート', icon: Upload },
+  { id: 'write', label: 'エピソードを書く', icon: FileText },
+  { id: 'scoring', label: '品質スコアリング', icon: BarChart3 },
+  { id: 'character-talk', label: 'キャラクタートーク', icon: MessageSquare },
   { id: 'grow', label: '読者を増やす', icon: Users },
   { id: 'letters', label: 'レター・収益', icon: Mail },
   { id: 'credits', label: 'クレジットと料金', icon: CreditCard },
@@ -203,28 +207,31 @@ export default function WritersGuidePage() {
           </h2>
           <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
             <p>
-              Workwriteは、<strong className="text-foreground">AIと共に物語を創る</strong>執筆プラットフォームです。
-              プロットの構築からキャラクター設計、文章の推敲まで、創作のあらゆるフェーズでAIがサポートします。
+              Workwriteは、<strong className="text-foreground">作家の創作をAIがアシストする</strong>小説プラットフォームです。
+              物語を書くのはあくまであなた自身。AIはプロットの壁打ち相手やキャラクター設計の補助、文章の推敲といった執筆の各フェーズで力を貸してくれるアシスタントです。
+            </p>
+            <p>
+              AIの活用度は作品ごとに透明に可視化されます。AI生成テキストの割合は自動計測され、読者に対して正直に表示されます。
+              だからこそ、AIを積極的に使うことも、まったく使わないことも、あなたの選択として尊重されます。
             </p>
             <p>
               書いた作品はそのまま公開でき、読者からのフィードバックやAIによる品質スコアリングで成長を実感できます。
-              あなたの物語を、もっと遠くへ届けましょう。
             </p>
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
               <div className="bg-muted/50 rounded-lg p-4 text-center">
                 <Wand2 className="h-5 w-5 text-primary mx-auto mb-2" />
-                <p className="text-xs font-medium text-foreground">AIが執筆をサポート</p>
-                <p className="text-[11px] mt-1">続き・描写・校正など10種類</p>
+                <p className="text-xs font-medium text-foreground">AIが執筆をアシスト</p>
+                <p className="text-[11px] mt-1">続き・描写・校正など多彩な機能</p>
               </div>
               <div className="bg-muted/50 rounded-lg p-4 text-center">
                 <BarChart3 className="h-5 w-5 text-primary mx-auto mb-2" />
-                <p className="text-xs font-medium text-foreground">品質スコアで成長</p>
-                <p className="text-[11px] mt-1">4次元の品質評価+改善提案</p>
+                <p className="text-xs font-medium text-foreground">6軸の品質スコアで成長</p>
+                <p className="text-[11px] mt-1">Standard / Pro モデル選択可</p>
               </div>
               <div className="bg-muted/50 rounded-lg p-4 text-center">
-                <Eye className="h-5 w-5 text-primary mx-auto mb-2" />
-                <p className="text-xs font-medium text-foreground">読者統計で分析</p>
-                <p className="text-[11px] mt-1">離脱率・読了率・読者推移</p>
+                <MessageSquare className="h-5 w-5 text-primary mx-auto mb-2" />
+                <p className="text-xs font-medium text-foreground">キャラクタートーク</p>
+                <p className="text-[11px] mt-1">登場人物と読者が会話できる</p>
               </div>
             </div>
           </div>
@@ -251,7 +258,7 @@ export default function WritersGuidePage() {
             <Step
               number={2}
               title="登場人物を設定"
-              description="作品編集画面の「キャラクター」タブから登場人物を追加します。名前、役割、性格、外見、背景などを設定できます。ここで設定したキャラクター情報は、AI執筆アシストが参照して一貫性のある文章を生成します。"
+              description="作品編集画面の「キャラクター」タブから登場人物を追加します。名前、役割、性格、外見、背景などを設定できます。ここで設定したキャラクター情報は、AI執筆アシストやキャラクタートークが参照して一貫性のある体験を提供します。"
               icon={Users}
               tips={['キャラクターを詳しく設定するほど、AIアシストの精度が上がります。']}
             />
@@ -264,7 +271,7 @@ export default function WritersGuidePage() {
             <Step
               number={4}
               title="公開する"
-              description="作品のステータスを「公開」に変更すると、読者に作品が公開されます。公開後は自動的にAIスコアリングが実行され、品質評価と感情タグが付与されます。"
+              description="作品のステータスを「公開」に変更すると、読者に作品が公開されます。公開後は自動的にAIスコアリングが実行され、6軸の品質評価と感情タグが付与されます。"
               icon={CheckCircle2}
               tips={[
                 'エピソード単位でも公開・非公開を切り替えられます。',
@@ -313,6 +320,43 @@ export default function WritersGuidePage() {
         </section>
 
         {/* ============================================================ */}
+        {/*  Section: インポート                                          */}
+        {/* ============================================================ */}
+        <section id="import">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <Upload className="h-5 w-5 text-primary" />
+            テキストファイルのインポート
+          </h2>
+          <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
+            既にテキストファイルで作品を書いている方は、ファイルをアップロードして作品を取り込めます。
+          </p>
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-4">
+            <FeatureCard
+              icon={FileText}
+              title="一括インポート"
+              description="1つのテキストファイルから「第○章」「Chapter」等の章区切りを自動検出し、複数エピソードに分割して取り込みます。"
+            />
+            <FeatureCard
+              icon={Layers}
+              title="複数ファイルインポート"
+              description="最大100件のテキストファイルをまとめてアップロード。各ファイルが1エピソードとして取り込まれます。"
+            />
+          </div>
+          <div className="text-xs text-muted-foreground space-y-1">
+            <p>対応形式: .txt（UTF-8、Shift_JIS等のエンコーディングを自動検出）、各ファイル最大10MB</p>
+            <p>新規作品として作成することも、既存の作品にエピソードを追加することもできます。</p>
+          </div>
+          <div className="mt-4">
+            <Link href="/works/import">
+              <Button variant="outline" size="sm" className="text-xs gap-1.5">
+                <Upload className="h-3.5 w-3.5" />
+                インポートページへ
+              </Button>
+            </Link>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
         {/*  Section: エピソードを書く                                    */}
         {/* ============================================================ */}
         <section id="write">
@@ -331,6 +375,7 @@ export default function WritersGuidePage() {
           <p className="text-sm text-muted-foreground mb-4 leading-relaxed">
             エディター右側のAIパネルから、さまざまなアシスト機能を利用できます。
             設定したキャラクターやプロットの情報を自動的に参照し、物語の一貫性を保った提案を行います。
+            AIはあくまでアシスタントとして提案を行い、最終的な採否はあなたが判断します。
           </p>
 
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mb-6">
@@ -391,7 +436,7 @@ export default function WritersGuidePage() {
             </h4>
             <div className="space-y-2 text-xs text-muted-foreground">
               <p>
-                <strong className="text-foreground">通常モード（Standard以上）</strong>
+                <strong className="text-foreground">じっくりモード（Standard以上）</strong>
                 ：AIがより深く思考してから回答します。複雑なプロット展開や繊細な心情描写に最適です。
                 <span className="font-mono ml-1">5cr〜/回</span>
               </p>
@@ -420,6 +465,124 @@ export default function WritersGuidePage() {
         </section>
 
         {/* ============================================================ */}
+        {/*  Section: 品質スコアリング                                    */}
+        {/* ============================================================ */}
+        <section id="scoring">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <BarChart3 className="h-5 w-5 text-primary" />
+            品質スコアリング
+          </h2>
+
+          <div className="space-y-6">
+            <div>
+              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
+                作品を公開すると、AIが6つの観点で品質を自動評価します。スコアは作品ページに表示され、
+                読者が作品を選ぶ際の参考になります。各軸の分析コメントと改善提案を参考に作品のブラッシュアップが可能です。
+              </p>
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                {[
+                  { label: '没入力', desc: '読者を引き込む力' },
+                  { label: '変容力', desc: '心に残る読後感' },
+                  { label: '拡散力', desc: '人に薦めたくなる魅力' },
+                  { label: '世界構築力', desc: '舞台設定の奥行き' },
+                  { label: 'キャラクター深度', desc: '人物の立体感' },
+                  { label: '構造スコア', desc: '物語の設計力' },
+                ].map((d) => (
+                  <div key={d.label} className="bg-muted/50 rounded-md p-2.5 text-center">
+                    <p className="text-xs font-medium">{d.label}</p>
+                    <p className="text-[10px] text-muted-foreground mt-0.5">{d.desc}</p>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2">Standard / Pro モデル選択</h3>
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                スコアリング実行時に2つのモデルから選択できます。
+              </p>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 mt-3">
+                <div className="border border-border rounded-lg p-3">
+                  <p className="text-xs font-medium">Standard</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">高速かつ低コスト。基本的な品質評価と改善提案を提供します。</p>
+                  <p className="text-[10px] font-mono text-muted-foreground mt-1">文字数に応じて1cr〜</p>
+                </div>
+                <div className="border border-primary/40 bg-primary/5 rounded-lg p-3">
+                  <p className="text-xs font-medium">Pro</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">より精度の高い分析と具体的な改善提案が得られます。作品の仕上げや改稿時に。</p>
+                  <p className="text-[10px] font-mono text-muted-foreground mt-1">文字数に応じて3cr〜</p>
+                </div>
+              </div>
+            </div>
+
+            <div>
+              <h3 className="text-sm font-medium mb-2">スコアリングの出力</h3>
+              <ul className="space-y-1.5 text-sm text-muted-foreground">
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <span><strong className="text-foreground">6軸のスコア</strong> — 各軸0〜100点 + レーダーチャート表示</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <span><strong className="text-foreground">各軸の分析コメント</strong> — 作品固有の場面やキャラクターを引用した具体的なフィードバック</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <span><strong className="text-foreground">改善提案3つ</strong> — インパクト順に「どこを」「どう変えると」「なぜ良くなるか」を提示</span>
+                </li>
+                <li className="flex items-start gap-2">
+                  <CheckCircle2 className="h-3.5 w-3.5 text-primary mt-0.5 shrink-0" />
+                  <span><strong className="text-foreground">感情タグ</strong> — 作品の読後感情を自動検出（勇気、涙、癒し等）</span>
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
+        {/*  Section: キャラクタートーク                                  */}
+        {/* ============================================================ */}
+        <section id="character-talk">
+          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
+            <MessageSquare className="h-5 w-5 text-primary" />
+            キャラクタートーク
+          </h2>
+
+          <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
+            <p>
+              読者があなたの作品の登場人物と直接会話できる機能です。
+              キャラクターは設定された性格・口調で応答し、読者の既読範囲に応じてネタバレを制御します。
+            </p>
+            <p>
+              また、まだ作品を読んでいない読者に対しても、キャラクターが自己紹介や世界観を語ることで
+              「この人の物語を読んでみたい」と思わせる作品への導線として機能します。
+            </p>
+
+            <div className="bg-muted/50 rounded-lg p-4 space-y-2">
+              <h4 className="text-sm font-medium text-foreground">作者の設定</h4>
+              <ul className="space-y-1 text-xs text-muted-foreground">
+                <li className="flex items-start gap-1.5">
+                  <CheckCircle2 className="h-3 w-3 text-primary mt-0.5 shrink-0" />
+                  作品の編集ページからキャラクタートークのON/OFFを切り替えられます（デフォルト: ON）
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <CheckCircle2 className="h-3 w-3 text-primary mt-0.5 shrink-0" />
+                  OFFにすると、「キャラクターと出会う」カルーセルやキャラクタートーク開始ボタンが非表示になります
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <CheckCircle2 className="h-3 w-3 text-primary mt-0.5 shrink-0" />
+                  キャラクター設定（性格、口調、一人称等）が充実しているほど、会話の品質が向上します
+                </li>
+                <li className="flex items-start gap-1.5">
+                  <CheckCircle2 className="h-3 w-3 text-primary mt-0.5 shrink-0" />
+                  読者がキャラクタートークに購入クレジットを使った場合、収益の一部が作者に還元されます
+                </li>
+              </ul>
+            </div>
+          </div>
+        </section>
+
+        {/* ============================================================ */}
         {/*  Section: 読者を増やす                                        */}
         {/* ============================================================ */}
         <section id="grow">
@@ -429,30 +592,6 @@ export default function WritersGuidePage() {
           </h2>
 
           <div className="space-y-6">
-            <div>
-              <h3 className="text-sm font-medium mb-2">AIスコアリングを活用する</h3>
-              <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                作品を公開すると、AIが4つの観点で品質を自動評価します。スコアは作品ページに表示され、
-                読者が作品を選ぶ際の参考になります。また、各次元の改善提案を参考に作品のブラッシュアップが可能です。
-              </p>
-              <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-                {[
-                  { label: '没入力', desc: '物語に引き込む力' },
-                  { label: '変容力', desc: '読者を変える力' },
-                  { label: '拡散力', desc: '人に薦めたくなる力' },
-                  { label: '世界構築力', desc: '世界観の深さ' },
-                ].map((d) => (
-                  <div key={d.label} className="bg-muted/50 rounded-md p-2.5 text-center">
-                    <p className="text-xs font-medium">{d.label}</p>
-                    <p className="text-[10px] text-muted-foreground mt-0.5">{d.desc}</p>
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs text-muted-foreground mt-2">
-                スコアリングは1回1クレジットで実行できます。
-              </p>
-            </div>
-
             <div>
               <h3 className="text-sm font-medium mb-2">読者統計を分析する</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
@@ -484,10 +623,6 @@ export default function WritersGuidePage() {
                 公開時にAIが自動付与する感情タグ（勇気、涙、癒し、ワクワクなど最大5つ）は、
                 読者のおすすめ機能で使用されます。適切なタグがつくよう、物語の感情的要素を意識して執筆すると発見されやすくなります。
               </p>
-              <p className="text-sm text-muted-foreground leading-relaxed mt-2">
-                また、Creation Wizardで設計した感情ブループリントは自動的に作者の意図タグとして変換され、
-                読者が付けた感情タグと並列で作品ページに表示されます。「作者が込めた想い」と「読者が感じたこと」が一目で比較できます。
-              </p>
             </div>
 
             <div>
@@ -505,7 +640,6 @@ export default function WritersGuidePage() {
                   <span>
                     <strong className="text-foreground">世界観タブを公開</strong>
                     ：ONにすると、作品ページに「世界観」タブが表示され、用語集・世界のルール・アイテム・歴史などを読者が閲覧できます。
-                    ファンタジーやSFなど独自世界を持つ作品に効果的です。
                   </span>
                 </div>
                 <div className="flex items-start gap-2 text-sm text-muted-foreground">
@@ -513,12 +647,11 @@ export default function WritersGuidePage() {
                   <span>
                     <strong className="text-foreground">感情設計を公開</strong>
                     ：ONにすると、「感情の旅路」として各フェーズの感情設計がグラフで可視化されます。
-                    読者にどんな感情体験を意図したかを伝えることで、作品への理解と共感が深まります。
                   </span>
                 </div>
               </div>
               <p className="text-xs text-muted-foreground mt-3">
-                どちらもデフォルトはOFFです。ネタバレになりうる情報（隠された真実など）は公開データに含まれないよう自動的に除外されます。
+                どちらもデフォルトはOFFです。ネタバレになりうる情報は公開データに含まれないよう自動的に除外されます。
               </p>
             </div>
           </div>
@@ -596,7 +729,6 @@ export default function WritersGuidePage() {
               <p className="text-sm text-muted-foreground leading-relaxed">
                 作品のAIスコアをX(Twitter)やLINEでシェアできます。
                 スコア付きの美しいOGPカード画像が自動生成され、SNSで作品の魅力を伝えやすくなります。
-                作品ページのシェアボタンからワンクリックで共有可能です。
               </p>
             </div>
           </div>
@@ -632,16 +764,17 @@ export default function WritersGuidePage() {
                   </thead>
                   <tbody className="text-sm">
                     {[
-                      { feature: 'AI執筆アシスト（通常）', cost: '1cr〜' },
-                      { feature: 'AI執筆アシスト（通常）', cost: '5cr〜' },
+                      { feature: 'AI執筆アシスト（通常）', cost: '1cr' },
+                      { feature: 'AI執筆アシスト（じっくり）', cost: '5cr〜' },
                       { feature: 'AI執筆アシスト（高精度）', cost: '30cr〜' },
                       { feature: 'Creation Wizard（各ステップ）', cost: '1cr' },
-                      { feature: 'AIスコアリング', cost: '1cr〜' },
+                      { feature: 'AIスコアリング（Standard）', cost: '1cr〜' },
+                      { feature: 'AIスコアリング（Pro）', cost: '3cr〜' },
+                      { feature: 'キャラクタートーク', cost: '1〜2cr' },
                       { feature: '読書タイプ再診断', cost: '1cr' },
                       { feature: '校正・推敲', cost: '0cr' },
                       { feature: 'あらすじ自動生成', cost: '0cr' },
-                      { feature: 'AI読書コンパニオン', cost: '0cr' },
-                      { feature: 'AIレコメンド・分析', cost: '0cr' },
+                      { feature: 'テキストファイルインポート', cost: '0cr' },
                     ].map((row) => (
                       <tr key={row.feature} className="border-b border-border last:border-b-0">
                         <td className="px-4 py-2.5">{row.feature}</td>
@@ -662,21 +795,21 @@ export default function WritersGuidePage() {
                     price: '¥0',
                     credits: '初月20cr / 以降10cr',
                     icon: Sparkles,
-                    features: ['簡易アシスト約3〜10回相当', 'スコアリング無制限', 'AI読書コンパニオン週5回'],
+                    features: ['簡易アシスト約3〜10回相当', 'スコアリング（Standard）', 'キャラクタートーク'],
                   },
                   {
                     name: 'Standard',
                     price: '¥2,980/月',
                     credits: '200cr/月',
                     icon: Zap,
-                    features: ['通常アシスト約33〜100回相当', 'じっくりモード対応', 'クレジット追加購入可', '初回7日間無料'],
+                    features: ['通常アシスト約33〜100回相当', 'じっくりモード対応', 'スコアリング（Pro対応）', 'クレジット追加購入可', '初回7日間無料'],
                   },
                   {
                     name: 'Pro',
                     price: '¥7,980/月',
                     credits: '600cr/月',
                     icon: Crown,
-                    features: ['通常アシスト約100〜300回相当', '高精度モード（Opus）', 'じっくりモード対応', 'クレジット追加購入可', '初回7日間無料'],
+                    features: ['通常アシスト約100〜300回相当', '高精度モード（Opus）', 'スコアリング（Pro対応）', 'クレジット追加購入可', '初回7日間無料'],
                   },
                 ].map((plan) => (
                   <div
@@ -714,7 +847,7 @@ export default function WritersGuidePage() {
               <h4 className="text-sm font-medium mb-2">無料で使い続けられる機能</h4>
               <p className="text-xs text-muted-foreground leading-relaxed">
                 作品の執筆・公開・閲覧、校正、感情タグ、レコメンド、読者統計、ハイライト、しおり、
-                あらすじ自動生成は、すべてのプランで<strong className="text-foreground">クレジット消費なし</strong>で利用できます。
+                あらすじ自動生成、テキストファイルインポートは、すべてのプランで<strong className="text-foreground">クレジット消費なし</strong>で利用できます。
                 課金なしでも十分に創作活動が行えます。
               </p>
             </div>
@@ -736,12 +869,20 @@ export default function WritersGuidePage() {
               a="AIが提案した文章をあなたが採用・編集した場合、最終的な作品の著作権はあなたに帰属します。Workwriteでは、AIの提案はあくまでアシストであり、最終的な創作判断は著者であるあなたが行います。"
             />
             <FAQ
+              q="作品データがAIの学習に使われることはありますか？"
+              a="いいえ、ありません。WorkwriteはAnthropic社のClaude APIを利用していますが、API経由で送信されたデータがAIモデルの学習（トレーニング）に使用されることはありません。詳しくは利用規約をご確認ください。"
+            />
+            <FAQ
               q="AIアシストでエラーが出た場合、クレジットは消費されますか？"
               a="AIの呼び出しに失敗した場合（サーバーエラー等でテキストが一切生成されなかった場合）、クレジットは自動的に返金されます。部分的にでもテキストが生成された場合は消費されます。"
             />
             <FAQ
               q="作品のオリジナリティスコアとは何ですか？"
               a="作品全体に対するAI生成テキストの割合を示す指標です。Creation Wizardの構想段階のテキストは0.3倍、執筆アシストで生成されたテキストは1.0倍で計算されます。あなた自身が書いたテキストが多いほどスコアが高くなります。"
+            />
+            <FAQ
+              q="キャラクタートークのネタバレ制御はどうなっていますか？"
+              a="キャラクターは読者の既読範囲までの内容しか知りません。まだ読んでいない展開については、キャラクター自身も「知らない」ものとして振る舞います。ただしベータ版のため、まれに精度が不十分な場合があります。"
             />
             <FAQ
               q="月間クレジットが余ったらどうなりますか？"
@@ -756,12 +897,8 @@ export default function WritersGuidePage() {
               a="はい。作品数に制限はありません。ダッシュボードから複数の作品を管理でき、それぞれ独立したキャラクター・プロット設定を持てます。"
             />
             <FAQ
-              q="非公開のまま下書きとして保存できますか？"
-              a="はい。作品は最初「下書き」状態で作成されます。準備ができるまで公開する必要はなく、エピソード単位でも公開・非公開を切り替えられます。"
-            />
-            <FAQ
-              q="AI読書コンパニオンとは何ですか？"
-              a="読んでいる作品について、AIとチャット形式で語り合える機能です。「このキャラクターの心情は？」「この伏線の意味は？」など、作品をより深く楽しめます。Freeプランは週5回、有料プランは無制限です。クレジットは消費しません。"
+              q="他のサイトで公開中の作品を投稿できますか？"
+              a="はい。権利者本人であれば、他サイトで公開中の作品をWorkwriteにも投稿できます（重複投稿）。テキストファイルインポート機能を使うと、まとめて取り込めます。ただし、他サイトの利用規約で重複投稿が制限されている場合はご注意ください。"
             />
           </div>
         </section>
