@@ -464,10 +464,11 @@ class ApiClient {
   }
 
   async createLetterCheckout(data: { episodeId: string; type: LetterType; content: string; giftAmount?: number }) {
-    return this.request<{ pendingLetterId: string; checkoutUrl: string }>('/letters/checkout', {
+    const res = await this.request<{ data: { pendingLetterId: string; checkoutUrl: string } }>('/letters/checkout', {
       method: 'POST',
       body: JSON.stringify(data),
     });
+    return res.data;
   }
 
   async getStamps() {
