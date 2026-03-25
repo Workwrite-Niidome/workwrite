@@ -5,7 +5,6 @@ import { Button } from '@/components/ui/button';
 import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter } from '@/components/ui/dialog';
 import { api, type LetterType } from '@/lib/api';
 import { Mail, Gift, Star, Zap } from 'lucide-react';
-import { StampPicker } from './stamp-picker';
 
 const LETTER_TYPES: {
   type: LetterType;
@@ -71,7 +70,6 @@ export function LetterComposeDialog({
   const [selectedType, setSelectedType] = useState<LetterType | null>(null);
   const [content, setContent] = useState('');
   const [giftAmount, setGiftAmount] = useState(1000);
-  const [stampId, setStampId] = useState<string | undefined>(undefined);
   const [sending, setSending] = useState(false);
   const [error, setError] = useState('');
 
@@ -81,7 +79,6 @@ export function LetterComposeDialog({
       setSelectedType(null);
       setContent('');
       setGiftAmount(1000);
-      setStampId(undefined);
       setError('');
     }
   }, [open]);
@@ -99,7 +96,6 @@ export function LetterComposeDialog({
         episodeId,
         type: selectedType,
         content: content.trim(),
-        stampId: stampId || undefined,
         giftAmount: selectedType === 'GIFT' ? giftAmount : undefined,
       });
       // Redirect to Stripe Checkout
@@ -156,9 +152,6 @@ export function LetterComposeDialog({
                   : config.price}
               </span>
             </div>
-            {selectedType && selectedType !== 'SHORT' && (
-              <StampPicker selectedStampId={stampId} onSelect={setStampId} />
-            )}
             {selectedType === 'GIFT' && (
               <div className="space-y-1">
                 <label className="text-xs text-muted-foreground">金額</label>

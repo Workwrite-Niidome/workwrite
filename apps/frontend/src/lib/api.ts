@@ -463,7 +463,7 @@ class ApiClient {
     return this.request<Letter[]>(`/letters/episode/${episodeId}`);
   }
 
-  async createLetterCheckout(data: { episodeId: string; type: LetterType; content: string; stampId?: string; giftAmount?: number }) {
+  async createLetterCheckout(data: { episodeId: string; type: LetterType; content: string; giftAmount?: number }) {
     return this.request<{ pendingLetterId: string; checkoutUrl: string }>('/letters/checkout', {
       method: 'POST',
       body: JSON.stringify(data),
@@ -1523,9 +1523,7 @@ export interface Letter {
   type: LetterType;
   content: string;
   amount: number;
-  stampId: string | null;
   isHighlighted: boolean;
-  isFreeQuota: boolean;
   moderationStatus: string;
   sender: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
   episode?: { id: string; title: string; workId: string };

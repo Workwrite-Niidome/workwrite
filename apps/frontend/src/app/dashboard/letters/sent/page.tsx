@@ -14,7 +14,6 @@ interface Letter {
   type: string;
   content: string;
   amount: number;
-  isFreeQuota: boolean;
   createdAt: string;
 }
 
@@ -69,7 +68,7 @@ export default function SentLettersPage() {
                     <span className="text-xs text-muted-foreground">To:</span>
                     <span className="text-sm font-medium">{letter.recipient?.displayName || letter.recipient?.name || '—'}</span>
                     <Badge className={`text-[10px] ${typeInfo.color}`}>{typeInfo.label}</Badge>
-                    {letter.amount > 0 && !letter.isFreeQuota && (
+                    {letter.amount > 0 && (
                       <span className="text-xs text-amber-600 font-medium">¥{letter.amount.toLocaleString()}</span>
                     )}
                   </div>

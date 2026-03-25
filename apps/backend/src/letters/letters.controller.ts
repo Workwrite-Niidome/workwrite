@@ -24,17 +24,6 @@ export class LettersController {
     return this.lettersService.findByEpisode(episodeId);
   }
 
-  @Post()
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send a letter (fan letter with tip) — legacy direct payment' })
-  create(
-    @CurrentUser('id') userId: string,
-    @Body() dto: CreateLetterDto,
-  ) {
-    return this.lettersService.create(userId, dto);
-  }
-
   @Post('checkout')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
@@ -69,12 +58,6 @@ export class LettersController {
   @ApiOperation({ summary: 'Get letter earnings summary (for authors)' })
   getEarnings(@CurrentUser('id') userId: string) {
     return this.lettersService.getEarnings(userId);
-  }
-
-  @Get('stamps')
-  @ApiOperation({ summary: 'Get stamp catalog' })
-  getStamps() {
-    return { data: this.stampsService.getStamps() };
   }
 
   @Get('author-payment-status/:episodeId')

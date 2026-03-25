@@ -79,9 +79,6 @@ export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }
               ¥{letter.amount.toLocaleString()}
             </span>
           )}
-          {letter.isFreeQuota && (
-            <span className="text-[10px] text-muted-foreground">無料</span>
-          )}
         </div>
         <p className="text-sm leading-relaxed">{letter.content}</p>
         <div className="flex items-center gap-2 text-xs text-muted-foreground">

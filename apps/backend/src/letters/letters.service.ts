@@ -35,11 +35,6 @@ export class LettersService {
       );
     }
 
-    // Validate stamp usage
-    if (dto.stampId && !config.hasStamp) {
-      throw new BadRequestException('ショートレターにはスタンプを付けられません');
-    }
-
     // Get episode to find recipient (author)
     const episode = await this.prisma.episode.findUnique({
       where: { id: dto.episodeId },
@@ -76,9 +71,7 @@ export class LettersService {
           type: dto.type,
           content: dto.content,
           amount,
-          stampId: dto.stampId,
           isHighlighted: config.highlighted,
-          isFreeQuota: false,
           moderationStatus: 'pending',
           moderationReason: 'AI審査が一時的に利用できないため、管理者による手動審査待ちです',
         },
@@ -103,9 +96,7 @@ export class LettersService {
         type: dto.type,
         content: dto.content,
         amount,
-        stampId: dto.stampId,
         isHighlighted: config.highlighted,
-        isFreeQuota: false,
         paymentId: payment.id,
         moderationStatus: 'approved',
       },
@@ -139,11 +130,6 @@ export class LettersService {
       throw new BadRequestException(
         `${dto.type}レターは${config.maxChars}文字までです`,
       );
-    }
-
-    // Validate stamp usage
-    if (dto.stampId && !config.hasStamp) {
-      throw new BadRequestException('ショートレターにはスタンプを付けられません');
     }
 
     // Get episode to find recipient (author)
@@ -196,7 +182,6 @@ export class LettersService {
         type: dto.type,
         content: dto.content,
         amount,
-        stampId: dto.stampId,
         giftAmount: dto.type === 'GIFT' ? (dto.giftAmount ?? 1000) : null,
         moderationStatus: moderationResult.approved ? 'approved' : 'pending',
         moderationReason: moderationResult.needsManualReview

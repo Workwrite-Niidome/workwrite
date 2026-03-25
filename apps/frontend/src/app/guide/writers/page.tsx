@@ -692,7 +692,7 @@ export default function WritersGuidePage() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                レター（STANDARD）以上ではスタンプを添えることができます。ギフトは自由な金額を設定可能です。
+                ギフトレターは自由な金額を設定可能です。
               </p>
             </div>
 

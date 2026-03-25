@@ -18,6 +18,12 @@ const mockPrismaService = () => ({
     count: jest.fn(),
     aggregate: jest.fn(),
   },
+  user: { findUnique: jest.fn() },
+  pendingLetter: {
+    create: jest.fn(),
+    update: jest.fn(),
+    delete: jest.fn(),
+  },
 });
 
 const mockPaymentsService = () => ({
@@ -45,12 +51,14 @@ describe('LettersService', () => {
   let payments: ReturnType<typeof mockPaymentsService>;
   let notifications: ReturnType<typeof mockNotificationsService>;
   let moderation: ReturnType<typeof mockModerationService>;
+  let stripeService: ReturnType<typeof mockStripeService>;
 
   beforeEach(async () => {
     prisma = mockPrismaService();
     payments = mockPaymentsService();
     notifications = mockNotificationsService();
     moderation = mockModerationService();
+    stripeService = mockStripeService();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
@@ -58,7 +66,7 @@ describe('LettersService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: PaymentsService, useValue: payments },
         { provide: NotificationsService, useValue: notifications },
-        { provide: StripeService, useValue: mockStripeService() },
+        { provide: StripeService, useValue: stripeService },
         { provide: LetterModerationService, useValue: moderation },
       ],
     }).compile();
@@ -118,7 +126,6 @@ describe('LettersService', () => {
           episodeId: 'ep-1',
           type: LetterTypeDto.SHORT,
           content: '応援！',
-          stampId: 'cheer-1',
         }),
       ).rejects.toThrow(BadRequestException);
     });
@@ -249,6 +256,264 @@ describe('LettersService', () => {
 
       expect(result.totalEarnings).toBe(0);
       expect(result.monthlyEarnings).toBe(0);
+    });
+  });
+
+  // ─── createCheckout ────────────────────────────────────────────────────────
+
+  describe('createCheckout', () => {
+    const validDto = {
+      episodeId: 'ep-1',
+      type: LetterTypeDto.STANDARD,
+      content: 'すごく面白かったです！',
+    };
+
+    const createdPendingLetter = {
+      id: 'pending-cuid-1',
+      senderId: 'user-1',
+      recipientId: 'author-1',
+      episodeId: 'ep-1',
+      type: 'STANDARD',
+      content: 'すごく面白かったです！',
+      amount: 300,
+    };
+
+    beforeEach(() => {
+      prisma.episode.findUnique.mockResolvedValue({
+        id: 'ep-1',
+        work: { authorId: 'author-1' },
+      });
+      prisma.user.findUnique.mockResolvedValue({ stripeAccountId: 'acct_test123' });
+      stripeService.getConnectStatus.mockResolvedValue({ chargesEnabled: true });
+      moderation.moderate.mockResolvedValue({ approved: true, needsManualReview: false });
+      prisma.pendingLetter.create.mockResolvedValue(createdPendingLetter);
+      prisma.pendingLetter.update.mockResolvedValue(createdPendingLetter);
+      prisma.pendingLetter.delete.mockResolvedValue({});
+      stripeService.createLetterCheckoutSession.mockResolvedValue({
+        url: 'https://checkout.stripe.com/pay/cs_test',
+        sessionId: 'cs_test_session',
+      });
+    });
+
+    it('happy path: returns pendingLetterId and checkoutUrl', async () => {
+      const result = await service.createCheckout('user-1', 'user@test.com', validDto);
+
+      expect(result.pendingLetterId).toBe('pending-cuid-1');
+      expect(result.checkoutUrl).toBe('https://checkout.stripe.com/pay/cs_test');
+    });
+
+    it('happy path: creates PendingLetter with correct data', async () => {
+      await service.createCheckout('user-1', 'user@test.com', validDto);
+
+      expect(prisma.pendingLetter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            senderId: 'user-1',
+            recipientId: 'author-1',
+            episodeId: 'ep-1',
+            type: 'STANDARD',
+            content: 'すごく面白かったです！',
+            amount: 300,
+            moderationStatus: 'approved',
+          }),
+        }),
+      );
+    });
+
+    it('happy path: updates PendingLetter placeholder sessionId to own ID then real session ID', async () => {
+      await service.createCheckout('user-1', 'user@test.com', validDto);
+
+      // First update: own ID as unique placeholder
+      expect(prisma.pendingLetter.update).toHaveBeenNthCalledWith(
+        1,
+        expect.objectContaining({
+          where: { id: 'pending-cuid-1' },
+          data: { stripeSessionId: 'pending-cuid-1' },
+        }),
+      );
+      // Second update: real Stripe session ID
+      expect(prisma.pendingLetter.update).toHaveBeenNthCalledWith(
+        2,
+        expect.objectContaining({
+          where: { id: 'pending-cuid-1' },
+          data: { stripeSessionId: 'cs_test_session' },
+        }),
+      );
+    });
+
+    it('happy path: calls Stripe with correct parameters', async () => {
+      await service.createCheckout('user-1', 'user@test.com', validDto);
+
+      expect(stripeService.createLetterCheckoutSession).toHaveBeenCalledWith(
+        'user-1',
+        'user@test.com',
+        'pending-cuid-1',
+        300,
+        'acct_test123',
+        expect.objectContaining({
+          recipientId: 'author-1',
+          episodeId: 'ep-1',
+          letterType: 'STANDARD',
+        }),
+      );
+    });
+
+    it('happy path: uses giftAmount for GIFT type', async () => {
+      const giftDto = {
+        episodeId: 'ep-1',
+        type: LetterTypeDto.GIFT,
+        content: 'すごい作品です！',
+        giftAmount: 5000,
+      };
+
+      await service.createCheckout('user-1', 'user@test.com', giftDto);
+
+      expect(prisma.pendingLetter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: 5000 }),
+        }),
+      );
+      expect(stripeService.createLetterCheckoutSession).toHaveBeenCalledWith(
+        expect.anything(),
+        expect.anything(),
+        expect.anything(),
+        5000,
+        expect.anything(),
+        expect.anything(),
+      );
+    });
+
+    it('happy path: defaults GIFT amount to 1000 when giftAmount is not provided', async () => {
+      const giftDto = {
+        episodeId: 'ep-1',
+        type: LetterTypeDto.GIFT,
+        content: 'すごい作品です！',
+      };
+
+      await service.createCheckout('user-1', 'user@test.com', giftDto);
+
+      expect(prisma.pendingLetter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: 1000 }),
+        }),
+      );
+    });
+
+    // ── Validation errors ──────────────────────────────────────────────────────
+
+    it('throws BadRequestException when content exceeds maxChars', async () => {
+      const longContent = 'a'.repeat(501); // STANDARD maxChars = 500
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', { ...validDto, content: longContent }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when stamp used with SHORT type', async () => {
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', {
+          episodeId: 'ep-1',
+          type: LetterTypeDto.SHORT,
+          content: '応援！',
+        }),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws NotFoundException when episode does not exist', async () => {
+      prisma.episode.findUnique.mockResolvedValue(null);
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow(NotFoundException);
+    });
+
+    it('throws BadRequestException when sender is same as recipient (own work)', async () => {
+      prisma.episode.findUnique.mockResolvedValue({
+        id: 'ep-1',
+        work: { authorId: 'user-1' }, // same as senderId
+      });
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when recipient has no Connect account', async () => {
+      prisma.user.findUnique.mockResolvedValue({ stripeAccountId: null });
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when recipient Connect account has chargesEnabled=false', async () => {
+      stripeService.getConnectStatus.mockResolvedValue({ chargesEnabled: false });
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('throws BadRequestException when moderation rejects content', async () => {
+      moderation.moderate.mockResolvedValue({
+        approved: false,
+        needsManualReview: false,
+        reason: '不適切な内容が含まれています',
+      });
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow(BadRequestException);
+    });
+
+    it('moderation rejection uses the reason from moderation result', async () => {
+      moderation.moderate.mockResolvedValue({
+        approved: false,
+        needsManualReview: false,
+        reason: '特定の不適切な内容',
+      });
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow('特定の不適切な内容');
+    });
+
+    // ── Stripe Checkout failure → cleanup ─────────────────────────────────────
+
+    it('deletes PendingLetter when Stripe Checkout creation fails', async () => {
+      stripeService.createLetterCheckoutSession.mockRejectedValue(
+        new Error('Stripe API error'),
+      );
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow('Stripe API error');
+
+      expect(prisma.pendingLetter.delete).toHaveBeenCalledWith({
+        where: { id: 'pending-cuid-1' },
+      });
+    });
+
+    it('re-throws the Stripe error after cleanup', async () => {
+      const stripeError = new Error('Network failure');
+      stripeService.createLetterCheckoutSession.mockRejectedValue(stripeError);
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow('Network failure');
+    });
+
+    it('does not store real sessionId when Stripe fails', async () => {
+      stripeService.createLetterCheckoutSession.mockRejectedValue(
+        new Error('Stripe error'),
+      );
+
+      await expect(
+        service.createCheckout('user-1', 'user@test.com', validDto),
+      ).rejects.toThrow();
+
+      // Only the first update (placeholder->own ID) should have run; the second (real sessionId) should not
+      expect(prisma.pendingLetter.update).toHaveBeenCalledTimes(1);
     });
   });
 });

@@ -15,7 +15,6 @@ interface Letter {
   type: string;
   content: string;
   amount: number;
-  isFreeQuota: boolean;
   createdAt: string;
 }
 
@@ -108,7 +107,7 @@ export default function ReceivedLettersPage() {
                   <div className="flex items-center gap-2 mb-2">
                     <span className="text-sm font-medium">{letter.sender?.displayName || letter.sender?.name || '匿名'}</span>
                     <Badge className={`text-[10px] ${typeInfo.color}`}>{typeInfo.label}</Badge>
-                    {letter.amount > 0 && !letter.isFreeQuota && (
+                    {letter.amount > 0 && (
                       <span className="text-xs text-green-600 font-medium">¥{letter.amount.toLocaleString()}</span>
                     )}
                   </div>
