@@ -526,7 +526,9 @@ function CreationPlanCard({
   const [readerJourney, setReaderJourney] = useState('');
   const [plotText, setPlotText] = useState('');
   const [worldText, setWorldText] = useState('');
-  const [chapters, setChapters] = useState<{ title: string; summary: string }[]>([]);
+  const [chapters, setChapters] = useState<{ title: string; summary: string; reason: string; readerEmotion: string }[]>([]);
+  const chapterDragIndex = useRef<number | null>(null);
+  const chapterDragOverIndex = useRef<number | null>(null);
 
   function startEditing() {
     const eb = creationPlan?.emotionBlueprint || {};
@@ -565,6 +567,8 @@ function CreationPlanCard({
       (creationPlan?.chapterOutline || []).map((ch: any) => ({
         title: ch.title || '',
         summary: ch.summary || '',
+        reason: ch.reason || '',
+        readerEmotion: ch.readerEmotion || '',
       }))
     );
     setEditing(true);
@@ -586,7 +590,12 @@ function CreationPlanCard({
           ? { freeText: worldText }
           : null,
         chapterOutline: chapters.filter((ch) => ch.title.trim()).length > 0
-          ? chapters.filter((ch) => ch.title.trim())
+          ? chapters.filter((ch) => ch.title.trim()).map((ch) => ({
+              title: ch.title,
+              summary: ch.summary,
+              reason: ch.reason,
+              readerEmotion: ch.readerEmotion,
+            }))
           : null,
       };
       await api.saveCreationPlan(workId, plan);
@@ -706,50 +715,161 @@ function CreationPlanCard({
                 />
               </div>
 
-              {/* Chapters */}
-              <div className="space-y-2">
-                <p className="text-xs font-medium text-muted-foreground">章立て</p>
-                {chapters.map((ch, i) => (
-                  <div key={i} className="flex gap-1 items-start">
-                    <span className="text-[10px] text-muted-foreground mt-2 w-6 shrink-0">{i + 1}.</span>
-                    <div className="flex-1 space-y-1">
-                      <Input
-                        value={ch.title}
-                        onChange={(e) => {
-                          const u = [...chapters];
-                          u[i] = { ...u[i], title: e.target.value };
-                          setChapters(u);
-                        }}
-                        placeholder="章タイトル"
-                        className="text-xs h-7"
-                      />
-                      <Textarea
-                        value={ch.summary}
-                        onChange={(e) => {
-                          const u = [...chapters];
-                          u[i] = { ...u[i], summary: e.target.value };
-                          setChapters(u);
-                        }}
-                        placeholder="概要"
-                        rows={1}
-                        className="text-xs"
-                      />
-                    </div>
+              {/* Chapters — Card UI with insert zones */}
+              <div>
+                <p className="text-xs font-medium text-muted-foreground mb-2">章立て</p>
+                {/* Insert zone before first card */}
+                {chapters.length > 0 && (
+                  <div
+                    className="group relative h-6 flex items-center mx-2 mb-1"
+                    onDragOver={(e) => { e.preventDefault(); chapterDragOverIndex.current = -1; }}
+                    onDrop={(e) => {
+                      e.preventDefault();
+                      const from = chapterDragIndex.current;
+                      if (from === null) return;
+                      const reordered = [...chapters];
+                      const [moved] = reordered.splice(from, 1);
+                      reordered.splice(0, 0, moved);
+                      setChapters(reordered);
+                      chapterDragIndex.current = null;
+                      chapterDragOverIndex.current = null;
+                    }}
+                  >
+                    <div className="w-full h-px bg-border group-hover:bg-primary/40 transition-colors" />
                     <button
-                      onClick={() => setChapters(chapters.filter((_, j) => j !== i))}
-                      className="text-muted-foreground hover:text-destructive mt-2"
+                      type="button"
+                      onClick={() => setChapters([{ title: '', summary: '', reason: '', readerEmotion: '' }, ...chapters])}
+                      className="absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border rounded-full px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap"
                     >
-                      <Trash2 className="h-3 w-3" />
+                      + ここに挿入
                     </button>
                   </div>
+                )}
+
+                {chapters.map((ch, i) => (
+                  <div key={ch.title + i}>
+                    {/* Card */}
+                    <div className="border border-border rounded-lg p-3 bg-background space-y-2">
+                      <div className="flex items-center gap-2">
+                        <div
+                          draggable
+                          onDragStart={(e) => {
+                            chapterDragIndex.current = i;
+                            e.dataTransfer.effectAllowed = 'move';
+                          }}
+                          onDragEnd={() => {
+                            chapterDragIndex.current = null;
+                            chapterDragOverIndex.current = null;
+                          }}
+                          className="cursor-grab active:cursor-grabbing p-0.5 shrink-0"
+                        >
+                          <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 pointer-events-none" />
+                        </div>
+                        <span className="text-[10px] text-muted-foreground shrink-0">{i + 1}.</span>
+                        <Input
+                          value={ch.title}
+                          onChange={(e) => {
+                            const u = [...chapters];
+                            u[i] = { ...u[i], title: e.target.value };
+                            setChapters(u);
+                          }}
+                          placeholder="話タイトル"
+                          className="text-xs h-7 flex-1"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setChapters(chapters.filter((_, j) => j !== i))}
+                          className="text-muted-foreground hover:text-destructive shrink-0"
+                        >
+                          <Trash2 className="h-3 w-3" />
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 pl-5">
+                        <div>
+                          <p className="text-[10px] text-muted-foreground mb-0.5">何が起こったか</p>
+                          <Textarea
+                            value={ch.summary}
+                            onChange={(e) => {
+                              const u = [...chapters];
+                              u[i] = { ...u[i], summary: e.target.value };
+                              setChapters(u);
+                            }}
+                            placeholder="例：主人公が○○する"
+                            rows={2}
+                            className="text-xs"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground mb-0.5">起こった理由</p>
+                          <Textarea
+                            value={ch.reason}
+                            onChange={(e) => {
+                              const u = [...chapters];
+                              u[i] = { ...u[i], reason: e.target.value };
+                              setChapters(u);
+                            }}
+                            placeholder="例：○○のため"
+                            rows={2}
+                            className="text-xs"
+                          />
+                        </div>
+                        <div>
+                          <p className="text-[10px] text-muted-foreground mb-0.5">読者の感情</p>
+                          <Textarea
+                            value={ch.readerEmotion}
+                            onChange={(e) => {
+                              const u = [...chapters];
+                              u[i] = { ...u[i], readerEmotion: e.target.value };
+                              setChapters(u);
+                            }}
+                            placeholder="例：驚き・ドキドキ"
+                            rows={1}
+                            className="text-xs"
+                          />
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Insert zone after each card */}
+                    <div
+                      className="group relative h-6 flex items-center mx-2 mt-1 mb-1"
+                      onDragOver={(e) => { e.preventDefault(); chapterDragOverIndex.current = i + 1; }}
+                      onDrop={(e) => {
+                        e.preventDefault();
+                        const from = chapterDragIndex.current;
+                        if (from === null) return;
+                        const reordered = [...chapters];
+                        const [moved] = reordered.splice(from, 1);
+                        const newIndex = from < i + 1 ? i : i + 1;
+                        reordered.splice(newIndex, 0, moved);
+                        setChapters(reordered);
+                        chapterDragIndex.current = null;
+                        chapterDragOverIndex.current = null;
+                      }}
+                    >
+                      <div className="w-full h-px bg-border group-hover:bg-primary/40 transition-colors" />
+                      <button
+                        type="button"
+                        onClick={() => {
+                          const u = [...chapters];
+                          u.splice(i + 1, 0, { title: '', summary: '', reason: '', readerEmotion: '' });
+                          setChapters(u);
+                        }}
+                        className="absolute left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity bg-background border border-border rounded-full px-2 py-0.5 text-[10px] text-muted-foreground hover:text-foreground whitespace-nowrap"
+                      >
+                        + ここに挿入
+                      </button>
+                    </div>
+                  </div>
                 ))}
+
                 <Button
                   variant="outline"
                   size="sm"
-                  className="text-xs gap-1"
-                  onClick={() => setChapters([...chapters, { title: '', summary: '' }])}
+                  className="text-xs gap-1 w-full border-dashed mt-1"
+                  onClick={() => setChapters([...chapters, { title: '', summary: '', reason: '', readerEmotion: '' }])}
                 >
-                  <Plus className="h-3 w-3" /> 追加
+                  <Plus className="h-3 w-3" /> 話を追加
                 </Button>
               </div>
 
@@ -822,12 +942,36 @@ function CreationPlanCard({
               )}
               {creationPlan.chapterOutline?.length > 0 && (
                 <div>
-                  <p className="text-xs font-medium text-muted-foreground mb-1">章立て</p>
-                  <div className="space-y-1">
+                  <p className="text-xs font-medium text-muted-foreground mb-2">章立て</p>
+                  <div className="space-y-1.5">
                     {creationPlan.chapterOutline.map((ch: any, i: number) => (
-                      <div key={i} className="text-xs">
-                        <span className="font-medium">第{i + 1}話: {ch.title}</span>
-                        {ch.summary && <p className="text-muted-foreground">{ch.summary}</p>}
+                      <div key={i} className="border border-border rounded-lg p-3 bg-background">
+                        <div className="flex items-center gap-2 mb-1">
+                          <span className="text-[10px] text-muted-foreground shrink-0 w-5">{i + 1}.</span>
+                          <span className="text-xs font-medium">{ch.title || '（無題）'}</span>
+                        </div>
+                        {(ch.summary || ch.reason || ch.readerEmotion) && (
+                          <div className="space-y-2 pl-5 pt-1 border-t border-border mt-2">
+                            {ch.summary && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">何が起こったか</p>
+                                <p className="text-xs leading-relaxed">{ch.summary}</p>
+                              </div>
+                            )}
+                            {ch.reason && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">起こった理由</p>
+                                <p className="text-xs leading-relaxed">{ch.reason}</p>
+                              </div>
+                            )}
+                            {ch.readerEmotion && (
+                              <div>
+                                <p className="text-[10px] text-muted-foreground mb-0.5">読者の感情</p>
+                                <p className="text-xs leading-relaxed">{ch.readerEmotion}</p>
+                              </div>
+                            )}
+                          </div>
+                        )}
                       </div>
                     ))}
                   </div>
