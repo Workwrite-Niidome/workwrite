@@ -43,59 +43,24 @@ interface Payout {
   createdAt: string;
 }
 
-function PendingPayoutBanner({ amount, count, expiresAt, connectReady, onClaimed }: {
-  amount: number; count: number; expiresAt: string | null; connectReady: boolean; onClaimed: () => void;
+function PendingPayoutBanner({ amount, count, expiresAt, connectReady }: {
+  amount: number; count: number; expiresAt: string | null; connectReady: boolean;
 }) {
-  const [claiming, setClaiming] = useState(false);
-  const [result, setResult] = useState<string | null>(null);
-
-  async function handleClaim() {
-    setClaiming(true);
-    setResult(null);
-    try {
-      const res = await api.claimLetterPayouts();
-      if (res.transferred > 0) {
-        setResult(`¥${res.totalAmount.toLocaleString()}の送金手続きが完了しました。Stripeの処理後、自動的にアカウントに反映されます。`);
-        onClaimed();
-      } else {
-        setResult('Stripe決済の処理待ちです。毎朝9:00の自動処理で送金されます。しばらくお待ちください。');
-      }
-    } catch (e: any) {
-      setResult('現在Stripe決済の処理待ちです。毎朝9:00の自動処理で送金されます。しばらくお待ちください。');
-    }
-    setClaiming(false);
-  }
-
   return (
     <Card className="mb-6 border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700">
       <CardContent className="py-4 px-5">
-        <div className="flex items-center justify-between">
-          <div>
-            <p className="text-sm font-medium">
-              保留中の収益: <span className="text-amber-600 font-bold">¥{amount.toLocaleString()}</span>
-              （{count}通）
-            </p>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              {connectReady
-                ? '毎朝9:00に自動送金されます。「送金をリクエスト」で手動送金も可能です。'
-                : 'Stripe Connect設定を完了すると受け取れます。'}
-              {expiresAt && (
-                <> 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</>
-              )}
-            </p>
-            {result && (
-              <p className={`text-xs mt-1.5 font-medium ${result.includes('完了') ? 'text-green-600' : 'text-amber-600'}`}>
-                {result}
-              </p>
-            )}
-          </div>
-          {connectReady && (
-            <Button size="sm" onClick={handleClaim} disabled={claiming} className="ml-4 shrink-0">
-              <Banknote className="h-3.5 w-3.5 mr-1" />
-              {claiming ? '処理中...' : '送金をリクエスト'}
-            </Button>
+        <p className="text-sm font-medium">
+          保留中の収益: <span className="text-amber-600 font-bold">¥{amount.toLocaleString()}</span>
+          （{count}通）
+        </p>
+        <p className="text-xs text-muted-foreground mt-1">
+          {connectReady
+            ? '毎朝9:00に自動送金されます。'
+            : 'Stripe Connect設定を完了すると受け取れます。'}
+          {expiresAt && (
+            <> 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</>
           )}
-        </div>
+        </p>
       </CardContent>
     </Card>
   );
@@ -212,8 +177,8 @@ function EarningsPageContent() {
           {!connectStatus?.hasAccount ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                レター収益を受け取るには、Stripe Connectアカウントの設定が必要です。
-                設定後、読者からのレター代金（手数料20%控除後）が毎日自動で振り込まれます。保留中の収益がある場合は「受け取る」ボタンで即時受け取りも可能です。
+                ギフトレター収益を受け取るには、Stripe Connectアカウントの設定が必要です。
+                設定後、読者からのギフトレター代金（手数料20%控除後）が毎日自動で振り込まれます。保留中の収益がある場合は「受け取る」ボタンで即時受け取りも可能です。
               </p>
               <Button onClick={handleOnboarding} disabled={onboardingLoading}>
                 {onboardingLoading ? (
@@ -237,7 +202,7 @@ function EarningsPageContent() {
                 </div>
                 <div className="text-sm">
                   {isConnectReady
-                    ? '振込が有効です。レター収益は毎日自動で振り込まれます（毎朝9:00確認）。'
+                    ? '振込が有効です。ギフトレター収益は毎日自動で振り込まれます（毎朝9:00確認）。'
                     : connectStatus.detailsSubmitted
                     ? 'Stripeによる審査中です。完了次第振込が有効になります。'
                     : '設定が途中です。続きを完了してください。'}
@@ -269,9 +234,6 @@ function EarningsPageContent() {
               count={earnings.pendingPayout.count}
               expiresAt={earnings.pendingPayout.expiresAt}
               connectReady={connectStatus?.chargesEnabled ?? false}
-              onClaimed={() => {
-                api.getLetterEarnings().then((res) => setEarnings((res as any).data || null)).catch(() => {});
-              }}
             />
           )}
 
@@ -303,7 +265,7 @@ function EarningsPageContent() {
               <CardContent className="py-4 px-4">
                 <div className="flex items-center gap-2 mb-1">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">累計レター数</p>
+                  <p className="text-xs text-muted-foreground">累計ギフトレター数</p>
                 </div>
                 <p className="text-2xl font-bold">{earnings.totalLetters}</p>
               </CardContent>
@@ -312,7 +274,7 @@ function EarningsPageContent() {
               <CardContent className="py-4 px-4">
                 <div className="flex items-center gap-2 mb-1">
                   <Mail className="h-4 w-4 text-muted-foreground" />
-                  <p className="text-xs text-muted-foreground">今月のレター数</p>
+                  <p className="text-xs text-muted-foreground">今月のギフトレター数</p>
                 </div>
                 <p className="text-2xl font-bold">{earnings.monthlyLetters}</p>
               </CardContent>
@@ -410,13 +372,13 @@ function EarningsPageContent() {
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground text-sm">プラットフォーム手数料について</p>
                   <p>
-                    レターは収益の80%（手数料20%）が作家に還元されます。
+                    ギフトレターは収益の80%（手数料20%）が作家に還元されます。
                     キャラクタートークは有償クレジットの消費額から40%が作家に還元されます。
                     表示されている収益は手数料控除後の金額です。
                   </p>
                   <p>
                     {isConnectReady
-                      ? 'レター収益は毎日自動で振り込まれます（毎朝9:00確認）。90日以内に受け取り設定がない場合、送信者に返金されます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
+                      ? 'ギフトレター収益は毎日自動で振り込まれます（毎朝9:00確認）。90日以内に受け取り設定がない場合、送信者に返金されます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
                       : 'Stripe Connectの設定完了後、自動振込が有効になります。'}
                   </p>
                 </div>
@@ -430,7 +392,7 @@ function EarningsPageContent() {
             <DollarSign className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
             <p className="text-muted-foreground">収益データがありません</p>
             <p className="text-xs text-muted-foreground mt-1">
-              作品を公開してレターを受け取ると、ここに収益が表示されます
+              作品を公開してギフトレターを受け取ると、ここに収益が表示されます
             </p>
           </CardContent>
         </Card>

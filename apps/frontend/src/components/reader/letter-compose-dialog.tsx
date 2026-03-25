@@ -17,7 +17,7 @@ const LETTER_TYPES: {
 }[] = [
   {
     type: 'SHORT',
-    label: 'ショートレター',
+    label: 'ショート',
     price: '¥120',
     maxChars: 140,
     icon: <Zap className="h-4 w-4" />,
@@ -26,7 +26,7 @@ const LETTER_TYPES: {
   },
   {
     type: 'STANDARD',
-    label: 'レター',
+    label: 'スタンダード',
     price: '¥300',
     maxChars: 500,
     icon: <Mail className="h-4 w-4" />,
@@ -35,7 +35,7 @@ const LETTER_TYPES: {
   },
   {
     type: 'PREMIUM',
-    label: 'プレミアムレター',
+    label: 'プレミアム',
     price: '¥500',
     maxChars: 1000,
     icon: <Star className="h-4 w-4" />,
@@ -44,7 +44,7 @@ const LETTER_TYPES: {
   },
   {
     type: 'GIFT',
-    label: 'ギフトレター',
+    label: 'ギフト',
     price: '¥1,000〜',
     maxChars: 1000,
     icon: <Gift className="h-4 w-4" />,
@@ -101,7 +101,7 @@ export function LetterComposeDialog({
       // Redirect to Stripe Checkout
       window.location.href = checkoutUrl;
     } catch (err: unknown) {
-      setError(err instanceof Error ? err.message : 'レターの送信に失敗しました');
+      setError(err instanceof Error ? err.message : 'ギフトレターの送信に失敗しました');
     } finally {
       setSending(false);
     }
@@ -111,7 +111,7 @@ export function LetterComposeDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogHeader>
         <DialogTitle>
-          {step === 'type' ? 'レターを書く' : `${config?.label}`}
+          {step === 'type' ? 'ギフトレターを書く' : `${config?.label}`}
         </DialogTitle>
       </DialogHeader>
       <DialogContent>
@@ -184,7 +184,7 @@ export function LetterComposeDialog({
               onClick={handleSend}
               disabled={sending || !content.trim()}
             >
-              {sending ? '送信中...' : 'レターを送る'}
+              {sending ? '送信中...' : 'ギフトレターを送る'}
             </Button>
           </>
         )}

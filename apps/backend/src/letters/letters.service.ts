@@ -31,7 +31,7 @@ export class LettersService {
     // Validate content length
     if (dto.content.length > config.maxChars) {
       throw new BadRequestException(
-        `${dto.type}レターは${config.maxChars}文字までです`,
+        `${dto.type}ギフトレターは${config.maxChars}文字までです`,
       );
     }
 
@@ -44,14 +44,14 @@ export class LettersService {
 
     const recipientId = episode.work.authorId;
     if (recipientId === senderId) {
-      throw new BadRequestException('自分の作品にはレターを送れません');
+      throw new BadRequestException('自分の作品にはギフトレターを送れません');
     }
 
     // AI moderation
     const moderationResult = await this.moderation.moderate(dto.content);
     if (!moderationResult.approved && !moderationResult.needsManualReview) {
       throw new BadRequestException(
-        moderationResult.reason || 'レター内容が不適切と判断されました',
+        moderationResult.reason || 'ギフトレターの内容が不適切と判断されました',
       );
     }
 
@@ -106,8 +106,8 @@ export class LettersService {
     // Notify author
     await this.notifications.createNotification(recipientId, {
       type: 'letter',
-      title: 'レターが届きました',
-      body: `${letter.sender.displayName || letter.sender.name}さんから¥${amount}のレターが届きました`,
+      title: 'ギフトレターが届きました',
+      body: `${letter.sender.displayName || letter.sender.name}さんから¥${amount}のギフトレターが届きました`,
       data: { letterId: letter.id, episodeId: dto.episodeId },
     });
 
@@ -128,7 +128,7 @@ export class LettersService {
     // Validate content length
     if (dto.content.length > config.maxChars) {
       throw new BadRequestException(
-        `${dto.type}レターは${config.maxChars}文字までです`,
+        `${dto.type}ギフトレターは${config.maxChars}文字までです`,
       );
     }
 
@@ -141,14 +141,14 @@ export class LettersService {
 
     const recipientId = episode.work.authorId;
     if (recipientId === senderId) {
-      throw new BadRequestException('自分の作品にはレターを送れません');
+      throw new BadRequestException('自分の作品にはギフトレターを送れません');
     }
 
     // AI moderation
     const moderationResult = await this.moderation.moderate(dto.content);
     if (!moderationResult.approved && !moderationResult.needsManualReview) {
       throw new BadRequestException(
-        moderationResult.reason || 'レター内容が不適切と判断されました',
+        moderationResult.reason || 'ギフトレターの内容が不適切と判断されました',
       );
     }
 

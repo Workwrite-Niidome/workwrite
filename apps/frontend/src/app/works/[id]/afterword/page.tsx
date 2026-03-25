@@ -302,7 +302,7 @@ export default function AfterwordPage() {
             <Share2 className="h-3.5 w-3.5" /> シェア
           </Button>
           <Button variant="outline" className="flex-1 gap-1.5" onClick={() => setLetterOpen(true)}>
-            <Mail className="h-3.5 w-3.5" /> レターを送る
+            <Mail className="h-3.5 w-3.5" /> ギフトレターを送る
           </Button>
         </div>
 

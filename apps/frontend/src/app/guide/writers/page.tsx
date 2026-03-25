@@ -44,7 +44,7 @@ const SECTIONS = [
   { id: 'scoring', label: '品質スコアリング', icon: BarChart3 },
   { id: 'character-talk', label: 'キャラクタートーク', icon: MessageSquare },
   { id: 'grow', label: '読者を増やす', icon: Users },
-  { id: 'letters', label: 'レター・収益', icon: Mail },
+  { id: 'letters', label: 'ギフトレター・収益', icon: Mail },
   { id: 'credits', label: 'クレジットと料金', icon: CreditCard },
   { id: 'faq', label: 'よくある質問', icon: HelpCircle },
 ] as const;
@@ -663,24 +663,24 @@ export default function WritersGuidePage() {
         <section id="letters">
           <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
             <Mail className="h-5 w-5 text-primary" />
-            レター・収益
+            ギフトレター・収益
           </h2>
 
           <div className="space-y-6">
             <div>
-              <h3 className="text-sm font-medium mb-2">ファンレターとは</h3>
+              <h3 className="text-sm font-medium mb-2">ギフトレターとは</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                読者がエピソードを読んだ後、感想や応援メッセージを「ファンレター」として著者に送れる機能です。
-                レターには有料の投げ銭が含まれ、<strong className="text-foreground">収益の80%が著者に還元</strong>されます（プラットフォーム手数料20%）。
+                読者がエピソードを読んだ後、感想や応援メッセージを「ギフトレター」として著者に送れる機能です。
+                ギフトレターには有料の投げ銭が含まれ、<strong className="text-foreground">収益の80%が著者に還元</strong>されます（プラットフォーム手数料20%）。
               </p>
             </div>
 
             <div>
-              <h3 className="text-sm font-medium mb-3">レターの種類</h3>
+              <h3 className="text-sm font-medium mb-3">ギフトレターの種類</h3>
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
                 {[
                   { type: 'ショート', price: '¥120', chars: '140文字', color: 'bg-blue-50 dark:bg-blue-950/30' },
-                  { type: 'レター', price: '¥300', chars: '500文字', color: 'bg-green-50 dark:bg-green-950/30' },
+                  { type: 'スタンダード', price: '¥300', chars: '500文字', color: 'bg-green-50 dark:bg-green-950/30' },
                   { type: 'プレミアム', price: '¥500', chars: '1000文字', color: 'bg-purple-50 dark:bg-purple-950/30' },
                   { type: 'ギフト', price: '¥1,000〜', chars: '1000文字', color: 'bg-amber-50 dark:bg-amber-950/30' },
                 ].map((lt) => (
@@ -692,22 +692,22 @@ export default function WritersGuidePage() {
                 ))}
               </div>
               <p className="text-xs text-muted-foreground mt-2">
-                ギフトレターは自由な金額を設定可能です。
+                ギフトタイプは自由な金額を設定可能です。
               </p>
             </div>
 
             <div>
               <h3 className="text-sm font-medium mb-2">AIモデレーション</h3>
               <p className="text-sm text-muted-foreground leading-relaxed">
-                すべてのレターはAIが自動審査し、誹謗中傷や不適切な内容を含むメッセージをブロックします。
-                著者が安心してレターを受け取れる仕組みです。
+                すべてのギフトレターはAIが自動審査し、誹謗中傷や不適切な内容を含むメッセージをブロックします。
+                著者が安心してギフトレターを受け取れる仕組みです。
               </p>
             </div>
 
             <div>
               <h3 className="text-sm font-medium mb-2">収益の確認</h3>
               <p className="text-sm text-muted-foreground leading-relaxed mb-3">
-                ダッシュボードの「収益」ページで、累計・月間の収益とレター数を確認できます。
+                ダッシュボードの「収益」ページで、累計・月間の収益とギフトレター数を確認できます。
               </p>
               <div className="bg-muted/50 rounded-lg p-4">
                 <h4 className="text-sm font-medium mb-2 flex items-center gap-1.5">
@@ -716,7 +716,7 @@ export default function WritersGuidePage() {
                 </h4>
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   収益を銀行口座に受け取るには、収益ページからStripe Connectのアカウント設定を完了してください。
-                  設定完了後、レター収益はStripe経由で自動的に振り込まれます。
+                  設定完了後、ギフトレター収益はStripe経由で自動的に振り込まれます。
                 </p>
               </div>
             </div>

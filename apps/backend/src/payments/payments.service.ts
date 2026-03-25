@@ -27,7 +27,7 @@ export class PaymentsService {
       select: { stripeAccountId: true },
     });
     if (!recipient?.stripeAccountId) {
-      throw new BadRequestException('この著者はまだ収益受取設定を完了していないため、有料レターを送れません。');
+      throw new BadRequestException('この著者はまだ収益受取設定を完了していないため、ギフトレターを送れません。');
     }
 
     const payer = await this.prisma.user.findUnique({

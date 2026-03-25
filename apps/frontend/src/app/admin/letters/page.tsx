@@ -66,7 +66,7 @@ export default function AdminLettersPage() {
     <div className="px-4 py-8 max-w-3xl mx-auto">
       <div className="flex items-center gap-2 mb-6">
         <Shield className="h-5 w-5" />
-        <h1 className="text-2xl font-bold">レターモデレーション</h1>
+        <h1 className="text-2xl font-bold">ギフトレターモデレーション</h1>
       </div>
 
       <div className="flex gap-2 mb-4">
@@ -90,7 +90,7 @@ export default function AdminLettersPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">
-              {filter === 'pending' ? '保留中のレターはありません' : 'レターがありません'}
+              {filter === 'pending' ? '保留中のギフトレターはありません' : 'ギフトレターがありません'}
             </p>
           </CardContent>
         </Card>

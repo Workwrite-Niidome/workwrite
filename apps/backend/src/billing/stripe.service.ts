@@ -193,7 +193,7 @@ export class StripeService {
         {
           price_data: {
             currency: 'jpy',
-            product_data: { name: 'レター（ファンレター）' },
+            product_data: { name: 'ギフトレター' },
             unit_amount: amount,
           },
           quantity: 1,

@@ -19,7 +19,7 @@ interface Letter {
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   SHORT: { label: 'ショート', color: 'bg-blue-50 text-blue-700' },
-  STANDARD: { label: 'レター', color: 'bg-green-50 text-green-700' },
+  STANDARD: { label: 'スタンダード', color: 'bg-green-50 text-green-700' },
   PREMIUM: { label: 'プレミアム', color: 'bg-purple-50 text-purple-700' },
   GIFT: { label: 'ギフト', color: 'bg-amber-50 text-amber-700' },
 };
@@ -45,15 +45,15 @@ export default function SentLettersPage() {
 
   return (
     <div className="px-4 py-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">送信レター</h1>
+      <h1 className="text-2xl font-bold mb-6">送信ギフトレター</h1>
 
       {letters.length === 0 ? (
         <Card>
           <CardContent className="py-12 text-center">
             <Send className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-muted-foreground">まだレターを送信していません</p>
+            <p className="text-muted-foreground">まだギフトレターを送信していません</p>
             <p className="text-xs text-muted-foreground mt-1">
-              作品を読んで、著者にレターを送ってみましょう
+              作品を読んで、著者にギフトレターを送ってみましょう
             </p>
           </CardContent>
         </Card>

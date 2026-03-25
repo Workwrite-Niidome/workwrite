@@ -29,7 +29,7 @@ interface Earnings {
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
   SHORT: { label: 'ショート', color: 'bg-blue-50 text-blue-700' },
-  STANDARD: { label: 'レター', color: 'bg-green-50 text-green-700' },
+  STANDARD: { label: 'スタンダード', color: 'bg-green-50 text-green-700' },
   PREMIUM: { label: 'プレミアム', color: 'bg-purple-50 text-purple-700' },
   GIFT: { label: 'ギフト', color: 'bg-amber-50 text-amber-700' },
 };
@@ -58,14 +58,14 @@ export default function ReceivedLettersPage() {
 
   return (
     <div className="px-4 py-8 max-w-2xl mx-auto">
-      <h1 className="text-2xl font-bold mb-6">受信レター</h1>
+      <h1 className="text-2xl font-bold mb-6">受信ギフトレター</h1>
 
       {/* Earnings summary */}
       {earnings && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
           <Card>
             <CardContent className="py-3 px-4 text-center">
-              <p className="text-xs text-muted-foreground">累計レター</p>
+              <p className="text-xs text-muted-foreground">累計ギフトレター</p>
               <p className="text-lg font-bold">{earnings.totalLetters}</p>
             </CardContent>
           </Card>
@@ -116,7 +116,7 @@ export default function ReceivedLettersPage() {
         <Card>
           <CardContent className="py-12 text-center">
             <Mail className="h-8 w-8 mx-auto mb-3 text-muted-foreground" />
-            <p className="text-muted-foreground">まだレターを受け取っていません</p>
+            <p className="text-muted-foreground">まだギフトレターを受け取っていません</p>
           </CardContent>
         </Card>
       ) : (

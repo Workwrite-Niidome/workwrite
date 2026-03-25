@@ -14,7 +14,7 @@ const TYPE_STYLES: Record<string, { icon: React.ReactNode; badge: string; badgeC
   },
   STANDARD: {
     icon: <Mail className="h-3 w-3" />,
-    badge: 'レター',
+    badge: 'スタンダード',
     badgeClass: 'bg-green-100 text-green-700 dark:bg-green-900/50 dark:text-green-300',
   },
   PREMIUM: {
@@ -99,7 +99,7 @@ export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }
           <div className="text-center py-8 space-y-2">
             <Mail className="h-8 w-8 mx-auto text-muted-foreground/50" />
             <p className="text-sm text-muted-foreground">
-              まだレターはありません
+              まだギフトレターはありません
             </p>
             <p className="text-xs text-muted-foreground">
               著者に感想を届けましょう
@@ -117,7 +117,7 @@ export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }
             onClick={() => onCompose ? onCompose() : setShowCompose(true)}
           >
             <PenLine className="h-3.5 w-3.5" />
-            レターを書く
+            ギフトレターを書く
           </Button>
         </div>
       )}

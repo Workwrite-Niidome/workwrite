@@ -167,8 +167,8 @@ export class StripeWebhookController {
       try {
         const { transferred, totalAmount } = await this.billingService.transferPendingLetterPayouts(user.id);
         const title = transferred > 0
-          ? `Stripe Connectの設定が完了しました。保留中のレター収益¥${totalAmount}を送金しました。`
-          : 'Stripe Connectの審査が完了しました。レター収益の自動振込が有効になりました。';
+          ? `Stripe Connectの設定が完了しました。保留中のギフトレター収益¥${totalAmount}を送金しました。`
+          : 'Stripe Connectの審査が完了しました。ギフトレター収益の自動振込が有効になりました。';
         await this.notifications.createNotification(user.id, {
           type: 'system',
           title,

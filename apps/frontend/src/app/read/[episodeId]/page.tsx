@@ -579,7 +579,7 @@ export default function ReaderPage() {
           <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[44px] min-w-[44px]" title="キャラクタートーク (a)">
             <Sparkles className="h-4 w-4" />
           </Button>
-          <Button variant="ghost" size="icon" onClick={toggleLetters} className="min-h-[44px] min-w-[44px]" title="レター (c)">
+          <Button variant="ghost" size="icon" onClick={toggleLetters} className="min-h-[44px] min-w-[44px]" title="ギフトレター (c)">
             <Mail className="h-4 w-4" />
           </Button>
           <Button variant="ghost" size="icon" onClick={() => setShowSettings(!showSettings)} className="min-h-[44px] min-w-[44px]" title="設定 (s)">
@@ -710,7 +710,7 @@ export default function ReaderPage() {
               className="flex items-center gap-2 rounded-full bg-card text-foreground border border-border px-5 py-3 shadow-lg hover:bg-secondary transition-all hover:scale-105 active:scale-95"
             >
               <Mail className="h-5 w-5" />
-              <span className="text-sm font-medium">レターを書く</span>
+              <span className="text-sm font-medium">ギフトレターを書く</span>
             </button>
           )}
           {!showCompanion && (
@@ -734,7 +734,7 @@ export default function ReaderPage() {
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleLetters} className="flex-col gap-0.5 h-auto py-1">
             <Mail className="h-4 w-4" />
-            <span className="text-[10px]">レター</span>
+            <span className="text-[10px]">ギフト</span>
           </Button>
           <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
             <MessageCircle className="h-4 w-4" />
@@ -749,7 +749,7 @@ export default function ReaderPage() {
 
       {/* Letters sidebar / BottomSheet */}
       {isMobile ? (
-        <BottomSheet open={showLetters} onClose={() => setShowLetters(false)} title="レター">
+        <BottomSheet open={showLetters} onClose={() => setShowLetters(false)} title="ギフトレター">
           <LetterPanel
             episodeId={episodeId}
             isAuthenticated={isAuthenticated}
@@ -764,7 +764,7 @@ export default function ReaderPage() {
       ) : showLetters ? (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-80 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
           <div className="flex items-center justify-between p-4 border-b border-border">
-            <span className="font-medium text-sm">レター</span>
+            <span className="font-medium text-sm">ギフトレター</span>
             <Button variant="ghost" size="icon" onClick={() => setShowLetters(false)} className="h-9 w-9">
               <X className="h-4 w-4" />
             </Button>

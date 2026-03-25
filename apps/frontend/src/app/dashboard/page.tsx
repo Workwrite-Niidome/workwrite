@@ -137,10 +137,10 @@ export default function DashboardPage() {
       {/* Quick nav */}
       <div className="flex flex-wrap gap-2 mb-6">
         <Link href="/dashboard/letters/received">
-          <Button variant="outline" size="sm"><Mail className="h-4 w-4 mr-1.5" /> 受信レター</Button>
+          <Button variant="outline" size="sm"><Mail className="h-4 w-4 mr-1.5" /> 受信ギフトレター</Button>
         </Link>
         <Link href="/dashboard/letters/sent">
-          <Button variant="outline" size="sm"><Send className="h-4 w-4 mr-1.5" /> 送信レター</Button>
+          <Button variant="outline" size="sm"><Send className="h-4 w-4 mr-1.5" /> 送信ギフトレター</Button>
         </Link>
         <Link href="/dashboard/referral">
           <Button variant="outline" size="sm"><Gift className="h-4 w-4 mr-1.5" /> 招待</Button>

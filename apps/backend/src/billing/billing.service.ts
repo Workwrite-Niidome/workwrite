@@ -278,10 +278,10 @@ export class BillingService {
           select: { name: true, displayName: true },
         });
         const senderName = sender?.displayName || sender?.name || '匿名';
-        const notifyBody = `${senderName}さんから¥${pending.amount}のレターが届きました。収益は毎朝自動で送金されます。`;
+        const notifyBody = `${senderName}さんから¥${pending.amount}のギフトレターが届きました。収益は毎朝自動で送金されます。`;
         await this.notifications.createNotification(pending.recipientId, {
           type: 'letter',
-          title: 'レターが届きました',
+          title: 'ギフトレターが届きました',
           body: notifyBody,
           data: { episodeId: pending.episodeId },
         });
@@ -330,7 +330,7 @@ export class BillingService {
           recipientId,
           episodeId,
           type: letterType || 'STANDARD',
-          content: '（決済完了後にレター内容を復元できませんでした。お問い合わせください。）',
+          content: '（決済完了後にギフトレター内容を復元できませんでした。お問い合わせください。）',
           amount,
           isHighlighted: letterType === 'PREMIUM' || letterType === 'GIFT',
           paymentId: payment.id,
@@ -343,8 +343,8 @@ export class BillingService {
       try {
         await this.notifications.createNotification(recipientId, {
           type: 'letter',
-          title: 'レターが届きました',
-          body: `¥${amount}のレターが届きました`,
+          title: 'ギフトレターが届きました',
+          body: `¥${amount}のギフトレターが届きました`,
           data: { episodeId },
         });
       } catch (e: any) {

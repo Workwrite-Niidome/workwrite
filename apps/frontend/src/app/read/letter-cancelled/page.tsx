@@ -8,7 +8,7 @@ export default function LetterCancelledPage() {
     <div className="min-h-screen flex items-center justify-center p-4">
       <div className="text-center space-y-4 max-w-md">
         <XCircle className="h-16 w-16 text-muted-foreground mx-auto" />
-        <h1 className="text-2xl font-bold">レターの送信をキャンセルしました</h1>
+        <h1 className="text-2xl font-bold">ギフトレターの送信をキャンセルしました</h1>
         <p className="text-muted-foreground">
           お支払いはされていません。もう一度お試しいただけます。
         </p>

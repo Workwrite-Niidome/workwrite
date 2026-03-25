@@ -1,8 +1,8 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 
-const MODERATION_SYSTEM_PROMPT = `あなたはファンレターの内容審査AIです。
-ファンレターが送信可能か判定してください。
+const MODERATION_SYSTEM_PROMPT = `あなたはギフトレターの内容審査AIです。
+ギフトレターが送信可能か判定してください。
 
 【拒否基準】
 - 攻撃的・侮辱的な表現、誹謗中傷
@@ -56,7 +56,7 @@ export class LetterModerationService {
             },
           ],
           messages: [
-            { role: 'user', content: `レター内容:\n"""\n${content}\n"""\n\nJSON形式で回答してください（他の文字は含めないでください）:\n{"approved": true}\nまたは\n{"approved": false, "reason": "拒否理由"}` },
+            { role: 'user', content: `ギフトレター内容:\n"""\n${content}\n"""\n\nJSON形式で回答してください（他の文字は含めないでください）:\n{"approved": true}\nまたは\n{"approved": false, "reason": "拒否理由"}` },
           ],
         }),
       });

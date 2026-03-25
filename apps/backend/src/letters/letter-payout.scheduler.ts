@@ -79,7 +79,7 @@ export class LetterPayoutScheduler {
         const totalAmount = Math.floor((group._sum.amount ?? 0) * 0.8);
         await this.notifications.createNotification(group.recipientId, {
           type: 'letter',
-          title: `保留中のレター収益が¥${totalAmount}あります`,
+          title: `保留中のギフトレター収益が¥${totalAmount}あります`,
           body: `Stripe設定を完了すると受け取れます。あと${daysLeft}日で送信者に返金されます。`,
         }).catch((e) => this.logger.error(`Reminder notification failed: ${e.message}`));
       }
@@ -108,7 +108,7 @@ export class LetterPayoutScheduler {
       const authorName = letter.recipient.displayName || letter.recipient.name || '著者';
       await this.notifications.createNotification(letter.senderId, {
         type: 'letter',
-        title: `${authorName}さんへのレター(¥${letter.amount})が5日後に返金されます`,
+        title: `${authorName}さんへのギフトレター(¥${letter.amount})が5日後に返金されます`,
         body: '著者がまだ収益受け取り設定を完了していないため、期限到来後に自動返金されます。',
       }).catch((e) => this.logger.error(`Sender warning failed: ${e.message}`));
     }
@@ -154,8 +154,8 @@ export class LetterPayoutScheduler {
         const authorName = letter.recipient.displayName || letter.recipient.name || '著者';
         await this.notifications.createNotification(letter.senderId, {
           type: 'letter',
-          title: `${authorName}さんへのレター(¥${letter.amount})を返金しました`,
-          body: '著者が収益受け取り設定を完了しなかったため、お支払い金額を返金しました。レターのメッセージは著者に届いています。',
+          title: `${authorName}さんへのギフトレター(¥${letter.amount})を返金しました`,
+          body: '著者が収益受け取り設定を完了しなかったため、お支払い金額を返金しました。ギフトレターのメッセージは著者に届いています。',
         }).catch(() => {});
 
         this.logger.log(`Refunded letter ${letter.id} (¥${letter.amount}) to sender ${letter.senderId}`);
