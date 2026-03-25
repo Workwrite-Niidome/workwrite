@@ -101,7 +101,7 @@ export class WorkImportController {
   @Post('files')
   @ApiOperation({ summary: 'Import multiple text files as episodes' })
   @ApiConsumes('multipart/form-data')
-  @UseInterceptors(FilesInterceptor('files', 10, FILE_UPLOAD_OPTIONS))
+  @UseInterceptors(FilesInterceptor('files', 100, FILE_UPLOAD_OPTIONS))
   async importMultipleFiles(
     @CurrentUser('id') userId: string,
     @UploadedFiles() files: Express.Multer.File[],

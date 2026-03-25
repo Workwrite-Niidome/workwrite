@@ -11,7 +11,7 @@ import { useAuth } from '@/lib/auth-context';
 import { api, type Work } from '@/lib/api';
 
 const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const MAX_MULTI_FILES = 10;
+const MAX_MULTI_FILES = 100;
 
 const GENRES = [
   { key: 'fantasy', label: 'ファンタジー' },
@@ -224,7 +224,19 @@ export default function ImportPage() {
 
   return (
     <div className="px-4 py-8 max-w-2xl mx-auto">
-      <h1 className="text-xl font-bold mb-6">テキストファイルのインポート</h1>
+      <h1 className="text-xl font-bold mb-4">テキストファイルのインポート</h1>
+
+      {step === 1 && (
+        <div className="mb-6 p-4 bg-muted/50 rounded-lg border border-border space-y-2">
+          <p className="text-sm text-foreground font-medium">使い方</p>
+          <div className="text-xs text-muted-foreground space-y-1.5">
+            <p><span className="font-medium text-foreground">一括インポート:</span> 1つのテキストファイルから章（「第○章」「Chapter」等）を自動検出し、複数エピソードに分割して取り込みます。長編小説をまとめて登録したい場合に便利です。</p>
+            <p><span className="font-medium text-foreground">複数ファイルインポート:</span> 複数のテキストファイル（最大100件）をまとめてアップロードし、各ファイルを1エピソードとして取り込みます。エピソードごとにファイルを分けている場合に便利です。</p>
+            <p>対応形式: .txt（UTF-8、Shift_JIS等のエンコーディングを自動検出）、各ファイル最大10MB</p>
+            <p>新規作品として作成することも、既存の作品にエピソードを追加することもできます。</p>
+          </div>
+        </div>
+      )}
 
       {/* Progress indicator */}
       <div className="flex items-center gap-2 mb-8">
@@ -258,7 +270,7 @@ export default function ImportPage() {
           <Tabs
             tabs={[
               { key: 'single', label: '一括インポート（1ファイル）' },
-              { key: 'multiple', label: '複数ファイルインポート' },
+              { key: 'multiple', label: '複数ファイルインポート（最大100件）' },
             ]}
             activeKey={mode}
             onTabChange={(key) => {
