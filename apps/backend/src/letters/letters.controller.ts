@@ -3,7 +3,6 @@ import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { LettersService } from './letters.service';
 import { StampsService } from './stamps/stamps.service';
 import { StripeService } from '../billing/stripe.service';
-import { BillingService } from '../billing/billing.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateLetterDto } from './dto/create-letter.dto';
@@ -16,7 +15,6 @@ export class LettersController {
     private lettersService: LettersService,
     private stampsService: StampsService,
     private stripeService: StripeService,
-    private billingService: BillingService,
     private prisma: PrismaService,
   ) {}
 
@@ -60,14 +58,6 @@ export class LettersController {
   @ApiOperation({ summary: 'Get letter earnings summary (for authors)' })
   getEarnings(@CurrentUser('id') userId: string) {
     return this.lettersService.getEarnings(userId);
-  }
-
-  @Post('claim-payouts')
-  @UseGuards(JwtAuthGuard)
-  @ApiBearerAuth()
-  @ApiOperation({ summary: 'Claim pending letter payouts (transfer to author Connect account)' })
-  async claimPayouts(@CurrentUser('id') userId: string) {
-    return this.billingService.transferPendingLetterPayouts(userId);
   }
 
   @Get('author-payment-status/:episodeId')

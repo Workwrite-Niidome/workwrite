@@ -651,7 +651,7 @@ describe('BillingService', () => {
         'author-1',
         expect.objectContaining({
           type: 'letter',
-          title: 'レターが届きました',
+          title: 'ギフトレターが届きました',
         }),
       );
     });
@@ -883,7 +883,7 @@ describe('BillingService', () => {
 
       expect(notifications.createNotification).toHaveBeenCalledWith(
         'author-1',
-        expect.objectContaining({ type: 'letter', title: 'レターが届きました' }),
+        expect.objectContaining({ type: 'letter', title: 'ギフトレターが届きました' }),
       );
     });
 
