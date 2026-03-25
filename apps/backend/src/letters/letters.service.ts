@@ -248,7 +248,7 @@ export class LettersService {
     const now = new Date();
     const monthStart = new Date(now.getFullYear(), now.getMonth(), 1);
 
-    const [totalLetters, monthlyLetters, totalEarnings, monthlyEarnings] =
+    const [totalLetters, monthlyLetters, totalEarnings, monthlyEarnings, pendingPayouts, nearestExpiry] =
       await Promise.all([
         this.prisma.letter.count({
           where: { recipientId: userId, moderationStatus: 'approved' },
@@ -272,11 +272,29 @@ export class LettersService {
           },
           _sum: { amount: true },
         }),
+        // Pending payouts: letters where author hasn't been paid yet
+        this.prisma.letter.aggregate({
+          where: { recipientId: userId, payoutStatus: 'pending', moderationStatus: 'approved' },
+          _sum: { amount: true },
+          _count: true,
+        }),
+        // Nearest expiry: oldest pending letter (90 days from createdAt)
+        this.prisma.letter.findFirst({
+          where: { recipientId: userId, payoutStatus: 'pending', moderationStatus: 'approved' },
+          orderBy: { createdAt: 'asc' },
+          select: { createdAt: true },
+        }),
       ]);
 
     const platformCut = 0.2;
     const totalGross = totalEarnings._sum.amount ?? 0;
     const monthlyGross = monthlyEarnings._sum.amount ?? 0;
+
+    const pendingAmount = Math.floor((pendingPayouts._sum.amount ?? 0) * (1 - platformCut));
+    const pendingCount = pendingPayouts._count ?? 0;
+    const expiresAt = nearestExpiry
+      ? new Date(nearestExpiry.createdAt.getTime() + 90 * 24 * 60 * 60 * 1000).toISOString()
+      : null;
 
     return {
       totalLetters,
@@ -284,6 +302,7 @@ export class LettersService {
       totalEarnings: Math.floor(totalGross * (1 - platformCut)),
       monthlyEarnings: Math.floor(monthlyGross * (1 - platformCut)),
       platformCutRate: platformCut,
+      pendingPayout: { amount: pendingAmount, count: pendingCount, expiresAt },
     };
   }
 }

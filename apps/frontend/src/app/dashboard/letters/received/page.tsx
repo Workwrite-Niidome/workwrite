@@ -24,6 +24,7 @@ interface Earnings {
   totalEarnings: number;
   monthlyEarnings: number;
   platformCutRate: number;
+  pendingPayout?: { amount: number; count: number; expiresAt: string | null };
 }
 
 const TYPE_LABELS: Record<string, { label: string; color: string }> = {
@@ -87,6 +88,27 @@ export default function ReceivedLettersPage() {
             </CardContent>
           </Card>
         </div>
+      )}
+
+      {/* Pending payout warning */}
+      {earnings?.pendingPayout && earnings.pendingPayout.count > 0 && (
+        <Card className="mb-6 border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700">
+          <CardContent className="py-4 px-5">
+            <p className="text-sm font-medium mb-1">
+              保留中の収益: <span className="text-amber-600 font-bold">¥{earnings.pendingPayout.amount.toLocaleString()}</span>
+              （{earnings.pendingPayout.count}通）
+            </p>
+            <p className="text-xs text-muted-foreground">
+              Stripe収益受け取り設定を完了すると受け取れます。
+              {earnings.pendingPayout.expiresAt && (
+                <>最も早い期限: <span className="font-medium">{new Date(earnings.pendingPayout.expiresAt).toLocaleDateString('ja-JP')}</span>（期限を過ぎると送信者に返金されます）</>
+              )}
+            </p>
+            <a href="/dashboard/earnings" className="text-xs text-primary underline mt-2 inline-block">
+              収益受け取り設定へ
+            </a>
+          </CardContent>
+        </Card>
       )}
 
       {/* Letters list */}
