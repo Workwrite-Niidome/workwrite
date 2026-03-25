@@ -28,6 +28,7 @@ import { HighlightDetailPopover } from '@/components/reader/highlight-detail-pop
 import { EpisodeCompleteBanner } from '@/components/reader/episode-complete-banner';
 import { CharacterTalkChat } from '@/components/ai/character-talk-chat';
 import { LetterPanel } from '@/components/reader/letter-panel';
+import { LetterComposeDialog } from '@/components/reader/letter-compose-dialog';
 import { useReaderShortcuts } from '@/hooks/use-reader-shortcuts';
 import { ShortcutsHelp } from '@/components/reader/shortcuts-help';
 import { useSwipeNavigation } from '@/hooks/use-swipe-navigation';
@@ -137,6 +138,10 @@ export default function ReaderPage() {
   const [selectedRange, setSelectedRange] = useState<{ start: number; end: number } | null>(null);
   const [selectedHighlight, setSelectedHighlight] = useState<Highlight | null>(null);
   const [highlightPopoverPos, setHighlightPopoverPos] = useState({ top: 0, left: 0 });
+
+  // Letter compose dialog (rendered at page level for mobile to avoid BottomSheet nesting)
+  const [showLetterCompose, setShowLetterCompose] = useState(false);
+  const [letterReloadKey, setLetterReloadKey] = useState(0);
 
   // AI Explanation dialog
   const [explainText, setExplainText] = useState('');
@@ -745,7 +750,16 @@ export default function ReaderPage() {
       {/* Letters sidebar / BottomSheet */}
       {isMobile ? (
         <BottomSheet open={showLetters} onClose={() => setShowLetters(false)} title="レター">
-          <LetterPanel episodeId={episodeId} isAuthenticated={isAuthenticated} />
+          <LetterPanel
+            episodeId={episodeId}
+            isAuthenticated={isAuthenticated}
+            reloadKey={letterReloadKey}
+            onCompose={() => {
+              setShowLetters(false);
+              // Small delay so BottomSheet closes before dialog opens
+              setTimeout(() => setShowLetterCompose(true), 200);
+            }}
+          />
         </BottomSheet>
       ) : showLetters ? (
         <div className="fixed right-0 top-0 bottom-0 z-50 w-80 bg-card text-card-foreground border-l border-border shadow-xl flex flex-col">
@@ -755,9 +769,20 @@ export default function ReaderPage() {
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <LetterPanel episodeId={episodeId} isAuthenticated={isAuthenticated} />
+          <LetterPanel episodeId={episodeId} isAuthenticated={isAuthenticated} reloadKey={letterReloadKey} />
         </div>
       ) : null}
+
+      {/* Letter compose dialog — rendered at page level to avoid BottomSheet/z-index issues on mobile */}
+      <LetterComposeDialog
+        open={showLetterCompose}
+        onOpenChange={setShowLetterCompose}
+        episodeId={episodeId}
+        onSent={() => {
+          setShowLetterCompose(false);
+          setLetterReloadKey((k) => k + 1);
+        }}
+      />
 
       {/* Companion sidebar / BottomSheet */}
       {isMobile ? (

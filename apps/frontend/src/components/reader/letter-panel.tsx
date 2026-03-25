@@ -32,9 +32,13 @@ const TYPE_STYLES: Record<string, { icon: React.ReactNode; badge: string; badgeC
 interface LetterPanelProps {
   episodeId: string;
   isAuthenticated: boolean;
+  /** When provided, compose dialog is handled externally (e.g. at page level to avoid BottomSheet nesting issues) */
+  onCompose?: () => void;
+  /** Called when letters should be reloaded (e.g. after send) */
+  reloadKey?: number;
 }
 
-export function LetterPanel({ episodeId, isAuthenticated }: LetterPanelProps) {
+export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }: LetterPanelProps) {
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCompose, setShowCompose] = useState(false);
@@ -49,7 +53,7 @@ export function LetterPanel({ episodeId, isAuthenticated }: LetterPanelProps) {
 
   useEffect(() => {
     loadLetters();
-  }, [episodeId]);
+  }, [episodeId, reloadKey]);
 
   function renderLetter(letter: Letter) {
     const style = TYPE_STYLES[letter.type] || TYPE_STYLES.STANDARD;
@@ -114,19 +118,22 @@ export function LetterPanel({ episodeId, isAuthenticated }: LetterPanelProps) {
           <Button
             size="sm"
             className="w-full gap-2"
-            onClick={() => setShowCompose(true)}
+            onClick={() => onCompose ? onCompose() : setShowCompose(true)}
           >
             <PenLine className="h-3.5 w-3.5" />
             レターを書く
           </Button>
         </div>
       )}
-      <LetterComposeDialog
-        open={showCompose}
-        onOpenChange={setShowCompose}
-        episodeId={episodeId}
-        onSent={loadLetters}
-      />
+      {/* Only render dialog here when no external handler (desktop sidebar case) */}
+      {!onCompose && (
+        <LetterComposeDialog
+          open={showCompose}
+          onOpenChange={setShowCompose}
+          episodeId={episodeId}
+          onSent={loadLetters}
+        />
+      )}
     </>
   );
 }
