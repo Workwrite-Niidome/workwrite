@@ -77,7 +77,7 @@ function PendingPayoutBanner({ amount, count, expiresAt, connectReady, onClaimed
             </p>
             <p className="text-xs text-muted-foreground mt-0.5">
               {connectReady
-                ? '毎朝9:00に自動送金されます。「今すぐ受け取る」で即時送金も可能です。'
+                ? '毎朝9:00に自動送金されます。「送金をリクエスト」で手動送金も可能です。'
                 : 'Stripe Connect設定を完了すると受け取れます。'}
               {expiresAt && (
                 <> 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</>
@@ -92,7 +92,7 @@ function PendingPayoutBanner({ amount, count, expiresAt, connectReady, onClaimed
           {connectReady && (
             <Button size="sm" onClick={handleClaim} disabled={claiming} className="ml-4 shrink-0">
               <Banknote className="h-3.5 w-3.5 mr-1" />
-              {claiming ? '処理中...' : '今すぐ受け取る'}
+              {claiming ? '処理中...' : '送金をリクエスト'}
             </Button>
           )}
         </div>
