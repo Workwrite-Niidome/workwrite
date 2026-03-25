@@ -114,7 +114,6 @@ export class StripeService {
       mode: 'subscription',
       line_items: [{ price: planConfig.priceId, quantity: 1 }],
       subscription_data: {
-        trial_period_days: 7,
         metadata: { userId, plan },
       },
       success_url: `${baseUrl}/settings/billing/success?session_id={CHECKOUT_SESSION_ID}`,
