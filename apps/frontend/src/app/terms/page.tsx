@@ -56,7 +56,17 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">6. アカウントの停止・削除</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">6. AI機能における作品データの取り扱い</h2>
+          <ul className="space-y-2 list-disc pl-5">
+            <li>本サービスでは、品質スコアリング、AI執筆アシスト、キャラクタートーク等の機能において、外部のAI APIサービス（Anthropic社 Claude API）を利用しています。</li>
+            <li><strong>お客様の作品データがAIモデルの学習（トレーニング）に使用されることはありません。</strong>API経由で送信されたデータは、リクエストの処理（推論）にのみ使用され、モデルの改善や再学習には一切利用されません。これはAI APIプロバイダーの利用規約においても明示されています。</li>
+            <li>AI機能の利用により生成された分析結果、スコア、会話内容等は、お客様のアカウントに紐づいて本サービス内にのみ保存されます。</li>
+            <li>作者は、作品設定から各AI機能（キャラクタートーク等）のON/OFFを個別に制御できます。</li>
+          </ul>
+        </section>
+
+        <section>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">7. アカウントの停止・削除</h2>
           <p>
             本規約に違反したアカウントを停止または削除する権利を留保します。
             ユーザーは設定ページからいつでもアカウントを削除することができます。
@@ -65,7 +75,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">7. 免責事項</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">8. 免責事項</h2>
           <p>
             Workwriteは「現状のまま」で提供され、いかなる種類の保証も行いません。
             データの損失やサービスの中断を含むがこれに限定されない、本サービスの利用または利用不能から生じる
@@ -74,7 +84,7 @@ export default function TermsPage() {
         </section>
 
         <section>
-          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">8. 規約の変更</h2>
+          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">9. 規約の変更</h2>
           <p>
             本規約は随時更新される場合があります。変更後も本サービスを継続して利用することにより、
             更新された規約に同意したものとみなされます。重要な変更については、メールまたはプラットフォーム上の通知にてお知らせいたします。
