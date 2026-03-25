@@ -173,14 +173,16 @@ export function WritingEditor({
     const ruby = `｜${base}《${rubyReading.trim()}》`;
     const before = content.slice(0, start);
     const after = content.slice(end);
+    const textarea = textareaRef.current;
+    const scrollTop = textarea?.scrollTop ?? 0;
     setContent(before + ruby + after);
     setRubyPopover(null);
     setRubyReading('');
     setTimeout(() => {
-      const textarea = textareaRef.current;
       if (textarea) {
-        textarea.focus();
+        textarea.focus({ preventScroll: true });
         textarea.setSelectionRange(start + ruby.length, start + ruby.length);
+        textarea.scrollTop = scrollTop;
       }
     }, 0);
   }, [content, rubyPopover, rubyReading]);
