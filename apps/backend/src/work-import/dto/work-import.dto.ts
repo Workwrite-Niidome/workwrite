@@ -19,6 +19,50 @@ export class AnalyzeTextDto {
   text: string;
 }
 
+export class ImportFileDto {
+  @ApiPropertyOptional({ description: '既存作品に追加する場合のworkId' })
+  @IsOptional()
+  @IsString()
+  workId?: string;
+
+  @ApiPropertyOptional({ description: '新規作品のタイトル' })
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  synopsis?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  genre?: string;
+}
+
+export class ImportMultipleFilesDto {
+  @ApiPropertyOptional({ description: '既存作品に追加する場合のworkId' })
+  @IsOptional()
+  @IsString()
+  workId?: string;
+
+  @ApiPropertyOptional({ description: '新規作品のタイトル' })
+  @IsOptional()
+  @IsString()
+  title?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  synopsis?: string;
+
+  @ApiPropertyOptional()
+  @IsOptional()
+  @IsString()
+  genre?: string;
+}
+
 export class ImportTextDto {
   @ApiProperty()
   @IsString()

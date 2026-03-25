@@ -1288,6 +1288,71 @@ class ApiClient {
     });
   }
 
+  // File Import
+  private async requestWithFormData<T>(
+    path: string,
+    formData: FormData,
+    skipRefresh = false,
+  ): Promise<T> {
+    const token = this.getToken();
+    const headers: Record<string, string> = {};
+    if (token) {
+      headers['Authorization'] = `Bearer ${token}`;
+    }
+
+    let res: Response;
+    try {
+      res = await fetch(`${API_BASE}${path}`, {
+        method: 'POST',
+        headers,
+        body: formData,
+      });
+    } catch {
+      throw new ApiError(0, 'サーバーに接続できません。バックエンドが起動しているか確認してください。');
+    }
+
+    if (res.status === 401 && !skipRefresh) {
+      const refreshed = await this.tryRefreshToken();
+      if (refreshed) {
+        return this.requestWithFormData<T>(path, formData, true);
+      }
+      this.setToken(null);
+      if (typeof window !== 'undefined') {
+        localStorage.removeItem('refreshToken');
+      }
+      this.onAuthFailure?.();
+      throw new ApiError(401, 'Authentication failed');
+    }
+
+    if (!res.ok) {
+      const error = await res.json().catch(() => ({ error: { message: 'サーバーエラーが発生しました' } }));
+      const message = error.error?.message || 'Unknown error';
+      throw new ApiError(res.status, message, error.error);
+    }
+
+    return res.json();
+  }
+
+  async analyzeImportFile(file: File) {
+    const formData = new FormData();
+    formData.append('file', file);
+    return this.requestWithFormData<{ chapters: { title: string; content: string; startLine: number }[]; detectedEncoding: string; totalCharacters: number }>('/works/import/file/analyze', formData);
+  }
+
+  async importFile(file: File, options: { workId?: string; title?: string; synopsis?: string; genre?: string }) {
+    const formData = new FormData();
+    formData.append('file', file);
+    Object.entries(options).forEach(([key, val]) => { if (val) formData.append(key, val); });
+    return this.requestWithFormData<{ importId: string; workId: string; episodeCount: number }>('/works/import/file', formData);
+  }
+
+  async importMultipleFiles(files: File[], options: { workId?: string; title?: string; synopsis?: string; genre?: string }) {
+    const formData = new FormData();
+    files.forEach(f => formData.append('files', f));
+    Object.entries(options).forEach(([key, val]) => { if (val) formData.append(key, val); });
+    return this.requestWithFormData<{ importId: string; workId: string; episodeCount: number }>('/works/import/files', formData);
+  }
+
   // Health check
   async checkHealth(): Promise<{ ok: boolean; db: boolean }> {
     try {
