@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BillingService } from '../billing.service';
 import { CreditService } from '../credit.service';
+import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
 // ─── Mock factories ───────────────────────────────────────────────────────────
@@ -16,7 +17,24 @@ const mockPrismaService = () => ({
   },
   user: {
     findFirst: jest.fn(),
+    findUnique: jest.fn(),
   },
+  payment: {
+    findUnique: jest.fn(),
+    create: jest.fn(),
+  },
+  letter: {
+    create: jest.fn(),
+  },
+  pendingLetter: {
+    findUnique: jest.fn(),
+    delete: jest.fn(),
+  },
+  $transaction: jest.fn(),
+});
+
+const mockNotificationsService = () => ({
+  createNotification: jest.fn(),
 });
 
 const mockCreditService = () => ({
@@ -63,16 +81,19 @@ describe('BillingService', () => {
   let service: BillingService;
   let prisma: ReturnType<typeof mockPrismaService>;
   let creditService: ReturnType<typeof mockCreditService>;
+  let notifications: ReturnType<typeof mockNotificationsService>;
 
   beforeEach(async () => {
     prisma = mockPrismaService();
     creditService = mockCreditService();
+    notifications = mockNotificationsService();
 
     const module: TestingModule = await Test.createTestingModule({
       providers: [
         BillingService,
         { provide: PrismaService, useValue: prisma },
         { provide: CreditService, useValue: creditService },
+        { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();
 
@@ -531,6 +552,396 @@ describe('BillingService', () => {
       await service.handlePaymentFailed(makeInvoice({ customer: null }));
 
       expect(prisma.user.findFirst).not.toHaveBeenCalled();
+    });
+  });
+
+  // ─── handleCheckoutComplete — letter type (handleLetterCheckoutComplete) ────
+
+  describe('handleCheckoutComplete (letter type)', () => {
+    // Helper: build a letter checkout session
+    function makeLetterSession(overrides: Record<string, any> = {}): any {
+      return {
+        id: 'cs_test_letter',
+        payment_intent: 'pi_letter123',
+        metadata: {
+          userId: 'sender-1',
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          recipientId: 'author-1',
+          episodeId: 'ep-1',
+          letterType: 'STANDARD',
+          amount: '300',
+        },
+        ...overrides,
+      };
+    }
+
+    const basePendingLetter = {
+      id: 'pending-1',
+      senderId: 'sender-1',
+      recipientId: 'author-1',
+      episodeId: 'ep-1',
+      type: 'STANDARD',
+      content: 'すごく面白かったです！',
+      amount: 300,
+      stampId: null,
+      moderationStatus: 'approved',
+      moderationReason: null,
+    };
+
+    beforeEach(() => {
+      // Default: $transaction executes the callback with prisma as tx
+      prisma.$transaction.mockImplementation((cb: (tx: any) => Promise<any>) => cb(prisma));
+      prisma.payment.findUnique.mockResolvedValue(null); // no duplicate payment
+      prisma.pendingLetter.findUnique.mockResolvedValue(basePendingLetter);
+      prisma.payment.create.mockResolvedValue({ id: 'payment-1' });
+      prisma.letter.create.mockResolvedValue({ id: 'letter-1' });
+      prisma.pendingLetter.delete.mockResolvedValue({});
+      prisma.user.findUnique.mockResolvedValue({ name: 'TestUser', displayName: 'Test' });
+      notifications.createNotification.mockResolvedValue(undefined);
+    });
+
+    // ── Normal path ────────────────────────────────────────────────────────────
+
+    it('normal path: creates Payment + Letter atomically and deletes PendingLetter', async () => {
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      expect(prisma.$transaction).toHaveBeenCalledTimes(1);
+      expect(prisma.payment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stripePaymentId: 'pi_letter123',
+            payerId: 'sender-1',
+            recipientId: 'author-1',
+            amount: 300,
+            type: 'LETTER',
+            status: 'succeeded',
+          }),
+        }),
+      );
+      expect(prisma.letter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            senderId: 'sender-1',
+            recipientId: 'author-1',
+            episodeId: 'ep-1',
+            type: 'STANDARD',
+            content: 'すごく面白かったです！',
+            amount: 300,
+            paymentId: 'payment-1',
+          }),
+        }),
+      );
+      expect(prisma.pendingLetter.delete).toHaveBeenCalledWith({
+        where: { id: 'pending-1' },
+      });
+    });
+
+    it('normal path: notifies the author after letter creation', async () => {
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      expect(notifications.createNotification).toHaveBeenCalledWith(
+        'author-1',
+        expect.objectContaining({
+          type: 'letter',
+          title: 'レターが届きました',
+        }),
+      );
+    });
+
+    it('normal path: uses displayName in notification body when available', async () => {
+      prisma.user.findUnique.mockResolvedValue({ name: 'kazuki', displayName: 'Kazuki San' });
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      const notifCall = notifications.createNotification.mock.calls[0];
+      expect(notifCall[1].body).toContain('Kazuki San');
+    });
+
+    it('normal path: falls back to name when displayName is null', async () => {
+      prisma.user.findUnique.mockResolvedValue({ name: 'kazuki', displayName: null });
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      const notifCall = notifications.createNotification.mock.calls[0];
+      expect(notifCall[1].body).toContain('kazuki');
+    });
+
+    it('normal path: falls back to 匿名 when both name and displayName are null', async () => {
+      prisma.user.findUnique.mockResolvedValue({ name: null, displayName: null });
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      const notifCall = notifications.createNotification.mock.calls[0];
+      expect(notifCall[1].body).toContain('匿名');
+    });
+
+    it('normal path: marks PREMIUM letter as isHighlighted=true', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue({
+        ...basePendingLetter,
+        type: 'PREMIUM',
+        amount: 500,
+      });
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      expect(prisma.letter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isHighlighted: true }),
+        }),
+      );
+    });
+
+    it('normal path: marks STANDARD letter as isHighlighted=false', async () => {
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      expect(prisma.letter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isHighlighted: false }),
+        }),
+      );
+    });
+
+    it('normal path: still completes even if notification throws', async () => {
+      notifications.createNotification.mockRejectedValue(new Error('notification failed'));
+
+      // Should not throw
+      await expect(service.handleCheckoutComplete(makeLetterSession())).resolves.toBeUndefined();
+      expect(prisma.letter.create).toHaveBeenCalled();
+    });
+
+    it('normal path: uses checkout_<sessionId> when payment_intent is null', async () => {
+      const session = makeLetterSession({ payment_intent: null });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.payment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stripePaymentId: 'checkout_cs_test_letter',
+          }),
+        }),
+      );
+    });
+
+    // ── Idempotency ────────────────────────────────────────────────────────────
+
+    it('idempotency: skips processing when Payment with same stripePaymentId already exists', async () => {
+      prisma.payment.findUnique.mockResolvedValue({ id: 'existing-payment' });
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.letter.create).not.toHaveBeenCalled();
+    });
+
+    it('idempotency: does NOT check for existing payment when payment_intent is null', async () => {
+      // payment_intent null means no idempotency check; should proceed to create
+      const session = makeLetterSession({ payment_intent: null });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.payment.findUnique).not.toHaveBeenCalled();
+      expect(prisma.$transaction).toHaveBeenCalled();
+    });
+
+    // ── Missing pendingLetterId ────────────────────────────────────────────────
+
+    it('does nothing when pendingLetterId is missing from metadata', async () => {
+      const session = makeLetterSession({
+        metadata: { userId: 'sender-1', type: 'letter' }, // no pendingLetterId
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.letter.create).not.toHaveBeenCalled();
+    });
+
+    // ── Fallback path: PendingLetter missing ──────────────────────────────────
+
+    it('fallback path: creates Payment + Letter from metadata when PendingLetter is missing', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      // Should NOT use $transaction for fallback path
+      expect(prisma.$transaction).not.toHaveBeenCalled();
+      expect(prisma.payment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            stripePaymentId: 'pi_letter123',
+            payerId: 'sender-1',
+            recipientId: 'author-1',
+            amount: 300,
+            type: 'LETTER',
+            status: 'succeeded',
+          }),
+        }),
+      );
+      expect(prisma.letter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({
+            senderId: 'sender-1',
+            recipientId: 'author-1',
+            episodeId: 'ep-1',
+            type: 'STANDARD',
+            amount: 300,
+            moderationStatus: 'approved',
+          }),
+        }),
+      );
+    });
+
+    it('fallback path: uses placeholder content for the letter body', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      const letterCall = prisma.letter.create.mock.calls[0][0];
+      expect(letterCall.data.content).toContain('決済完了後');
+    });
+
+    it('fallback path: marks PREMIUM type as isHighlighted=true', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      const session = makeLetterSession({
+        metadata: {
+          userId: 'sender-1',
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          recipientId: 'author-1',
+          episodeId: 'ep-1',
+          letterType: 'PREMIUM',
+          amount: '500',
+        },
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.letter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ isHighlighted: true }),
+        }),
+      );
+    });
+
+    it('fallback path: defaults to STANDARD type when letterType is missing from metadata', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      const session = makeLetterSession({
+        metadata: {
+          userId: 'sender-1',
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          recipientId: 'author-1',
+          episodeId: 'ep-1',
+          // letterType intentionally omitted
+          amount: '300',
+        },
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.letter.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ type: 'STANDARD' }),
+        }),
+      );
+    });
+
+    it('fallback path: defaults amount to 0 when amount is missing from metadata', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      const session = makeLetterSession({
+        metadata: {
+          userId: 'sender-1',
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          recipientId: 'author-1',
+          episodeId: 'ep-1',
+        },
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.payment.create).toHaveBeenCalledWith(
+        expect.objectContaining({
+          data: expect.objectContaining({ amount: 0 }),
+        }),
+      );
+    });
+
+    it('fallback path: notifies the author', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+
+      await service.handleCheckoutComplete(makeLetterSession());
+
+      expect(notifications.createNotification).toHaveBeenCalledWith(
+        'author-1',
+        expect.objectContaining({ type: 'letter', title: 'レターが届きました' }),
+      );
+    });
+
+    it('fallback path: still completes even if notification throws', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      notifications.createNotification.mockRejectedValue(new Error('notify failed'));
+
+      await expect(service.handleCheckoutComplete(makeLetterSession())).resolves.toBeUndefined();
+      expect(prisma.letter.create).toHaveBeenCalled();
+    });
+
+    // ── Fallback failure: metadata incomplete ─────────────────────────────────
+
+    it('fallback failure: does nothing when PendingLetter missing AND recipientId absent', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      const session = makeLetterSession({
+        metadata: {
+          userId: 'sender-1',
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          // recipientId intentionally missing
+          episodeId: 'ep-1',
+        },
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.payment.create).not.toHaveBeenCalled();
+      expect(prisma.letter.create).not.toHaveBeenCalled();
+    });
+
+    it('fallback failure: does nothing when PendingLetter missing AND episodeId absent', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      const session = makeLetterSession({
+        metadata: {
+          userId: 'sender-1',
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          recipientId: 'author-1',
+          // episodeId intentionally missing
+        },
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.payment.create).not.toHaveBeenCalled();
+      expect(prisma.letter.create).not.toHaveBeenCalled();
+    });
+
+    it('fallback failure: does nothing when PendingLetter missing AND userId absent', async () => {
+      prisma.pendingLetter.findUnique.mockResolvedValue(null);
+      const session = makeLetterSession({
+        metadata: {
+          // userId intentionally missing
+          type: 'letter',
+          pendingLetterId: 'pending-1',
+          recipientId: 'author-1',
+          episodeId: 'ep-1',
+        },
+      });
+
+      await service.handleCheckoutComplete(session);
+
+      expect(prisma.payment.create).not.toHaveBeenCalled();
+      expect(prisma.letter.create).not.toHaveBeenCalled();
     });
   });
 });

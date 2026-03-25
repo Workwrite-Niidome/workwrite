@@ -277,7 +277,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
   const makeChar = (id: string, name: string) => ({
     id,
     name,
-    role: 'main',
+    role: '主要',
     personality: null,
     speechStyle: null,
   });

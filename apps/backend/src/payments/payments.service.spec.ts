@@ -50,29 +50,25 @@ describe('PaymentsService', () => {
   // ─── createTip ─────────────────────────────────────────────────────────────
 
   describe('createTip', () => {
-    it('creates mock payment when Stripe key is not set', async () => {
+    it('throws BadRequestException when Stripe key is not set', async () => {
       config.get.mockReturnValue(undefined); // no STRIPE_SECRET_KEY
-      prisma.user.findUnique
-        .mockResolvedValueOnce({ stripeAccountId: null }) // recipient
-        .mockResolvedValueOnce({ email: 'payer@example.com' }); // payer
-      prisma.payment.create.mockResolvedValue({ id: 'mock-payment-1', status: 'mock' });
 
-      const result = await service.createTip('payer-1', 'recipient-1', 300);
+      await expect(
+        service.createTip('payer-1', 'recipient-1', 300),
+      ).rejects.toThrow(BadRequestException);
 
-      expect(result.status).toBe('mock');
       expect(stripe.createConnectPaymentIntent).not.toHaveBeenCalled();
     });
 
-    it('creates mock payment when recipient has no Connect account', async () => {
+    it('throws BadRequestException when recipient has no Connect account', async () => {
       config.get.mockReturnValue('sk_test_xxx'); // Stripe key is set
       prisma.user.findUnique
-        .mockResolvedValueOnce({ stripeAccountId: null }) // no connect
-        .mockResolvedValueOnce({ email: 'payer@example.com', stripeCustomerId: 'cus_1' });
-      prisma.payment.create.mockResolvedValue({ id: 'payment-1', status: 'pending' });
+        .mockResolvedValueOnce({ stripeAccountId: null }); // no connect
 
-      const result = await service.createTip('payer-1', 'recipient-1', 300);
+      await expect(
+        service.createTip('payer-1', 'recipient-1', 300),
+      ).rejects.toThrow(BadRequestException);
 
-      expect(result.status).toBe('pending');
       expect(stripe.createConnectPaymentIntent).not.toHaveBeenCalled();
     });
 
@@ -100,6 +96,7 @@ describe('PaymentsService', () => {
           recipientId: 'recipient-1',
           type: 'letter_tip',
         }),
+        expect.any(String), // idempotencyKey
       );
       expect(result.status).toBe('succeeded');
     });
