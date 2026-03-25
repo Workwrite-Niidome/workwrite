@@ -41,7 +41,7 @@ const NAV_ITEMS: NavItem[] = [
   { href: '/bookmarks', label: 'しおり', icon: Bookmark, authRequired: true },
   { href: '/notifications', label: '通知', icon: Bell, authRequired: true },
   { href: '/announcements', label: 'お知らせ', icon: Megaphone },
-  { href: '/stats', label: '統計・収益', icon: BarChart3, authRequired: true },
+  { href: '/stats', label: '統計', icon: BarChart3, authRequired: true },
   { href: '/dashboard', label: '執筆', icon: Feather, authRequired: true },
   { href: '/profile', label: 'マイページ', icon: User, authRequired: true },
   { href: '/settings', label: '設定', icon: Settings, authRequired: true },
