@@ -1,18 +1,20 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Star, ChevronDown, BookOpen, Sparkles, Mail, PenLine, Share2, Hand, Droplets, Heart, Zap, Flame, Brain } from 'lucide-react';
+import {
+  Star, ChevronDown, Sparkles, Mail, PenLine, Share2, Hand,
+  Droplets, Heart, Zap, Flame, Brain, Check, BookOpen, ArrowLeft,
+} from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { useAuth } from '@/lib/auth-context';
 import { InsightCard } from '@/components/ai/insight-card';
 import { RecommendationCard } from '@/components/ai/recommendation-card';
+import { LetterComposeDialog } from '@/components/reader/letter-compose-dialog';
 import { api, type Work, type EmotionTag, type AiInsightData, type AiRecommendation } from '@/lib/api';
 
 const EMOTIONS = [
@@ -23,11 +25,31 @@ const EMOTIONS = [
   { icon: Brain, label: '深い', value: 'thoughtful' },
 ];
 
-const STATE_AXES = [
-  { axis: 'confidence', label: '自信' },
-  { axis: 'worldview', label: '世界観' },
-  { axis: 'empathy', label: '共感力' },
-  { axis: 'motivation', label: 'モチベーション' },
+const IMPACT_AXES = [
+  { axis: 'empathy', label: '共感力', emoji: '💞' },
+  { axis: 'perspective', label: '視野', emoji: '🌐' },
+  { axis: 'motivation', label: 'やる気', emoji: '🔥' },
+  { axis: 'emotion', label: '感情の豊かさ', emoji: '🌊' },
+  { axis: 'knowledge', label: '知識・教養', emoji: '📚' },
+];
+
+const IMPACT_LEVELS = [
+  { value: 1, label: 'すこし' },
+  { value: 2, label: 'まあまあ' },
+  { value: 3, label: 'かなり' },
+  { value: 4, label: 'とても' },
+];
+
+// ワンタップひとことタグ（感情タグ + インパクトタグを統合）
+const QUICK_TAGS = [
+  { id: '_recommend', label: '誰かに勧めたい' },
+  { id: '_reread', label: 'もう一度読みたい' },
+  { id: '_lifechanging', label: '人生観が変わった' },
+  { id: '_perspective', label: '考え方が変わった' },
+  { id: '_motivated', label: 'やる気が出た' },
+  { id: '_cried', label: '泣いた' },
+  { id: '_stayed_up', label: '夜更かしした' },
+  { id: '_told_someone', label: '人に話したくなった' },
 ];
 
 export default function AfterwordPage() {
@@ -38,16 +60,18 @@ export default function AfterwordPage() {
 
   const [work, setWork] = useState<Work | null>(null);
   const [loading, setLoading] = useState(true);
+  const [lastEpisodeId, setLastEpisodeId] = useState<string | null>(null);
 
-  // Main actions
+  // Reaction
   const [claps, setClaps] = useState(0);
   const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
   const [reactionSent, setReactionSent] = useState(false);
-  const [comment, setComment] = useState('');
+  const [reactionLoaded, setReactionLoaded] = useState(false);
+  const [sendingReaction, setSendingReaction] = useState(false);
 
   // Expandable sections
   const [showDetailedEmotions, setShowDetailedEmotions] = useState(false);
-  const [showStateChange, setShowStateChange] = useState(false);
+  const [showImpact, setShowImpact] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showReview, setShowReview] = useState(false);
 
@@ -55,11 +79,11 @@ export default function AfterwordPage() {
   const [allEmotionTags, setAllEmotionTags] = useState<EmotionTag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
   const [tagIntensities, setTagIntensities] = useState<Record<string, number>>({});
+  const [emotionTagsSaved, setEmotionTagsSaved] = useState(false);
 
-  // State change
-  const [stateChanges, setStateChanges] = useState<Record<string, { before: number; after: number }>>(
-    Object.fromEntries(STATE_AXES.map((a) => [a.axis, { before: 5, after: 5 }])),
-  );
+  // Impact (replaces confusing before/after sliders)
+  const [impacts, setImpacts] = useState<Record<string, number>>({});
+  const [impactSaved, setImpactSaved] = useState(false);
 
   // AI Insights
   const [insights, setInsights] = useState<AiInsightData | null>(null);
@@ -72,67 +96,92 @@ export default function AfterwordPage() {
   // Recommendations
   const [recs, setRecs] = useState<AiRecommendation[]>([]);
 
+  // Letter dialog
+  const [letterOpen, setLetterOpen] = useState(false);
+
+  // Load work + emotion tags + existing reaction
   useEffect(() => {
     if (!isAuthenticated) { router.push('/login'); return; }
-    Promise.all([
-      api.getWork(workId),
-      api.getEmotionTags(),
-    ]).then(([workRes, tagsRes]) => {
-      setWork(workRes.data);
-      setAllEmotionTags(tagsRes.data);
+
+    api.getWork(workId).then((workRes) => {
+      const w = workRes.data;
+      setWork(w);
+
+      // Find last episode
+      const episodes = w?.episodes;
+      if (episodes && episodes.length > 0) {
+        const lastEp = [...episodes].sort((a: any, b: any) => b.orderIndex - a.orderIndex)[0];
+        setLastEpisodeId(lastEp.id);
+
+        // Load existing reaction for last episode
+        api.getEpisodeReactions(lastEp.id).then((res) => {
+          const data = res.data;
+          if (data.myReaction) {
+            setClaps(data.myReaction.claps);
+            setSelectedEmotion(data.myReaction.emotion);
+            setReactionSent(true);
+          }
+          setReactionLoaded(true);
+        }).catch(() => setReactionLoaded(true));
+      } else {
+        setReactionLoaded(true);
+      }
     }).catch(() => router.push('/'))
       .finally(() => setLoading(false));
 
-    // Pre-load recommendations
+    api.getEmotionTags().then((res) => setAllEmotionTags(res.data)).catch(() => {});
     api.getAiRecommendationsBecauseYouRead(workId)
       .then((res) => setRecs(res.data || []))
       .catch(() => {});
   }, [workId, isAuthenticated, router]);
 
+  // Explicit reaction send (no more auto-send)
+  const handleSendReaction = useCallback(async () => {
+    if (claps === 0 || !lastEpisodeId) return;
+    setSendingReaction(true);
+    try {
+      await api.sendReaction(lastEpisodeId, { claps, emotion: selectedEmotion || undefined });
+      setReactionSent(true);
+    } catch { /* ignore */ }
+    setSendingReaction(false);
+  }, [claps, selectedEmotion, lastEpisodeId]);
+
   function handleClap() {
     const newClaps = Math.min(claps + 1, 5);
     setClaps(newClaps);
+    setReactionSent(false); // Mark as unsaved
   }
 
-  async function sendReaction() {
-    if (claps === 0) return;
-    // Save as reaction on the last episode
-    try {
-      const workData = await api.getWork(workId);
-      const episodes = workData.data?.episodes;
-      if (episodes && episodes.length > 0) {
-        const lastEp = episodes.sort((a: any, b: any) => b.orderIndex - a.orderIndex)[0];
-        await api.sendReaction(lastEp.id, { claps, emotion: selectedEmotion || undefined });
-      }
-    } catch { /* ignore */ }
-    setReactionSent(true);
+  function handleEmotion(value: string) {
+    setSelectedEmotion(selectedEmotion === value ? null : value);
+    setReactionSent(false);
   }
-
-  // Auto-send reaction when claps change
-  useEffect(() => {
-    if (claps > 0) {
-      const timer = setTimeout(() => sendReaction(), 1500);
-      return () => clearTimeout(timer);
-    }
-  }, [claps, selectedEmotion]);
 
   async function handleSubmitEmotionTags() {
     if (selectedTags.length > 0) {
-      await api.addEmotionTags(workId, selectedTags.map((tagId) => ({ tagId, intensity: tagIntensities[tagId] || 3 }))).catch(() => {});
+      try {
+        await api.addEmotionTags(workId, selectedTags.map((tagId) => ({ tagId, intensity: tagIntensities[tagId] || 3 })));
+        setEmotionTagsSaved(true);
+        setTimeout(() => setEmotionTagsSaved(false), 3000);
+      } catch { /* ignore */ }
     }
   }
 
-  async function handleSubmitStateChanges() {
-    const changes = STATE_AXES
-      .filter((a) => stateChanges[a.axis].before !== stateChanges[a.axis].after)
-      .map((a) => ({ axis: a.axis, ...stateChanges[a.axis] }));
+  async function handleSubmitImpact() {
+    const changes = IMPACT_AXES
+      .filter((a) => impacts[a.axis] && impacts[a.axis] > 0)
+      .map((a) => ({ axis: a.axis, before: 5, after: 5 + impacts[a.axis] }));
     if (changes.length > 0) {
-      await api.saveStateChanges(workId, changes).catch(() => {});
+      try {
+        await api.saveStateChanges(workId, changes);
+        setImpactSaved(true);
+        setTimeout(() => setImpactSaved(false), 3000);
+      } catch { /* ignore */ }
     }
   }
 
   function handleLoadInsights() {
-    setShowInsights(true);
+    setShowInsights(!showInsights);
     if (!insights && !insightsLoading) {
       setInsightsLoading(true);
       api.getAiInsights(workId)
@@ -159,106 +208,147 @@ export default function AfterwordPage() {
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Skeleton className="h-40 w-80" /></div>;
   if (!work) return null;
 
+  const hasUnsavedReaction = claps > 0 && !reactionSent;
+
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
       <div className="max-w-lg mx-auto px-4 py-16 space-y-8">
 
-        {/* Afterglow */}
+        {/* Afterglow header */}
         <div className="text-center space-y-4 animate-in fade-in duration-1000">
           <Star className="h-10 w-10 mx-auto text-primary/60" />
           <h1 className="text-2xl font-serif font-bold">{work.title}</h1>
           <p className="text-muted-foreground">読了おめでとうございます</p>
         </div>
 
-        {/* Main Action: Clap + Emotion */}
-        <div className="text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-500">
-          <p className="text-sm text-muted-foreground">この作品はどうでしたか？</p>
-          <button
-            onClick={handleClap}
-            disabled={claps >= 5}
-            className={cn(
-              'h-16 w-16 rounded-full border-2 flex items-center justify-center transition-all mx-auto',
-              claps > 0 ? 'border-primary bg-primary/10 scale-110' : 'border-border hover:border-primary hover:bg-primary/5',
-            )}
-          >
-            <Hand className={cn('h-7 w-7', claps > 0 ? 'text-primary' : 'text-muted-foreground')} />
-          </button>
-          <p className={cn('text-xs', claps > 0 ? 'text-primary font-medium' : 'text-muted-foreground')}>
-            {claps > 0 ? `${claps}/5 拍手` : '拍手する'}
-          </p>
-
-          {claps > 0 && (
-            <div className="flex justify-center gap-2 flex-wrap animate-in fade-in duration-300">
-              {EMOTIONS.map((e) => (
-                <button
-                  key={e.value}
-                  onClick={() => setSelectedEmotion(selectedEmotion === e.value ? null : e.value)}
-                  className={cn(
-                    'flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs transition-all',
-                    selectedEmotion === e.value
-                      ? 'border-primary bg-primary/15 text-primary font-medium'
-                      : 'border-border text-muted-foreground hover:border-primary/50',
-                  )}
-                >
-                  <e.icon className="h-3 w-3" />
-                  {e.label}
-                </button>
-              ))}
-            </div>
-          )}
-
-          {reactionSent && <p className="text-[11px] text-muted-foreground">作者に届きました</p>}
-        </div>
-
-        {/* Comment + Action buttons */}
-        <div className="space-y-3 animate-in fade-in duration-500 delay-700">
-          <Textarea
-            value={comment}
-            onChange={(e) => setComment(e.target.value)}
-            rows={2}
-            placeholder="一言感想（任意）"
-            className="text-sm"
-          />
-          <div className="flex gap-2">
-            <Button variant="outline" className="flex-1 gap-1.5" onClick={handleShare}>
-              <Share2 className="h-3.5 w-3.5" /> シェア
-            </Button>
-            <Link href={`/read/${work.episodes?.sort((a: any, b: any) => b.orderIndex - a.orderIndex)[0]?.id}#letter`} className="flex-1">
-              <Button variant="outline" className="w-full gap-1.5">
-                <Mail className="h-3.5 w-3.5" /> レターを送る
-              </Button>
-            </Link>
+        {/* Clap + Emotion */}
+        <div className="text-center space-y-4 animate-in fade-in slide-in-from-bottom-4 duration-500 delay-300">
+          <div className="space-y-1">
+            <p className="text-sm text-muted-foreground">この作品はどうでしたか？</p>
+            <p className="text-[11px] text-muted-foreground/70">タップで拍手を送れます（最大5回）。回数が気持ちの大きさになります</p>
           </div>
 
-          {/* Review with Cr incentive */}
-          {!reviewSubmitted ? (
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowReview(!showReview)}
-                className="w-full flex items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
-              >
-                <span className="flex items-center gap-1.5"><PenLine className="h-3.5 w-3.5" /> レビューを書く</span>
-                <span className="text-xs text-primary">5Cr</span>
-              </button>
-              {showReview && (
-                <div className="space-y-2 animate-in fade-in duration-200">
-                  <Textarea
-                    value={reviewText}
-                    onChange={(e) => setReviewText(e.target.value)}
-                    rows={4}
-                    placeholder="この作品について思ったことを自由に書いてください..."
-                    className="text-sm font-serif"
-                  />
-                  <Button onClick={handleSubmitReview} disabled={reviewText.length < 20} className="w-full">
-                    {reviewText.length < 20 ? `あと${20 - reviewText.length}文字` : 'レビューを投稿して5Cr獲得'}
-                  </Button>
-                </div>
+          {/* Clap button */}
+          <div className="flex flex-col items-center gap-2">
+            <button
+              onClick={handleClap}
+              disabled={claps >= 5}
+              className={cn(
+                'h-16 w-16 rounded-full border-2 flex items-center justify-center transition-all mx-auto',
+                claps > 0 ? 'border-primary bg-primary/10 scale-110' : 'border-border hover:border-primary hover:bg-primary/5',
+                claps >= 5 && 'opacity-60',
+              )}
+            >
+              <Hand className={cn('h-7 w-7', claps > 0 ? 'text-primary' : 'text-muted-foreground')} />
+            </button>
+            <span className={cn('text-xs', claps > 0 ? 'text-primary font-medium' : 'text-muted-foreground')}>
+              {claps === 0 && '拍手する'}
+              {claps === 1 && '1/5 ありがとう！'}
+              {claps === 2 && '2/5 面白かった！'}
+              {claps === 3 && '3/5 すごく良い！'}
+              {claps === 4 && '4/5 最高！'}
+              {claps === 5 && '5/5 感動した！'}
+            </span>
+          </div>
+
+          {/* Emotion selection (show after first clap) */}
+          {claps > 0 && (
+            <div className="space-y-3 animate-in fade-in duration-300">
+              <p className="text-xs text-muted-foreground">どんな気持ちでしたか？（任意）</p>
+              <div className="flex justify-center gap-2 flex-wrap">
+                {EMOTIONS.map((e) => (
+                  <button
+                    key={e.value}
+                    onClick={() => handleEmotion(e.value)}
+                    className={cn(
+                      'flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs transition-all',
+                      selectedEmotion === e.value
+                        ? 'border-primary bg-primary/15 text-primary font-medium'
+                        : 'border-border text-muted-foreground hover:border-primary/50',
+                    )}
+                  >
+                    <e.icon className="h-3 w-3" />
+                    {e.label}
+                  </button>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {/* Explicit send button */}
+          {claps > 0 && (
+            <div className="pt-1">
+              {hasUnsavedReaction ? (
+                <Button
+                  size="sm"
+                  onClick={handleSendReaction}
+                  disabled={sendingReaction}
+                  className="gap-1.5"
+                >
+                  {sendingReaction ? '送信中...' : '作者に届ける'}
+                </Button>
+              ) : (
+                <p className="text-[11px] text-primary flex items-center justify-center gap-1">
+                  <Check className="h-3 w-3" /> 作者に届きました
+                </p>
               )}
             </div>
-          ) : (
-            <p className="text-xs text-center text-primary">レビューを投稿しました（5Cr獲得）</p>
           )}
         </div>
+
+        {/* Action buttons: Share + Letter */}
+        <div className="flex gap-2 animate-in fade-in duration-500 delay-500">
+          <Button variant="outline" className="flex-1 gap-1.5" onClick={handleShare}>
+            <Share2 className="h-3.5 w-3.5" /> シェア
+          </Button>
+          <Button variant="outline" className="flex-1 gap-1.5" onClick={() => setLetterOpen(true)}>
+            <Mail className="h-3.5 w-3.5" /> レターを送る
+          </Button>
+        </div>
+
+        {/* Letter compose dialog (opens in-place, no navigation) */}
+        {lastEpisodeId && (
+          <LetterComposeDialog
+            open={letterOpen}
+            onOpenChange={setLetterOpen}
+            episodeId={lastEpisodeId}
+            onSent={() => setLetterOpen(false)}
+          />
+        )}
+
+        {/* Review with Cr incentive */}
+        {!reviewSubmitted ? (
+          <div className="space-y-2">
+            <button
+              onClick={() => setShowReview(!showReview)}
+              className="w-full flex items-center justify-between text-sm text-muted-foreground hover:text-foreground transition-colors py-1"
+            >
+              <span className="flex items-center gap-1.5"><PenLine className="h-3.5 w-3.5" /> レビューを書く</span>
+              <span className="flex items-center gap-2">
+                <span className="text-xs text-primary">5Cr</span>
+                <ChevronDown className={cn('h-4 w-4 transition-transform', showReview && 'rotate-180')} />
+              </span>
+            </button>
+            {showReview && (
+              <div className="space-y-2 animate-in fade-in duration-200">
+                <Textarea
+                  value={reviewText}
+                  onChange={(e) => setReviewText(e.target.value)}
+                  rows={4}
+                  placeholder="この作品について思ったことを自由に書いてください..."
+                  className="text-sm font-serif"
+                />
+                <Button onClick={handleSubmitReview} disabled={reviewText.length < 20} className="w-full">
+                  {reviewText.length < 20 ? `あと${20 - reviewText.length}文字` : 'レビューを投稿して5Cr獲得'}
+                </Button>
+              </div>
+            )}
+          </div>
+        ) : (
+          <p className="text-xs text-center text-primary flex items-center justify-center gap-1">
+            <Check className="h-3 w-3" /> レビューを投稿しました（5Cr獲得）
+          </p>
+        )}
 
         {/* Expandable optional sections */}
         <div className="space-y-1 border-t border-border pt-4">
@@ -291,32 +381,68 @@ export default function AfterwordPage() {
                   </div>
                 ))}
               </div>
-              <Button size="sm" variant="outline" onClick={handleSubmitEmotionTags}>保存</Button>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={handleSubmitEmotionTags} disabled={selectedTags.length === 0}>
+                  保存
+                </Button>
+                {emotionTagsSaved && (
+                  <span className="text-xs text-primary flex items-center gap-1 animate-in fade-in duration-200">
+                    <Check className="h-3 w-3" /> 保存しました
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
-          {/* State change */}
+          {/* Impact — simplified from confusing before/after sliders */}
           <button
-            onClick={() => setShowStateChange(!showStateChange)}
+            onClick={() => setShowImpact(!showImpact)}
             className="w-full flex items-center justify-between py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            読書前後の自分の変化を記録する
-            <ChevronDown className={cn('h-4 w-4 transition-transform', showStateChange && 'rotate-180')} />
+            この作品から受けた影響
+            <ChevronDown className={cn('h-4 w-4 transition-transform', showImpact && 'rotate-180')} />
           </button>
-          {showStateChange && (
+          {showImpact && (
             <div className="pb-4 space-y-4 animate-in fade-in duration-200">
-              {STATE_AXES.map(({ axis, label }) => (
-                <div key={axis} className="space-y-1">
-                  <div className="flex justify-between text-xs"><span>{label}</span><span>{stateChanges[axis].before} → {stateChanges[axis].after}</span></div>
-                  <div className="grid grid-cols-2 gap-3">
-                    <div><label className="text-[10px] text-muted-foreground">読む前</label>
-                      <input type="range" min={1} max={10} value={stateChanges[axis].before} onChange={(e) => setStateChanges((prev) => ({ ...prev, [axis]: { ...prev[axis], before: Number(e.target.value) } }))} className="w-full accent-primary" /></div>
-                    <div><label className="text-[10px] text-muted-foreground">読んだ後</label>
-                      <input type="range" min={1} max={10} value={stateChanges[axis].after} onChange={(e) => setStateChanges((prev) => ({ ...prev, [axis]: { ...prev[axis], after: Number(e.target.value) } }))} className="w-full accent-primary" /></div>
+              {IMPACT_AXES.map(({ axis, label, emoji }) => (
+                <div key={axis} className="space-y-2">
+                  <p className="text-xs font-medium">{emoji} {label}</p>
+                  <div className="flex gap-1.5">
+                    {IMPACT_LEVELS.map((level) => (
+                      <button
+                        key={level.value}
+                        onClick={() => setImpacts((prev) => ({
+                          ...prev,
+                          [axis]: prev[axis] === level.value ? 0 : level.value,
+                        }))}
+                        className={cn(
+                          'flex-1 py-1.5 rounded-md text-[11px] border transition-all',
+                          impacts[axis] === level.value
+                            ? 'border-primary bg-primary/15 text-primary font-medium'
+                            : 'border-border text-muted-foreground hover:border-primary/40',
+                        )}
+                      >
+                        {level.label}
+                      </button>
+                    ))}
                   </div>
                 </div>
               ))}
-              <Button size="sm" variant="outline" onClick={handleSubmitStateChanges}>保存</Button>
+              <div className="flex items-center gap-2">
+                <Button
+                  size="sm"
+                  variant="outline"
+                  onClick={handleSubmitImpact}
+                  disabled={Object.values(impacts).every((v) => !v || v === 0)}
+                >
+                  保存
+                </Button>
+                {impactSaved && (
+                  <span className="text-xs text-primary flex items-center gap-1 animate-in fade-in duration-200">
+                    <Check className="h-3 w-3" /> 保存しました
+                  </span>
+                )}
+              </div>
             </div>
           )}
 
@@ -363,11 +489,16 @@ export default function AfterwordPage() {
           </div>
         )}
 
-        {/* Back to bookshelf */}
-        <div className="text-center pt-4">
+        {/* Navigation — both work page and bookshelf */}
+        <div className="flex justify-center gap-3 pt-4">
+          <Link href={`/works/${workId}`}>
+            <Button variant="outline" className="gap-1.5 text-muted-foreground">
+              <BookOpen className="h-3.5 w-3.5" /> 作品ページ
+            </Button>
+          </Link>
           <Link href="/bookshelf">
-            <Button variant="ghost" className="text-muted-foreground">
-              本棚へ戻る
+            <Button variant="ghost" className="gap-1.5 text-muted-foreground">
+              <ArrowLeft className="h-3.5 w-3.5" /> 本棚へ戻る
             </Button>
           </Link>
         </div>

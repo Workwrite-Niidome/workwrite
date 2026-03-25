@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef, useCallback } from 'react';
+import { useState, useEffect, useRef, useCallback, Suspense } from 'react';
 import Link from 'next/link';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { Search, ArrowRight, Bot, Users, X, ChevronLeft, ChevronRight } from 'lucide-react';
@@ -37,7 +37,7 @@ const SORT_OPTIONS = [
 ];
 const PAGE_SIZE = 20;
 
-export default function DiscoverPage() {
+function DiscoverContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
 
@@ -447,6 +447,14 @@ export default function DiscoverPage() {
         </>}
       </>}
     </div>
+  );
+}
+
+export default function DiscoverPage() {
+  return (
+    <Suspense>
+      <DiscoverContent />
+    </Suspense>
   );
 }
 
