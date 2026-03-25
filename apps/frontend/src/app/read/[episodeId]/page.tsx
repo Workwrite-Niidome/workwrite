@@ -696,15 +696,28 @@ export default function ReaderPage() {
         )}
       </nav>
 
-      {/* Floating character talk button -- desktop only, always visible */}
-      {!isMobile && !showCompanion && !immersiveMode && (
-        <button
-          onClick={toggleCompanion}
-          className="fixed bottom-6 right-6 z-40 flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
-        >
-          <MessageCircle className="h-5 w-5" />
-          <span className="text-sm font-medium">キャラクターと話す</span>
-        </button>
+      {/* Floating action buttons -- desktop only */}
+      {!isMobile && !immersiveMode && (
+        <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
+          {!showLetters && (
+            <button
+              onClick={toggleLetters}
+              className="flex items-center gap-2 rounded-full bg-card text-foreground border border-border px-5 py-3 shadow-lg hover:bg-secondary transition-all hover:scale-105 active:scale-95"
+            >
+              <Mail className="h-5 w-5" />
+              <span className="text-sm font-medium">レターを書く</span>
+            </button>
+          )}
+          {!showCompanion && (
+            <button
+              onClick={toggleCompanion}
+              className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+            >
+              <MessageCircle className="h-5 w-5" />
+              <span className="text-sm font-medium">キャラクターと話す</span>
+            </button>
+          )}
+        </div>
       )}
 
       {/* Mobile bottom navigation bar */}
