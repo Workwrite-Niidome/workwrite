@@ -106,62 +106,6 @@ export default function AiSafetyPage() {
           </ul>
         </section>
 
-        {/* ── 他サービスとの比較 ── */}
-        <section>
-          <h2 className="text-xs tracking-[0.15em] text-foreground mb-3">他の小説投稿サービスとの比較</h2>
-          <p className="mb-3">
-            主要な小説投稿サービスにおけるAI関連規約の状況です（2026年3月時点）。
-          </p>
-          <div className="overflow-x-auto">
-            <table className="w-full text-xs border-collapse">
-              <thead>
-                <tr className="border-b border-border">
-                  <th className="text-left py-2 pr-3 text-foreground font-medium">サービス</th>
-                  <th className="text-left py-2 pr-3 text-foreground font-medium">AI投稿</th>
-                  <th className="text-left py-2 pr-3 text-foreground font-medium">AI表示義務</th>
-                  <th className="text-left py-2 pr-3 text-foreground font-medium">AI利用率の自動計測</th>
-                </tr>
-              </thead>
-              <tbody className="divide-y divide-border">
-                <tr>
-                  <td className="py-2 pr-3">小説家になろう</td>
-                  <td className="py-2 pr-3">可（加筆前提）</td>
-                  <td className="py-2 pr-3">任意推奨</td>
-                  <td className="py-2 pr-3">なし</td>
-                </tr>
-                <tr>
-                  <td className="py-2 pr-3">カクヨム</td>
-                  <td className="py-2 pr-3">可</td>
-                  <td className="py-2 pr-3">推奨タグ（3段階）</td>
-                  <td className="py-2 pr-3">なし</td>
-                </tr>
-                <tr>
-                  <td className="py-2 pr-3">アルファポリス</td>
-                  <td className="py-2 pr-3">可（コンテスト/出版NG）</td>
-                  <td className="py-2 pr-3">規定なし</td>
-                  <td className="py-2 pr-3">なし</td>
-                </tr>
-                <tr>
-                  <td className="py-2 pr-3">ノベルアップ+</td>
-                  <td className="py-2 pr-3">可</td>
-                  <td className="py-2 pr-3">必須（チェック欄）</td>
-                  <td className="py-2 pr-3">なし</td>
-                </tr>
-                <tr className="text-foreground font-medium">
-                  <td className="py-2 pr-3">Workwrite</td>
-                  <td className="py-2 pr-3">可</td>
-                  <td className="py-2 pr-3">自動表示（50%超で強制フラグ）</td>
-                  <td className="py-2 pr-3">あり（段階別・加重算出）</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-          <p className="mt-3 text-xs">
-            Workwriteは、AI利用率を自動的かつ客観的に計測する唯一のプラットフォームです。
-            作者の自己申告に頼らず、システムが透明性を担保します。
-          </p>
-        </section>
-
         <p className="pt-4 border-t border-border text-xs">
           最終更新: 2026年3月25日
         </p>
