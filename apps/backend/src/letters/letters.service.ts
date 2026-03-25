@@ -144,21 +144,6 @@ export class LettersService {
       throw new BadRequestException('自分の作品にはレターを送れません');
     }
 
-    // Check recipient has Connect account
-    const recipient = await this.prisma.user.findUnique({
-      where: { id: recipientId },
-      select: { stripeAccountId: true },
-    });
-    if (!recipient?.stripeAccountId) {
-      throw new BadRequestException('この著者はまだ収益受け取り設定が完了していません');
-    }
-
-    // Verify Connect account is active
-    const connectStatus = await this.stripeService.getConnectStatus(recipientId);
-    if (!connectStatus.chargesEnabled) {
-      throw new BadRequestException('この著者はまだ収益受け取り設定が完了していません');
-    }
-
     // AI moderation
     const moderationResult = await this.moderation.moderate(dto.content);
     if (!moderationResult.approved && !moderationResult.needsManualReview) {
@@ -207,7 +192,6 @@ export class LettersService {
         senderEmail,
         pendingLetter.id,
         amount,
-        recipient.stripeAccountId,
         { recipientId, episodeId: dto.episodeId, letterType: dto.type },
       );
       url = result.url;

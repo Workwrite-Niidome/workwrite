@@ -162,15 +162,19 @@ export class StripeWebhookController {
     });
     if (!user) return;
 
-    // Notify author when their Connect account becomes fully active
+    // When Connect account becomes fully active, transfer pending letter payouts
     if (account.charges_enabled && account.payouts_enabled) {
       try {
+        const { transferred, totalAmount } = await this.billingService.transferPendingLetterPayouts(user.id);
+        const title = transferred > 0
+          ? `Stripe Connectの設定が完了しました。保留中のレター収益¥${totalAmount}を送金しました。`
+          : 'Stripe Connectの審査が完了しました。レター収益の自動振込が有効になりました。';
         await this.notifications.createNotification(user.id, {
           type: 'system',
-          title: 'Stripe Connectの審査が完了しました。レター収益の自動振込が有効になりました。',
+          title,
         });
       } catch (e: any) {
-        this.logger.error(`Failed to notify user ${user.id} about Connect approval: ${e.message}`);
+        this.logger.error(`Failed to process Connect activation for user ${user.id}: ${e.message}`);
       }
     }
   }

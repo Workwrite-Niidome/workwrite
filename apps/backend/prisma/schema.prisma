@@ -395,6 +395,8 @@ model Letter {
   isHighlighted    Boolean      @default(false) // PREMIUM以上: 上部固定表示
   isFreeQuota      Boolean      @default(false) // Free枠使用時 true
   paymentId        String?      // Payment.id
+  payoutStatus     String       @default("pending") // pending / transferred / not_applicable
+  payoutTransferId String?      // Stripe Transfer ID
   moderationStatus String       @default("approved") // approved / rejected / pending
   moderationReason String?      // 検閲拒否理由
   createdAt        DateTime     @default(now())
@@ -407,6 +409,7 @@ model Letter {
   @@index([recipientId])
   @@index([senderId])
   @@index([createdAt])
+  @@index([payoutStatus])
 }
 
 enum LetterType {

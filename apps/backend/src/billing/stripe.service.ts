@@ -178,15 +178,14 @@ export class StripeService {
     email: string,
     pendingLetterId: string,
     amount: number,
-    recipientAccountId: string,
     letterContext: { recipientId: string; episodeId: string; letterType: string },
   ): Promise<{ url: string; sessionId: string }> {
     const stripe = this.ensureStripe();
     const customerId = await this.getOrCreateCustomer(userId, email);
     const baseUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
 
-    const applicationFeeAmount = Math.round(amount * 0.2); // 20% platform fee
-
+    // Platform receives payment. Transfer to author happens separately
+    // when author has Stripe Connect set up.
     const session = await stripe.checkout.sessions.create({
       customer: customerId,
       mode: 'payment',
@@ -201,8 +200,6 @@ export class StripeService {
         },
       ],
       payment_intent_data: {
-        application_fee_amount: applicationFeeAmount,
-        transfer_data: { destination: recipientAccountId },
         metadata: { type: 'letter_tip', pendingLetterId },
       },
       success_url: `${baseUrl}/read/letter-sent?session_id={CHECKOUT_SESSION_ID}`,
@@ -212,12 +209,11 @@ export class StripeService {
         type: 'letter',
         pendingLetterId,
         amount: String(amount),
-        // Fallback data: PendingLetter消失時にWebhookからレターを復元するため
         recipientId: letterContext.recipientId,
         episodeId: letterContext.episodeId,
         letterType: letterContext.letterType,
       },
-      expires_at: Math.floor(Date.now() / 1000) + 1800, // 30 minutes (UX timeout)
+      expires_at: Math.floor(Date.now() / 1000) + 1800,
     });
 
     return { url: session.url!, sessionId: session.id };

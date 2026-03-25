@@ -1,6 +1,7 @@
 import { Test, TestingModule } from '@nestjs/testing';
 import { BillingService } from '../billing.service';
 import { CreditService } from '../credit.service';
+import { StripeService } from '../stripe.service';
 import { NotificationsService } from '../../notifications/notifications.service';
 import { PrismaService } from '../../common/prisma/prisma.service';
 
@@ -41,6 +42,11 @@ const mockCreditService = () => ({
   getBalance: jest.fn(),
   grantMonthlyCredits: jest.fn(),
   addPurchasedCredits: jest.fn(),
+});
+
+const mockStripeService = () => ({
+  getConnectStatus: jest.fn(),
+  createTransfer: jest.fn(),
 });
 
 // ─── Helpers ─────────────────────────────────────────────────────────────────
@@ -93,6 +99,7 @@ describe('BillingService', () => {
         BillingService,
         { provide: PrismaService, useValue: prisma },
         { provide: CreditService, useValue: creditService },
+        { provide: StripeService, useValue: mockStripeService() },
         { provide: NotificationsService, useValue: notifications },
       ],
     }).compile();

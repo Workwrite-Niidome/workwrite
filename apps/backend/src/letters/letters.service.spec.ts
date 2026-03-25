@@ -339,7 +339,6 @@ describe('LettersService', () => {
         'user@test.com',
         'pending-cuid-1',
         300,
-        'acct_test123',
         expect.objectContaining({
           recipientId: 'author-1',
           episodeId: 'ep-1',
@@ -368,7 +367,6 @@ describe('LettersService', () => {
         expect.anything(),
         expect.anything(),
         5000,
-        expect.anything(),
         expect.anything(),
       );
     });
@@ -412,22 +410,6 @@ describe('LettersService', () => {
         id: 'ep-1',
         work: { authorId: 'user-1' }, // same as senderId
       });
-
-      await expect(
-        service.createCheckout('user-1', 'user@test.com', validDto),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException when recipient has no Connect account', async () => {
-      prisma.user.findUnique.mockResolvedValue({ stripeAccountId: null });
-
-      await expect(
-        service.createCheckout('user-1', 'user@test.com', validDto),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException when recipient Connect account has chargesEnabled=false', async () => {
-      stripeService.getConnectStatus.mockResolvedValue({ chargesEnabled: false });
 
       await expect(
         service.createCheckout('user-1', 'user@test.com', validDto),

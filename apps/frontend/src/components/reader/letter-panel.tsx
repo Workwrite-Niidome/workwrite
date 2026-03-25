@@ -42,8 +42,6 @@ export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }
   const [letters, setLetters] = useState<Letter[]>([]);
   const [loading, setLoading] = useState(true);
   const [showCompose, setShowCompose] = useState(false);
-  const [canReceivePayment, setCanReceivePayment] = useState<boolean | null>(null);
-
   function loadLetters() {
     setLoading(true);
     api.getLettersForEpisode(episodeId)
@@ -54,15 +52,7 @@ export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }
 
   useEffect(() => {
     loadLetters();
-    if (isAuthenticated) {
-      api.getAuthorPaymentStatus(episodeId)
-        .then((res) => {
-          const data = (res as any)?.data ?? res;
-          setCanReceivePayment(data?.canReceivePayment ?? false);
-        })
-        .catch(() => setCanReceivePayment(false));
-    }
-  }, [episodeId, reloadKey, isAuthenticated]);
+  }, [episodeId, reloadKey]);
 
   function renderLetter(letter: Letter) {
     const style = TYPE_STYLES[letter.type] || TYPE_STYLES.STANDARD;
@@ -121,21 +111,14 @@ export function LetterPanel({ episodeId, isAuthenticated, onCompose, reloadKey }
       </div>
       {isAuthenticated && (
         <div className="p-4 border-t border-border">
-          {canReceivePayment === false ? (
-            <p className="text-xs text-muted-foreground text-center">
-              この著者はまだレターの受け取り設定が完了していません。感想はレビューで伝えられます。
-            </p>
-          ) : (
-            <Button
-              size="sm"
-              className="w-full gap-2"
-              onClick={() => onCompose ? onCompose() : setShowCompose(true)}
-              disabled={canReceivePayment === null}
-            >
-              <PenLine className="h-3.5 w-3.5" />
-              レターを書く
-            </Button>
-          )}
+          <Button
+            size="sm"
+            className="w-full gap-2"
+            onClick={() => onCompose ? onCompose() : setShowCompose(true)}
+          >
+            <PenLine className="h-3.5 w-3.5" />
+            レターを書く
+          </Button>
         </div>
       )}
       {/* Only render dialog here when no external handler (desktop sidebar case) */}
