@@ -38,12 +38,13 @@ describe('LetterModerationService', () => {
   // ─── moderate ──────────────────────────────────────────────────────────────
 
   describe('moderate', () => {
-    it('auto-approves when ANTHROPIC_API_KEY is not set', async () => {
+    it('queues for manual review when ANTHROPIC_API_KEY is not set', async () => {
       config.get.mockReturnValue(undefined);
 
       const result = await service.moderate('test content');
 
-      expect(result.approved).toBe(true);
+      expect(result.approved).toBe(false);
+      expect(result.needsManualReview).toBe(true);
       expect(fetchSpy).not.toHaveBeenCalled();
     });
 
@@ -84,25 +85,27 @@ describe('LetterModerationService', () => {
       expect(result.reason).toBe('攻撃的な表現');
     });
 
-    it('auto-approves when API returns error status', async () => {
+    it('queues for manual review when API returns error status', async () => {
       config.get.mockReturnValue('sk-ant-xxx');
       fetchSpy.mockResolvedValue({ ok: false, status: 500 } as any);
 
       const result = await service.moderate('test content');
 
-      expect(result.approved).toBe(true);
+      expect(result.approved).toBe(false);
+      expect(result.needsManualReview).toBe(true);
     });
 
-    it('auto-approves when fetch throws network error', async () => {
+    it('queues for manual review when fetch throws network error', async () => {
       config.get.mockReturnValue('sk-ant-xxx');
       fetchSpy.mockRejectedValue(new Error('Network error'));
 
       const result = await service.moderate('test content');
 
-      expect(result.approved).toBe(true);
+      expect(result.approved).toBe(false);
+      expect(result.needsManualReview).toBe(true);
     });
 
-    it('auto-approves when API response is malformed JSON', async () => {
+    it('queues for manual review when API response is malformed JSON', async () => {
       config.get.mockReturnValue('sk-ant-xxx');
       fetchSpy.mockResolvedValue({
         ok: true,
@@ -114,7 +117,8 @@ describe('LetterModerationService', () => {
 
       const result = await service.moderate('test content');
 
-      expect(result.approved).toBe(true);
+      expect(result.approved).toBe(false);
+      expect(result.needsManualReview).toBe(true);
     });
   });
 });

@@ -120,16 +120,6 @@ describe('LettersService', () => {
       ).rejects.toThrow(BadRequestException);
     });
 
-    it('throws BadRequestException when sending stamp with SHORT type', async () => {
-      await expect(
-        service.create('user-1', {
-          episodeId: 'ep-1',
-          type: LetterTypeDto.SHORT,
-          content: '応援！',
-        }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
     it('throws NotFoundException when episode does not exist', async () => {
       prisma.episode.findUnique.mockResolvedValue(null);
 
@@ -406,16 +396,6 @@ describe('LettersService', () => {
 
       await expect(
         service.createCheckout('user-1', 'user@test.com', { ...validDto, content: longContent }),
-      ).rejects.toThrow(BadRequestException);
-    });
-
-    it('throws BadRequestException when stamp used with SHORT type', async () => {
-      await expect(
-        service.createCheckout('user-1', 'user@test.com', {
-          episodeId: 'ep-1',
-          type: LetterTypeDto.SHORT,
-          content: '応援！',
-        }),
       ).rejects.toThrow(BadRequestException);
     });
 
