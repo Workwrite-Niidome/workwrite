@@ -291,6 +291,7 @@ export class BillingService {
               recipient.stripeAccountId,
               { type: 'letter_payout', recipientId: pending.recipientId },
               `letter_payout_${paymentIntentId}`,
+              paymentIntentId || undefined,
             );
             payoutStatus = 'transferred';
             payoutTransferId = transferId;
@@ -439,12 +440,19 @@ export class BillingService {
 
     for (const letter of pendingLetters) {
       try {
+        // Get the original charge ID to use as source_transaction
+        // This allows transfer even when platform balance is pending
+        const payment = letter.paymentId
+          ? await this.prisma.payment.findUnique({ where: { id: letter.paymentId } })
+          : null;
+
         const authorAmount = Math.floor(letter.amount * 0.8);
         const { transferId } = await this.stripeService.createTransfer(
           authorAmount,
           author.stripeAccountId,
           { type: 'letter_payout', letterId: letter.id, recipientId: authorId },
           `letter_payout_${letter.id}`,
+          payment?.stripePaymentId || undefined,
         );
 
         await this.prisma.letter.update({
