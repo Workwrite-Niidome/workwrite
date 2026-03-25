@@ -24,7 +24,6 @@ import {
   Zap,
   Crown,
   MessageSquare,
-  Link2,
   Mail,
   DollarSign,
   Share2,
@@ -39,8 +38,7 @@ import { cn } from '@/lib/utils';
 const SECTIONS = [
   { id: 'intro', label: 'Workwriteとは', icon: BookOpen },
   { id: 'create', label: '作品を作る', icon: PenTool },
-  { id: 'import', label: 'URLインポート', icon: Link2 },
-  { id: 'write', label: 'エピソードを書く', icon: FileText },
+{ id: 'write', label: 'エピソードを書く', icon: FileText },
   { id: 'grow', label: '読者を増やす', icon: Users },
   { id: 'letters', label: 'レター・収益', icon: Mail },
   { id: 'credits', label: 'クレジットと料金', icon: CreditCard },
@@ -312,62 +310,6 @@ export default function WritersGuidePage() {
             生成結果は作品の「構想メモ」として保存され、AI執筆アシストが参照します。
             内容は自由に編集・上書きできます。
           </p>
-        </section>
-
-        {/* ============================================================ */}
-        {/*  Section: URLインポート                                       */}
-        {/* ============================================================ */}
-        <section id="import">
-          <h2 className="text-lg font-semibold mb-4 flex items-center gap-2">
-            <Link2 className="h-5 w-5 text-primary" />
-            URLインポート
-          </h2>
-
-          <div className="space-y-4 text-sm text-muted-foreground leading-relaxed">
-            <p>
-              <strong className="text-foreground">小説家になろう</strong>や<strong className="text-foreground">カクヨム</strong>で既に作品を公開している方は、
-              URLを貼るだけで作品をWorkwriteに取り込めます。取り込み後、自動でAI品質スコアリングが実行されます。
-            </p>
-
-            <div className="mb-4">
-              <Step
-                number={1}
-                title="URLを入力"
-                description="執筆ダッシュボードの「インポート」ページで、小説家になろう（ncode.syosetu.com）またはカクヨム（kakuyomu.jp）の作品URLを貼り付けます。"
-                icon={Link2}
-              />
-              <Step
-                number={2}
-                title="自動取り込み"
-                description="メタデータとエピソード本文が自動で取得されます。最大500エピソードまで対応しています。"
-                icon={FileText}
-              />
-              <Step
-                number={3}
-                title="AI品質分析"
-                description="取り込み完了後、6軸のAIスコアリングが自動実行されます。あなたの作品の強みと改善ポイントが可視化されます。"
-                icon={BarChart3}
-                tips={[
-                  'スコア結果はSNSでシェアできます。OGP画像も自動生成されます。',
-                  '分析だけの利用も可能です（/analyze ページ）。',
-                ]}
-              />
-            </div>
-
-            <div className="bg-muted/50 rounded-lg p-4">
-              <h4 className="text-sm font-medium mb-2">対応サイト</h4>
-              <div className="grid grid-cols-2 gap-3">
-                <div className="text-center">
-                  <p className="text-xs font-medium text-foreground">小説家になろう</p>
-                  <p className="text-[11px] mt-0.5">ncode.syosetu.com/n○○○○/</p>
-                </div>
-                <div className="text-center">
-                  <p className="text-xs font-medium text-foreground">カクヨム</p>
-                  <p className="text-[11px] mt-0.5">kakuyomu.jp/works/○○○○</p>
-                </div>
-              </div>
-            </div>
-          </div>
         </section>
 
         {/* ============================================================ */}

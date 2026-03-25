@@ -818,7 +818,7 @@ model WorkImport {
   id               String   @id @default(cuid())
   userId           String
   workId           String?
-  source           String   // "text_paste", "file_upload", "url_narou", "url_kakuyomu"
+  source           String   // "text_paste", "file_upload"
   sourceUrl        String?
   metadata         Json?
   status           String   @default("PENDING")

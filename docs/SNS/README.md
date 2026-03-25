@@ -6,8 +6,7 @@ Workwrite の集客用コンテンツ一覧。
 
 | ファイル | 内容 | ターゲット |
 |---------|------|-----------|
-| `twitter-posts.md` | Twitter(X) 投稿10本 + 想定リーチ分析 | なろう/カクヨム執筆者 |
-| `note-01-narou-ranking-fatigue.md` | note記事: ランキング疲れ共感型 | なろう中堅執筆者 |
+| `twitter-posts.md` | Twitter(X) 投稿10本 + 想定リーチ分析 | Web小説執筆者 |
 | `note-02-ai-writing-misconception.md` | note記事: AI執筆支援の実態解説 | AI興味層+執筆者 |
 | `note-03-creation-wizard-guide.md` | note記事: 創作ウィザードガイド | 初心者+SEO長期流入 |
 

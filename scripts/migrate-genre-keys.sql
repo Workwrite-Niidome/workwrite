@@ -1,5 +1,5 @@
 -- Migrate genre values to standardized English keys
--- Covers: Japanese labels, Narou import values, uppercase legacy values, compound values
+-- Covers: Japanese labels, import values, uppercase legacy values, compound values
 
 BEGIN;
 

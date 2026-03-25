@@ -255,14 +255,12 @@ describe('WorkImportService — getImportStatus ownership', () => {
 
   beforeEach(() => {
     prisma = buildPrismaMock();
-    // WorkImportService requires ScoringService, CreditService, and two scrapers.
+    // WorkImportService requires ScoringService and CreditService.
     // These are not exercised by getImportStatus, so we pass stub objects.
     service = new WorkImportService(
       prisma,
       {} as any,   // ScoringService
       {} as any,   // CreditService
-      {} as any,   // NarouScraperService
-      {} as any,   // KakuyomuScraperService
     );
   });
 

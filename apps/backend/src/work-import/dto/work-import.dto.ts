@@ -1,4 +1,4 @@
-import { IsString, IsOptional, IsArray, IsBoolean, IsUrl, ValidateNested, MaxLength } from 'class-validator';
+import { IsString, IsOptional, IsArray, ValidateNested, MaxLength } from 'class-validator';
 import { Type } from 'class-transformer';
 import { ApiProperty, ApiPropertyOptional } from '@nestjs/swagger';
 
@@ -42,13 +42,3 @@ export class ImportTextDto {
   chapters: ChapterDto[];
 }
 
-export class ImportUrlDto {
-  @ApiProperty({ description: 'なろう or カクヨムのURL' })
-  @IsString()
-  url: string;
-
-  @ApiPropertyOptional({ description: '自動スコアリングを実行するか（デフォルト: true）' })
-  @IsOptional()
-  @IsBoolean()
-  autoScore?: boolean;
-}

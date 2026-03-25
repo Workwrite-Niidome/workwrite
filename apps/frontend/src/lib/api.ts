@@ -389,13 +389,6 @@ class ApiClient {
     );
   }
 
-  async importFromUrl(url: string, autoScore = true) {
-    return this.request<{ data: { importId: string; workId: string; title: string; episodes: number; scoringResult: any } }>(
-      '/works/import/url',
-      { method: 'POST', body: JSON.stringify({ url, autoScore }) },
-    );
-  }
-
   async getImportStatus(importId: string) {
     return this.request<{ data: { id: string; status: string; totalChapters: number; importedChapters: number; workId?: string; errorMessage?: string } }>(
       `/works/import/${importId}/status`,

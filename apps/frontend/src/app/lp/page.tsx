@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { ArrowRight, PenTool, Shield, Sparkles, BookOpen, Users, BarChart3, Heart, Eye, Lightbulb, ChevronDown, Mail, Share2, Link2 } from 'lucide-react';
+import { ArrowRight, PenTool, Shield, Sparkles, BookOpen, Users, BarChart3, Heart, Eye, Lightbulb, ChevronDown, Mail, Share2 } from 'lucide-react';
 import { ThemeToggle } from '@/components/ui/theme-toggle';
 import { useState } from 'react';
 import { useAuth } from '@/lib/auth-context';
@@ -183,12 +183,6 @@ function FeaturesSection() {
       title: '物語構造の設計ツール',
       subtitle: '三幕構成、キャラクター関係性、伏線管理',
       description: 'ストーリーアーク、幕・シーン設計、キャラクター関係性マップ、伏線トラッカーなど、プロの技法をツールとして提供します。',
-    },
-    {
-      icon: Link2,
-      title: 'URLインポート＆自動分析',
-      subtitle: '小説家になろう・カクヨムのURLを貼るだけでAI分析',
-      description: '既存の作品URLを入力するだけで自動取り込み。6軸のAI品質スコアリングで、あなたの強みと改善ポイントが一目でわかります。',
     },
     {
       icon: Mail,
@@ -468,10 +462,6 @@ function FaqSection() {
     {
       q: 'ファンレター（投げ銭）の仕組みは？',
       a: '読者がエピソードを読んだ後、著者にファンレターを送れます。ショート（¥120）、レター（¥300）、プレミアム（¥500）、ギフト（¥1,000〜）の4タイプがあり、収益の80%が著者に還元されます。レター内容はAIが自動審査するため、誹謗中傷は届きません。',
-    },
-    {
-      q: '小説家になろうやカクヨムの作品を持ってこれますか？',
-      a: 'はい。作品のURLを貼るだけで自動取り込みが可能です。取り込み後、AIが品質スコアリングを実行し、作品の強みと改善ポイントを可視化します。分析だけの利用（作品の保存なし）も可能です。',
     },
   ];
 
