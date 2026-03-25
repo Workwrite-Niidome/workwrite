@@ -15,6 +15,7 @@ interface Earnings {
   totalEarnings: number;
   monthlyEarnings: number;
   platformCutRate: number;
+  pendingPayout?: { amount: number; count: number; expiresAt: string | null };
 }
 
 interface ConnectStatus {
@@ -40,6 +41,60 @@ interface Payout {
   periodStart: string;
   periodEnd: string;
   createdAt: string;
+}
+
+function PendingPayoutBanner({ amount, count, expiresAt, connectReady, onClaimed }: {
+  amount: number; count: number; expiresAt: string | null; connectReady: boolean; onClaimed: () => void;
+}) {
+  const [claiming, setClaiming] = useState(false);
+  const [result, setResult] = useState<string | null>(null);
+
+  async function handleClaim() {
+    setClaiming(true);
+    setResult(null);
+    try {
+      const res = await api.claimLetterPayouts();
+      if (res.transferred > 0) {
+        setResult(`¥${res.totalAmount.toLocaleString()}を送金しました`);
+        onClaimed();
+      } else {
+        setResult('送金可能な保留金はありません');
+      }
+    } catch (e: any) {
+      setResult(e?.message || '送金に失敗しました');
+    }
+    setClaiming(false);
+  }
+
+  return (
+    <Card className="mb-6 border-amber-300 bg-amber-50/50 dark:bg-amber-950/20 dark:border-amber-700">
+      <CardContent className="py-4 px-5">
+        <div className="flex items-center justify-between">
+          <div>
+            <p className="text-sm font-medium">
+              保留中の収益: <span className="text-amber-600 font-bold">¥{amount.toLocaleString()}</span>
+              （{count}通）
+            </p>
+            <p className="text-xs text-muted-foreground mt-0.5">
+              {connectReady
+                ? '「受け取る」ボタンでStripeアカウントに送金できます'
+                : 'Stripe Connect設定を完了すると受け取れます'}
+              {expiresAt && (
+                <span className="ml-1">/ 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</span>
+              )}
+            </p>
+            {result && <p className="text-xs mt-1 font-medium text-green-600">{result}</p>}
+          </div>
+          {connectReady && (
+            <Button size="sm" onClick={handleClaim} disabled={claiming} className="ml-4 shrink-0">
+              <Banknote className="h-3.5 w-3.5 mr-1" />
+              {claiming ? '送金中...' : '受け取る'}
+            </Button>
+          )}
+        </div>
+      </CardContent>
+    </Card>
+  );
 }
 
 function EarningsPageContent() {
@@ -203,6 +258,19 @@ function EarningsPageContent() {
 
       {earnings ? (
         <>
+          {/* Pending payout banner */}
+          {earnings.pendingPayout && earnings.pendingPayout.count > 0 && (
+            <PendingPayoutBanner
+              amount={earnings.pendingPayout.amount}
+              count={earnings.pendingPayout.count}
+              expiresAt={earnings.pendingPayout.expiresAt}
+              connectReady={connectStatus?.chargesEnabled ?? false}
+              onClaimed={() => {
+                api.getLetterEarnings().then((res) => setEarnings((res as any).data || null)).catch(() => {});
+              }}
+            />
+          )}
+
           {/* Main stats */}
           <div className="grid grid-cols-2 gap-3 mb-6">
             <Card>

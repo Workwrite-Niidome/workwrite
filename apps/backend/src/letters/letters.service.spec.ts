@@ -15,6 +15,7 @@ const mockPrismaService = () => ({
   letter: {
     create: jest.fn(),
     findMany: jest.fn(),
+    findFirst: jest.fn(),
     count: jest.fn(),
     aggregate: jest.fn(),
   },
@@ -223,7 +224,9 @@ describe('LettersService', () => {
         .mockResolvedValueOnce(10); // monthlyLetters
       prisma.letter.aggregate
         .mockResolvedValueOnce({ _sum: { amount: 50000 } }) // totalEarnings
-        .mockResolvedValueOnce({ _sum: { amount: 5000 } }); // monthlyEarnings
+        .mockResolvedValueOnce({ _sum: { amount: 5000 } }) // monthlyEarnings
+        .mockResolvedValueOnce({ _sum: { amount: 1000 }, _count: 2 }); // pendingPayouts
+      prisma.letter.findFirst.mockResolvedValueOnce({ createdAt: new Date() }); // nearestExpiry
 
       const result = await service.getEarnings('author-1');
 
@@ -232,6 +235,7 @@ describe('LettersService', () => {
       expect(result.totalEarnings).toBe(40000); // 50000 * 0.8
       expect(result.monthlyEarnings).toBe(4000); // 5000 * 0.8
       expect(result.platformCutRate).toBe(0.2);
+      expect(result.pendingPayout.count).toBe(2);
     });
 
     it('handles zero earnings gracefully', async () => {
@@ -240,12 +244,15 @@ describe('LettersService', () => {
         .mockResolvedValueOnce(0);
       prisma.letter.aggregate
         .mockResolvedValueOnce({ _sum: { amount: null } })
-        .mockResolvedValueOnce({ _sum: { amount: null } });
+        .mockResolvedValueOnce({ _sum: { amount: null } })
+        .mockResolvedValueOnce({ _sum: { amount: null }, _count: 0 }); // pendingPayouts
+      prisma.letter.findFirst.mockResolvedValueOnce(null); // no nearestExpiry
 
       const result = await service.getEarnings('author-1');
 
       expect(result.totalEarnings).toBe(0);
       expect(result.monthlyEarnings).toBe(0);
+      expect(result.pendingPayout.count).toBe(0);
     });
   });
 

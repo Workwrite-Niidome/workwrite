@@ -487,6 +487,11 @@ class ApiClient {
     return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number } }>('/letters/earnings');
   }
 
+  async claimLetterPayouts() {
+    const res = await this.request<{ data: { transferred: number; totalAmount: number } }>('/letters/claim-payouts', { method: 'POST' });
+    return (res as any).data ?? res;
+  }
+
   async getAuthorPaymentStatus(episodeId: string) {
     return this.request<{ canReceivePayment: boolean }>(`/letters/author-payment-status/${episodeId}`);
   }

@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
-import { Cron, CronExpression } from '@nestjs/schedule';
+import { Cron } from '@nestjs/schedule';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { BillingService } from '../billing/billing.service';
 import { StripeService } from '../billing/stripe.service';
 import { NotificationsService } from '../notifications/notifications.service';
 
@@ -12,6 +13,7 @@ export class LetterPayoutScheduler {
 
   constructor(
     private prisma: PrismaService,
+    private billingService: BillingService,
     private stripeService: StripeService,
     private notifications: NotificationsService,
   ) {}
@@ -19,9 +21,30 @@ export class LetterPayoutScheduler {
   /** Run daily at 9:00 AM JST — send reminders and process refunds */
   @Cron('0 0 * * *') // midnight UTC = 9 AM JST
   async processPayoutRemindersAndRefunds() {
+    await this.transferPendingPayouts();
     await this.sendAuthorReminders();
     await this.sendSenderWarnings();
     await this.processRefunds();
+  }
+
+  /** Auto-transfer pending payouts for authors who now have Stripe Connect */
+  private async transferPendingPayouts() {
+    // Find all authors with pending payouts
+    const authorsWithPending = await this.prisma.letter.groupBy({
+      by: ['recipientId'],
+      where: { payoutStatus: 'pending', moderationStatus: 'approved' },
+    });
+
+    for (const group of authorsWithPending) {
+      try {
+        const { transferred, totalAmount } = await this.billingService.transferPendingLetterPayouts(group.recipientId);
+        if (transferred > 0) {
+          this.logger.log(`Auto-transferred ${transferred} pending payouts (¥${totalAmount}) to author ${group.recipientId}`);
+        }
+      } catch (e: any) {
+        // Author doesn't have Connect yet — skip silently
+      }
+    }
   }
 
   /** Notify authors with pending payouts at Day 30 and Day 60 */
