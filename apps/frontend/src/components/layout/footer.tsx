@@ -47,6 +47,7 @@ export function Footer() {
               <li><Link href="/terms" className="hover:text-foreground transition-colors">利用規約</Link></li>
               <li><Link href="/privacy" className="hover:text-foreground transition-colors">プライバシーポリシー</Link></li>
               <li><Link href="/legal/tokushoho" className="hover:text-foreground transition-colors">特定商取引法に基づく表記</Link></li>
+              <li><Link href="/ai-safety" className="hover:text-foreground transition-colors">AI安全性について</Link></li>
             </ul>
           </div>
         </div>
