@@ -117,8 +117,13 @@ export function NotificationDropdown() {
                   key={n.id}
                   onClick={() => {
                     if (!n.read) handleMarkRead(n.id);
-                    if (n.type.startsWith('digest')) {
-                      setOpen(false);
+                    setOpen(false);
+                    if (n.type === 'letter') {
+                      router.push('/dashboard/letters/received');
+                    } else if (n.type === 'editor_mode') {
+                      const workId = (n as any).data?.workId;
+                      router.push(workId ? `/works/${workId}/edit` : '/dashboard');
+                    } else {
                       router.push('/notifications');
                     }
                   }}
