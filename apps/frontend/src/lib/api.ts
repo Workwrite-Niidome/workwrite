@@ -484,7 +484,7 @@ class ApiClient {
   }
 
   async getLetterEarnings() {
-    return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number } }>('/letters/earnings');
+    return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number; pendingPayout?: { amount: number; count: number; expiresAt: string | null } } }>('/letters/earnings');
   }
 
   async claimLetterPayouts() {
