@@ -64,8 +64,10 @@ async function ensureSchema() {
     await prisma.$executeRawUnsafe(`ALTER TABLE "Letter" ADD COLUMN IF NOT EXISTS "payoutTransferId" TEXT`);
     await prisma.$executeRawUnsafe(`CREATE INDEX IF NOT EXISTS "Letter_payoutStatus_idx" ON "Letter"("payoutStatus")`);
 
-    // Backfill: existing paid letters = already transferred (destination charge era)
-    await prisma.$executeRawUnsafe(`UPDATE "Letter" SET "payoutStatus" = 'transferred' WHERE "paymentId" IS NOT NULL AND "payoutStatus" = 'pending'`);
+    // Backfill: letters with payoutTransferId = actually transferred via Stripe Transfer
+    // Letters without payoutTransferId but with paymentId = paid but not yet transferred to author (pending)
+    await prisma.$executeRawUnsafe(`UPDATE "Letter" SET "payoutStatus" = 'transferred' WHERE "payoutTransferId" IS NOT NULL AND "payoutStatus" = 'pending'`);
+    await prisma.$executeRawUnsafe(`UPDATE "Letter" SET "payoutStatus" = 'pending' WHERE "payoutTransferId" IS NULL AND "paymentId" IS NOT NULL AND "payoutStatus" = 'transferred'`);
 
     // Fix: paid letters stuck with moderationStatus='pending' should be 'approved'
     await prisma.$executeRawUnsafe(`UPDATE "Letter" SET "moderationStatus" = 'approved' WHERE "paymentId" IS NOT NULL AND "moderationStatus" = 'pending'`);
