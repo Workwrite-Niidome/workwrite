@@ -1,7 +1,8 @@
-import { Injectable, BadRequestException, NotFoundException } from '@nestjs/common';
+import { Injectable, BadRequestException, NotFoundException, ForbiddenException, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { StripeService } from '../billing/stripe.service';
 import { LetterModerationService } from './letter-moderation.service';
 import { CreateLetterDto, LETTER_CONFIG } from './dto/create-letter.dto';
 
@@ -14,10 +15,13 @@ const userSelect = {
 
 @Injectable()
 export class LettersService {
+  private readonly logger = new Logger(LettersService.name);
+
   constructor(
     private prisma: PrismaService,
     private payments: PaymentsService,
     private notifications: NotificationsService,
+    private stripeService: StripeService,
     private moderation: LetterModerationService,
   ) {}
 
@@ -50,7 +54,7 @@ export class LettersService {
 
     // AI moderation
     const moderationResult = await this.moderation.moderate(dto.content);
-    if (!moderationResult.approved) {
+    if (!moderationResult.approved && !moderationResult.needsManualReview) {
       throw new BadRequestException(
         moderationResult.reason || 'レター内容が不適切と判断されました',
       );
@@ -61,6 +65,27 @@ export class LettersService {
       dto.type === 'GIFT'
         ? (dto.giftAmount ?? 1000)
         : config.price;
+
+    // If manual review needed, save letter as pending without processing payment
+    if (moderationResult.needsManualReview) {
+      const letter = await this.prisma.letter.create({
+        data: {
+          senderId,
+          recipientId,
+          episodeId: dto.episodeId,
+          type: dto.type,
+          content: dto.content,
+          amount,
+          stampId: dto.stampId,
+          isHighlighted: config.highlighted,
+          isFreeQuota: false,
+          moderationStatus: 'pending',
+          moderationReason: 'AI審査が一時的に利用できないため、管理者による手動審査待ちです',
+        },
+        include: { sender: { select: userSelect } },
+      });
+      return letter;
+    }
 
     // Process payment
     const payment = await this.payments.createTip(
@@ -96,6 +121,126 @@ export class LettersService {
     });
 
     return letter;
+  }
+
+  /**
+   * Create a PendingLetter + Stripe Checkout session.
+   * Returns the Checkout URL for redirect.
+   */
+  async createCheckout(
+    senderId: string,
+    senderEmail: string,
+    dto: CreateLetterDto,
+  ): Promise<{ pendingLetterId: string; checkoutUrl: string }> {
+    const config = LETTER_CONFIG[dto.type];
+
+    // Validate content length
+    if (dto.content.length > config.maxChars) {
+      throw new BadRequestException(
+        `${dto.type}レターは${config.maxChars}文字までです`,
+      );
+    }
+
+    // Validate stamp usage
+    if (dto.stampId && !config.hasStamp) {
+      throw new BadRequestException('ショートレターにはスタンプを付けられません');
+    }
+
+    // Get episode to find recipient (author)
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: dto.episodeId },
+      include: { work: { select: { authorId: true } } },
+    });
+    if (!episode) throw new NotFoundException('エピソードが見つかりません');
+
+    const recipientId = episode.work.authorId;
+    if (recipientId === senderId) {
+      throw new BadRequestException('自分の作品にはレターを送れません');
+    }
+
+    // Check recipient has Connect account
+    const recipient = await this.prisma.user.findUnique({
+      where: { id: recipientId },
+      select: { stripeAccountId: true },
+    });
+    if (!recipient?.stripeAccountId) {
+      throw new BadRequestException('この著者はまだ収益受け取り設定が完了していません');
+    }
+
+    // Verify Connect account is active
+    const connectStatus = await this.stripeService.getConnectStatus(recipientId);
+    if (!connectStatus.chargesEnabled) {
+      throw new BadRequestException('この著者はまだ収益受け取り設定が完了していません');
+    }
+
+    // AI moderation
+    const moderationResult = await this.moderation.moderate(dto.content);
+    if (!moderationResult.approved && !moderationResult.needsManualReview) {
+      throw new BadRequestException(
+        moderationResult.reason || 'レター内容が不適切と判断されました',
+      );
+    }
+
+    // Calculate amount
+    const amount =
+      dto.type === 'GIFT'
+        ? (dto.giftAmount ?? 1000)
+        : config.price;
+
+    // Create PendingLetter (stripeSessionId uses own ID as temporary unique placeholder)
+    const pendingLetter = await this.prisma.pendingLetter.create({
+      data: {
+        senderId,
+        recipientId,
+        episodeId: dto.episodeId,
+        type: dto.type,
+        content: dto.content,
+        amount,
+        stampId: dto.stampId,
+        giftAmount: dto.type === 'GIFT' ? (dto.giftAmount ?? 1000) : null,
+        moderationStatus: moderationResult.approved ? 'approved' : 'pending',
+        moderationReason: moderationResult.needsManualReview
+          ? 'AI審査が一時的に利用できないため、管理者による手動審査待ちです'
+          : null,
+        stripeSessionId: `placeholder`, // updated immediately below
+        expiresAt: new Date(Date.now() + 72 * 60 * 60 * 1000), // 72h: Stripe webhook retry window is up to 3 days
+      },
+    });
+
+    // Update placeholder to own ID (guaranteed unique by cuid)
+    await this.prisma.pendingLetter.update({
+      where: { id: pendingLetter.id },
+      data: { stripeSessionId: pendingLetter.id },
+    });
+
+    // Create Stripe Checkout session — if this fails, clean up the PendingLetter
+    let url: string;
+    let sessionId: string;
+    try {
+      const result = await this.stripeService.createLetterCheckoutSession(
+        senderId,
+        senderEmail,
+        pendingLetter.id,
+        amount,
+        recipient.stripeAccountId,
+        { recipientId, episodeId: dto.episodeId, letterType: dto.type },
+      );
+      url = result.url;
+      sessionId = result.sessionId;
+    } catch (err) {
+      // Stripe Checkout creation failed — delete orphaned PendingLetter
+      await this.prisma.pendingLetter.delete({ where: { id: pendingLetter.id } }).catch(() => {});
+      this.logger.error(`Stripe Checkout creation failed for PendingLetter ${pendingLetter.id}: ${err}`);
+      throw err;
+    }
+
+    // Store real Stripe session ID for audit trail
+    await this.prisma.pendingLetter.update({
+      where: { id: pendingLetter.id },
+      data: { stripeSessionId: sessionId },
+    });
+
+    return { pendingLetterId: pendingLetter.id, checkoutUrl: url };
   }
 
   async findByEpisode(episodeId: string) {

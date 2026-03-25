@@ -2,9 +2,11 @@ import { Controller, Get, Post, Body, Param, Patch, Query, UseGuards } from '@ne
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { LettersService } from './letters.service';
 import { StampsService } from './stamps/stamps.service';
+import { StripeService } from '../billing/stripe.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { CreateLetterDto } from './dto/create-letter.dto';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 @ApiTags('Letters')
 @Controller('letters')
@@ -12,6 +14,8 @@ export class LettersController {
   constructor(
     private lettersService: LettersService,
     private stampsService: StampsService,
+    private stripeService: StripeService,
+    private prisma: PrismaService,
   ) {}
 
   @Get('episode/:episodeId')
@@ -23,12 +27,24 @@ export class LettersController {
   @Post()
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Send a letter (fan letter with tip)' })
+  @ApiOperation({ summary: 'Send a letter (fan letter with tip) — legacy direct payment' })
   create(
     @CurrentUser('id') userId: string,
     @Body() dto: CreateLetterDto,
   ) {
     return this.lettersService.create(userId, dto);
+  }
+
+  @Post('checkout')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Create letter + Stripe Checkout session (redirect flow)' })
+  createCheckout(
+    @CurrentUser('id') userId: string,
+    @CurrentUser('email') email: string,
+    @Body() dto: CreateLetterDto,
+  ) {
+    return this.lettersService.createCheckout(userId, email, dto);
   }
 
   @Get('received')
@@ -59,5 +75,28 @@ export class LettersController {
   @ApiOperation({ summary: 'Get stamp catalog' })
   getStamps() {
     return { data: this.stampsService.getStamps() };
+  }
+
+  @Get('author-payment-status/:episodeId')
+  @ApiOperation({ summary: 'Check if the episode author can receive letter payments' })
+  async getAuthorPaymentStatus(@Param('episodeId') episodeId: string) {
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      include: { work: { select: { authorId: true } } },
+    });
+    if (!episode) return { canReceivePayment: false };
+
+    const author = await this.prisma.user.findUnique({
+      where: { id: episode.work.authorId },
+      select: { stripeAccountId: true },
+    });
+    if (!author?.stripeAccountId) return { canReceivePayment: false };
+
+    try {
+      const status = await this.stripeService.getConnectStatus(episode.work.authorId);
+      return { canReceivePayment: status.chargesEnabled && status.payoutsEnabled };
+    } catch {
+      return { canReceivePayment: false };
+    }
   }
 }

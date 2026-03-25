@@ -13,6 +13,7 @@ import { BillingService } from './billing.service';
 import { StripeService } from './stripe.service';
 import { CreateCheckoutDto, GetTransactionsDto, PurchaseCreditsDto } from './dto/billing.dto';
 import { CreditService } from './credit.service';
+import { AuthorPayoutService } from './author-payout.service';
 
 @Controller('billing')
 @UseGuards(JwtAuthGuard)
@@ -21,6 +22,7 @@ export class BillingController {
     private billingService: BillingService,
     private stripeService: StripeService,
     private creditService: CreditService,
+    private authorPayoutService: AuthorPayoutService,
   ) {}
 
   @Get('status')
@@ -110,5 +112,10 @@ export class BillingController {
         err?.message || 'Stripeダッシュボードのリンク生成に失敗しました。',
       );
     }
+  }
+
+  @Get('payouts')
+  async getPayoutHistory(@Req() req: any) {
+    return { data: await this.authorPayoutService.getPayoutHistory(req.user.id) };
   }
 }

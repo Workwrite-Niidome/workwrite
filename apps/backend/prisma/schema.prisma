@@ -52,8 +52,10 @@ model User {
   postBookmarks PostBookmark[]
 
   // Letters
-  lettersSent     Letter[] @relation("lettersSent")
-  lettersReceived Letter[] @relation("lettersReceived")
+  lettersSent             Letter[]        @relation("lettersSent")
+  lettersReceived         Letter[]        @relation("lettersReceived")
+  pendingLettersSent      PendingLetter[] @relation("pendingLettersSent")
+  pendingLettersReceived  PendingLetter[] @relation("pendingLettersReceived")
 
   // Referral
   referralCode    String?  @unique
@@ -243,6 +245,7 @@ model Episode {
   highlights      Highlight[]
   comments        Comment[]
   letters         Letter[]
+  pendingLetters  PendingLetter[]
   scenes          StoryScene[]
   aiAnalysis      EpisodeAnalysis?
   posts           Post[]
@@ -411,6 +414,32 @@ enum LetterType {
   STANDARD  // ¥300, 500字
   PREMIUM   // ¥500, 1000字
   GIFT      // ¥1,000〜, 1000字
+}
+
+model PendingLetter {
+  id               String     @id @default(cuid())
+  senderId         String
+  recipientId      String
+  episodeId        String
+  type             LetterType
+  content          String     @db.Text
+  amount           Int
+  stampId          String?
+  giftAmount       Int?
+  moderationStatus String     @default("approved")
+  moderationReason String?
+  stripeSessionId  String     @unique
+  expiresAt        DateTime
+  createdAt        DateTime   @default(now())
+
+  sender    User    @relation("pendingLettersSent", fields: [senderId], references: [id])
+  recipient User    @relation("pendingLettersReceived", fields: [recipientId], references: [id])
+  episode   Episode @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+
+  @@index([senderId])
+  @@index([recipientId])
+  @@index([stripeSessionId])
+  @@index([expiresAt])
 }
 
 // ============================================================
@@ -762,18 +791,23 @@ model AiConversation {
 // ============================================================
 
 model CharacterTalkRevenue {
-  id            String   @id @default(cuid())
+  id            String        @id @default(cuid())
   authorId      String
   readerId      String
   workId        String
   characterId   String?
-  mode          String   @default("character")
+  mode          String        @default("character")
   creditAmount  Int
   revenueYen    Int
   creditTxId    String?
-  createdAt     DateTime @default(now())
+  payoutId      String?
+  createdAt     DateTime      @default(now())
+
+  payout AuthorPayout? @relation(fields: [payoutId], references: [id])
+
   @@index([authorId, createdAt])
   @@index([workId])
+  @@index([payoutId])
 }
 
 // ============================================================
@@ -1316,4 +1350,26 @@ model Announcement {
   creator User @relation("announcementCreator", fields: [createdBy], references: [id])
 
   @@index([isPublished, createdAt])
+}
+
+// ============================================================
+// Author Payout (Character Talk monthly payout to authors)
+// ============================================================
+
+model AuthorPayout {
+  id               String   @id @default(cuid())
+  authorId         String
+  amount           Int      // yen to transfer
+  stripeTransferId String?  @unique
+  periodStart      DateTime
+  periodEnd        DateTime
+  status           String   @default("pending") // pending | processing | completed | failed
+  failureReason    String?
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  revenues CharacterTalkRevenue[]
+
+  @@index([authorId, createdAt])
+  @@index([status])
 }

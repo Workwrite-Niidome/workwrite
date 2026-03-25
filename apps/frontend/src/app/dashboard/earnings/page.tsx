@@ -7,7 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import { api } from '@/lib/api';
-import { DollarSign, TrendingUp, Mail, MessageCircle, Info, ExternalLink, CheckCircle, AlertCircle, Loader2 } from 'lucide-react';
+import { DollarSign, TrendingUp, Mail, MessageCircle, Info, ExternalLink, CheckCircle, AlertCircle, Loader2, Banknote } from 'lucide-react';
 
 interface Earnings {
   totalLetters: number;
@@ -33,6 +33,15 @@ interface TalkEarnings {
   platformCutRate: number;
 }
 
+interface Payout {
+  id: string;
+  amount: number;
+  status: string;
+  periodStart: string;
+  periodEnd: string;
+  createdAt: string;
+}
+
 function EarningsPageContent() {
   const searchParams = useSearchParams();
   const connectResult = searchParams.get('connect');
@@ -40,6 +49,7 @@ function EarningsPageContent() {
   const [earnings, setEarnings] = useState<Earnings | null>(null);
   const [talkEarnings, setTalkEarnings] = useState<TalkEarnings | null>(null);
   const [connectStatus, setConnectStatus] = useState<ConnectStatus | null>(null);
+  const [payouts, setPayouts] = useState<Payout[]>([]);
   const [loading, setLoading] = useState(true);
   const [onboardingLoading, setOnboardingLoading] = useState(false);
 
@@ -53,6 +63,9 @@ function EarningsPageContent() {
         .catch(() => {}),
       api.getConnectStatus()
         .then((res) => setConnectStatus((res as any).data || null))
+        .catch(() => {}),
+      api.getPayoutHistory()
+        .then((res) => setPayouts((res as any).data || []))
         .catch(() => {}),
     ]).finally(() => setLoading(false));
   }, []);
@@ -283,6 +296,40 @@ function EarningsPageContent() {
             </>
           )}
 
+          {/* Payout history */}
+          {payouts.length > 0 && (
+            <>
+              <h2 className="text-lg font-semibold mt-8 mb-3">振込履歴</h2>
+              <div className="space-y-2 mb-6">
+                {payouts.map((p) => (
+                  <Card key={p.id}>
+                    <CardContent className="py-3 px-4 flex items-center justify-between">
+                      <div className="flex items-center gap-3">
+                        <Banknote className="h-4 w-4 text-muted-foreground shrink-0" />
+                        <div>
+                          <p className="text-sm font-medium">¥{p.amount.toLocaleString()}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {new Date(p.periodStart).toLocaleDateString('ja-JP', { year: 'numeric', month: 'short' })}分
+                          </p>
+                        </div>
+                      </div>
+                      <Badge className={
+                        p.status === 'completed' ? 'bg-green-50 text-green-700 text-xs' :
+                        p.status === 'processing' ? 'bg-blue-50 text-blue-700 text-xs' :
+                        p.status === 'failed' ? 'bg-red-50 text-red-700 text-xs' :
+                        'bg-gray-50 text-gray-700 text-xs'
+                      }>
+                        {p.status === 'completed' ? '振込済' :
+                         p.status === 'processing' ? '処理中' :
+                         p.status === 'failed' ? '失敗' : '保留中'}
+                      </Badge>
+                    </CardContent>
+                  </Card>
+                ))}
+              </div>
+            </>
+          )}
+
           {/* Platform fee explanation */}
           <Card>
             <CardContent className="py-4 px-4">
@@ -291,13 +338,13 @@ function EarningsPageContent() {
                 <div className="text-xs text-muted-foreground space-y-1">
                   <p className="font-medium text-foreground text-sm">プラットフォーム手数料について</p>
                   <p>
-                    レター収益からプラットフォーム手数料として{Math.round(earnings.platformCutRate * 100)}%が差し引かれます。
-                    キャラクタートークでは、有償クレジット消費額の40%が作家に還元されます。
+                    レターは収益の80%（手数料20%）が作家に還元されます。
+                    キャラクタートークは有償クレジットの消費額から40%が作家に還元されます。
                     表示されている収益は手数料控除後の金額です。
                   </p>
                   <p>
                     {isConnectReady
-                      ? '収益はStripe Connectを通じて自動的に振り込まれます。'
+                      ? 'レター収益はStripe Connectを通じて自動的に振り込まれます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
                       : 'Stripe Connectの設定完了後、自動振込が有効になります。'}
                   </p>
                 </div>

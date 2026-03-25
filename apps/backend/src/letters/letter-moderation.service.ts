@@ -20,6 +20,7 @@ const MODERATION_SYSTEM_PROMPT = `あなたはファンレターの内容審査A
 export interface ModerationResult {
   approved: boolean;
   reason?: string;
+  needsManualReview?: boolean;
 }
 
 @Injectable()
@@ -31,8 +32,8 @@ export class LetterModerationService {
   async moderate(content: string): Promise<ModerationResult> {
     const apiKey = this.config.get<string>('ANTHROPIC_API_KEY');
     if (!apiKey) {
-      this.logger.warn('ANTHROPIC_API_KEY not set, auto-approving letter');
-      return { approved: true };
+      this.logger.warn('ANTHROPIC_API_KEY not set, queueing for manual review');
+      return { approved: false, reason: 'manual_review', needsManualReview: true };
     }
 
     try {
@@ -61,8 +62,8 @@ export class LetterModerationService {
       });
 
       if (!response.ok) {
-        this.logger.error(`Moderation API error: ${response.status}`);
-        return { approved: true };
+        this.logger.error(`Moderation API error: ${response.status}, queueing for manual review`);
+        return { approved: false, reason: 'manual_review', needsManualReview: true };
       }
 
       const data = await response.json();
@@ -73,8 +74,8 @@ export class LetterModerationService {
         reason: json.reason || undefined,
       };
     } catch (err) {
-      this.logger.error('Letter moderation failed, auto-approving', err);
-      return { approved: true };
+      this.logger.error('Letter moderation failed, queueing for manual review', err);
+      return { approved: false, reason: 'manual_review', needsManualReview: true };
     }
   }
 }

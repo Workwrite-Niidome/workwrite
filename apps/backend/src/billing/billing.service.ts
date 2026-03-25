@@ -1,6 +1,7 @@
 import { Injectable, Logger } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { CreditService } from './credit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import Stripe from 'stripe';
 
 const PLAN_MONTHLY_CREDITS: Record<string, number> = {
@@ -19,6 +20,7 @@ export class BillingService {
   constructor(
     private prisma: PrismaService,
     private creditService: CreditService,
+    private notifications: NotificationsService,
   ) {}
 
   /** Get billing status for a user */
@@ -116,6 +118,12 @@ export class BillingService {
       return;
     }
 
+    // Letter checkout
+    if (session.metadata?.type === 'letter') {
+      await this.handleLetterCheckoutComplete(session);
+      return;
+    }
+
     // Subscription checkout
     const plan = session.metadata?.plan;
     if (!plan) return;
@@ -195,6 +203,155 @@ export class BillingService {
       PLAN_MONTHLY_CREDITS.free,
       'free',
     );
+  }
+
+  /** Handle letter checkout completion — create Payment + Letter from PendingLetter */
+  private async handleLetterCheckoutComplete(
+    session: Stripe.Checkout.Session,
+  ): Promise<void> {
+    const pendingLetterId = session.metadata?.pendingLetterId;
+    if (!pendingLetterId) {
+      this.logger.warn('Letter checkout missing pendingLetterId in metadata');
+      return;
+    }
+
+    const paymentIntentId =
+      typeof session.payment_intent === 'string'
+        ? session.payment_intent
+        : session.payment_intent?.id;
+
+    // Idempotency: check if Letter already created for this payment
+    if (paymentIntentId) {
+      const existingPayment = await this.prisma.payment.findUnique({
+        where: { stripePaymentId: paymentIntentId },
+      });
+      if (existingPayment) {
+        this.logger.log(`Letter payment ${paymentIntentId} already processed, skipping`);
+        return;
+      }
+    }
+
+    const pending = await this.prisma.pendingLetter.findUnique({
+      where: { id: pendingLetterId },
+    });
+
+    if (pending) {
+      // Normal path: PendingLetter exists → create Payment + Letter atomically
+      await this.prisma.$transaction(async (tx) => {
+        const payment = await tx.payment.create({
+          data: {
+            stripePaymentId: paymentIntentId || `checkout_${session.id}`,
+            payerId: pending.senderId,
+            recipientId: pending.recipientId,
+            amount: pending.amount,
+            type: 'LETTER',
+            status: 'succeeded',
+          },
+        });
+
+        await tx.letter.create({
+          data: {
+            senderId: pending.senderId,
+            recipientId: pending.recipientId,
+            episodeId: pending.episodeId,
+            type: pending.type,
+            content: pending.content,
+            amount: pending.amount,
+            stampId: pending.stampId,
+            isHighlighted: pending.type === 'PREMIUM' || pending.type === 'GIFT',
+            isFreeQuota: false,
+            paymentId: payment.id,
+            moderationStatus: pending.moderationStatus,
+            moderationReason: pending.moderationReason,
+          },
+        });
+
+        await tx.pendingLetter.delete({
+          where: { id: pendingLetterId },
+        });
+      });
+
+      // Notify author (outside transaction — non-critical)
+      try {
+        const sender = await this.prisma.user.findUnique({
+          where: { id: pending.senderId },
+          select: { name: true, displayName: true },
+        });
+        const senderName = sender?.displayName || sender?.name || '匿名';
+        await this.notifications.createNotification(pending.recipientId, {
+          type: 'letter',
+          title: 'レターが届きました',
+          body: `${senderName}さんから¥${pending.amount}のレターが届きました`,
+          data: { episodeId: pending.episodeId },
+        });
+      } catch (e: any) {
+        this.logger.error(`Failed to notify author about letter: ${e.message}`);
+      }
+
+      this.logger.log(`Letter created from PendingLetter ${pendingLetterId} (payment_intent: ${paymentIntentId})`);
+    } else {
+      // Fallback path: PendingLetter missing (expired/cascade-deleted) but payment succeeded
+      // Reconstruct minimal Letter from Stripe session metadata to prevent money loss
+      const meta = session.metadata || {};
+      const recipientId = meta.recipientId;
+      const episodeId = meta.episodeId;
+      const letterType = meta.letterType as any;
+      const amount = meta.amount ? parseInt(meta.amount, 10) : 0;
+      const userId = meta.userId;
+
+      if (!recipientId || !episodeId || !userId) {
+        this.logger.error(
+          `PendingLetter ${pendingLetterId} missing AND metadata incomplete — cannot create Letter. ` +
+          `Payment ${paymentIntentId} succeeded but Letter NOT created. Manual intervention required. ` +
+          `metadata: ${JSON.stringify(meta)}`,
+        );
+        return;
+      }
+
+      this.logger.warn(
+        `PendingLetter ${pendingLetterId} missing — reconstructing Letter from metadata (payment: ${paymentIntentId})`,
+      );
+
+      const payment = await this.prisma.payment.create({
+        data: {
+          stripePaymentId: paymentIntentId || `checkout_${session.id}`,
+          payerId: userId,
+          recipientId,
+          amount,
+          type: 'LETTER',
+          status: 'succeeded',
+        },
+      });
+
+      await this.prisma.letter.create({
+        data: {
+          senderId: userId,
+          recipientId,
+          episodeId,
+          type: letterType || 'STANDARD',
+          content: '（決済完了後にレター内容を復元できませんでした。お問い合わせください。）',
+          amount,
+          isHighlighted: letterType === 'PREMIUM' || letterType === 'GIFT',
+          isFreeQuota: false,
+          paymentId: payment.id,
+          moderationStatus: 'approved',
+        },
+      });
+
+      // Notify author
+      try {
+        await this.notifications.createNotification(recipientId, {
+          type: 'letter',
+          title: 'レターが届きました',
+          body: `¥${amount}のレターが届きました`,
+          data: { episodeId },
+        });
+      } catch (e: any) {
+        this.logger.error(`Failed to notify author about fallback letter: ${e.message}`);
+      }
+
+      this.logger.warn(`Fallback Letter created for payment ${paymentIntentId} (PendingLetter ${pendingLetterId} was missing)`);
+    }
   }
 
   /** Handle invoice.payment_failed */

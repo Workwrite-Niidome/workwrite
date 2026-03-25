@@ -2,6 +2,7 @@ import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { StripeService } from '../billing/stripe.service';
+import { randomUUID } from 'crypto';
 
 const PLATFORM_FEE_RATE = 0.2; // 20%
 
@@ -17,75 +18,58 @@ export class PaymentsService {
 
   async createTip(payerId: string, recipientId: string, amount: number) {
     const stripeKey = this.config.get<string>('STRIPE_SECRET_KEY');
+    if (!stripeKey) {
+      throw new BadRequestException('決済機能が現在利用できません。管理者にお問い合わせください。');
+    }
 
-    // Check if recipient has a Connect account
     const recipient = await this.prisma.user.findUnique({
       where: { id: recipientId },
       select: { stripeAccountId: true },
     });
+    if (!recipient?.stripeAccountId) {
+      throw new BadRequestException('この著者はまだ収益受取設定を完了していないため、有料レターを送れません。');
+    }
 
     const payer = await this.prisma.user.findUnique({
       where: { id: payerId },
       select: { email: true, stripeCustomerId: true },
     });
-
-    // If Stripe is configured AND recipient has Connect account → real payment
-    if (stripeKey && recipient?.stripeAccountId && payer?.email) {
-      try {
-        // Ensure payer has a Stripe customer
-        const customerId = await this.stripeService.getOrCreateCustomer(payerId, payer.email);
-
-        // Create payment with Connect destination
-        const { paymentIntentId } = await this.stripeService.createConnectPaymentIntent(
-          customerId,
-          recipient.stripeAccountId,
-          amount,
-          PLATFORM_FEE_RATE,
-          {
-            payerId,
-            recipientId,
-            type: 'letter_tip',
-          },
-        );
-
-        const payment = await this.prisma.payment.create({
-          data: {
-            stripePaymentId: paymentIntentId,
-            payerId,
-            recipientId,
-            amount,
-            type: 'TIP',
-            status: 'succeeded',
-          },
-        });
-
-        this.logger.log(`Connect payment created: ${paymentIntentId}, amount=${amount}, fee=${Math.round(amount * PLATFORM_FEE_RATE)}`);
-        return payment;
-      } catch (e: any) {
-        this.logger.error(`Stripe Connect payment failed: ${e.message}`);
-        throw new BadRequestException('決済に失敗しました。もう一度お試しください。');
-      }
+    if (!payer?.email) {
+      throw new BadRequestException('メールアドレスが設定されていません。');
     }
 
-    // Fallback: mock payment (no Stripe key or no Connect account)
-    if (!stripeKey) {
-      this.logger.warn('STRIPE_SECRET_KEY not set, recording tip without payment processing');
-    } else if (!recipient?.stripeAccountId) {
-      this.logger.warn(`Recipient ${recipientId} has no Connect account, recording mock tip`);
-    }
+    try {
+      const customerId = await this.stripeService.getOrCreateCustomer(payerId, payer.email);
+      const idempotencyKey = `letter_tip_${payerId}_${recipientId}_${randomUUID()}`;
 
-    const payment = await this.prisma.payment.create({
-      data: {
-        stripePaymentId: `tip_${Date.now()}_${Math.random().toString(36).slice(2)}`,
-        payerId,
-        recipientId,
+      const { paymentIntentId, status } = await this.stripeService.createConnectPaymentIntent(
+        customerId,
+        recipient.stripeAccountId,
         amount,
-        type: 'TIP',
-        status: stripeKey ? 'pending' : 'mock',
-      },
-    });
+        PLATFORM_FEE_RATE,
+        { payerId, recipientId, type: 'letter_tip' },
+        idempotencyKey,
+      );
 
-    return payment;
+      // Use Stripe's actual status; webhook will update if it changes
+      const payment = await this.prisma.payment.create({
+        data: {
+          stripePaymentId: paymentIntentId,
+          payerId,
+          recipientId,
+          amount,
+          type: 'LETTER',
+          status: status === 'succeeded' ? 'succeeded' : 'pending',
+        },
+      });
+
+      this.logger.log(`Connect payment created: ${paymentIntentId}, status=${status}, amount=${amount}, fee=${Math.round(amount * PLATFORM_FEE_RATE)}`);
+      return payment;
+    } catch (e: any) {
+      this.logger.error(`Stripe Connect payment failed: ${e.message}`);
+      if (e instanceof BadRequestException) throw e;
+      throw new BadRequestException('決済に失敗しました。もう一度お試しください。');
+    }
   }
 
   async getSubscriptionStatus(userId: string) {

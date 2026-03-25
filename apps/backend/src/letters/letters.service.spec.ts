@@ -4,6 +4,7 @@ import { LettersService } from './letters.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PaymentsService } from '../payments/payments.service';
 import { NotificationsService } from '../notifications/notifications.service';
+import { StripeService } from '../billing/stripe.service';
 import { LetterModerationService } from './letter-moderation.service';
 import { LetterTypeDto } from './dto/create-letter.dto';
 
@@ -31,6 +32,11 @@ const mockModerationService = () => ({
   moderate: jest.fn(),
 });
 
+const mockStripeService = () => ({
+  getConnectStatus: jest.fn(),
+  createLetterCheckoutSession: jest.fn(),
+});
+
 // ─── Tests ───────────────────────────────────────────────────────────────────
 
 describe('LettersService', () => {
@@ -52,6 +58,7 @@ describe('LettersService', () => {
         { provide: PrismaService, useValue: prisma },
         { provide: PaymentsService, useValue: payments },
         { provide: NotificationsService, useValue: notifications },
+        { provide: StripeService, useValue: mockStripeService() },
         { provide: LetterModerationService, useValue: moderation },
       ],
     }).compile();

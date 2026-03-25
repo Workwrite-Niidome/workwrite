@@ -173,6 +173,56 @@ export class StripeService {
     return { url: session.url! };
   }
 
+  async createLetterCheckoutSession(
+    userId: string,
+    email: string,
+    pendingLetterId: string,
+    amount: number,
+    recipientAccountId: string,
+    letterContext: { recipientId: string; episodeId: string; letterType: string },
+  ): Promise<{ url: string; sessionId: string }> {
+    const stripe = this.ensureStripe();
+    const customerId = await this.getOrCreateCustomer(userId, email);
+    const baseUrl = this.config.get<string>('FRONTEND_URL') || 'https://workwrite.jp';
+
+    const applicationFeeAmount = Math.round(amount * 0.2); // 20% platform fee
+
+    const session = await stripe.checkout.sessions.create({
+      customer: customerId,
+      mode: 'payment',
+      line_items: [
+        {
+          price_data: {
+            currency: 'jpy',
+            product_data: { name: 'レター（ファンレター）' },
+            unit_amount: amount,
+          },
+          quantity: 1,
+        },
+      ],
+      payment_intent_data: {
+        application_fee_amount: applicationFeeAmount,
+        transfer_data: { destination: recipientAccountId },
+        metadata: { type: 'letter_tip', pendingLetterId },
+      },
+      success_url: `${baseUrl}/read/letter-sent?session_id={CHECKOUT_SESSION_ID}`,
+      cancel_url: `${baseUrl}/read/letter-cancelled`,
+      metadata: {
+        userId,
+        type: 'letter',
+        pendingLetterId,
+        amount: String(amount),
+        // Fallback data: PendingLetter消失時にWebhookからレターを復元するため
+        recipientId: letterContext.recipientId,
+        episodeId: letterContext.episodeId,
+        letterType: letterContext.letterType,
+      },
+      expires_at: Math.floor(Date.now() / 1000) + 1800, // 30 minutes (UX timeout)
+    });
+
+    return { url: session.url!, sessionId: session.id };
+  }
+
   async createPortalSession(userId: string): Promise<{ url: string }> {
     const stripe = this.ensureStripe();
     const user = await this.prisma.user.findUnique({
@@ -337,38 +387,68 @@ export class StripeService {
 
   /**
    * Create a PaymentIntent with Connect destination charge.
-   * Platform takes applicationFeePercent as fee.
+   * @param applicationFeeRate — decimal fraction (0.2 = 20%)
+   * @param idempotencyKey — unique key to prevent duplicate charges
    */
   async createConnectPaymentIntent(
     customerId: string,
     recipientAccountId: string,
     amount: number,
-    applicationFeePercent: number,
+    applicationFeeRate: number,
     metadata: Record<string, string>,
-  ): Promise<{ clientSecret: string; paymentIntentId: string }> {
+    idempotencyKey?: string,
+  ): Promise<{ clientSecret: string; paymentIntentId: string; status: string }> {
     const stripe = this.ensureStripe();
-    const applicationFeeAmount = Math.round(amount * applicationFeePercent);
+    const applicationFeeAmount = Math.round(amount * applicationFeeRate);
 
-    const paymentIntent = await stripe.paymentIntents.create({
-      amount,
-      currency: 'jpy',
-      customer: customerId,
-      application_fee_amount: applicationFeeAmount,
-      transfer_data: {
-        destination: recipientAccountId,
+    const paymentIntent = await stripe.paymentIntents.create(
+      {
+        amount,
+        currency: 'jpy',
+        customer: customerId,
+        application_fee_amount: applicationFeeAmount,
+        transfer_data: {
+          destination: recipientAccountId,
+        },
+        metadata,
+        confirm: true,
+        automatic_payment_methods: {
+          enabled: true,
+          allow_redirects: 'never',
+        },
       },
-      metadata,
-      // Auto-confirm for simple charges (no 3D Secure needed for small amounts in Japan)
-      confirm: true,
-      automatic_payment_methods: {
-        enabled: true,
-        allow_redirects: 'never',
-      },
-    });
+      idempotencyKey ? { idempotencyKey } : undefined,
+    );
 
     return {
       clientSecret: paymentIntent.client_secret!,
       paymentIntentId: paymentIntent.id,
+      status: paymentIntent.status,
     };
+  }
+
+  /**
+   * Create a Stripe Transfer from platform to a Connect account.
+   * Used for character talk monthly payouts.
+   */
+  async createTransfer(
+    amount: number,
+    destinationAccountId: string,
+    metadata: Record<string, string>,
+    idempotencyKey?: string,
+  ): Promise<{ transferId: string }> {
+    const stripe = this.ensureStripe();
+
+    const transfer = await stripe.transfers.create(
+      {
+        amount,
+        currency: 'jpy',
+        destination: destinationAccountId,
+        metadata,
+      },
+      idempotencyKey ? { idempotencyKey } : undefined,
+    );
+
+    return { transferId: transfer.id };
   }
 }

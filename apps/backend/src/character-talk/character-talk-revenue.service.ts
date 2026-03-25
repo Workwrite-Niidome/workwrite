@@ -23,8 +23,8 @@ export class CharacterTalkRevenueService {
   ): Promise<void> {
     if (purchasedCreditsUsed <= 0) return;
 
-    // Revenue calculation: 9.8 yen per credit, author gets 30%
-    const revenueYen = Math.floor(purchasedCreditsUsed * 9.8 * 0.3);
+    // Revenue calculation: 9.8 yen per credit, author gets 40%
+    const revenueYen = Math.floor(purchasedCreditsUsed * 9.8 * 0.4);
 
     try {
       await this.prisma.characterTalkRevenue.create({
@@ -79,7 +79,7 @@ export class CharacterTalkRevenueService {
       monthlyRevenue: Number(monthlyResult[0]?.sum ?? 0),
       totalSessions: Number(totalResult[0]?.count ?? 0),
       monthlySessions: Number(monthlyResult[0]?.count ?? 0),
-      platformCutRate: 0.7,
+      platformCutRate: 0.6,
     };
   }
 }

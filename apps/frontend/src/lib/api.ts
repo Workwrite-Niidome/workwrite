@@ -470,8 +470,8 @@ class ApiClient {
     return this.request<Letter[]>(`/letters/episode/${episodeId}`);
   }
 
-  async sendLetter(data: { episodeId: string; type: LetterType; content: string; stampId?: string; giftAmount?: number }) {
-    return this.request<Letter>('/letters', {
+  async createLetterCheckout(data: { episodeId: string; type: LetterType; content: string; stampId?: string; giftAmount?: number }) {
+    return this.request<{ pendingLetterId: string; checkoutUrl: string }>('/letters/checkout', {
       method: 'POST',
       body: JSON.stringify(data),
     });
@@ -491,6 +491,14 @@ class ApiClient {
 
   async getLetterEarnings() {
     return this.request<{ data: { totalLetters: number; monthlyLetters: number; totalEarnings: number; monthlyEarnings: number; platformCutRate: number } }>('/letters/earnings');
+  }
+
+  async getAuthorPaymentStatus(episodeId: string) {
+    return this.request<{ canReceivePayment: boolean }>(`/letters/author-payment-status/${episodeId}`);
+  }
+
+  async getPayoutHistory() {
+    return this.request<{ data: { id: string; amount: number; status: string; periodStart: string; periodEnd: string; createdAt: string }[] }>('/billing/payouts');
   }
 
   // Discover

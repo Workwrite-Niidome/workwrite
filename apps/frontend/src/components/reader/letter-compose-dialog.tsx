@@ -95,15 +95,15 @@ export function LetterComposeDialog({
     setSending(true);
     setError('');
     try {
-      await api.sendLetter({
+      const { checkoutUrl } = await api.createLetterCheckout({
         episodeId,
         type: selectedType,
         content: content.trim(),
         stampId: stampId || undefined,
         giftAmount: selectedType === 'GIFT' ? giftAmount : undefined,
       });
-      onSent();
-      onOpenChange(false);
+      // Redirect to Stripe Checkout
+      window.location.href = checkoutUrl;
     } catch (err: unknown) {
       setError(err instanceof Error ? err.message : 'レターの送信に失敗しました');
     } finally {
