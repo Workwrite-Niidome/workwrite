@@ -209,7 +209,7 @@ function EarningsPageContent() {
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 レター収益を受け取るには、Stripe Connectアカウントの設定が必要です。
-                設定後、読者からのレター代金（手数料20%控除後）が自動的に振り込まれます。
+                設定後、読者からのレター代金（手数料20%控除後）が毎日自動で振り込まれます。保留中の収益がある場合は「受け取る」ボタンで即時受け取りも可能です。
               </p>
               <Button onClick={handleOnboarding} disabled={onboardingLoading}>
                 {onboardingLoading ? (
@@ -233,7 +233,7 @@ function EarningsPageContent() {
                 </div>
                 <div className="text-sm">
                   {isConnectReady
-                    ? '振込が有効です。レター収益は自動的に振り込まれます。'
+                    ? '振込が有効です。レター収益は毎日自動で振り込まれます（毎朝9:00確認）。'
                     : connectStatus.detailsSubmitted
                     ? 'Stripeによる審査中です。完了次第振込が有効になります。'
                     : '設定が途中です。続きを完了してください。'}
@@ -412,7 +412,7 @@ function EarningsPageContent() {
                   </p>
                   <p>
                     {isConnectReady
-                      ? 'レター収益はStripe Connectを通じて自動的に振り込まれます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
+                      ? 'レター収益は毎日自動で振り込まれます（毎朝9:00確認）。90日以内に受け取り設定がない場合、送信者に返金されます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
                       : 'Stripe Connectの設定完了後、自動振込が有効になります。'}
                   </p>
                 </div>
