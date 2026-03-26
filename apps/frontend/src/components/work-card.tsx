@@ -19,11 +19,11 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
 
   return (
     <Link href={`/works/${work.id}`} className="group block">
-      <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
+      <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all overflow-hidden">
         <CardContent className="p-5 space-y-2.5">
           <div className="flex items-start justify-between gap-2">
             {work.genre && (
-              <Badge variant="outline" className="text-[11px] shrink-0">
+              <Badge variant="outline" className="text-[11px] truncate max-w-[140px]">
                 {GENRE_LABELS[work.genre] || work.genre}
               </Badge>
             )}
