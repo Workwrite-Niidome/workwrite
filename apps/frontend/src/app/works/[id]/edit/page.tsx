@@ -9,7 +9,7 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
-import { ConfirmDialog } from '@/components/ui/dialog';
+import { Dialog, DialogHeader, DialogTitle, DialogContent, DialogFooter, ConfirmDialog } from '@/components/ui/dialog';
 import { Loading } from '@/components/layout/loading';
 import { ScoreCard } from '@/components/scoring/score-card';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
@@ -69,6 +69,7 @@ export default function EditWorkPage() {
   // Confirm dialogs
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
+  const [publishWithScoring, setPublishWithScoring] = useState(true);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [deleteEpisodeId, setDeleteEpisodeId] = useState<string | null>(null);
   const [creationPlan, setCreationPlan] = useState<any>(null);
@@ -131,9 +132,12 @@ export default function EditWorkPage() {
 
   async function handlePublish() {
     try {
-      const res = await api.updateWork(workId, { status: 'PUBLISHED' } as Partial<Work>);
+      const res = await api.updateWork(workId, {
+        status: 'PUBLISHED',
+        skipScoring: !publishWithScoring,
+      } as any);
       setWork(res.data);
-      setMessage('公開しました');
+      setMessage(publishWithScoring ? '公開しました（スコアリング実行中）' : '公開しました（スコアリングなし）');
     } catch {
       setMessage('公開に失敗しました');
     }
@@ -473,14 +477,36 @@ export default function EditWorkPage() {
         onConfirm={handleDelete}
       />
 
-      <ConfirmDialog
-        open={confirmPublish}
-        onOpenChange={setConfirmPublish}
-        title="作品を公開"
-        message={work.status === 'UNPUBLISHED' ? 'この作品を再公開しますか？' : 'この作品を公開しますか？'}
-        confirmLabel="公開する"
-        onConfirm={handlePublish}
-      />
+      <Dialog open={confirmPublish} onOpenChange={setConfirmPublish}>
+        <DialogHeader>
+          <DialogTitle>作品を公開</DialogTitle>
+        </DialogHeader>
+        <DialogContent>
+          <p className="text-sm text-muted-foreground mb-4">
+            {work.status === 'UNPUBLISHED' ? 'この作品を再公開しますか？' : 'この作品を公開しますか？'}
+          </p>
+          <label className="flex items-center gap-2 text-sm cursor-pointer">
+            <input
+              type="checkbox"
+              checked={publishWithScoring}
+              onChange={(e) => setPublishWithScoring(e.target.checked)}
+              className="rounded"
+            />
+            <span>AIスコアリングを実行する（クレジット消費あり）</span>
+          </label>
+          <p className="text-xs text-muted-foreground mt-1 ml-6">
+            オフにするとクレジットを消費せずに公開できます。スコアリングはあとから手動で実行できます。
+          </p>
+        </DialogContent>
+        <DialogFooter>
+          <Button variant="outline" size="sm" onClick={() => setConfirmPublish(false)}>
+            キャンセル
+          </Button>
+          <Button size="sm" onClick={() => { setConfirmPublish(false); handlePublish(); }}>
+            公開する
+          </Button>
+        </DialogFooter>
+      </Dialog>
 
       <ConfirmDialog
         open={confirmUnpublish}

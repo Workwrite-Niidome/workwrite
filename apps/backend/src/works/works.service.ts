@@ -164,8 +164,10 @@ export class WorksService {
           content: `新作『${dto.title || work.title}』を公開しました`,
           workId: id,
         }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
-        // Auto-scoring, search indexing, emotion tag generation
-        this.autoProcessWork(id).catch((e) => this.logger.warn(`Auto-process failed: ${e}`));
+        // Auto-scoring, search indexing, emotion tag generation (skip if user opts out)
+        if (!dto.skipScoring) {
+          this.autoProcessWork(id).catch((e) => this.logger.warn(`Auto-process failed: ${e}`));
+        }
 
         // First publish reward: 10Cr (one-time per user)
         this.grantFirstPublishReward(userId).catch((e) =>

@@ -96,4 +96,9 @@ export class UpdateWorkDto {
   @IsArray()
   @IsString({ each: true })
   tags?: string[];
+
+  @ApiPropertyOptional({ description: '公開時にスコアリングをスキップする' })
+  @IsOptional()
+  @IsBoolean()
+  skipScoring?: boolean;
 }
