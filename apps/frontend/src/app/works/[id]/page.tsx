@@ -17,6 +17,7 @@ import { EmotionArc } from '@/components/work/EmotionArc';
 import { ScoreBadge } from '@/components/scoring/score-badge';
 import { ShareScoreButton } from '@/components/scoring/share-score-button';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
+import { OriginalityBadge } from '@/components/originality/originality-badge';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -174,6 +175,7 @@ export default function WorkDetailPage() {
                   </span>
                 </>
               )}
+              {work.originality != null && <OriginalityBadge score={work.originality} />}
               {work.genre && <Badge variant="secondary" className="shrink-0">{GENRE_LABELS[work.genre] || work.genre}</Badge>}
               {(work as any).completionStatus === 'COMPLETED' && (
                 <Badge variant="default" className="shrink-0 bg-green-600">完結</Badge>

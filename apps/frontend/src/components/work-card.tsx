@@ -3,6 +3,7 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { ScoreBadge } from '@/components/scoring/score-badge';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
+import { OriginalityBadge } from '@/components/originality/originality-badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { GENRE_LABELS } from '@/lib/constants';
 import type { Work } from '@/lib/api';
@@ -47,6 +48,7 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
 
           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
             {work.isAiGenerated && <AiGeneratedBadge />}
+            {work.originality != null && <OriginalityBadge score={work.originality} />}
             {work.tags?.slice(0, 3).map((t) => (
               <span key={t.id} className="text-[11px] text-muted-foreground">#{t.tag}</span>
             ))}
