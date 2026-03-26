@@ -165,9 +165,16 @@ export class SearchService implements OnModuleInit {
 
     // Category filters
     if (options?.category === 'hidden-gems') {
-      const avg = await this.prisma.qualityScore.aggregate({ _avg: { overall: true } });
-      where.qualityScore = { overall: { gte: (avg._avg.overall ?? 50) * 1.2 } };
-      where.totalViews = { lt: 100 };
+      const allScores = await this.prisma.qualityScore.findMany({
+        select: { overall: true },
+        orderBy: { overall: 'asc' },
+      });
+      const median = allScores.length > 0
+        ? allScores[Math.floor(allScores.length / 2)].overall
+        : 50;
+      const threshold = Math.max(median * 1.1, 50);
+      where.qualityScore = { overall: { gte: threshold } };
+      where.totalViews = { lt: 300 };
     }
 
     if (options?.aiGenerated === true || options?.category === 'ai') {
