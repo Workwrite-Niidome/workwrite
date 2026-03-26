@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback, useState } from 'react';
+import { useRef, useCallback, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Settings, X, Mail, MessageCircle } from 'lucide-react';
 import type { Highlight } from '@/lib/api';
@@ -77,13 +77,31 @@ export function VerticalReader({
     }
   }
 
+  // Mouse wheel → horizontal scroll (vertical writing mode)
+  useEffect(() => {
+    const el = columnContainerRef.current;
+    if (!el) return;
+
+    function handleWheel(e: WheelEvent) {
+      e.preventDefault();
+      // Convert vertical wheel to horizontal scroll
+      // deltaY > 0 = scroll down = next page (left in vertical-rl)
+      el!.scrollBy({
+        left: e.deltaY > 0 ? 200 : -200,
+        behavior: 'auto',
+      });
+    }
+
+    el.addEventListener('wheel', handleWheel, { passive: false });
+    return () => el.removeEventListener('wheel', handleWheel);
+  }, []);
+
   // Handle boundary navigation
   const handleNext = useCallback(() => {
     if (isLastPage) {
       if (nextEpisode) {
         router.push(`/read/${nextEpisode.id}`);
       } else {
-        // Bounce effect
         const el = columnContainerRef.current;
         if (el) {
           el.style.transition = 'transform 0.15s ease';
@@ -105,7 +123,6 @@ export function VerticalReader({
       if (prevEpisode) {
         router.push(`/read/${prevEpisode.id}`);
       } else {
-        // Bounce effect
         const el = columnContainerRef.current;
         if (el) {
           el.style.transition = 'transform 0.15s ease';
@@ -132,10 +149,6 @@ export function VerticalReader({
 
   const fontSizeClass = FONT_SIZE_MAP[fontSize] || 'text-base';
 
-  // Use dvh if supported, vh as fallback
-  const headerHeight = 48;
-  const footerHeight = 40;
-
   return (
     <div
       style={{
@@ -148,11 +161,83 @@ export function VerticalReader({
         display: 'flex',
         flexDirection: 'column',
         zIndex: 30,
-        background: 'inherit',
       }}
       className="bg-background text-foreground"
     >
-      {/* Mini header */}
+      {/* Mini header — just back button, minimal */}
+      <div
+        style={{
+          height: '40px',
+          writingMode: 'horizontal-tb',
+          display: 'flex',
+          alignItems: 'center',
+          padding: '0 12px',
+          flexShrink: 0,
+        } as React.CSSProperties}
+        data-no-nav
+      >
+        <button
+          onClick={() => router.push(`/works/${episode.workId}`)}
+          className="flex items-center gap-1 text-xs text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronLeft className="h-3.5 w-3.5" />
+          作品へ戻る
+        </button>
+      </div>
+
+      {/* Vertical text container — overflow: auto for free scrolling */}
+      <div
+        ref={(node) => {
+          (columnContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          if (contentRef && 'current' in contentRef) {
+            (contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
+          }
+        }}
+        onMouseUp={onContentMouseUp}
+        style={{
+          flex: 1,
+          writingMode: 'vertical-rl',
+          WebkitWritingMode: 'vertical-rl',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          padding: '2rem',
+          scrollSnapType: 'x mandatory',
+        } as React.CSSProperties}
+      >
+        {/* Title — centered vertically */}
+        <div
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            justifyContent: 'center',
+            height: '100%',
+            marginLeft: '3em',
+            paddingRight: '1rem',
+            scrollSnapAlign: 'start',
+          }}
+        >
+          <h1
+            className="font-serif font-bold"
+            style={{ fontSize: '1.5rem' }}
+          >
+            {episode.title}
+          </h1>
+        </div>
+
+        {/* Body text */}
+        <div
+          className={`font-serif ${fontSizeClass} ${lineHeight}`}
+          style={{ whiteSpace: 'pre-wrap' }}
+        >
+          <HighlightedText
+            text={episode.content}
+            highlights={highlights}
+            onHighlightClick={onHighlightClick}
+          />
+        </div>
+      </div>
+
+      {/* Footer bar — page indicator + action buttons */}
       <div
         style={{
           height: '44px',
@@ -160,19 +245,29 @@ export function VerticalReader({
           display: 'flex',
           alignItems: 'center',
           justifyContent: 'space-between',
-          padding: '0 12px',
-          borderBottom: '1px solid var(--border, #333)',
+          padding: '0 16px',
+          borderTop: '1px solid var(--border, #333)',
           flexShrink: 0,
         } as React.CSSProperties}
         data-no-nav
       >
-        <button
-          onClick={() => router.push(`/works/${episode.workId}`)}
-          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
-        >
-          <ChevronLeft className="h-4 w-4" />
-          作品へ戻る
-        </button>
+        {/* Page info */}
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-muted-foreground tabular-nums">
+            {currentPage + 1} / {totalPages}
+          </span>
+          <div className="w-24 h-1 rounded-full overflow-hidden bg-muted">
+            <div
+              className="h-full bg-primary rounded-full"
+              style={{
+                width: `${progressPct * 100}%`,
+                transition: 'width 0.3s ease',
+              }}
+            />
+          </div>
+        </div>
+
+        {/* Action buttons */}
         <div className="flex items-center gap-1">
           <button
             onClick={onLetterClick}
@@ -202,95 +297,6 @@ export function VerticalReader({
           >
             <X className="h-4 w-4" />
           </button>
-        </div>
-      </div>
-
-      {/* Vertical text container — NO CSS columns, just overflow: hidden + scrollLeft */}
-      <div
-        ref={(node) => {
-          (columnContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-          if (contentRef && 'current' in contentRef) {
-            (contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
-          }
-        }}
-        onMouseUp={onContentMouseUp}
-        style={{
-          flex: 1,
-          writingMode: 'vertical-rl',
-          WebkitWritingMode: 'vertical-rl',
-          overflow: 'hidden',
-          padding: '2rem 2rem',
-        } as React.CSSProperties}
-      >
-        {/* Title — centered vertically in the container */}
-        <div
-          style={{
-            display: 'flex',
-            alignItems: 'center',
-            justifyContent: 'center',
-            height: '100%',
-            marginLeft: '3em', /* Gap between title and body text = ~3 lines */
-            paddingRight: '1rem',
-          }}
-        >
-          <h1
-            className="font-serif font-bold"
-            style={{
-              fontSize: '1.5rem',
-              textAlign: 'center',
-            }}
-          >
-            {episode.title}
-          </h1>
-        </div>
-
-        {/* Body text */}
-        <div
-          className={`font-serif ${fontSizeClass} ${lineHeight}`}
-          style={{ whiteSpace: 'pre-wrap' }}
-        >
-          <HighlightedText
-            text={episode.content}
-            highlights={highlights}
-            onHighlightClick={onHighlightClick}
-          />
-        </div>
-      </div>
-
-      {/* Page indicator — fixed at bottom, horizontal writing */}
-      <div
-        style={{
-          height: `${footerHeight}px`,
-          writingMode: 'horizontal-tb',
-          display: 'flex',
-          alignItems: 'center',
-          justifyContent: 'center',
-          gap: '12px',
-          borderTop: '1px solid var(--border, #333)',
-        }}
-        data-no-nav
-      >
-        <span className="text-xs text-muted-foreground tabular-nums">
-          {currentPage + 1} / {totalPages}
-        </span>
-        <div
-          style={{
-            width: '120px',
-            height: '4px',
-            borderRadius: '2px',
-            overflow: 'hidden',
-          }}
-          className="bg-muted"
-        >
-          <div
-            className="bg-primary"
-            style={{
-              height: '100%',
-              width: `${progressPct * 100}%`,
-              transition: 'width 0.3s ease',
-              borderRadius: '2px',
-            }}
-          />
         </div>
       </div>
     </div>

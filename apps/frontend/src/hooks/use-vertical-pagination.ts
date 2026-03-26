@@ -91,8 +91,18 @@ export function useVerticalPagination({
     });
     observer.observe(el);
 
+    // Track scroll position to update current page (for free scrolling / mouse wheel)
+    function handleScroll() {
+      if (!el) return;
+      const pos = getScrollPosition(el);
+      const page = Math.round(pos / el.clientWidth);
+      setCurrentPage(Math.max(0, Math.min(page, Math.ceil(el.scrollWidth / el.clientWidth) - 1)));
+    }
+    el.addEventListener('scroll', handleScroll, { passive: true });
+
     return () => {
       observer.disconnect();
+      el.removeEventListener('scroll', handleScroll);
       if (recalcTimerRef.current) clearTimeout(recalcTimerRef.current);
     };
   }, [contentReady, recalculate, containerRef]);
