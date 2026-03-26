@@ -8,6 +8,8 @@ interface PaginationParams {
   search?: string;
   role?: string;
   status?: string;
+  plan?: string;
+  banned?: string;
 }
 
 @Injectable()
@@ -42,11 +44,18 @@ export class AdminService {
   }
 
   async getUsers(params: PaginationParams) {
-    const { page, limit, search, role } = params;
+    const { page, limit, search, role, plan, banned } = params;
     const skip = (page - 1) * limit;
 
     const where: Record<string, unknown> = {};
     if (role) where.role = role;
+    if (banned === 'true') where.isBanned = true;
+    if (banned === 'false') where.isBanned = false;
+    if (plan === 'free') {
+      where.subscription = null;
+    } else if (plan) {
+      where.subscription = { plan };
+    }
     if (search) {
       where.OR = [
         { name: { contains: search, mode: 'insensitive' } },

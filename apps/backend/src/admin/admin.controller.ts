@@ -57,13 +57,17 @@ export class AdminController {
   @ApiQuery({ name: 'limit', required: false })
   @ApiQuery({ name: 'search', required: false })
   @ApiQuery({ name: 'role', required: false })
+  @ApiQuery({ name: 'plan', required: false })
+  @ApiQuery({ name: 'banned', required: false })
   getUsers(
     @Query('page', new DefaultValuePipe(1), ParseIntPipe) page: number,
     @Query('limit', new DefaultValuePipe(20), ParseIntPipe) limit: number,
     @Query('search') search?: string,
     @Query('role') role?: string,
+    @Query('plan') plan?: string,
+    @Query('banned') banned?: string,
   ) {
-    return this.adminService.getUsers({ page, limit, search, role });
+    return this.adminService.getUsers({ page, limit, search, role, plan, banned });
   }
 
   @Patch('users/:id/role')

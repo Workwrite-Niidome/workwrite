@@ -18,17 +18,26 @@ export default function AdminUsersPage() {
   const [page, setPage] = useState(1);
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('');
+  const [planFilter, setPlanFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState('');
   const [loading, setLoading] = useState(true);
 
   const fetchUsers = useCallback(async () => {
     setLoading(true);
     try {
-      const res = await api.getAdminUsers({ page, limit: PAGE_SIZE, search: search || undefined, role: roleFilter || undefined });
+      const res = await api.getAdminUsers({
+        page,
+        limit: PAGE_SIZE,
+        search: search || undefined,
+        role: roleFilter || undefined,
+        plan: planFilter || undefined,
+        banned: statusFilter || undefined,
+      });
       setUsers(res.data);
       setTotal(res.total);
     } catch {}
     setLoading(false);
-  }, [page, search, roleFilter]);
+  }, [page, search, roleFilter, planFilter, statusFilter]);
 
   useEffect(() => { fetchUsers(); }, [fetchUsers]);
 
@@ -107,8 +116,29 @@ export default function AdminUsersPage() {
           className="h-10 rounded-lg border border-border bg-transparent px-3 text-sm"
           aria-label="Filter by role"
         >
-          <option value="">All roles</option>
+          <option value="">全ロール</option>
           {ROLES.map((r) => <option key={r} value={r}>{r}</option>)}
+        </select>
+        <select
+          value={planFilter}
+          onChange={(e) => { setPlanFilter(e.target.value); setPage(1); }}
+          className="h-10 rounded-lg border border-border bg-transparent px-3 text-sm"
+          aria-label="Filter by plan"
+        >
+          <option value="">全プラン</option>
+          <option value="free">無料</option>
+          <option value="standard">Standard</option>
+          <option value="pro">Pro</option>
+        </select>
+        <select
+          value={statusFilter}
+          onChange={(e) => { setStatusFilter(e.target.value); setPage(1); }}
+          className="h-10 rounded-lg border border-border bg-transparent px-3 text-sm"
+          aria-label="Filter by status"
+        >
+          <option value="">全ステータス</option>
+          <option value="false">Active</option>
+          <option value="true">凍結中</option>
         </select>
       </div>
 

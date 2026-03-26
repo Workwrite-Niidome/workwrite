@@ -41,7 +41,8 @@ interface AnalyzeResult {
 interface ImportResult {
   importId: string;
   workId: string;
-  episodeCount: number;
+  chapters?: number;
+  episodes?: number;
 }
 
 export default function ImportPage() {
@@ -538,7 +539,7 @@ export default function ImportPage() {
           <CheckCircle2 className="h-12 w-12 mx-auto text-green-500" />
           <h2 className="text-lg font-bold">インポートが完了しました！</h2>
           <p className="text-sm text-muted-foreground">
-            {importResult.episodeCount} エピソードがインポートされました。
+            {importResult.chapters ?? importResult.episodes ?? 0} エピソードがインポートされました。
           </p>
           <div className="flex gap-3 justify-center pt-4">
             <Button onClick={() => router.push(`/works/${importResult.workId}`)}>

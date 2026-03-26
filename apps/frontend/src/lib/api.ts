@@ -749,12 +749,14 @@ class ApiClient {
     return this.request<{ data: AdminStats }>('/admin/stats');
   }
 
-  async getAdminUsers(params?: { page?: number; limit?: number; search?: string; role?: string }) {
+  async getAdminUsers(params?: { page?: number; limit?: number; search?: string; role?: string; plan?: string; banned?: string }) {
     const qs = new URLSearchParams();
     if (params?.page) qs.set('page', String(params.page));
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.search) qs.set('search', params.search);
     if (params?.role) qs.set('role', params.role);
+    if (params?.plan) qs.set('plan', params.plan);
+    if (params?.banned) qs.set('banned', params.banned);
     return this.request<{ data: AdminUser[]; total: number; page: number; limit: number }>(
       `/admin/users?${qs.toString()}`,
     );
@@ -1340,7 +1342,9 @@ class ApiClient {
       throw new ApiError(res.status, message, error.error);
     }
 
-    return res.json();
+    const json = await res.json();
+    // TransformInterceptor wraps response in { data: ... } — unwrap it
+    return (json?.data ?? json) as T;
   }
 
   async analyzeImportFile(file: File) {
@@ -1353,14 +1357,14 @@ class ApiClient {
     const formData = new FormData();
     formData.append('file', file);
     Object.entries(options).forEach(([key, val]) => { if (val) formData.append(key, val); });
-    return this.requestWithFormData<{ importId: string; workId: string; episodeCount: number }>('/works/import/file', formData);
+    return this.requestWithFormData<{ importId: string; workId: string; chapters: number; detectedEncoding: string }>('/works/import/file', formData);
   }
 
   async importMultipleFiles(files: File[], options: { workId?: string; title?: string; synopsis?: string; genre?: string }) {
     const formData = new FormData();
     files.forEach(f => formData.append('files', f));
     Object.entries(options).forEach(([key, val]) => { if (val) formData.append(key, val); });
-    return this.requestWithFormData<{ importId: string; workId: string; episodeCount: number }>('/works/import/files', formData);
+    return this.requestWithFormData<{ importId: string; workId: string; episodes: number }>('/works/import/files', formData);
   }
 
   // Health check
