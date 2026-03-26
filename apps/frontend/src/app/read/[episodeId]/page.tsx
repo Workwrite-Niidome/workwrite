@@ -32,13 +32,11 @@ import { LetterComposeDialog } from '@/components/reader/letter-compose-dialog';
 import { useReaderShortcuts } from '@/hooks/use-reader-shortcuts';
 import { ShortcutsHelp } from '@/components/reader/shortcuts-help';
 import { useSwipeNavigation } from '@/hooks/use-swipe-navigation';
-import { VerticalReader } from '@/components/reader/vertical-reader';
 
 type FontSize = 'sm' | 'base' | 'lg' | 'xl';
 type Theme = 'light' | 'dark' | 'sepia';
 type LineHeight = 'tight' | 'normal' | 'relaxed' | 'loose';
 type MaxWidth = 'narrow' | 'normal' | 'wide';
-type WritingMode = 'horizontal' | 'vertical';
 
 const FONT_SIZES: Record<FontSize, string> = {
   sm: 'text-sm',
@@ -73,7 +71,6 @@ interface ReaderSettings {
   theme: Theme;
   lineHeight: LineHeight;
   maxWidth: MaxWidth;
-  writingMode: WritingMode;
 }
 
 const DEFAULT_SETTINGS: ReaderSettings = {
@@ -81,7 +78,6 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   theme: 'light',
   lineHeight: 'normal',
   maxWidth: 'normal',
-  writingMode: 'horizontal',
 };
 
 function loadSettings(): ReaderSettings {
@@ -537,27 +533,6 @@ export default function ReaderPage() {
           ))}
         </div>
       </div>
-      <div className="space-y-2">
-        <label className="text-xs text-muted-foreground">組み方向</label>
-        <div className="flex gap-1">
-          <Button
-            variant={settings.writingMode === 'horizontal' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateSettings({ writingMode: 'horizontal' })}
-            className="flex-1 text-xs min-h-[44px]"
-          >
-            横書き
-          </Button>
-          <Button
-            variant={settings.writingMode === 'vertical' ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => updateSettings({ writingMode: 'vertical' })}
-            className="flex-1 text-xs min-h-[44px]"
-          >
-            縦書き
-          </Button>
-        </div>
-      </div>
       <div className="pt-2 border-t border-border">
         <Button variant="ghost" size="sm" onClick={resetSettings} className="w-full text-xs">
           デフォルトに戻す
@@ -566,19 +541,15 @@ export default function ReaderPage() {
     </div>
   );
 
-  const isVertical = settings.writingMode === 'vertical';
-
   return (
     <div className={`min-h-screen ${themeStyle.bg} ${themeStyle.text} transition-colors`}>
-      {/* Progress bar — hidden in vertical mode (VerticalReader has its own) */}
-      {!isVertical && (
-        <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted" style={{ transform: 'translateZ(0)' }}>
-          <div
-            className="h-full bg-primary transition-all duration-300"
-            style={{ width: `${progressPct * 100}%` }}
-          />
-        </div>
-      )}
+      {/* Progress bar */}
+      <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted" style={{ transform: 'translateZ(0)' }}>
+        <div
+          className="h-full bg-primary transition-all duration-300"
+          style={{ width: `${progressPct * 100}%` }}
+        />
+      </div>
 
       {/* Swipe edge indicators */}
       {swipeEdge === 'left' && prevEp && (
@@ -675,86 +646,63 @@ export default function ReaderPage() {
       {/* Keyboard shortcuts help */}
       <ShortcutsHelp open={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
 
-      {/* Main content — horizontal or vertical */}
-      {isVertical ? (
-        <VerticalReader
-          episode={episode}
-          highlights={highlights}
-          fontSize={settings.fontSize}
-          lineHeight={lineHeightClass}
-          onHighlightClick={(h, e) => handleHighlightClick(h, e)}
-          onContentMouseUp={handleContentMouseUp}
-          contentRef={contentRef}
-          onProgressChange={(pct) => {
-            setProgressPct(pct);
-            saveProgress(pct, 0);
-          }}
-          onLastPageReached={() => {
-            if (!showCompleteBanner) setShowCompleteBanner(true);
-          }}
-          prevEpisode={prevEp}
-          nextEpisode={nextEp}
+      {/* Main content */}
+      <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
+        {prologue && (
+          <div className="mb-12 border-l-2 border-primary/30 pl-5">
+            <p className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap text-muted-foreground italic`}>
+              {prologue}
+            </p>
+            <div className="mt-6 border-t border-border/50" />
+          </div>
+        )}
+        <h1 className="text-2xl font-bold font-serif mb-8 text-center">
+          {episode.title}
+        </h1>
+        <div className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap`}>
+          <HighlightedText
+            text={episode.content}
+            highlights={highlights}
+            onHighlightClick={(h, e) => handleHighlightClick(h, e)}
+          />
+        </div>
+      </article>
+
+      {/* Episode complete banner */}
+      {showCompleteBanner && (
+        <EpisodeCompleteBanner
+          episodeId={episodeId}
+          nextEpisodeId={nextEp?.id}
+          workId={episode.workId}
         />
-      ) : (
-        <>
-          <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
-            {prologue && (
-              <div className="mb-12 border-l-2 border-primary/30 pl-5">
-                <p className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap text-muted-foreground italic`}>
-                  {prologue}
-                </p>
-                <div className="mt-6 border-t border-border/50" />
-              </div>
-            )}
-            <h1 className="text-2xl font-bold font-serif mb-8 text-center">
-              {episode.title}
-            </h1>
-            <div className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap`}>
-              <HighlightedText
-                text={episode.content}
-                highlights={highlights}
-                onHighlightClick={(h, e) => handleHighlightClick(h, e)}
-              />
-            </div>
-          </article>
-
-          {/* Episode complete banner */}
-          {showCompleteBanner && (
-            <EpisodeCompleteBanner
-              episodeId={episodeId}
-              nextEpisodeId={nextEp?.id}
-              workId={episode.workId}
-            />
-          )}
-
-          {/* Navigation */}
-          <nav className={`mx-auto ${maxWidthClass} px-6 py-8 flex justify-between border-t border-border/50`}>
-            {prevEp ? (
-              <Link href={`/read/${prevEp.id}`}>
-                <Button variant="outline" className="gap-1 min-h-[44px]">
-                  <ChevronLeft className="h-4 w-4" /> 前話
-                </Button>
-              </Link>
-            ) : (
-              <div />
-            )}
-            {nextEp ? (
-              <Link href={`/read/${nextEp.id}`}>
-                <Button variant="outline" className="gap-1 min-h-[44px]">
-                  次話 <ChevronRight className="h-4 w-4" />
-                </Button>
-              </Link>
-            ) : (
-              <Link href={`/works/${episode.workId}/afterword`}>
-                <Button variant="default" className="min-h-[44px]">読了</Button>
-              </Link>
-            )}
-          </nav>
-        </>
       )}
 
-      {/* Floating action buttons -- desktop only, hidden in vertical mode */}
-      {!isMobile && !immersiveMode && !isVertical && (
+      {/* Navigation */}
+      <nav className={`mx-auto ${maxWidthClass} px-6 py-8 flex justify-between border-t border-border/50`}>
+        {prevEp ? (
+          <Link href={`/read/${prevEp.id}`}>
+            <Button variant="outline" className="gap-1 min-h-[44px]">
+              <ChevronLeft className="h-4 w-4" /> 前話
+            </Button>
+          </Link>
+        ) : (
+          <div />
+        )}
+        {nextEp ? (
+          <Link href={`/read/${nextEp.id}`}>
+            <Button variant="outline" className="gap-1 min-h-[44px]">
+              次話 <ChevronRight className="h-4 w-4" />
+            </Button>
+          </Link>
+        ) : (
+          <Link href={`/works/${episode.workId}/afterword`}>
+            <Button variant="default" className="min-h-[44px]">読了</Button>
+          </Link>
+        )}
+      </nav>
+
+      {/* Floating action buttons -- desktop only */}
+      {!isMobile && !immersiveMode && (
         <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
           {!showLetters && (
             <button
@@ -777,8 +725,8 @@ export default function ReaderPage() {
         </div>
       )}
 
-      {/* Mobile bottom navigation bar -- hidden in vertical mode */}
-      {isMobile && !immersiveMode && !isVertical && (
+      {/* Mobile bottom navigation bar */}
+      {isMobile && !immersiveMode && (
         <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border flex justify-around py-2 px-4">
           <Button variant="ghost" size="sm" onClick={navigatePrev} disabled={!prevEp} className="flex-col gap-0.5 h-auto py-1">
             <ChevronLeft className="h-4 w-4" />
