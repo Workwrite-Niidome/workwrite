@@ -14,6 +14,8 @@ import {
   Sparkles,
   MessageCircle,
   Copy,
+  AlignLeft,
+  AlignVerticalJustifyStart,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -37,6 +39,7 @@ type FontSize = 'sm' | 'base' | 'lg' | 'xl';
 type Theme = 'light' | 'dark' | 'sepia';
 type LineHeight = 'tight' | 'normal' | 'relaxed' | 'loose';
 type MaxWidth = 'narrow' | 'normal' | 'wide';
+type WritingMode = 'horizontal' | 'vertical';
 
 const FONT_SIZES: Record<FontSize, string> = {
   sm: 'text-sm',
@@ -71,6 +74,7 @@ interface ReaderSettings {
   theme: Theme;
   lineHeight: LineHeight;
   maxWidth: MaxWidth;
+  writingMode: WritingMode;
 }
 
 const DEFAULT_SETTINGS: ReaderSettings = {
@@ -78,6 +82,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   theme: 'light',
   lineHeight: 'normal',
   maxWidth: 'normal',
+  writingMode: 'horizontal',
 };
 
 function loadSettings(): ReaderSettings {
@@ -147,6 +152,12 @@ export default function ReaderPage() {
   const [explainText, setExplainText] = useState('');
   const [showExplainDialog, setShowExplainDialog] = useState(false);
 
+  // Vertical writing mode
+  const isVertical = settings.writingMode === 'vertical';
+  const [currentPage, setCurrentPage] = useState(0);
+  const [totalPages, setTotalPages] = useState(1);
+  const verticalContainerRef = useRef<HTMLDivElement>(null);
+
   const contentRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -196,14 +207,18 @@ export default function ReaderPage() {
       .then((res) => {
         const entry = res.data.find((p) => p.episodeId === episodeId);
         if (entry && entry.lastPosition > 0) {
-          // Delay to ensure content is rendered
           requestAnimationFrame(() => {
-            window.scrollTo(0, entry.lastPosition);
+            if (isVertical && verticalContainerRef.current) {
+              // In vertical-rl, scroll position is negative (leftward)
+              verticalContainerRef.current.scrollLeft = -entry.lastPosition;
+            } else {
+              window.scrollTo(0, entry.lastPosition);
+            }
           });
         }
       })
       .catch(() => {});
-  }, [episodeId, isAuthenticated, episode]);
+  }, [episodeId, isAuthenticated, episode, isVertical]);
 
   // Load highlights
   useEffect(() => {
@@ -240,6 +255,7 @@ export default function ReaderPage() {
 
   useEffect(() => {
     function handleScroll() {
+      if (isVertical) return; // Vertical mode handles progress via container scroll
       const el = contentRef.current;
       if (!el) return;
       const scrollTop = window.scrollY;
@@ -255,7 +271,7 @@ export default function ReaderPage() {
     }
     window.addEventListener('scroll', handleScroll, { passive: true });
     return () => window.removeEventListener('scroll', handleScroll);
-  }, [saveProgress, showCompleteBanner]);
+  }, [saveProgress, showCompleteBanner, isVertical]);
 
   useEffect(() => {
     return () => {
@@ -297,6 +313,95 @@ export default function ReaderPage() {
       if (cursorTimerRef.current) clearTimeout(cursorTimerRef.current);
     };
   }, [immersiveMode]);
+
+  // Vertical mode: calculate pages and handle scroll
+  const updatePageInfo = useCallback(() => {
+    const container = verticalContainerRef.current;
+    if (!container || !isVertical) return;
+    const scrollWidth = container.scrollWidth;
+    const clientWidth = container.clientWidth;
+    const maxScroll = scrollWidth - clientWidth;
+    // vertical-rl scrolls from 0 (rightmost) to negative (leftmost)
+    // or from maxScroll to 0 depending on browser
+    const scrollLeft = Math.abs(container.scrollLeft);
+    const pages = Math.max(1, Math.ceil(scrollWidth / clientWidth));
+    const page = maxScroll > 0 ? Math.round((scrollLeft / maxScroll) * (pages - 1)) : 0;
+    setTotalPages(pages);
+    setCurrentPage(page);
+
+    // Update reading progress
+    const pct = maxScroll > 0 ? scrollLeft / maxScroll : 1;
+    setProgressPct(pct);
+    saveProgress(pct, scrollLeft);
+    if (pct >= 0.9 && !showCompleteBanner) {
+      setShowCompleteBanner(true);
+    }
+  }, [isVertical, saveProgress, showCompleteBanner]);
+
+  useEffect(() => {
+    const container = verticalContainerRef.current;
+    if (!container || !isVertical) return;
+
+    // Initial page calc after content renders
+    const timer = setTimeout(updatePageInfo, 100);
+
+    container.addEventListener('scroll', updatePageInfo, { passive: true });
+    return () => {
+      clearTimeout(timer);
+      container.removeEventListener('scroll', updatePageInfo);
+    };
+  }, [isVertical, updatePageInfo, episode]);
+
+  // Vertical mode: mouse wheel → horizontal scroll
+  useEffect(() => {
+    const container = verticalContainerRef.current;
+    if (!container || !isVertical) return;
+
+    function handleWheel(e: WheelEvent) {
+      // Convert vertical wheel to horizontal scroll
+      if (Math.abs(e.deltaY) > Math.abs(e.deltaX)) {
+        e.preventDefault();
+        // In vertical-rl, negative scrollLeft goes left (forward in reading)
+        container!.scrollLeft -= e.deltaY;
+      }
+    }
+
+    container.addEventListener('wheel', handleWheel, { passive: false });
+    return () => container.removeEventListener('wheel', handleWheel);
+  }, [isVertical]);
+
+  // Vertical mode: click/tap page navigation
+  const handleVerticalClick = useCallback((e: React.MouseEvent<HTMLDivElement>) => {
+    const container = verticalContainerRef.current;
+    if (!container) return;
+
+    // Don't navigate if user is selecting text
+    if (window.getSelection()?.toString()) return;
+    // Don't navigate if clicking on interactive elements
+    const target = e.target as HTMLElement;
+    if (target.closest('button, a, input, textarea, [role="button"]')) return;
+
+    const rect = container.getBoundingClientRect();
+    const x = e.clientX - rect.left;
+    const third = rect.width / 3;
+    const pageWidth = container.clientWidth;
+
+    if (x < third) {
+      // Left 1/3: next page (forward in vertical-rl)
+      container.scrollBy({ left: -pageWidth, behavior: 'smooth' });
+    } else if (x > third * 2) {
+      // Right 1/3: previous page (backward in vertical-rl)
+      container.scrollBy({ left: pageWidth, behavior: 'smooth' });
+    }
+    // Middle 1/3: do nothing (could toggle UI)
+  }, []);
+
+  // Vertical mode: prevent body scroll
+  useEffect(() => {
+    if (!isVertical) return;
+    document.body.style.overflow = 'hidden';
+    return () => { document.body.style.overflow = ''; };
+  }, [isVertical]);
 
   function updateSettings(partial: Partial<ReaderSettings>) {
     setSettings((prev) => {
@@ -533,6 +638,27 @@ export default function ReaderPage() {
           ))}
         </div>
       </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">組方向</label>
+        <div className="flex gap-1">
+          <Button
+            variant={settings.writingMode === 'horizontal' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => updateSettings({ writingMode: 'horizontal' })}
+            className="flex-1 text-xs min-h-[44px] gap-1"
+          >
+            <AlignLeft className="h-3 w-3" /> 横書き
+          </Button>
+          <Button
+            variant={settings.writingMode === 'vertical' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => updateSettings({ writingMode: 'vertical' })}
+            className="flex-1 text-xs min-h-[44px] gap-1"
+          >
+            <AlignVerticalJustifyStart className="h-3 w-3" /> 縦書き
+          </Button>
+        </div>
+      </div>
       <div className="pt-2 border-t border-border">
         <Button variant="ghost" size="sm" onClick={resetSettings} className="w-full text-xs">
           デフォルトに戻す
@@ -647,104 +773,190 @@ export default function ReaderPage() {
       <ShortcutsHelp open={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
 
       {/* Main content */}
-      <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
-        {prologue && (
-          <div className="mb-12 border-l-2 border-primary/30 pl-5">
-            <p className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap text-muted-foreground italic`}>
-              {prologue}
-            </p>
-            <div className="mt-6 border-t border-border/50" />
+      {isVertical ? (
+        <>
+          {/* Vertical writing mode */}
+          <div
+            ref={verticalContainerRef}
+            onClick={handleVerticalClick}
+            onMouseUp={handleContentMouseUp}
+            className="overflow-x-auto overflow-y-hidden"
+            style={{
+              writingMode: 'vertical-rl',
+              height: `calc(100vh - ${isMobile ? '110px' : '120px'})`,
+              padding: isMobile ? '16px 12px 8px' : '24px 32px 8px',
+            }}
+          >
+            <article ref={contentRef} className={`h-full font-serif ${fontSizeClass} ${lineHeightClass}`}>
+              <h1 className="text-2xl font-bold font-serif mb-6 text-center">
+                {episode.title}
+              </h1>
+              <div className="whitespace-pre-wrap">
+                <HighlightedText
+                  text={episode.content}
+                  highlights={highlights}
+                  onHighlightClick={(h, e) => handleHighlightClick(h, e)}
+                />
+              </div>
+            </article>
           </div>
-        )}
-        <h1 className="text-2xl font-bold font-serif mb-8 text-center">
-          {episode.title}
-        </h1>
-        <div className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap`}>
-          <HighlightedText
-            text={episode.content}
-            highlights={highlights}
-            onHighlightClick={(h, e) => handleHighlightClick(h, e)}
-          />
-        </div>
-      </article>
 
-      {/* Episode complete banner */}
-      {showCompleteBanner && (
-        <EpisodeCompleteBanner
-          episodeId={episodeId}
-          nextEpisodeId={nextEp?.id}
-          workId={episode.workId}
-        />
-      )}
+          {/* Bottom bar for vertical mode: pagination + actions */}
+          <div className={`fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border ${isMobile ? 'px-3 py-2' : 'px-6 py-2'}`}>
+            <div className="flex items-center justify-between max-w-screen-lg mx-auto">
+              {/* Episode nav */}
+              <div className="flex items-center gap-1">
+                {prevEp ? (
+                  <Link href={`/read/${prevEp.id}`}>
+                    <Button variant="ghost" size="sm" className="gap-0.5 min-h-[36px] text-xs">
+                      <ChevronLeft className="h-3 w-3" /> 前話
+                    </Button>
+                  </Link>
+                ) : (
+                  <div className="w-16" />
+                )}
+              </div>
 
-      {/* Navigation */}
-      <nav className={`mx-auto ${maxWidthClass} px-6 py-8 flex justify-between border-t border-border/50`}>
-        {prevEp ? (
-          <Link href={`/read/${prevEp.id}`}>
-            <Button variant="outline" className="gap-1 min-h-[44px]">
-              <ChevronLeft className="h-4 w-4" /> 前話
-            </Button>
-          </Link>
-        ) : (
-          <div />
-        )}
-        {nextEp ? (
-          <Link href={`/read/${nextEp.id}`}>
-            <Button variant="outline" className="gap-1 min-h-[44px]">
-              次話 <ChevronRight className="h-4 w-4" />
-            </Button>
-          </Link>
-        ) : (
-          <Link href={`/works/${episode.workId}/afterword`}>
-            <Button variant="default" className="min-h-[44px]">読了</Button>
-          </Link>
-        )}
-      </nav>
+              {/* Page indicator */}
+              <span className="text-xs text-muted-foreground tabular-nums">
+                {currentPage + 1} / {totalPages}
+              </span>
 
-      {/* Floating action buttons -- desktop only */}
-      {!isMobile && !immersiveMode && (
-        <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
-          {!showLetters && (
-            <button
-              onClick={toggleLetters}
-              className="flex items-center gap-2 rounded-full bg-card text-foreground border border-border px-5 py-3 shadow-lg hover:bg-secondary transition-all hover:scale-105 active:scale-95"
-            >
-              <Mail className="h-5 w-5" />
-              <span className="text-sm font-medium">ギフトレターを書く</span>
-            </button>
+              {/* Actions + episode nav */}
+              <div className="flex items-center gap-1">
+                <Button variant="ghost" size="icon" onClick={toggleLetters} className="min-h-[36px] min-w-[36px]" title="ギフトレター">
+                  <Mail className="h-4 w-4" />
+                </Button>
+                <Button variant="ghost" size="icon" onClick={toggleCompanion} className="min-h-[36px] min-w-[36px]" title="キャラクタートーク">
+                  <MessageCircle className="h-4 w-4" />
+                </Button>
+                {nextEp ? (
+                  <Link href={`/read/${nextEp.id}`}>
+                    <Button variant="ghost" size="sm" className="gap-0.5 min-h-[36px] text-xs">
+                      次話 <ChevronRight className="h-3 w-3" />
+                    </Button>
+                  </Link>
+                ) : (
+                  <Link href={`/works/${episode.workId}/afterword`}>
+                    <Button variant="ghost" size="sm" className="min-h-[36px] text-xs">読了</Button>
+                  </Link>
+                )}
+              </div>
+            </div>
+          </div>
+
+          {/* Episode complete banner */}
+          {showCompleteBanner && (
+            <EpisodeCompleteBanner
+              episodeId={episodeId}
+              nextEpisodeId={nextEp?.id}
+              workId={episode.workId}
+            />
           )}
-          {!showCompanion && (
-            <button
-              onClick={toggleCompanion}
-              className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
-            >
-              <MessageCircle className="h-5 w-5" />
-              <span className="text-sm font-medium">キャラクターと話す</span>
-            </button>
-          )}
-        </div>
-      )}
+        </>
+      ) : (
+        <>
+          {/* Horizontal writing mode (existing) */}
+          <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
+            {prologue && (
+              <div className="mb-12 border-l-2 border-primary/30 pl-5">
+                <p className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap text-muted-foreground italic`}>
+                  {prologue}
+                </p>
+                <div className="mt-6 border-t border-border/50" />
+              </div>
+            )}
+            <h1 className="text-2xl font-bold font-serif mb-8 text-center">
+              {episode.title}
+            </h1>
+            <div className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap`}>
+              <HighlightedText
+                text={episode.content}
+                highlights={highlights}
+                onHighlightClick={(h, e) => handleHighlightClick(h, e)}
+              />
+            </div>
+          </article>
 
-      {/* Mobile bottom navigation bar */}
-      {isMobile && !immersiveMode && (
-        <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border flex justify-around py-2 px-4">
-          <Button variant="ghost" size="sm" onClick={navigatePrev} disabled={!prevEp} className="flex-col gap-0.5 h-auto py-1">
-            <ChevronLeft className="h-4 w-4" />
-            <span className="text-[10px]">前話</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={toggleLetters} className="flex-col gap-0.5 h-auto py-1">
-            <Mail className="h-4 w-4" />
-            <span className="text-[10px]">ギフト</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
-            <MessageCircle className="h-4 w-4" />
-            <span className="text-[10px]">キャラ</span>
-          </Button>
-          <Button variant="ghost" size="sm" onClick={navigateNext} disabled={!nextEp} className="flex-col gap-0.5 h-auto py-1">
-            <ChevronRight className="h-4 w-4" />
-            <span className="text-[10px]">次話</span>
-          </Button>
-        </div>
+          {/* Episode complete banner */}
+          {showCompleteBanner && (
+            <EpisodeCompleteBanner
+              episodeId={episodeId}
+              nextEpisodeId={nextEp?.id}
+              workId={episode.workId}
+            />
+          )}
+
+          {/* Navigation */}
+          <nav className={`mx-auto ${maxWidthClass} px-6 py-8 flex justify-between border-t border-border/50`}>
+            {prevEp ? (
+              <Link href={`/read/${prevEp.id}`}>
+                <Button variant="outline" className="gap-1 min-h-[44px]">
+                  <ChevronLeft className="h-4 w-4" /> 前話
+                </Button>
+              </Link>
+            ) : (
+              <div />
+            )}
+            {nextEp ? (
+              <Link href={`/read/${nextEp.id}`}>
+                <Button variant="outline" className="gap-1 min-h-[44px]">
+                  次話 <ChevronRight className="h-4 w-4" />
+                </Button>
+              </Link>
+            ) : (
+              <Link href={`/works/${episode.workId}/afterword`}>
+                <Button variant="default" className="min-h-[44px]">読了</Button>
+              </Link>
+            )}
+          </nav>
+
+          {/* Floating action buttons -- desktop only */}
+          {!isMobile && !immersiveMode && (
+            <div className="fixed bottom-6 right-6 z-40 flex flex-col gap-3">
+              {!showLetters && (
+                <button
+                  onClick={toggleLetters}
+                  className="flex items-center gap-2 rounded-full bg-card text-foreground border border-border px-5 py-3 shadow-lg hover:bg-secondary transition-all hover:scale-105 active:scale-95"
+                >
+                  <Mail className="h-5 w-5" />
+                  <span className="text-sm font-medium">ギフトレターを書く</span>
+                </button>
+              )}
+              {!showCompanion && (
+                <button
+                  onClick={toggleCompanion}
+                  className="flex items-center gap-2 rounded-full bg-primary text-primary-foreground px-5 py-3 shadow-lg hover:bg-primary/90 transition-all hover:scale-105 active:scale-95"
+                >
+                  <MessageCircle className="h-5 w-5" />
+                  <span className="text-sm font-medium">キャラクターと話す</span>
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Mobile bottom navigation bar */}
+          {isMobile && !immersiveMode && (
+            <div className="fixed bottom-0 left-0 right-0 z-40 bg-card/95 backdrop-blur border-t border-border flex justify-around py-2 px-4">
+              <Button variant="ghost" size="sm" onClick={navigatePrev} disabled={!prevEp} className="flex-col gap-0.5 h-auto py-1">
+                <ChevronLeft className="h-4 w-4" />
+                <span className="text-[10px]">前話</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={toggleLetters} className="flex-col gap-0.5 h-auto py-1">
+                <Mail className="h-4 w-4" />
+                <span className="text-[10px]">ギフト</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={toggleCompanion} className="flex-col gap-0.5 h-auto py-1">
+                <MessageCircle className="h-4 w-4" />
+                <span className="text-[10px]">キャラ</span>
+              </Button>
+              <Button variant="ghost" size="sm" onClick={navigateNext} disabled={!nextEp} className="flex-col gap-0.5 h-auto py-1">
+                <ChevronRight className="h-4 w-4" />
+                <span className="text-[10px]">次話</span>
+              </Button>
+            </div>
+          )}
+        </>
       )}
 
       {/* Letters sidebar / BottomSheet */}
