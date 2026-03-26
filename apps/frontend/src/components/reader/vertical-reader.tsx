@@ -82,14 +82,24 @@ export function VerticalReader({
     const el = columnContainerRef.current;
     if (!el) return;
 
+    // Detect scroll direction for vertical-rl
+    // In vertical-rl, scrolling "forward" (next page) means scrollLeft increases (Chrome) or decreases (Firefox)
+    const testDiv = document.createElement('div');
+    testDiv.style.cssText = 'writing-mode:vertical-rl;width:50px;height:50px;overflow:auto;position:absolute;left:-9999px';
+    testDiv.innerHTML = '<div style="width:200px;height:50px"></div>';
+    document.body.appendChild(testDiv);
+    testDiv.scrollLeft = -1;
+    const isNegativeScroll = testDiv.scrollLeft < 0;
+    document.body.removeChild(testDiv);
+
     function handleWheel(e: WheelEvent) {
       e.preventDefault();
-      // Convert vertical wheel to horizontal scroll
-      // deltaY > 0 = scroll down = next page (left in vertical-rl)
-      el!.scrollBy({
-        left: e.deltaY > 0 ? 200 : -200,
-        behavior: 'auto',
-      });
+      const delta = e.deltaY || e.deltaX;
+      const scrollAmount = delta > 0 ? 150 : -150;
+      // In Firefox (negative scroll), forward = negative scrollLeft
+      // In Chrome (positive scroll), forward = positive scrollLeft
+      const adjustedAmount = isNegativeScroll ? -scrollAmount : scrollAmount;
+      el!.scrollLeft += adjustedAmount;
     }
 
     el.addEventListener('wheel', handleWheel, { passive: false });
