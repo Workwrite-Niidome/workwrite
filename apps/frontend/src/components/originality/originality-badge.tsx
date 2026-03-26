@@ -25,13 +25,13 @@ export function OriginalityBadge({ score, className }: OriginalityBadgeProps) {
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-[11px] cursor-help',
+        'inline-flex items-center gap-0.5 rounded-full border font-medium shrink-0 text-[10px] px-1.5 py-0.5 cursor-help bg-muted/50 border-border',
         color,
         className,
       )}
       title={aiPct === 0 ? 'この作品はAIを使用していません' : `この作品の約${aiPct}%にAI執筆アシストが使用されています`}
     >
-      <Icon className="h-3 w-3" />
+      <Icon className="h-2.5 w-2.5" />
       {label}
     </span>
   );
