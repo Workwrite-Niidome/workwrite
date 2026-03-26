@@ -21,7 +21,7 @@ export function WorldTab({ workId }: { workId: string }) {
 
   useEffect(() => {
     api.getWorldData(workId)
-      .then((res) => setData(res))
+      .then((res) => setData((res as any)?.data ?? res))
       .catch(() => {})
       .finally(() => setLoading(false));
   }, [workId]);

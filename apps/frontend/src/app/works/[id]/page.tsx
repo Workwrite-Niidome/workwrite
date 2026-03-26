@@ -68,12 +68,17 @@ export default function WorkDetailPage() {
 
     // Fetch emotion profile
     api.getEmotionProfile(workId)
-      .then((res) => setEmotionProfile(res))
+      .then((res) => setEmotionProfile((res as any)?.data ?? res))
       .catch(() => {});
 
     // Check if world data exists
     api.getWorldData(workId)
-      .then((res) => { if (res) setHasWorldData(true); })
+      .then((res) => {
+        const world = (res as any)?.data ?? res;
+        if (world && (world.basics || world.rules?.length || world.terminology?.length || world.history || world.items?.length)) {
+          setHasWorldData(true);
+        }
+      })
       .catch(() => {});
 
     // Fetch episode reactions
