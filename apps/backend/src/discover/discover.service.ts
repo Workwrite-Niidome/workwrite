@@ -44,7 +44,7 @@ export class DiscoverService {
 
     if (recentActivity.length === 0) {
       return this.prisma.work.findMany({
-        where: { status: 'PUBLISHED', qualityScore: { overall: { gte: 40 } } },
+        where: { status: 'PUBLISHED', qualityScore: { overall: { gte: 70 } } },
         orderBy: { totalViews: 'desc' },
         take: limit,
         include: {
@@ -63,7 +63,7 @@ export class DiscoverService {
       where: {
         id: { in: workIds },
         status: 'PUBLISHED',
-        qualityScore: { overall: { gte: 40 } },
+        qualityScore: { overall: { gte: 70 } },
       },
       include: {
         author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
