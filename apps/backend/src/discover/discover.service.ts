@@ -86,17 +86,21 @@ export class DiscoverService {
   }
 
   async getHiddenGems(limit = 6) {
-    // Quality score top percentile but low views
-    const highQualityThreshold = await this.prisma.qualityScore.aggregate({
-      _avg: { overall: true },
+    // Quality score above median but low views — "buried treasures"
+    const allScores = await this.prisma.qualityScore.findMany({
+      select: { overall: true },
+      orderBy: { overall: 'asc' },
     });
-    const avgScore = highQualityThreshold._avg.overall ?? 50;
+    const median = allScores.length > 0
+      ? allScores[Math.floor(allScores.length / 2)].overall
+      : 50;
+    const threshold = Math.max(median * 1.1, 50); // Slightly above median, floor at 50
 
     return this.prisma.work.findMany({
       where: {
         status: 'PUBLISHED',
-        qualityScore: { overall: { gte: avgScore * 1.2 } },
-        totalViews: { lt: 100 },
+        qualityScore: { overall: { gte: threshold } },
+        totalViews: { lt: 300 },
       },
       orderBy: { qualityScore: { overall: 'desc' } },
       take: limit,
