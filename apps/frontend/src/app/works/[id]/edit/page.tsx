@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users, Globe, EyeOff } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users, Globe, EyeOff, Link2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -257,7 +257,10 @@ export default function EditWorkPage() {
             <Button onClick={() => openPublishDialog()} size="sm" variant="default">公開する</Button>
           )}
           {work.status === 'PUBLISHED' && (
-            <Button onClick={() => setConfirmUnpublish(true)} size="sm" variant="outline">非公開にする</Button>
+            <>
+              <Button onClick={() => setConfirmUnpublish(true)} size="sm" variant="outline">非公開にする</Button>
+              <PublishedUrlCopy workId={workId} />
+            </>
           )}
           {work.status === 'UNPUBLISHED' && (
             <Button onClick={() => openPublishDialog()} size="sm" variant="default">再公開する</Button>
@@ -1225,5 +1228,26 @@ function ReaderDisplaySettings({
         )}
       </CardContent>
     </Card>
+  );
+}
+
+function PublishedUrlCopy({ workId }: { workId: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/works/${workId}`;
+
+  return (
+    <button
+      onClick={() => {
+        navigator.clipboard.writeText(url).then(() => {
+          setCopied(true);
+          setTimeout(() => setCopied(false), 2000);
+        });
+      }}
+      className="inline-flex items-center gap-1 h-8 px-2 text-xs rounded-md border border-border bg-background hover:bg-secondary transition-colors"
+      title={url}
+    >
+      {copied ? <Check className="h-3 w-3 text-green-500" /> : <Link2 className="h-3 w-3" />}
+      {copied ? 'コピーしました' : '公開URLをコピー'}
+    </button>
   );
 }

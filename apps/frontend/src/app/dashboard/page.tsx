@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift, Coins } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift, Coins, Link2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
@@ -331,6 +331,11 @@ export default function DashboardPage() {
                   </div>
                 </CardContent>
               </Link>
+              {work.status === 'PUBLISHED' && (
+                <div className="px-6 pb-2">
+                  <PublishedUrl workId={work.id} />
+                </div>
+              )}
               <div className="px-6 pb-4 flex gap-2">
                 <Link href={`/works/${work.id}/episodes/new`}>
                   <Button variant="outline" size="sm" className="text-xs h-8">
@@ -539,6 +544,42 @@ function CrEarningGuide() {
           </Link>
         ))}
       </div>
+    </div>
+  );
+}
+
+function PublishedUrl({ workId }: { workId: string }) {
+  const [copied, setCopied] = useState(false);
+  const url = `${typeof window !== 'undefined' ? window.location.origin : ''}/works/${workId}`;
+
+  const handleCopy = (e: React.MouseEvent) => {
+    e.preventDefault();
+    e.stopPropagation();
+    navigator.clipboard.writeText(url).then(() => {
+      setCopied(true);
+      setTimeout(() => setCopied(false), 2000);
+    });
+  };
+
+  return (
+    <div className="flex items-center gap-1.5 text-xs text-muted-foreground" onClick={(e) => e.preventDefault()}>
+      <Link2 className="h-3 w-3 shrink-0" />
+      <a
+        href={`/works/${workId}`}
+        target="_blank"
+        rel="noopener noreferrer"
+        className="truncate hover:text-primary transition-colors"
+        onClick={(e) => e.stopPropagation()}
+      >
+        {url}
+      </a>
+      <button
+        onClick={handleCopy}
+        className="shrink-0 p-0.5 rounded hover:bg-secondary transition-colors"
+        title="URLをコピー"
+      >
+        {copied ? <Check className="h-3 w-3 text-green-500" /> : <Link2 className="h-3 w-3" />}
+      </button>
     </div>
   );
 }
