@@ -193,7 +193,7 @@ export function CharacterCard({ character }: { character: CharacterMatch }) {
 
   return (
     <>
-      <div className="border border-border rounded-xl p-4 hover:border-primary/20 hover:shadow-sm transition-all bg-card">
+      <div className="border border-primary/20 rounded-xl p-4 hover:border-primary/40 hover:shadow-sm transition-all bg-primary/[0.03] dark:bg-primary/[0.06]">
         {/* Character header */}
         <div className="mb-2">
           <div className="flex items-center gap-1.5">

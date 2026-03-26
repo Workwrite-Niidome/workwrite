@@ -146,10 +146,7 @@ export default function Home() {
       </section>
 
       <div className="px-4 md:px-6 py-12 space-y-16">
-        {/* Character Match */}
-        <CharacterMatchCarousel limit={10} />
-
-        {/* Following feed */}
+        {/* Following feed — top priority for returning users */}
         {isAuthenticated && <FollowingFeedSection />}
 
         {/* Popular */}
@@ -206,6 +203,9 @@ export default function Home() {
               : data?.recent.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
           </div>
         </section>
+
+        {/* Character Match — after novels, visually distinct */}
+        <CharacterMatchCarousel limit={10} />
 
         {/* AI Generated Works */}
         <AiWorksSection />
