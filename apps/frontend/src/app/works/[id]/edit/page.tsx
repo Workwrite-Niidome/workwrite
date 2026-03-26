@@ -70,8 +70,6 @@ export default function EditWorkPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishWithScoring, setPublishWithScoring] = useState(true);
-  const [scoringEstimate, setScoringEstimate] = useState<{ credits: number; balance: number } | null>(null);
-  const [estimateLoading, setEstimateLoading] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [deleteEpisodeId, setDeleteEpisodeId] = useState<string | null>(null);
   const [creationPlan, setCreationPlan] = useState<any>(null);
@@ -134,12 +132,6 @@ export default function EditWorkPage() {
 
   function openPublishDialog() {
     setConfirmPublish(true);
-    setScoringEstimate(null);
-    setEstimateLoading(true);
-    api.estimateScoringCost(workId)
-      .then((data) => setScoringEstimate({ credits: data.estimate.credits, balance: data.balance.total }))
-      .catch(() => setScoringEstimate(null))
-      .finally(() => setEstimateLoading(false));
   }
 
   async function handlePublish() {
@@ -504,21 +496,10 @@ export default function EditWorkPage() {
               onChange={(e) => setPublishWithScoring(e.target.checked)}
               className="rounded"
             />
-            <span>
-              AIスコアリングを実行する
-              {estimateLoading && '（見積もり中...）'}
-              {!estimateLoading && scoringEstimate && `（${scoringEstimate.credits}cr消費）`}
-            </span>
+            <span>AIスコアリングを実行する（無料）</span>
           </label>
-          {!estimateLoading && scoringEstimate && publishWithScoring && (
-            <p className={`text-xs mt-1 ml-6 ${scoringEstimate.balance < scoringEstimate.credits ? 'text-destructive' : 'text-muted-foreground'}`}>
-              {scoringEstimate.balance < scoringEstimate.credits
-                ? `残高 ${scoringEstimate.balance}cr — クレジットが不足しています`
-                : `残高 ${scoringEstimate.balance}cr → 実行後 ${scoringEstimate.balance - scoringEstimate.credits}cr`}
-            </p>
-          )}
           <p className="text-xs text-muted-foreground mt-1 ml-6">
-            オフにするとクレジットを消費せずに公開できます。スコアリングはあとから手動で実行できます。
+            オフにすると公開のみ行います。スコアリングはあとから手動でも実行できます。
           </p>
         </DialogContent>
         <DialogFooter>
