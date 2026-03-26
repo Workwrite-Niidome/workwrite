@@ -25,20 +25,6 @@ const EMOTIONS = [
   { icon: Brain, label: '深い', value: 'thoughtful' },
 ];
 
-const IMPACT_AXES = [
-  { axis: 'empathy', label: '共感力', emoji: '💞' },
-  { axis: 'perspective', label: '視野', emoji: '🌐' },
-  { axis: 'motivation', label: 'やる気', emoji: '🔥' },
-  { axis: 'emotion', label: '感情の豊かさ', emoji: '🌊' },
-  { axis: 'knowledge', label: '知識・教養', emoji: '📚' },
-];
-
-const IMPACT_LEVELS = [
-  { value: 1, label: 'すこし' },
-  { value: 2, label: 'まあまあ' },
-  { value: 3, label: 'かなり' },
-  { value: 4, label: 'とても' },
-];
 
 // ワンタップひとことタグ（感情タグ + インパクトタグを統合）
 const QUICK_TAGS = [
@@ -70,20 +56,14 @@ export default function AfterwordPage() {
   const [sendingReaction, setSendingReaction] = useState(false);
 
   // Expandable sections
-  const [showDetailedEmotions, setShowDetailedEmotions] = useState(false);
-  const [showImpact, setShowImpact] = useState(false);
+  const [showTags, setShowTags] = useState(false);
   const [showInsights, setShowInsights] = useState(false);
   const [showReview, setShowReview] = useState(false);
 
-  // Detailed emotion tags
+  // Unified tags (API emotion tags + built-in quick tags)
   const [allEmotionTags, setAllEmotionTags] = useState<EmotionTag[]>([]);
   const [selectedTags, setSelectedTags] = useState<string[]>([]);
-  const [tagIntensities, setTagIntensities] = useState<Record<string, number>>({});
-  const [emotionTagsSaved, setEmotionTagsSaved] = useState(false);
-
-  // Impact (replaces confusing before/after sliders)
-  const [impacts, setImpacts] = useState<Record<string, number>>({});
-  const [impactSaved, setImpactSaved] = useState(false);
+  const [tagsSaved, setTagsSaved] = useState(false);
 
   // AI Insights
   const [insights, setInsights] = useState<AiInsightData | null>(null);
@@ -157,27 +137,27 @@ export default function AfterwordPage() {
     setReactionSent(false);
   }
 
-  async function handleSubmitEmotionTags() {
-    if (selectedTags.length > 0) {
-      try {
-        await api.addEmotionTags(workId, selectedTags.map((tagId) => ({ tagId, intensity: tagIntensities[tagId] || 3 })));
-        setEmotionTagsSaved(true);
-        setTimeout(() => setEmotionTagsSaved(false), 3000);
-      } catch { /* ignore */ }
-    }
-  }
+  async function handleSubmitTags() {
+    // Send API emotion tags (filter out built-in quick tags starting with _)
+    const emotionTagIds = selectedTags.filter((id) => !id.startsWith('_'));
+    const quickTagIds = selectedTags.filter((id) => id.startsWith('_'));
 
-  async function handleSubmitImpact() {
-    const changes = IMPACT_AXES
-      .filter((a) => impacts[a.axis] && impacts[a.axis] > 0)
-      .map((a) => ({ axis: a.axis, before: 5, after: 5 + impacts[a.axis] }));
-    if (changes.length > 0) {
-      try {
-        await api.saveStateChanges(workId, changes);
-        setImpactSaved(true);
-        setTimeout(() => setImpactSaved(false), 3000);
-      } catch { /* ignore */ }
-    }
+    try {
+      if (emotionTagIds.length > 0) {
+        await api.addEmotionTags(workId, emotionTagIds.map((tagId) => ({ tagId, intensity: 3 })));
+      }
+      // Save quick tags as state changes (map to axes for backend compatibility)
+      const stateChanges = quickTagIds.map((id) => ({
+        axis: id.replace('_', ''),
+        before: 5,
+        after: 8,
+      }));
+      if (stateChanges.length > 0) {
+        await api.saveStateChanges(workId, stateChanges);
+      }
+      setTagsSaved(true);
+      setTimeout(() => setTagsSaved(false), 3000);
+    } catch { /* ignore */ }
   }
 
   function handleLoadInsights() {
@@ -354,90 +334,42 @@ export default function AfterwordPage() {
         <div className="space-y-1 border-t border-border pt-4">
           <p className="text-xs text-muted-foreground mb-2">もっと記録する（任意）</p>
 
-          {/* Detailed emotion tags */}
+          {/* Unified tags: quick tags + API emotion tags */}
           <button
-            onClick={() => setShowDetailedEmotions(!showDetailedEmotions)}
+            onClick={() => setShowTags(!showTags)}
             className="w-full flex items-center justify-between py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
-            感情タグを詳細に記録する
-            <ChevronDown className={cn('h-4 w-4 transition-transform', showDetailedEmotions && 'rotate-180')} />
+            この作品にタグをつける
+            <ChevronDown className={cn('h-4 w-4 transition-transform', showTags && 'rotate-180')} />
           </button>
-          {showDetailedEmotions && (
+          {showTags && (
             <div className="pb-4 space-y-3 animate-in fade-in duration-200">
+              <p className="text-[11px] text-muted-foreground">当てはまるものをタップ（いくつでも）</p>
               <div className="flex flex-wrap gap-2">
+                {QUICK_TAGS.map((tag) => (
+                  <button
+                    key={tag.id}
+                    onClick={() => setSelectedTags((prev) => prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id])}
+                    className={cn('px-3 py-1.5 rounded-full text-xs transition-all', selectedTags.includes(tag.id) ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/80')}
+                  >
+                    {tag.label}
+                  </button>
+                ))}
                 {allEmotionTags.map((tag) => (
-                  <div key={tag.id} className="flex flex-col items-center gap-1">
-                    <button
-                      onClick={() => setSelectedTags((prev) => prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id])}
-                      className={cn('px-3 py-1.5 rounded-full text-xs transition-all', selectedTags.includes(tag.id) ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/80')}
-                    >
-                      {tag.nameJa}
-                    </button>
-                    {selectedTags.includes(tag.id) && (
-                      <input type="range" min={1} max={5} value={tagIntensities[tag.id] || 3}
-                        onChange={(e) => setTagIntensities((prev) => ({ ...prev, [tag.id]: Number(e.target.value) }))}
-                        className="w-14 accent-primary" />
-                    )}
-                  </div>
+                  <button
+                    key={tag.id}
+                    onClick={() => setSelectedTags((prev) => prev.includes(tag.id) ? prev.filter(t => t !== tag.id) : [...prev, tag.id])}
+                    className={cn('px-3 py-1.5 rounded-full text-xs transition-all', selectedTags.includes(tag.id) ? 'bg-primary text-primary-foreground' : 'bg-muted text-foreground hover:bg-muted/80')}
+                  >
+                    {tag.nameJa}
+                  </button>
                 ))}
               </div>
               <div className="flex items-center gap-2">
-                <Button size="sm" variant="outline" onClick={handleSubmitEmotionTags} disabled={selectedTags.length === 0}>
+                <Button size="sm" variant="outline" onClick={handleSubmitTags} disabled={selectedTags.length === 0}>
                   保存
                 </Button>
-                {emotionTagsSaved && (
-                  <span className="text-xs text-primary flex items-center gap-1 animate-in fade-in duration-200">
-                    <Check className="h-3 w-3" /> 保存しました
-                  </span>
-                )}
-              </div>
-            </div>
-          )}
-
-          {/* Impact — simplified from confusing before/after sliders */}
-          <button
-            onClick={() => setShowImpact(!showImpact)}
-            className="w-full flex items-center justify-between py-2 text-sm text-muted-foreground hover:text-foreground transition-colors"
-          >
-            この作品から受けた影響
-            <ChevronDown className={cn('h-4 w-4 transition-transform', showImpact && 'rotate-180')} />
-          </button>
-          {showImpact && (
-            <div className="pb-4 space-y-4 animate-in fade-in duration-200">
-              {IMPACT_AXES.map(({ axis, label, emoji }) => (
-                <div key={axis} className="space-y-2">
-                  <p className="text-xs font-medium">{emoji} {label}</p>
-                  <div className="flex gap-1.5">
-                    {IMPACT_LEVELS.map((level) => (
-                      <button
-                        key={level.value}
-                        onClick={() => setImpacts((prev) => ({
-                          ...prev,
-                          [axis]: prev[axis] === level.value ? 0 : level.value,
-                        }))}
-                        className={cn(
-                          'flex-1 py-1.5 rounded-md text-[11px] border transition-all',
-                          impacts[axis] === level.value
-                            ? 'border-primary bg-primary/15 text-primary font-medium'
-                            : 'border-border text-muted-foreground hover:border-primary/40',
-                        )}
-                      >
-                        {level.label}
-                      </button>
-                    ))}
-                  </div>
-                </div>
-              ))}
-              <div className="flex items-center gap-2">
-                <Button
-                  size="sm"
-                  variant="outline"
-                  onClick={handleSubmitImpact}
-                  disabled={Object.values(impacts).every((v) => !v || v === 0)}
-                >
-                  保存
-                </Button>
-                {impactSaved && (
+                {tagsSaved && (
                   <span className="text-xs text-primary flex items-center gap-1 animate-in fade-in duration-200">
                     <Check className="h-3 w-3" /> 保存しました
                   </span>

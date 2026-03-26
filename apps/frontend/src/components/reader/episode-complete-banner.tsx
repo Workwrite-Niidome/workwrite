@@ -79,7 +79,10 @@ export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId }: Epis
   return (
     <div className="mx-auto max-w-2xl px-6 py-8 text-center space-y-6 animate-in fade-in slide-in-from-bottom-4 duration-500">
       <div className="border-t border-border pt-8 space-y-5">
-        <p className="text-sm text-muted-foreground">この話はどうでしたか？</p>
+        <div className="space-y-1">
+          <p className="text-sm text-muted-foreground">この話はどうでしたか？</p>
+          <p className="text-[11px] text-muted-foreground/70">タップで拍手（最大5回）</p>
+        </div>
 
         {/* Clap button */}
         <div className="flex flex-col items-center gap-2">
@@ -103,7 +106,12 @@ export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId }: Epis
             'text-xs transition-colors',
             claps > 0 ? 'text-primary font-medium' : 'text-muted-foreground',
           )}>
-            {claps > 0 ? `${claps}/5 拍手` : '拍手する'}
+            {claps === 0 && '拍手する'}
+            {claps === 1 && '1/5 ありがとう！'}
+            {claps === 2 && '2/5 面白かった！'}
+            {claps === 3 && '3/5 すごく良い！'}
+            {claps === 4 && '4/5 最高！'}
+            {claps === 5 && '5/5 感動した！'}
           </span>
           {sent && claps > 0 && (
             <p className="text-[10px] text-muted-foreground animate-in fade-in duration-300">

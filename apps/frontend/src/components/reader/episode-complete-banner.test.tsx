@@ -46,6 +46,7 @@ describe('EpisodeCompleteBanner', () => {
   it('should render the completion message', () => {
     render(<EpisodeCompleteBanner episodeId="ep-1" workId="w-1" />);
     expect(screen.getByText('この話はどうでしたか？')).toBeInTheDocument();
+    expect(screen.getByText(/タップで拍手/)).toBeInTheDocument();
   });
 
   it('should show next episode button when nextEpisodeId is provided', () => {
