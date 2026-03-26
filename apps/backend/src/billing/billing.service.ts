@@ -278,7 +278,7 @@ export class BillingService {
           select: { name: true, displayName: true },
         });
         const senderName = sender?.displayName || sender?.name || '匿名';
-        const notifyBody = `${senderName}さんから¥${pending.amount}のギフトレターが届きました。収益は毎朝自動で送金されます。`;
+        const notifyBody = `${senderName}さんから¥${pending.amount}のギフトレターが届きました。収益はStripeの処理後（通常4〜6営業日）自動で送金されます。`;
         await this.notifications.createNotification(pending.recipientId, {
           type: 'letter',
           title: 'ギフトレターが届きました',

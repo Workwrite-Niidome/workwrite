@@ -55,7 +55,7 @@ function PendingPayoutBanner({ amount, count, expiresAt, connectReady }: {
         </p>
         <p className="text-xs text-muted-foreground mt-1">
           {connectReady
-            ? '毎朝9:00に自動送金されます。'
+            ? 'Stripe決済の処理後（通常4〜6営業日）、自動送金されます。'
             : 'Stripe Connect設定を完了すると受け取れます。'}
           {expiresAt && (
             <> 期限: {new Date(expiresAt).toLocaleDateString('ja-JP')}</>
@@ -178,7 +178,7 @@ function EarningsPageContent() {
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
                 ギフトレター収益を受け取るには、Stripe Connectアカウントの設定が必要です。
-                設定後、読者からのギフトレター代金（手数料20%控除後）が毎日自動で振り込まれます。保留中の収益がある場合は「受け取る」ボタンで即時受け取りも可能です。
+                設定後、読者からのギフトレター代金（手数料20%控除後）がStripe処理後（通常4〜6営業日）に自動で振り込まれます。
               </p>
               <Button onClick={handleOnboarding} disabled={onboardingLoading}>
                 {onboardingLoading ? (
@@ -202,7 +202,7 @@ function EarningsPageContent() {
                 </div>
                 <div className="text-sm">
                   {isConnectReady
-                    ? '振込が有効です。ギフトレター収益は毎日自動で振り込まれます（毎朝9:00確認）。'
+                    ? '振込が有効です。ギフトレター収益は自動で振り込まれます（Stripe処理後4〜6営業日、毎朝9:00確認）。'
                     : connectStatus.detailsSubmitted
                     ? 'Stripeによる審査中です。完了次第振込が有効になります。'
                     : '設定が途中です。続きを完了してください。'}
@@ -378,7 +378,7 @@ function EarningsPageContent() {
                   </p>
                   <p>
                     {isConnectReady
-                      ? 'ギフトレター収益は毎日自動で振り込まれます（毎朝9:00確認）。90日以内に受け取り設定がない場合、送信者に返金されます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
+                      ? 'ギフトレター収益は自動で振り込まれます（Stripe処理後4〜6営業日、毎朝9:00確認）。90日以内に受け取り設定がない場合、送信者に返金されます。キャラクタートーク収益は毎月月初に振り込まれます（最低500円以上）。'
                       : 'Stripe Connectの設定完了後、自動振込が有効になります。'}
                   </p>
                 </div>
