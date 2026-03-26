@@ -1125,6 +1125,13 @@ class ApiClient {
     });
   }
 
+  async bulkSetCharacterVisibility(workId: string, isPublic: boolean) {
+    return this.request<{ updated: number; isPublic: boolean }>(`/works/${workId}/characters/bulk-visibility`, {
+      method: 'PUT',
+      body: JSON.stringify({ isPublic }),
+    });
+  }
+
   // AI Insights
   async getAiInsights(workId: string) {
     return this.request<{ data: AiInsightData }>(`/ai/insights/${workId}`);

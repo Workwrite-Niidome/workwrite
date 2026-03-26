@@ -87,6 +87,16 @@ export class StoryStructureService {
     return { deleted: true };
   }
 
+  async bulkSetCharacterVisibility(workId: string, userId: string, isPublic: boolean) {
+    await this.verifyOwnership(workId, userId);
+    const result = await this.prisma.storyCharacter.updateMany({
+      where: { workId },
+      data: { isPublic },
+    });
+    this.discoverService.invalidateCharacterMatchCache();
+    return { updated: result.count, isPublic };
+  }
+
   async setRelation(workId: string, fromId: string, userId: string, dto: SetRelationDto) {
     await this.verifyOwnership(workId, userId);
     const from = await this.prisma.storyCharacter.findUnique({ where: { id: fromId } });

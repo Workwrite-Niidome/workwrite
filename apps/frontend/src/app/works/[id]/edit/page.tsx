@@ -1074,6 +1074,8 @@ function ReaderDisplaySettings({
 }) {
   const [isWorldPublic, setIsWorldPublic] = useState(false);
   const [isEmotionPublic, setIsEmotionPublic] = useState(false);
+  const [allCharsPublic, setAllCharsPublic] = useState(true);
+  const [charCount, setCharCount] = useState(0);
   const [saving, setSaving] = useState(false);
 
   useEffect(() => {
@@ -1081,7 +1083,13 @@ function ReaderDisplaySettings({
       setIsWorldPublic(creationPlan.isWorldPublic ?? false);
       setIsEmotionPublic(creationPlan.isEmotionPublic ?? false);
     }
-  }, [creationPlan]);
+    // Check character visibility
+    api.getCharacters(workId).then((res) => {
+      const chars = Array.isArray(res) ? res : (res as any).data || [];
+      setCharCount(chars.length);
+      setAllCharsPublic(chars.length > 0 && chars.every((c: any) => c.isPublic !== false));
+    }).catch(() => {});
+  }, [creationPlan, workId]);
 
   const hasWorldData = creationPlan?.worldBuildingData;
   const hasEmotionData = creationPlan?.emotionBlueprint;
@@ -1093,6 +1101,18 @@ function ReaderDisplaySettings({
       await api.updatePublicFlags(workId, { [field]: value });
       if (field === 'isWorldPublic') setIsWorldPublic(value);
       else setIsEmotionPublic(value);
+    } catch {
+      // revert
+    } finally {
+      setSaving(false);
+    }
+  }
+
+  async function handleBulkCharacterVisibility(value: boolean) {
+    setSaving(true);
+    try {
+      await api.bulkSetCharacterVisibility(workId, value);
+      setAllCharsPublic(value);
     } catch {
       // revert
     } finally {
@@ -1140,6 +1160,27 @@ function ReaderDisplaySettings({
             />
           </button>
         </label>
+        {charCount > 0 && (
+          <label className="flex items-center justify-between gap-2 cursor-pointer">
+            <div>
+              <p className="text-xs font-medium">キャラクター情報を読者に公開</p>
+              <p className="text-[10px] text-muted-foreground">作品ページにキャラクター一覧が表示されます（{charCount}人）</p>
+            </div>
+            <button
+              onClick={() => handleBulkCharacterVisibility(!allCharsPublic)}
+              disabled={saving}
+              className={`relative inline-flex h-5 w-9 items-center rounded-full transition-colors ${
+                allCharsPublic ? 'bg-primary' : 'bg-muted'
+              }`}
+            >
+              <span
+                className={`inline-block h-4 w-4 transform rounded-full bg-white transition-transform ${
+                  allCharsPublic ? 'translate-x-4' : 'translate-x-0.5'
+                }`}
+              />
+            </button>
+          </label>
+        )}
         {hasWorldData && (
           <label className="flex items-center justify-between gap-2 cursor-pointer">
             <div>
