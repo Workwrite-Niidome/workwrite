@@ -70,6 +70,8 @@ export default function EditWorkPage() {
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [confirmPublish, setConfirmPublish] = useState(false);
   const [publishWithScoring, setPublishWithScoring] = useState(true);
+  const [scoringEstimate, setScoringEstimate] = useState<{ credits: number; balance: number } | null>(null);
+  const [estimateLoading, setEstimateLoading] = useState(false);
   const [confirmUnpublish, setConfirmUnpublish] = useState(false);
   const [deleteEpisodeId, setDeleteEpisodeId] = useState<string | null>(null);
   const [creationPlan, setCreationPlan] = useState<any>(null);
@@ -128,6 +130,16 @@ export default function EditWorkPage() {
     } finally {
       setSaving(false);
     }
+  }
+
+  function openPublishDialog() {
+    setConfirmPublish(true);
+    setScoringEstimate(null);
+    setEstimateLoading(true);
+    api.estimateScoringCost(workId)
+      .then((data) => setScoringEstimate({ credits: data.estimate.credits, balance: data.balance.total }))
+      .catch(() => setScoringEstimate(null))
+      .finally(() => setEstimateLoading(false));
   }
 
   async function handlePublish() {
@@ -250,13 +262,13 @@ export default function EditWorkPage() {
             <Button variant="outline" size="sm"><Eye className="h-3.5 w-3.5 mr-1" /> プレビュー</Button>
           </Link>
           {work.status === 'DRAFT' && (
-            <Button onClick={() => setConfirmPublish(true)} size="sm" variant="default">公開する</Button>
+            <Button onClick={() => openPublishDialog()} size="sm" variant="default">公開する</Button>
           )}
           {work.status === 'PUBLISHED' && (
             <Button onClick={() => setConfirmUnpublish(true)} size="sm" variant="outline">非公開にする</Button>
           )}
           {work.status === 'UNPUBLISHED' && (
-            <Button onClick={() => setConfirmPublish(true)} size="sm" variant="default">再公開する</Button>
+            <Button onClick={() => openPublishDialog()} size="sm" variant="default">再公開する</Button>
           )}
           <select
             value={(work as any).completionStatus || 'ONGOING'}
@@ -492,8 +504,19 @@ export default function EditWorkPage() {
               onChange={(e) => setPublishWithScoring(e.target.checked)}
               className="rounded"
             />
-            <span>AIスコアリングを実行する（クレジット消費あり）</span>
+            <span>
+              AIスコアリングを実行する
+              {estimateLoading && '（見積もり中...）'}
+              {!estimateLoading && scoringEstimate && `（${scoringEstimate.credits}cr消費）`}
+            </span>
           </label>
+          {!estimateLoading && scoringEstimate && publishWithScoring && (
+            <p className={`text-xs mt-1 ml-6 ${scoringEstimate.balance < scoringEstimate.credits ? 'text-destructive' : 'text-muted-foreground'}`}>
+              {scoringEstimate.balance < scoringEstimate.credits
+                ? `残高 ${scoringEstimate.balance}cr — クレジットが不足しています`
+                : `残高 ${scoringEstimate.balance}cr → 実行後 ${scoringEstimate.balance - scoringEstimate.credits}cr`}
+            </p>
+          )}
           <p className="text-xs text-muted-foreground mt-1 ml-6">
             オフにするとクレジットを消費せずに公開できます。スコアリングはあとから手動で実行できます。
           </p>
