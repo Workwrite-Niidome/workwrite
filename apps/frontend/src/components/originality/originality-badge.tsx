@@ -7,32 +7,24 @@ interface OriginalityBadgeProps {
   className?: string;
 }
 
-function getConfig(originality: number): { color: string; label: string; icon: 'pen' | 'bot' } {
-  const aiPct = Math.round((1 - originality) * 100);
-  if (originality >= 0.9) return { color: 'text-muted-foreground', label: 'オリジナル', icon: 'pen' };
-  if (originality >= 0.7) return { color: 'text-muted-foreground', label: `AI ${aiPct}%`, icon: 'bot' };
-  return { color: 'text-muted-foreground', label: `AI ${aiPct}%`, icon: 'bot' };
-}
-
 /** originality 50%以上の作品にのみ表示。50%未満はAiGeneratedBadgeに任せる */
 export function OriginalityBadge({ score, className }: OriginalityBadgeProps) {
   if (score == null || score < 0.5) return null;
 
-  const { color, label, icon } = getConfig(score);
   const aiPct = Math.round((1 - score) * 100);
-  const Icon = icon === 'pen' ? Pen : Bot;
+  const isOriginal = score >= 0.9;
 
   return (
     <span
       className={cn(
-        'inline-flex items-center gap-1 text-[11px] cursor-help',
-        color,
+        'inline-flex items-center gap-0.5 rounded-full border font-medium shrink-0 text-[10px] px-1.5 py-0.5',
+        'bg-muted/50 border-border text-muted-foreground',
         className,
       )}
       title={aiPct === 0 ? 'この作品はAIを使用していません' : `この作品の約${aiPct}%にAI執筆アシストが使用されています`}
     >
-      <Icon className="h-3 w-3" />
-      {label}
+      {isOriginal ? <Pen className="h-2.5 w-2.5" /> : <Bot className="h-2.5 w-2.5" />}
+      {isOriginal ? 'オリジナル' : `AI ${aiPct}%`}
     </span>
   );
 }
