@@ -692,6 +692,10 @@ export default function ReaderPage() {
           onLastPageReached={() => {
             if (!showCompleteBanner) setShowCompleteBanner(true);
           }}
+          onSettingsClick={() => setShowSettings(true)}
+          onExitVertical={() => updateSettings({ writingMode: 'horizontal' })}
+          onLetterClick={toggleLetters}
+          onCharacterTalkClick={toggleCompanion}
           prevEpisode={prevEp}
           nextEpisode={nextEp}
         />

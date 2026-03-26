@@ -1,7 +1,8 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState } from 'react';
 import { useRouter } from 'next/navigation';
+import { ChevronLeft, Settings, X, Mail, MessageCircle } from 'lucide-react';
 import type { Highlight } from '@/lib/api';
 import { HighlightedText } from './highlighted-text';
 import { useVerticalPagination } from '@/hooks/use-vertical-pagination';
@@ -24,6 +25,10 @@ interface VerticalReaderProps {
   contentRef: React.RefObject<HTMLDivElement | null>;
   onProgressChange: (pct: number, pageInfo: { current: number; total: number }) => void;
   onLastPageReached: () => void;
+  onSettingsClick: () => void;
+  onExitVertical: () => void;
+  onLetterClick: () => void;
+  onCharacterTalkClick: () => void;
   prevEpisode?: { id: string; title: string } | null;
   nextEpisode?: { id: string; title: string } | null;
 }
@@ -38,6 +43,10 @@ export function VerticalReader({
   contentRef,
   onProgressChange,
   onLastPageReached,
+  onSettingsClick,
+  onExitVertical,
+  onLetterClick,
+  onCharacterTalkClick,
   prevEpisode,
   nextEpisode,
 }: VerticalReaderProps) {
@@ -130,13 +139,72 @@ export function VerticalReader({
   return (
     <div
       style={{
-        height: '100dvh',
+        position: 'fixed',
+        top: 0,
+        left: 0,
+        right: 0,
+        bottom: 0,
         overflow: 'hidden',
         display: 'flex',
         flexDirection: 'column',
-        position: 'relative',
+        zIndex: 30,
+        background: 'inherit',
       }}
+      className="bg-background text-foreground"
     >
+      {/* Mini header */}
+      <div
+        style={{
+          height: '44px',
+          writingMode: 'horizontal-tb',
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '0 12px',
+          borderBottom: '1px solid var(--border, #333)',
+          flexShrink: 0,
+        } as React.CSSProperties}
+        data-no-nav
+      >
+        <button
+          onClick={() => router.push(`/works/${episode.workId}`)}
+          className="flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors"
+        >
+          <ChevronLeft className="h-4 w-4" />
+          作品へ戻る
+        </button>
+        <div className="flex items-center gap-1">
+          <button
+            onClick={onLetterClick}
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            title="レター"
+          >
+            <Mail className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onCharacterTalkClick}
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            title="キャラクタートーク"
+          >
+            <MessageCircle className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onSettingsClick}
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            title="表示設定"
+          >
+            <Settings className="h-4 w-4" />
+          </button>
+          <button
+            onClick={onExitVertical}
+            className="p-2 text-muted-foreground hover:text-foreground transition-colors"
+            title="横書きに切り替え"
+          >
+            <X className="h-4 w-4" />
+          </button>
+        </div>
+      </div>
+
       {/* Vertical text container — NO CSS columns, just overflow: hidden + scrollLeft */}
       <div
         ref={(node) => {
