@@ -582,7 +582,7 @@ export default function ImportPage() {
             {importResult.chapters ?? importResult.episodes ?? 0} エピソードがインポートされました。
           </p>
           <div className="flex gap-3 justify-center pt-4">
-            <Button onClick={() => router.push(`/works/${importResult.workId}/editor-mode`)}>
+            <Button onClick={() => router.push(`/works/${importResult.workId}/edit`)}>
               作品を編集する
             </Button>
             <Button
