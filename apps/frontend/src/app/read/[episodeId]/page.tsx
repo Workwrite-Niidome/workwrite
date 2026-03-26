@@ -37,6 +37,7 @@ type FontSize = 'sm' | 'base' | 'lg' | 'xl';
 type Theme = 'light' | 'dark' | 'sepia';
 type LineHeight = 'tight' | 'normal' | 'relaxed' | 'loose';
 type MaxWidth = 'narrow' | 'normal' | 'wide';
+type WritingMode = 'horizontal' | 'vertical';
 
 const FONT_SIZES: Record<FontSize, string> = {
   sm: 'text-sm',
@@ -71,6 +72,7 @@ interface ReaderSettings {
   theme: Theme;
   lineHeight: LineHeight;
   maxWidth: MaxWidth;
+  writingMode: WritingMode;
 }
 
 const DEFAULT_SETTINGS: ReaderSettings = {
@@ -78,6 +80,7 @@ const DEFAULT_SETTINGS: ReaderSettings = {
   theme: 'light',
   lineHeight: 'normal',
   maxWidth: 'normal',
+  writingMode: 'horizontal',
 };
 
 function loadSettings(): ReaderSettings {
@@ -242,20 +245,36 @@ export default function ReaderPage() {
     function handleScroll() {
       const el = contentRef.current;
       if (!el) return;
-      const scrollTop = window.scrollY;
-      const docHeight = document.documentElement.scrollHeight - window.innerHeight;
-      const pct = docHeight > 0 ? Math.min(scrollTop / docHeight, 1) : 1;
+
+      let pct: number;
+      if (settings.writingMode === 'vertical') {
+        // Vertical writing: horizontal scroll within article element (right-to-left)
+        const scrollLeft = Math.abs(el.scrollLeft);
+        const scrollWidth = el.scrollWidth - el.clientWidth;
+        pct = scrollWidth > 0 ? Math.min(scrollLeft / scrollWidth, 1) : 1;
+      } else {
+        const scrollTop = window.scrollY;
+        const docHeight = document.documentElement.scrollHeight - window.innerHeight;
+        pct = docHeight > 0 ? Math.min(scrollTop / docHeight, 1) : 1;
+      }
       setProgressPct(pct);
-      saveProgress(pct, scrollTop);
+      saveProgress(pct, window.scrollY);
 
       // Show complete banner at 90%
       if (pct >= 0.9 && !showCompleteBanner) {
         setShowCompleteBanner(true);
       }
     }
-    window.addEventListener('scroll', handleScroll, { passive: true });
-    return () => window.removeEventListener('scroll', handleScroll);
-  }, [saveProgress, showCompleteBanner]);
+
+    // Vertical mode: listen on article scroll; horizontal: window scroll
+    const scrollTarget = settings.writingMode === 'vertical' ? contentRef.current : window;
+    if (scrollTarget) {
+      scrollTarget.addEventListener('scroll', handleScroll, { passive: true });
+    }
+    return () => {
+      if (scrollTarget) scrollTarget.removeEventListener('scroll', handleScroll);
+    };
+  }, [saveProgress, showCompleteBanner, settings.writingMode]);
 
   useEffect(() => {
     return () => {
@@ -457,6 +476,7 @@ export default function ReaderPage() {
   const fontSizeClass = FONT_SIZES[settings.fontSize];
   const lineHeightClass = LINE_HEIGHTS[settings.lineHeight].class;
   const maxWidthClass = MAX_WIDTHS[settings.maxWidth].class;
+  const isVertical = settings.writingMode === 'vertical';
 
   const settingsContent = (
     <div className="p-4 space-y-4">
@@ -531,6 +551,27 @@ export default function ReaderPage() {
               {val.label}
             </Button>
           ))}
+        </div>
+      </div>
+      <div className="space-y-2">
+        <label className="text-xs text-muted-foreground">組み方向</label>
+        <div className="flex gap-1">
+          <Button
+            variant={settings.writingMode === 'horizontal' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => updateSettings({ writingMode: 'horizontal' })}
+            className="flex-1 text-xs min-h-[44px]"
+          >
+            横書き
+          </Button>
+          <Button
+            variant={settings.writingMode === 'vertical' ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => updateSettings({ writingMode: 'vertical' })}
+            className="flex-1 text-xs min-h-[44px]"
+          >
+            縦書き
+          </Button>
         </div>
       </div>
       <div className="pt-2 border-t border-border">
@@ -647,13 +688,26 @@ export default function ReaderPage() {
       <ShortcutsHelp open={showShortcutsHelp} onClose={() => setShowShortcutsHelp(false)} />
 
       {/* Main content */}
-      <article ref={contentRef} className={`mx-auto ${maxWidthClass} px-6 py-12`} onMouseUp={handleContentMouseUp}>
+      <article
+        ref={contentRef}
+        className={`mx-auto ${isVertical ? '' : maxWidthClass} px-6 py-12`}
+        style={isVertical ? {
+          writingMode: 'vertical-rl',
+          WebkitWritingMode: 'vertical-rl',
+          overflowX: 'auto',
+          overflowY: 'hidden',
+          maxHeight: '80vh',
+          paddingLeft: '2rem',
+          paddingRight: '2rem',
+        } as React.CSSProperties : undefined}
+        onMouseUp={handleContentMouseUp}
+      >
         {prologue && (
-          <div className="mb-12 border-l-2 border-primary/30 pl-5">
+          <div className={isVertical ? 'mr-12 border-r-2 border-primary/30 pr-5' : 'mb-12 border-l-2 border-primary/30 pl-5'}>
             <p className={`font-serif ${fontSizeClass} ${lineHeightClass} whitespace-pre-wrap text-muted-foreground italic`}>
               {prologue}
             </p>
-            <div className="mt-6 border-t border-border/50" />
+            <div className={isVertical ? 'ml-6 border-l border-border/50' : 'mt-6 border-t border-border/50'} />
           </div>
         )}
         <h1 className="text-2xl font-bold font-serif mb-8 text-center">
