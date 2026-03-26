@@ -67,16 +67,12 @@ export function usePageNavigation({
       }
     }
 
-    const el = containerRef.current;
-    if (el) {
-      el.addEventListener('click', handleClick);
-    }
+    // Use window-level click to avoid conflicts with overflow:auto scroll containers
+    window.addEventListener('click', handleClick);
     window.addEventListener('keydown', handleKeyDown);
 
     return () => {
-      if (el) {
-        el.removeEventListener('click', handleClick);
-      }
+      window.removeEventListener('click', handleClick);
       window.removeEventListener('keydown', handleKeyDown);
     };
   }, [containerRef, onNext, onPrev, enabled]);
