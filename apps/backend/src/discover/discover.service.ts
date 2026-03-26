@@ -44,7 +44,7 @@ export class DiscoverService {
 
     if (recentActivity.length === 0) {
       return this.prisma.work.findMany({
-        where: { status: 'PUBLISHED' },
+        where: { status: 'PUBLISHED', qualityScore: { overall: { gte: 40 } } },
         orderBy: { totalViews: 'desc' },
         take: limit,
         include: {
@@ -56,9 +56,15 @@ export class DiscoverService {
       });
     }
 
-    const workIds = recentActivity.map((r) => r.workId);
+    // Filter: at least 2 distinct readers
+    const qualifiedActivity = recentActivity.filter((r) => Number(r.userCount) >= 2);
+    const workIds = (qualifiedActivity.length > 0 ? qualifiedActivity : recentActivity).map((r) => r.workId);
     const works = await this.prisma.work.findMany({
-      where: { id: { in: workIds }, status: 'PUBLISHED' },
+      where: {
+        id: { in: workIds },
+        status: 'PUBLISHED',
+        qualityScore: { overall: { gte: 40 } },
+      },
       include: {
         author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
         tags: true,
