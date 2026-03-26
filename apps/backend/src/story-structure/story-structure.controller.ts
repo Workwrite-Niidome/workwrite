@@ -42,6 +42,16 @@ export class StoryStructureController {
     return this.service.createCharacter(workId, userId, dto);
   }
 
+  @Put('works/:workId/characters/bulk-visibility')
+  @ApiOperation({ summary: 'Set isPublic for all characters in a work' })
+  bulkSetCharacterVisibility(
+    @Param('workId') workId: string,
+    @CurrentUser('id') userId: string,
+    @Body() body: { isPublic: boolean },
+  ) {
+    return this.service.bulkSetCharacterVisibility(workId, userId, body.isPublic);
+  }
+
   @Put('works/:workId/characters/:id')
   @ApiOperation({ summary: 'Update a character' })
   updateCharacter(
@@ -51,16 +61,6 @@ export class StoryStructureController {
     @Body() dto: UpdateCharacterDto,
   ) {
     return this.service.updateCharacter(workId, id, userId, dto);
-  }
-
-  @Put('works/:workId/characters/bulk-visibility')
-  @ApiOperation({ summary: 'Set isPublic for all characters in a work' })
-  bulkSetCharacterVisibility(
-    @Param('workId') workId: string,
-    @CurrentUser('id') userId: string,
-    @Body() body: { isPublic: boolean },
-  ) {
-    return this.service.bulkSetCharacterVisibility(workId, userId, body.isPublic);
   }
 
   @Delete('works/:workId/characters/:id')
