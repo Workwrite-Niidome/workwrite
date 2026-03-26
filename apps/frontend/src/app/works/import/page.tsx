@@ -1,8 +1,8 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, DragEvent } from 'react';
 import { useRouter } from 'next/navigation';
-import { FileText, Upload, ArrowLeft, ArrowUp, ArrowDown, Loader2, CheckCircle2, AlertCircle, X } from 'lucide-react';
+import { FileText, Upload, ArrowLeft, ArrowUp, ArrowDown, Loader2, CheckCircle2, AlertCircle, X, GripVertical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Tabs } from '@/components/ui/tabs';
@@ -149,6 +149,32 @@ export default function ImportPage() {
 
   const removeFile = (index: number) => {
     setFiles(files.filter((_, i) => i !== index));
+  };
+
+  // Drag reorder
+  const [dragIndex, setDragIndex] = useState<number | null>(null);
+  const [dragOverIndex, setDragOverIndex] = useState<number | null>(null);
+
+  const handleDragStart = (e: DragEvent<HTMLDivElement>, index: number) => {
+    setDragIndex(index);
+    e.dataTransfer.effectAllowed = 'move';
+  };
+
+  const handleDragOver = (e: DragEvent<HTMLDivElement>, index: number) => {
+    e.preventDefault();
+    e.dataTransfer.dropEffect = 'move';
+    setDragOverIndex(index);
+  };
+
+  const handleDragEnd = () => {
+    if (dragIndex !== null && dragOverIndex !== null && dragIndex !== dragOverIndex) {
+      const newFiles = [...files];
+      const [moved] = newFiles.splice(dragIndex, 1);
+      newFiles.splice(dragOverIndex, 0, moved);
+      setFiles(newFiles);
+    }
+    setDragIndex(null);
+    setDragOverIndex(null);
   };
 
   const goToStep3 = async () => {
@@ -357,7 +383,21 @@ export default function ImportPage() {
               </p>
               <div className="space-y-2">
                 {files.map((f, i) => (
-                  <div key={`${f.name}-${i}`} className="flex items-center gap-2 border border-border rounded-lg p-3">
+                  <div
+                    key={`${f.name}-${i}`}
+                    draggable
+                    onDragStart={(e) => handleDragStart(e, i)}
+                    onDragOver={(e) => handleDragOver(e, i)}
+                    onDragEnd={handleDragEnd}
+                    className={`flex items-center gap-2 border rounded-lg p-3 cursor-grab active:cursor-grabbing transition-colors ${
+                      dragOverIndex === i && dragIndex !== i
+                        ? 'border-primary bg-primary/5'
+                        : dragIndex === i
+                        ? 'opacity-50 border-border'
+                        : 'border-border'
+                    }`}
+                  >
+                    <GripVertical className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm text-muted-foreground w-6 text-center">{i + 1}</span>
                     <FileText className="h-4 w-4 text-muted-foreground shrink-0" />
                     <span className="text-sm flex-1 truncate">{f.name}</span>
@@ -542,8 +582,8 @@ export default function ImportPage() {
             {importResult.chapters ?? importResult.episodes ?? 0} エピソードがインポートされました。
           </p>
           <div className="flex gap-3 justify-center pt-4">
-            <Button onClick={() => router.push(`/works/${importResult.workId}`)}>
-              作品を確認する
+            <Button onClick={() => router.push(`/works/${importResult.workId}/editor-mode`)}>
+              作品を編集する
             </Button>
             <Button
               variant="outline"
