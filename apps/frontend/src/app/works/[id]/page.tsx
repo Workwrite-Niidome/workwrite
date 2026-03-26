@@ -175,7 +175,7 @@ export default function WorkDetailPage() {
                   </span>
                 </>
               )}
-              {work.originality != null && <OriginalityBadge score={work.originality} />}
+              {!work.isAiGenerated && <OriginalityBadge score={work.originality ?? null} />}
               {work.genre && <Badge variant="secondary" className="shrink-0">{GENRE_LABELS[work.genre] || work.genre}</Badge>}
               {(work as any).completionStatus === 'COMPLETED' && (
                 <Badge variant="default" className="shrink-0 bg-green-600">完結</Badge>

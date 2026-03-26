@@ -46,13 +46,12 @@ export default function AiSafetyPage() {
               創作の補助段階（キャラクター設計・プロット等）と本文執筆では加重を分け、補助的利用が過大に評価されないよう設計しています。
             </li>
             <li>
-              <strong className="text-foreground">オリジナリティバッジの表示。</strong>
-              各作品に色分けされたバッジが表示されます:
+              <strong className="text-foreground">AI利用率の表示。</strong>
+              各作品にAI利用状況が表示されます:
               <ul className="list-none pl-0 mt-2 space-y-1">
-                <li><span className="inline-block w-3 h-3 rounded-full bg-green-500 mr-2 align-middle" />90%以上 — ほぼ人間の創作</li>
-                <li><span className="inline-block w-3 h-3 rounded-full bg-blue-500 mr-2 align-middle" />70〜89% — 適度なAI活用</li>
-                <li><span className="inline-block w-3 h-3 rounded-full bg-amber-500 mr-2 align-middle" />50〜69% — AI使用多め</li>
-                <li><span className="inline-block w-3 h-3 rounded-full bg-gray-400 mr-2 align-middle" />50%未満 — AI主体</li>
+                <li><span className="text-muted-foreground text-xs mr-1">✏️</span><strong className="text-foreground">オリジナル</strong> — AI利用率10%未満。ほぼ著者自身の執筆</li>
+                <li><span className="text-muted-foreground text-xs mr-1">🤖</span><strong className="text-foreground">AI ○%</strong> — AI利用率10〜50%。実際の利用率を数値で表示</li>
+                <li><span className="text-foreground text-xs mr-1">🤖</span><strong className="text-foreground">AI Generated</strong> — AI利用率50%超。AI主体の作品として明示</li>
               </ul>
             </li>
             <li>

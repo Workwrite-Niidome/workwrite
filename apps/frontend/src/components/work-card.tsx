@@ -48,7 +48,7 @@ export function WorkCard({ work, showSynopsis = true }: WorkCardProps) {
 
           <div className="flex items-center gap-1.5 flex-wrap pt-0.5">
             {work.isAiGenerated && <AiGeneratedBadge />}
-            {work.originality != null && <OriginalityBadge score={work.originality} />}
+            {!work.isAiGenerated && <OriginalityBadge score={work.originality ?? null} />}
             {work.tags?.slice(0, 3).map((t) => (
               <span key={t.id} className="text-[11px] text-muted-foreground">#{t.tag}</span>
             ))}
