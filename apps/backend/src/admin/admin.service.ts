@@ -21,7 +21,7 @@ export class AdminService {
     const today = new Date();
     today.setHours(0, 0, 0, 0);
 
-    const [totalUsers, todayNewUsers, totalWorks, todayNewWorks, totalReviews, totalComments] =
+    const [totalUsers, todayNewUsers, totalWorks, todayNewWorks, totalReviews, totalComments, standardCount, proCount] =
       await Promise.all([
         this.prisma.user.count(),
         this.prisma.user.count({ where: { createdAt: { gte: today } } }),
@@ -29,9 +29,16 @@ export class AdminService {
         this.prisma.work.count({ where: { createdAt: { gte: today } } }),
         this.prisma.review.count(),
         this.prisma.comment.count(),
+        this.prisma.subscription.count({ where: { plan: 'standard', status: 'active' } }),
+        this.prisma.subscription.count({ where: { plan: 'pro', status: 'active' } }),
       ]);
 
-    return { totalUsers, totalWorks, totalReviews, totalComments, todayNewUsers, todayNewWorks };
+    const freeCount = totalUsers - standardCount - proCount;
+
+    return {
+      totalUsers, totalWorks, totalReviews, totalComments, todayNewUsers, todayNewWorks,
+      planCounts: { free: freeCount, standard: standardCount, pro: proCount },
+    };
   }
 
   async getUsers(params: PaginationParams) {

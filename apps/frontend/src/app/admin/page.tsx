@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { api, type AdminStats } from '@/lib/api';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Users, BookOpen, MessageSquare, TrendingUp } from 'lucide-react';
+import { Users, BookOpen, MessageSquare, TrendingUp, CreditCard } from 'lucide-react';
 
 function StatCard({ label, value, icon: Icon, sub }: { label: string; value: number; icon: React.ElementType; sub?: string }) {
   return (
@@ -57,6 +57,17 @@ export default function AdminDashboard() {
         <StatCard label="New Users Today" value={stats.todayNewUsers} icon={TrendingUp} />
         <StatCard label="New Works Today" value={stats.todayNewWorks} icon={TrendingUp} />
       </div>
+
+      {stats.planCounts && (
+        <>
+          <h2 className="text-xs tracking-[0.15em] uppercase text-muted-foreground mb-4 mt-8">Plan Distribution</h2>
+          <div className="grid grid-cols-3 gap-4">
+            <StatCard label="Free" value={stats.planCounts.free} icon={Users} />
+            <StatCard label="Standard" value={stats.planCounts.standard} icon={CreditCard} sub="¥2,980/月" />
+            <StatCard label="Pro" value={stats.planCounts.pro} icon={CreditCard} sub="¥7,980/月" />
+          </div>
+        </>
+      )}
     </div>
   );
 }

@@ -1670,6 +1670,7 @@ export interface AdminStats {
   totalComments: number;
   todayNewUsers: number;
   todayNewWorks: number;
+  planCounts?: { free: number; standard: number; pro: number };
 }
 
 export interface AdminUser {
