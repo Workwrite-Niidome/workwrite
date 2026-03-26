@@ -48,10 +48,10 @@ export default function AiSafetyPage() {
             <li>
               <strong className="text-foreground">AI利用率の表示。</strong>
               各作品にAI利用状況が表示されます:
-              <ul className="list-none pl-0 mt-2 space-y-1">
-                <li><span className="text-muted-foreground text-xs mr-1">✏️</span><strong className="text-foreground">オリジナル</strong> — AI利用率10%未満。ほぼ著者自身の執筆</li>
-                <li><span className="text-muted-foreground text-xs mr-1">🤖</span><strong className="text-foreground">AI ○%</strong> — AI利用率10〜50%。実際の利用率を数値で表示</li>
-                <li><span className="text-foreground text-xs mr-1">🤖</span><strong className="text-foreground">AI Generated</strong> — AI利用率50%超。AI主体の作品として明示</li>
+              <ul className="list-none pl-0 mt-2 space-y-2">
+                <li><span className="inline-flex items-center gap-0.5 rounded-full border bg-muted/50 border-border text-muted-foreground text-[10px] px-1.5 py-0.5 mr-1 align-middle">オリジナル</span>AI利用率10%未満。ほぼ著者自身の執筆</li>
+                <li><span className="inline-flex items-center gap-0.5 rounded-full border bg-muted/50 border-border text-muted-foreground text-[10px] px-1.5 py-0.5 mr-1 align-middle">AI ○%</span>AI利用率10〜50%。実際の利用率を数値で表示</li>
+                <li><span className="inline-flex items-center gap-0.5 rounded-full border bg-violet-500/10 border-violet-500/30 text-violet-600 dark:text-violet-400 text-[10px] px-1.5 py-0.5 mr-1 align-middle">AI Generated</span>AI利用率50%超。AI主体の作品として明示</li>
               </ul>
             </li>
             <li>
