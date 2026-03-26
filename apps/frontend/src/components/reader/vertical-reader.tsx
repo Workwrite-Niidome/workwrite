@@ -206,12 +206,12 @@ export function VerticalReader({
         onMouseUp={onContentMouseUp}
         style={{
           flex: 1,
+          width: '100%',
+          minHeight: 0,
           writingMode: 'vertical-rl',
           WebkitWritingMode: 'vertical-rl',
-          overflowX: 'auto',
-          overflowY: 'hidden',
+          overflow: 'auto',
           padding: '2rem',
-          scrollSnapType: 'x mandatory',
         } as React.CSSProperties}
       >
         {/* Title — centered vertically */}

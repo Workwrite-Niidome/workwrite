@@ -28,6 +28,9 @@ const mockPrismaService = () => ({
     findMany: jest.fn(),
     delete: jest.fn(),
   },
+  subscription: {
+    count: jest.fn(),
+  },
 });
 
 describe('AdminService', () => {
@@ -63,6 +66,9 @@ describe('AdminService', () => {
         .mockResolvedValueOnce(3); // today's new works
       prisma.review.count.mockResolvedValue(200);
       prisma.comment.count.mockResolvedValue(300);
+      prisma.subscription.count
+        .mockResolvedValueOnce(10) // standard
+        .mockResolvedValueOnce(3); // pro
 
       const result = await service.getStats();
 
@@ -73,6 +79,7 @@ describe('AdminService', () => {
         totalComments: 300,
         todayNewUsers: 5,
         todayNewWorks: 3,
+        planCounts: { free: 87, standard: 10, pro: 3 },
       });
     });
   });
