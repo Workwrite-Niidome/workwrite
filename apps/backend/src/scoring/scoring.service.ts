@@ -96,7 +96,12 @@ export class ScoringService {
     };
   }
 
-  async scoreWork(workId: string, userId?: string, model: ScoringModel = 'haiku'): Promise<ScoringResult | null> {
+  async scoreWork(workId: string, userId?: string, model: ScoringModel = 'haiku'): Promise<{
+    newScore: ScoringResult;
+    historyId: string;
+    currentScore: any;
+    autoAdopted: boolean;
+  } | null> {
     const work = await this.prisma.work.findUnique({
       where: { id: workId },
       include: {
@@ -227,22 +232,10 @@ export class ScoringService {
       // ── Phase 2: LLM Scoring (single call with structured data) ──
       const result = await this.callLlmForScoring(scoringInput, selectedModel);
 
-      await this.prisma.qualityScore.upsert({
-        where: { workId },
-        update: {
-          immersion: result.immersion,
-          transformation: result.transformation,
-          virality: result.virality,
-          worldBuilding: result.worldBuilding,
-          characterDepth: result.characterDepth,
-          structuralScore: result.structuralScore,
-          overall: result.overall,
-          analysisJson: result.analysis as object,
-          improvementTips: result.improvementTips,
-          scoredAt: new Date(),
-          version: { increment: 1 },
-        },
-        create: {
+      // Save to history (NOT to QualityScore — user decides whether to adopt)
+      const currentScore = await this.prisma.qualityScore.findUnique({ where: { workId } });
+      const historyEntry = await this.prisma.scoreHistory.create({
+        data: {
           workId,
           immersion: result.immersion,
           transformation: result.transformation,
@@ -253,8 +246,15 @@ export class ScoringService {
           overall: result.overall,
           analysisJson: result.analysis as object,
           improvementTips: result.improvementTips,
+          emotionTags: result.emotionTags as any,
+          model,
         },
       });
+
+      // Auto-adopt if no current score exists (first time scoring)
+      if (!currentScore) {
+        await this.adoptScore(workId, historyEntry.id);
+      }
 
       // Confirm credit transaction
       if (transactionId) {
@@ -263,7 +263,7 @@ export class ScoringService {
         );
       }
 
-      return result;
+      return { newScore: result, historyId: historyEntry.id, currentScore, autoAdopted: !currentScore };
     } catch (e) {
       // Refund on failure
       if (transactionId) {
@@ -457,5 +457,54 @@ export class ScoringService {
       this.logger.error('Episode scoring failed', e);
       return null;
     }
+  }
+
+  async adoptScore(workId: string, historyId: string, userId?: string) {
+    const entry = await this.prisma.scoreHistory.findUnique({ where: { id: historyId } });
+    if (!entry || entry.workId !== workId) return false;
+
+    if (userId) {
+      const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } });
+      if (!work || work.authorId !== userId) return false;
+    }
+
+    await this.prisma.qualityScore.upsert({
+      where: { workId },
+      update: {
+        immersion: entry.immersion,
+        transformation: entry.transformation,
+        virality: entry.virality,
+        worldBuilding: entry.worldBuilding,
+        characterDepth: entry.characterDepth,
+        structuralScore: entry.structuralScore,
+        overall: entry.overall,
+        analysisJson: entry.analysisJson as any,
+        improvementTips: entry.improvementTips as any,
+        scoredAt: entry.scoredAt,
+        version: { increment: 1 },
+      },
+      create: {
+        workId,
+        immersion: entry.immersion,
+        transformation: entry.transformation,
+        virality: entry.virality,
+        worldBuilding: entry.worldBuilding,
+        characterDepth: entry.characterDepth,
+        structuralScore: entry.structuralScore,
+        overall: entry.overall,
+        analysisJson: entry.analysisJson as any,
+        improvementTips: entry.improvementTips as any,
+        scoredAt: entry.scoredAt,
+      },
+    });
+    return true;
+  }
+
+  async getHistory(workId: string, limit = 20) {
+    return this.prisma.scoreHistory.findMany({
+      where: { workId },
+      orderBy: { scoredAt: 'desc' },
+      take: limit,
+    });
   }
 }

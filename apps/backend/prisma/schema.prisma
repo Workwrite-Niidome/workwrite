@@ -159,6 +159,7 @@ model Work {
   tags           WorkTag[]
   emotionTags    UserEmotionTag[]
   qualityScore   QualityScore?
+  scoreHistories ScoreHistory[]
   bookshelfEntries BookshelfEntry[]
   reviews        Review[]
   stateChanges   StateChange[]
@@ -543,6 +544,27 @@ model QualityScore {
   work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
 
   @@index([overall])
+}
+
+model ScoreHistory {
+  id              String   @id @default(cuid())
+  workId          String
+  immersion       Float
+  transformation  Float
+  virality        Float
+  worldBuilding   Float
+  characterDepth  Float?
+  structuralScore Float?
+  overall         Float
+  analysisJson    Json?
+  improvementTips Json?
+  emotionTags     Json?
+  model           String   // "haiku" or "sonnet"
+  scoredAt        DateTime @default(now())
+
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([workId, scoredAt(sort: Desc)])
 }
 
 // ============================================================

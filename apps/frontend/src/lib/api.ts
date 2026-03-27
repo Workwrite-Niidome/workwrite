@@ -633,7 +633,15 @@ class ApiClient {
 
   async triggerScoring(workId: string, model?: 'haiku' | 'sonnet') {
     const query = model ? `?model=${model}` : '';
-    return this.request<{ data: QualityScoreDetail | null }>(`/scoring/works/${workId}${query}`, { method: 'POST' });
+    return this.request<{ data: ScoringResponse | null }>(`/scoring/works/${workId}${query}`, { method: 'POST' });
+  }
+
+  async adoptScore(workId: string, historyId: string) {
+    return this.request<{ success: boolean }>(`/scoring/works/${workId}/adopt?historyId=${historyId}`, { method: 'POST' });
+  }
+
+  async getScoringHistory(workId: string) {
+    return this.request<{ data: ScoreHistoryEntry[] }>(`/scoring/works/${workId}/history`);
   }
 
   async getScoreAnalysis(workId: string) {
@@ -1628,6 +1636,18 @@ export interface QualityScoreDetail {
   emotionTags?: string[];
   scoredAt: string;
   isImported?: boolean;
+}
+
+export interface ScoringResponse {
+  newScore: QualityScoreDetail;
+  historyId: string;
+  currentScore: QualityScoreDetail | null;
+  autoAdopted: boolean;
+}
+
+export interface ScoreHistoryEntry extends QualityScoreDetail {
+  id: string;
+  model: string;
 }
 
 export interface NotificationItem {

@@ -5,7 +5,7 @@ import { Zap } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { api, type QualityScoreDetail } from '@/lib/api';
+import { api, type QualityScoreDetail, type ScoreHistoryEntry } from '@/lib/api';
 import { ShareScoreButton } from './share-score-button';
 
 interface ScoreCardProps {
@@ -107,6 +107,10 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
   const [selectedModel, setSelectedModel] = useState<ScoringModel>('haiku');
   const [error, setError] = useState('');
   const [lastCreditCost, setLastCreditCost] = useState<number | null>(null);
+  const [pendingResult, setPendingResult] = useState<{ newScore: QualityScoreDetail; historyId: string } | null>(null);
+  const [adopting, setAdopting] = useState(false);
+  const [historyEntries, setHistoryEntries] = useState<ScoreHistoryEntry[]>([]);
+  const [showHistory, setShowHistory] = useState(false);
 
   async function handleEstimate() {
     if (!workId) return;
@@ -139,13 +143,47 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
       const res = await api.triggerScoring(workId, selectedModel);
       if (res.data) {
         setLastCreditCost(currentCredits || null);
-        onScoreUpdate?.(res.data);
+        if (res.data.autoAdopted) {
+          // First time scoring — auto-adopted
+          onScoreUpdate?.(res.data.newScore);
+        } else {
+          // Show comparison UI
+          setPendingResult({ newScore: res.data.newScore, historyId: res.data.historyId });
+        }
       }
     } catch (e: any) {
       setError(e?.message || 'スコアリングに失敗しました');
     }
     setScoring(false);
     setCostEstimate(null);
+  }
+
+  async function handleAdopt(historyId?: string, newScore?: QualityScoreDetail) {
+    const hid = historyId || pendingResult?.historyId;
+    const ns = newScore || pendingResult?.newScore;
+    if (!workId || !hid || !ns) return;
+    setAdopting(true);
+    try {
+      await api.adoptScore(workId, hid);
+      onScoreUpdate?.(ns);
+      setPendingResult(null);
+    } catch (e: any) {
+      setError(e?.message || '採用に失敗しました');
+    }
+    setAdopting(false);
+  }
+
+  function handleKeepCurrent() {
+    setPendingResult(null);
+  }
+
+  async function loadHistory() {
+    if (!workId) return;
+    try {
+      const res = await api.getScoringHistory(workId);
+      setHistoryEntries((res as any).data || res || []);
+      setShowHistory(true);
+    } catch {}
   }
 
   function handleCancel() {
@@ -347,7 +385,92 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             )}
           </div>
         )}
+        {/* Comparison UI after new scoring */}
+        {pendingResult && score && (
+          <div className="mt-4 p-4 border border-primary/30 rounded-lg bg-primary/5 space-y-3">
+            <p className="text-sm font-medium">新しいスコアが算出されました</p>
+            <div className="grid grid-cols-2 gap-4">
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-1">現在のスコア</p>
+                <p className="text-3xl font-bold">{Math.round(score.overall)}</p>
+              </div>
+              <div className="text-center">
+                <p className="text-xs text-muted-foreground mb-1">新しいスコア</p>
+                <p className="text-3xl font-bold text-primary">{Math.round(pendingResult.newScore.overall)}</p>
+                <ScoreDelta current={score.overall} next={pendingResult.newScore.overall} />
+              </div>
+            </div>
+            <div className="space-y-1">
+              {ALL_AXES.map((axis) => {
+                const cur = (score[axis.key as keyof QualityScoreDetail] as number) ?? 0;
+                const next = (pendingResult.newScore[axis.key as keyof QualityScoreDetail] as number) ?? 0;
+                if (cur === 0 && next === 0) return null;
+                return (
+                  <div key={axis.key} className="flex items-center justify-between text-xs">
+                    <span className="text-muted-foreground">{axis.label}</span>
+                    <span>
+                      {Math.round(cur)} → {Math.round(next)}{' '}
+                      <ScoreDelta current={cur} next={next} />
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+            <div className="flex gap-2 pt-1">
+              <Button size="sm" onClick={() => handleAdopt()} disabled={adopting} className="text-xs h-7">
+                {adopting ? '採用中...' : '新しいスコアを採用'}
+              </Button>
+              <Button size="sm" variant="ghost" onClick={handleKeepCurrent} disabled={adopting} className="text-xs h-7">
+                元のスコアを維持
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {/* History toggle */}
+        {score && workId && (
+          <div className="mt-2">
+            <button onClick={showHistory ? () => setShowHistory(false) : loadHistory} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
+              {showHistory ? 'スコア履歴を閉じる' : 'スコア履歴を表示'}
+            </button>
+            {showHistory && historyEntries.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {historyEntries.map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between text-xs p-2 rounded border border-border">
+                    <div>
+                      <span className="font-medium">{Math.round(entry.overall)}</span>
+                      <span className="text-muted-foreground ml-2">{new Date(entry.scoredAt).toLocaleDateString('ja-JP')}</span>
+                      <span className="text-muted-foreground ml-1">({entry.model})</span>
+                    </div>
+                    <Button
+                      size="sm"
+                      variant="ghost"
+                      className="text-[10px] h-6 px-2"
+                      onClick={() => handleAdopt(entry.id, entry)}
+                      disabled={adopting}
+                    >
+                      採用
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            )}
+            {showHistory && historyEntries.length === 0 && (
+              <p className="text-[10px] text-muted-foreground mt-1">履歴がありません</p>
+            )}
+          </div>
+        )}
       </CardContent>
     </Card>
+  );
+}
+
+function ScoreDelta({ current, next }: { current: number; next: number }) {
+  const diff = Math.round(next - current);
+  if (diff === 0) return <span className="text-muted-foreground text-[10px]">--</span>;
+  return (
+    <span className={`text-[10px] font-medium ${diff > 0 ? 'text-green-600' : 'text-red-500'}`}>
+      {diff > 0 ? '+' : ''}{diff}
+    </span>
   );
 }

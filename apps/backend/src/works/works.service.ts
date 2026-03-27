@@ -319,8 +319,13 @@ export class WorksService {
 
   /** Auto-score, generate emotion tags, and index to search after publishing */
   async autoProcessWork(workId: string) {
-    // 1. Score the work
-    const score = await this.scoringService.scoreWork(workId);
+    // 1. Score the work (auto-adopts on first scoring)
+    const result = await this.scoringService.scoreWork(workId);
+    const score = result?.newScore ?? null;
+    // If not auto-adopted (existing score), force-adopt for auto-process
+    if (result && !result.autoAdopted) {
+      await this.scoringService.adoptScore(workId, result.historyId);
+    }
     this.logger.log(`Auto-scored work ${workId}: overall=${score?.overall}`);
 
     // 2. Generate emotion tags from scoring result

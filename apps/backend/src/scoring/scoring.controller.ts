@@ -25,7 +25,7 @@ export class ScoringController {
   @Post('works/:workId')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
-  @ApiOperation({ summary: 'Trigger AI scoring for a work (dynamic credit cost)' })
+  @ApiOperation({ summary: 'Trigger AI scoring for a work (saves to history, does not overwrite current score)' })
   @ApiQuery({ name: 'model', required: false, enum: ['haiku', 'sonnet'] })
   async scoreWork(
     @Param('workId') workId: string,
@@ -35,20 +35,79 @@ export class ScoringController {
     const userId = req.user?.id || req.user?.sub;
     const result = await this.scoringService.scoreWork(workId, userId, model || 'haiku');
     if (!result) return { data: null };
+
+    const { newScore, historyId, currentScore, autoAdopted } = result;
+
     return {
       data: {
-        immersion: result.immersion,
-        transformation: result.transformation,
-        virality: result.virality,
-        worldBuilding: result.worldBuilding,
-        characterDepth: result.characterDepth,
-        structuralScore: result.structuralScore,
-        overall: result.overall,
-        analysis: result.analysis,
-        tips: result.improvementTips,
-        emotionTags: result.emotionTags,
-        scoredAt: new Date().toISOString(),
+        newScore: {
+          immersion: newScore.immersion,
+          transformation: newScore.transformation,
+          virality: newScore.virality,
+          worldBuilding: newScore.worldBuilding,
+          characterDepth: newScore.characterDepth,
+          structuralScore: newScore.structuralScore,
+          overall: newScore.overall,
+          analysis: newScore.analysis,
+          tips: newScore.improvementTips,
+          emotionTags: newScore.emotionTags,
+          scoredAt: new Date().toISOString(),
+        },
+        historyId,
+        currentScore: currentScore ? {
+          immersion: currentScore.immersion,
+          transformation: currentScore.transformation,
+          virality: currentScore.virality,
+          worldBuilding: currentScore.worldBuilding,
+          characterDepth: currentScore.characterDepth,
+          structuralScore: currentScore.structuralScore,
+          overall: currentScore.overall,
+          analysis: currentScore.analysisJson as Record<string, string> | null,
+          tips: (currentScore.improvementTips as string[]) || [],
+          scoredAt: currentScore.scoredAt.toISOString(),
+        } : null,
+        autoAdopted,
       },
+    };
+  }
+
+  @Post('works/:workId/adopt')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Adopt a score history entry as the current quality score' })
+  @ApiQuery({ name: 'historyId', required: true })
+  async adoptScore(
+    @Param('workId') workId: string,
+    @Req() req: any,
+    @Query('historyId') historyId: string,
+  ) {
+    const userId = req.user?.id || req.user?.sub;
+    const success = await this.scoringService.adoptScore(workId, historyId, userId);
+    return { success };
+  }
+
+  @Get('works/:workId/history')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get scoring history for a work' })
+  async getHistory(@Param('workId') workId: string) {
+    const entries = await this.scoringService.getHistory(workId);
+    return {
+      data: entries.map((e: any) => ({
+        id: e.id,
+        immersion: e.immersion,
+        transformation: e.transformation,
+        virality: e.virality,
+        worldBuilding: e.worldBuilding,
+        characterDepth: e.characterDepth,
+        structuralScore: e.structuralScore,
+        overall: e.overall,
+        analysis: e.analysisJson as Record<string, string> | null,
+        tips: (e.improvementTips as string[]) || [],
+        emotionTags: (e.emotionTags as string[]) || [],
+        model: e.model,
+        scoredAt: e.scoredAt.toISOString(),
+      })),
     };
   }
 
