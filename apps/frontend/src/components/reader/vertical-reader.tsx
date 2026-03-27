@@ -1,6 +1,6 @@
 'use client';
 
-import { useRef, useCallback } from 'react';
+import { useRef, useCallback, useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { ChevronLeft, Settings, Mail, MessageCircle, X } from 'lucide-react';
 import type { Highlight } from '@/lib/api';
@@ -59,12 +59,29 @@ export function VerticalReader({
     onReachEnd: onLastPageReached,
   });
 
+  // Track container width for CSS column-width (prevents text clipping at page boundaries)
+  const [columnWidth, setColumnWidth] = useState(0);
+
   const setRefs = useCallback((node: HTMLDivElement | null) => {
     (scrollContainerRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
     if (contentRef && 'current' in contentRef) {
       (contentRef as React.MutableRefObject<HTMLDivElement | null>).current = node;
     }
+    if (node) {
+      // padding-left + padding-right = 2.5rem * 2 = 80px (approx)
+      setColumnWidth(node.clientWidth);
+    }
   }, [contentRef]);
+
+  useEffect(() => {
+    const el = scrollContainerRef.current;
+    if (!el) return;
+    const observer = new ResizeObserver(() => {
+      setColumnWidth(el.clientWidth);
+    });
+    observer.observe(el);
+    return () => observer.disconnect();
+  }, []);
 
   const fontSizeClass = FONT_SIZE_MAP[fontSize] || 'text-base';
 
@@ -134,10 +151,16 @@ export function VerticalReader({
           </h1>
         </div>
 
-        {/* Body */}
+        {/* Body — column-width ensures text doesn't clip at page boundaries */}
         <div
           className={`font-serif ${fontSizeClass} ${lineHeight}`}
-          style={{ whiteSpace: 'pre-wrap' }}
+          style={{
+            whiteSpace: 'pre-wrap',
+            columnWidth: columnWidth > 0 ? `${columnWidth}px` : undefined,
+            columnGap: 0,
+            columnFill: 'auto',
+            height: '100%',
+          } as React.CSSProperties}
         >
           <HighlightedText
             text={episode.content}
