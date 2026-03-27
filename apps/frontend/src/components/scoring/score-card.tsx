@@ -1,7 +1,7 @@
 'use client';
 
-import { useState } from 'react';
-import { Zap } from 'lucide-react';
+import { useState, useEffect } from 'react';
+import { Zap, History, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -100,6 +100,78 @@ function formatChars(chars: number): string {
   return `${chars}`;
 }
 
+/** Full score display — reused for current score and history entries */
+function ScoreDisplay({ data, label }: { data: QualityScoreDetail; label?: string }) {
+  return (
+    <div className="space-y-4">
+      {label && <p className="text-[10px] text-muted-foreground">{label}</p>}
+      {(data as any).isImported && (
+        <div className="p-2.5 bg-muted/50 rounded-md border border-border">
+          <p className="text-[11px] text-muted-foreground leading-relaxed">
+            本文から読み取れる魅力をもとに分析しました。キャラクター設定やプロットをWorkwriteに登録すると、
+            キャラの一貫性チェックや伏線追跡など、さらに深い分析が可能になります。
+          </p>
+        </div>
+      )}
+      <div className="text-center">
+        <span className="text-4xl font-bold text-primary">{Math.round(data.overall)}</span>
+        <span className="text-muted-foreground text-sm ml-1">/ 100</span>
+        {data.overall >= 50 && (
+          <p className="text-sm font-medium mt-1" style={{ color: data.overall >= 90 ? '#9333ea' : data.overall >= 80 ? '#16a34a' : data.overall >= 65 ? '#2563eb' : '#d97706' }}>
+            {data.overall >= 90 ? '傑作' : data.overall >= 80 ? '秀作' : data.overall >= 65 ? '良作' : '佳作'}
+          </p>
+        )}
+      </div>
+      <RadarChart score={data} />
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        {ALL_AXES.map((axis) => {
+          const val = data[axis.key as keyof QualityScoreDetail] as number | undefined;
+          if (val == null) return null;
+          return (
+            <div key={axis.key} className="p-3 rounded-lg border border-border bg-muted/30">
+              <div className="flex items-center justify-between mb-1">
+                <div>
+                  <p className="text-xs font-medium">{axis.label}</p>
+                  <p className="text-[10px] text-muted-foreground">{axis.desc}</p>
+                </div>
+                <p className="text-lg font-bold">{Math.round(val)}</p>
+              </div>
+              {data.analysis?.[axis.key] && (
+                <p className="text-[11px] text-muted-foreground leading-relaxed">{data.analysis[axis.key]}</p>
+              )}
+            </div>
+          );
+        })}
+      </div>
+      {data.emotionTags && data.emotionTags.length > 0 && (
+        <div>
+          <p className="text-xs font-medium mb-1.5">感情タグ</p>
+          <div className="flex flex-wrap gap-1">
+            {data.emotionTags.map((tag) => (
+              <Badge key={tag} variant="secondary" className="text-[10px]">
+                {EMOTION_TAG_LABELS[tag] || tag}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {data.tips && data.tips.length > 0 && (
+        <div className="space-y-1">
+          <p className="text-xs font-medium">改善提案</p>
+          <ol className="space-y-1.5">
+            {data.tips.map((tip, i) => (
+              <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
+                <span className="text-primary font-bold shrink-0">{i + 1}.</span>
+                <span>{tip}</span>
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+    </div>
+  );
+}
+
 export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCardProps) {
   const [scoring, setScoring] = useState(false);
   const [estimating, setEstimating] = useState(false);
@@ -109,8 +181,23 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
   const [lastCreditCost, setLastCreditCost] = useState<number | null>(null);
   const [pendingResult, setPendingResult] = useState<{ newScore: QualityScoreDetail; historyId: string } | null>(null);
   const [adopting, setAdopting] = useState(false);
+
+  // History tab state
   const [historyEntries, setHistoryEntries] = useState<ScoreHistoryEntry[]>([]);
-  const [showHistory, setShowHistory] = useState(false);
+  const [historyLoaded, setHistoryLoaded] = useState(false);
+  const [viewingHistoryIndex, setViewingHistoryIndex] = useState<number | null>(null); // null = current score
+
+  // Load history on mount if score exists
+  useEffect(() => {
+    if (workId && score && !historyLoaded) {
+      api.getScoringHistory(workId)
+        .then((res) => {
+          setHistoryEntries((res as any).data || res || []);
+          setHistoryLoaded(true);
+        })
+        .catch(() => setHistoryLoaded(true));
+    }
+  }, [workId, score, historyLoaded]);
 
   async function handleEstimate() {
     if (!workId) return;
@@ -144,12 +231,12 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
       if (res.data) {
         setLastCreditCost(currentCredits || null);
         if (res.data.autoAdopted) {
-          // First time scoring — auto-adopted
           onScoreUpdate?.(res.data.newScore);
         } else {
-          // Show comparison UI
           setPendingResult({ newScore: res.data.newScore, historyId: res.data.historyId });
         }
+        // Refresh history
+        setHistoryLoaded(false);
       }
     } catch (e: any) {
       setError(e?.message || 'スコアリングに失敗しました');
@@ -158,14 +245,12 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
     setCostEstimate(null);
   }
 
-  async function handleAdopt(historyId?: string, newScore?: QualityScoreDetail) {
-    const hid = historyId || pendingResult?.historyId;
-    const ns = newScore || pendingResult?.newScore;
-    if (!workId || !hid || !ns) return;
+  async function handleAdopt() {
+    if (!workId || !pendingResult) return;
     setAdopting(true);
     try {
-      await api.adoptScore(workId, hid);
-      onScoreUpdate?.(ns);
+      await api.adoptScore(workId, pendingResult.historyId);
+      onScoreUpdate?.(pendingResult.newScore);
       setPendingResult(null);
     } catch (e: any) {
       setError(e?.message || '採用に失敗しました');
@@ -177,20 +262,17 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
     setPendingResult(null);
   }
 
-  async function loadHistory() {
-    if (!workId) return;
-    try {
-      const res = await api.getScoringHistory(workId);
-      setHistoryEntries((res as any).data || res || []);
-      setShowHistory(true);
-    } catch {}
-  }
-
   function handleCancel() {
     setCostEstimate(null);
   }
 
   const insufficientCredits = costEstimate && costEstimate.balance.total < currentCredits;
+
+  // Which score to display in the main area
+  const displayScore = viewingHistoryIndex !== null && historyEntries[viewingHistoryIndex]
+    ? historyEntries[viewingHistoryIndex]
+    : score;
+  const isViewingHistory = viewingHistoryIndex !== null;
 
   return (
     <Card>
@@ -200,7 +282,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
             <Zap className="h-4 w-4" />
             AI品質スコア
           </span>
-          {workId && !costEstimate && (
+          {workId && !costEstimate && !pendingResult && (
             <Button
               variant="outline"
               size="sm"
@@ -214,12 +296,14 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
         </CardTitle>
         {error && <p className="text-xs text-destructive">{error}</p>}
 
-        {/* Cost confirmation dialog */}
+        {/* Cost confirmation */}
         {costEstimate && (
           <div className="mt-2 p-3 bg-muted/50 rounded-lg border border-border space-y-2">
             <p className="text-xs font-medium">スコアリングのコスト確認</p>
-
-            {/* Model selection */}
+            <p className="text-[10px] text-muted-foreground leading-relaxed">
+              スコアリング後、現在のスコアと新しいスコアを比較して、どちらを掲載するか選べます。
+              スコアが下がっても安心 — フィードバックを改善に活かしつつ、元のスコアをそのまま維持できます。
+            </p>
             <div className="flex gap-2">
               <button
                 type="button"
@@ -249,9 +333,8 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
               )}
             </div>
             {selectedModel === 'sonnet' && (
-              <p className="text-[10px] text-muted-foreground">より精度の高い分析と具体的な改善提案が得られます。</p>
+              <p className="text-[10px] text-muted-foreground">より精度の高い分析と具体的な改善提案が得られます。高精度モデルだからスコアが高くなるわけではありません。</p>
             )}
-
             <div className="text-xs text-muted-foreground space-y-0.5">
               <p>作品文字数: 約{formatChars(costEstimate.totalChars)}文字</p>
               <p>消費クレジット: <span className="font-bold text-foreground">{currentCredits}cr</span></p>
@@ -272,13 +355,7 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
               >
                 {scoring ? 'スコアリング中...' : `${currentCredits}cr で実行`}
               </Button>
-              <Button
-                size="sm"
-                variant="ghost"
-                onClick={handleCancel}
-                disabled={scoring}
-                className="text-xs h-7"
-              >
+              <Button size="sm" variant="ghost" onClick={handleCancel} disabled={scoring} className="text-xs h-7">
                 キャンセル
               </Button>
             </div>
@@ -286,109 +363,13 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
         )}
       </CardHeader>
       <CardContent className="space-y-4">
-        {score ? (
-          <>
-            {(score as any).isImported && (
-              <div className="p-2.5 bg-muted/50 rounded-md border border-border">
-                <p className="text-[11px] text-muted-foreground leading-relaxed">
-                  本文から読み取れる魅力をもとに分析しました。キャラクター設定やプロットをWorkwriteに登録すると、
-                  キャラの一貫性チェックや伏線追跡など、さらに深い分析が可能になります。
-                </p>
-              </div>
-            )}
-            {/* Overall score */}
-            <div className="text-center">
-              <span className="text-4xl font-bold text-primary">{Math.round(score.overall)}</span>
-              <span className="text-muted-foreground text-sm ml-1">/ 100</span>
-              {score.overall >= 50 && (
-                <p className="text-sm font-medium mt-1" style={{ color: score.overall >= 90 ? '#9333ea' : score.overall >= 80 ? '#16a34a' : score.overall >= 65 ? '#2563eb' : '#d97706' }}>
-                  {score.overall >= 90 ? '傑作' : score.overall >= 80 ? '秀作' : score.overall >= 65 ? '良作' : '佳作'}
-                </p>
-              )}
-            </div>
-
-            {/* Radar chart */}
-            <RadarChart score={score} />
-
-            {/* All 6 axes */}
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {ALL_AXES.map((axis) => {
-                const val = score[axis.key as keyof QualityScoreDetail] as number | undefined;
-                if (val == null) return null;
-                return (
-                  <div key={axis.key} className="p-3 rounded-lg border border-border bg-muted/30">
-                    <div className="flex items-center justify-between mb-1">
-                      <div>
-                        <p className="text-xs font-medium">{axis.label}</p>
-                        <p className="text-[10px] text-muted-foreground">{axis.desc}</p>
-                      </div>
-                      <p className="text-lg font-bold">{Math.round(val)}</p>
-                    </div>
-                    {score.analysis?.[axis.key] && (
-                      <p className="text-[11px] text-muted-foreground leading-relaxed">{score.analysis[axis.key]}</p>
-                    )}
-                  </div>
-                );
-              })}
-            </div>
-
-            {/* Emotion tags */}
-            {score.emotionTags && score.emotionTags.length > 0 && (
-              <div>
-                <p className="text-xs font-medium mb-1.5">感情タグ</p>
-                <div className="flex flex-wrap gap-1">
-                  {score.emotionTags.map((tag) => (
-                    <Badge key={tag} variant="secondary" className="text-[10px]">
-                      {EMOTION_TAG_LABELS[tag] || tag}
-                    </Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Improvement tips */}
-            {score.tips && score.tips.length > 0 && (
-              <div className="space-y-1">
-                <p className="text-xs font-medium">改善提案</p>
-                <ol className="space-y-1.5">
-                  {score.tips.map((tip, i) => (
-                    <li key={i} className="text-xs text-muted-foreground flex items-start gap-2">
-                      <span className="text-primary font-bold shrink-0">{i + 1}.</span>
-                      <span>{tip}</span>
-                    </li>
-                  ))}
-                </ol>
-              </div>
-            )}
-
-            <div className="flex items-center justify-between">
-              <p className="text-[10px] text-muted-foreground">
-                スコアリング: {new Date(score.scoredAt).toLocaleDateString('ja-JP')}
-                {lastCreditCost != null && ` (${lastCreditCost}クレジット消費)`}
-              </p>
-              {workId && (
-                <ShareScoreButton
-                  workId={workId}
-                  title={workTitle || '作品'}
-                  score={score.overall}
-                />
-              )}
-            </div>
-          </>
-        ) : (
-          <div className="text-center py-6">
-            <p className="text-sm text-muted-foreground mb-2">まだスコアリングされていません</p>
-            {workId && (
-              <p className="text-xs text-muted-foreground">
-                上のボタンからAIスコアリングを実行できます（文字数に応じたクレジット消費）
-              </p>
-            )}
-          </div>
-        )}
         {/* Comparison UI after new scoring */}
         {pendingResult && score && (
-          <div className="mt-4 p-4 border border-primary/30 rounded-lg bg-primary/5 space-y-3">
+          <div className="p-4 border border-primary/30 rounded-lg bg-primary/5 space-y-3">
             <p className="text-sm font-medium">新しいスコアが算出されました</p>
+            <p className="text-xs text-muted-foreground">
+              どちらのスコアを作品ページに掲載するか選べます。どちらを選んでも、両方のフィードバックは履歴から確認できます。
+            </p>
             <div className="grid grid-cols-2 gap-4">
               <div className="text-center">
                 <p className="text-xs text-muted-foreground mb-1">現在のスコア</p>
@@ -417,46 +398,80 @@ export function ScoreCard({ score, workId, workTitle, onScoreUpdate }: ScoreCard
               })}
             </div>
             <div className="flex gap-2 pt-1">
-              <Button size="sm" onClick={() => handleAdopt()} disabled={adopting} className="text-xs h-7">
+              <Button size="sm" onClick={handleAdopt} disabled={adopting} className="text-xs h-7">
                 {adopting ? '採用中...' : '新しいスコアを採用'}
               </Button>
               <Button size="sm" variant="ghost" onClick={handleKeepCurrent} disabled={adopting} className="text-xs h-7">
-                元のスコアを維持
+                現在のスコアを維持
               </Button>
             </div>
           </div>
         )}
 
-        {/* History toggle */}
-        {score && workId && (
-          <div className="mt-2">
-            <button onClick={showHistory ? () => setShowHistory(false) : loadHistory} className="text-[10px] text-muted-foreground hover:text-foreground transition-colors">
-              {showHistory ? 'スコア履歴を閉じる' : 'スコア履歴を表示'}
+        {/* History tabs */}
+        {displayScore && historyEntries.length > 1 && (
+          <div className="flex items-center gap-1 overflow-x-auto pb-1">
+            <button
+              onClick={() => setViewingHistoryIndex(null)}
+              className={`shrink-0 px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                viewingHistoryIndex === null
+                  ? 'bg-primary text-primary-foreground'
+                  : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+              }`}
+            >
+              現在
             </button>
-            {showHistory && historyEntries.length > 0 && (
-              <div className="mt-2 space-y-1.5">
-                {historyEntries.map((entry) => (
-                  <div key={entry.id} className="flex items-center justify-between text-xs p-2 rounded border border-border">
-                    <div>
-                      <span className="font-medium">{Math.round(entry.overall)}</span>
-                      <span className="text-muted-foreground ml-2">{new Date(entry.scoredAt).toLocaleDateString('ja-JP')}</span>
-                      <span className="text-muted-foreground ml-1">({entry.model})</span>
-                    </div>
-                    <Button
-                      size="sm"
-                      variant="ghost"
-                      className="text-[10px] h-6 px-2"
-                      onClick={() => handleAdopt(entry.id, entry)}
-                      disabled={adopting}
-                    >
-                      採用
-                    </Button>
-                  </div>
-                ))}
+            {historyEntries.map((entry, i) => (
+              <button
+                key={entry.id}
+                onClick={() => setViewingHistoryIndex(i)}
+                className={`shrink-0 px-2.5 py-1 rounded-md text-[10px] font-medium transition-colors ${
+                  viewingHistoryIndex === i
+                    ? 'bg-primary text-primary-foreground'
+                    : 'bg-muted/50 text-muted-foreground hover:bg-muted'
+                }`}
+              >
+                {Math.round(entry.overall)}点 {new Date(entry.scoredAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+              </button>
+            ))}
+          </div>
+        )}
+
+        {/* Main score display */}
+        {displayScore ? (
+          <>
+            <ScoreDisplay
+              data={displayScore}
+              label={isViewingHistory ? `${new Date(displayScore.scoredAt).toLocaleDateString('ja-JP')} のスコアリング結果（閲覧のみ）` : undefined}
+            />
+            {!isViewingHistory && (
+              <div className="flex items-center justify-between">
+                <p className="text-[10px] text-muted-foreground">
+                  スコアリング: {new Date(displayScore.scoredAt).toLocaleDateString('ja-JP')}
+                  {lastCreditCost != null && ` (${lastCreditCost}クレジット消費)`}
+                </p>
+                {workId && (
+                  <ShareScoreButton
+                    workId={workId}
+                    title={workTitle || '作品'}
+                    score={displayScore.overall}
+                  />
+                )}
               </div>
             )}
-            {showHistory && historyEntries.length === 0 && (
-              <p className="text-[10px] text-muted-foreground mt-1">履歴がありません</p>
+            {isViewingHistory && (
+              <p className="text-[10px] text-muted-foreground text-center">
+                過去のスコアリング結果です。フィードバックを改善の参考にご活用ください。
+              </p>
+            )}
+          </>
+        ) : (
+          <div className="text-center py-6">
+            <p className="text-sm text-muted-foreground mb-2">まだスコアリングされていません</p>
+            {workId && (
+              <p className="text-xs text-muted-foreground">
+                上のボタンからAIスコアリングを実行できます。スコアリング後、掲載するスコアを選べるので気軽にお試しください。
+              </p>
             )}
           </div>
         )}
