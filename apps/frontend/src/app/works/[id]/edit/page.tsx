@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users, Globe, EyeOff, Link2, Check } from 'lucide-react';
+import { Plus, Trash2, Pencil, Eye, GripVertical, ChevronDown, ChevronUp, BookOpen, Save, X, Users, Globe, EyeOff, Link2, Check, BookMarked } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -43,6 +43,7 @@ interface EpisodeItem {
   wordCount: number;
   publishedAt: string | null;
   scheduledAt: string | null;
+  chapterTitle?: string | null;
 }
 
 function getEpisodeStatus(ep: EpisodeItem) {
@@ -75,6 +76,10 @@ export default function EditWorkPage() {
   const [creationPlan, setCreationPlan] = useState<any>(null);
   const [planOpen, setPlanOpen] = useState(false);
   const [showCharacters, setShowCharacters] = useState(false);
+
+  // Chapter divider editing
+  const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
+  const [chapterTitleInput, setChapterTitleInput] = useState('');
 
   // Drag state
   const dragItemRef = useRef<number | null>(null);
@@ -201,6 +206,20 @@ export default function EditWorkPage() {
     } catch {
       setMessage('操作に失敗しました');
     }
+  }
+
+  async function handleSaveChapterTitle(epId: string) {
+    const trimmed = chapterTitleInput.trim();
+    try {
+      await api.updateEpisode(epId, { chapterTitle: trimmed || '' } as any);
+      setEpisodes((prev) =>
+        prev.map((e) => e.id === epId ? { ...e, chapterTitle: trimmed || null } : e),
+      );
+      setMessage(trimmed ? '章区切りを設定しました' : '章区切りを解除しました');
+    } catch {
+      setMessage('章区切りの保存に失敗しました');
+    }
+    setEditingChapterId(null);
   }
 
   async function handleDragEnd() {
@@ -402,6 +421,38 @@ export default function EditWorkPage() {
                         onDrop={handleDragEnd}
                         className="group"
                       >
+                        {/* Chapter divider display / edit */}
+                        {editingChapterId === ep.id ? (
+                          <div className="flex items-center gap-1.5 px-2 py-1.5 -mx-2 bg-muted/50 rounded-md mb-1">
+                            <BookMarked className="h-3.5 w-3.5 text-primary shrink-0" />
+                            <Input
+                              value={chapterTitleInput}
+                              onChange={(e) => setChapterTitleInput(e.target.value)}
+                              placeholder="例：第一章"
+                              className="h-7 text-sm flex-1"
+                              autoFocus
+                              onKeyDown={(e) => {
+                                if (e.key === 'Enter') handleSaveChapterTitle(ep.id);
+                                if (e.key === 'Escape') setEditingChapterId(null);
+                              }}
+                            />
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleSaveChapterTitle(ep.id)}>
+                              <Check className="h-3 w-3" />
+                            </Button>
+                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingChapterId(null)}>
+                              <X className="h-3 w-3" />
+                            </Button>
+                          </div>
+                        ) : ep.chapterTitle ? (
+                          <button
+                            onClick={() => { setEditingChapterId(ep.id); setChapterTitleInput(ep.chapterTitle || ''); }}
+                            className="flex items-center gap-1.5 px-2 py-1.5 -mx-2 text-sm font-semibold text-primary hover:bg-muted/50 rounded-md mb-1 w-full text-left"
+                          >
+                            <BookMarked className="h-3.5 w-3.5 shrink-0" />
+                            {ep.chapterTitle}
+                          </button>
+                        ) : null}
+
                         <div className="flex items-center justify-between rounded-md px-2 py-2 -mx-2 hover:bg-muted transition-colors">
                           <div className="flex items-center gap-1.5 min-w-0">
                             <GripVertical className="h-3.5 w-3.5 text-muted-foreground/50 cursor-grab shrink-0 opacity-0 group-hover:opacity-100 transition-opacity" />
@@ -414,6 +465,13 @@ export default function EditWorkPage() {
                             </Link>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
+                            <button
+                              onClick={() => { setEditingChapterId(ep.id); setChapterTitleInput(ep.chapterTitle || ''); }}
+                              title="章区切りを設定"
+                              className="text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
+                            >
+                              <BookMarked className="h-3 w-3" />
+                            </button>
                             <button
                               onClick={(e) => { e.preventDefault(); handleToggleEpisodePublish(ep); }}
                               title={ep.publishedAt ? '下書きに戻す' : '公開する'}

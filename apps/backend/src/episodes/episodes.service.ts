@@ -41,6 +41,7 @@ export class EpisodesService {
         wordCount,
         publishedAt,
         scheduledAt: dto.scheduledAt ? new Date(dto.scheduledAt) : null,
+        chapterTitle: dto.chapterTitle || null,
       },
     });
   }
@@ -60,6 +61,7 @@ export class EpisodesService {
         publishedAt: true,
         scheduledAt: true,
         createdAt: true,
+        chapterTitle: true,
       },
     });
   }
@@ -98,6 +100,7 @@ export class EpisodesService {
     }
     if (dto.orderIndex !== undefined) data.orderIndex = dto.orderIndex;
     if (dto.scheduledAt !== undefined) data.scheduledAt = new Date(dto.scheduledAt);
+    if (dto.chapterTitle !== undefined) data.chapterTitle = dto.chapterTitle || null;
 
     return this.prisma.episode.update({ where: { id }, data });
   }

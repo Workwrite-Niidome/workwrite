@@ -90,7 +90,7 @@ export class WorksService {
         tags: true,
         episodes: {
           orderBy: { orderIndex: 'asc' },
-          select: { id: true, title: true, orderIndex: true, wordCount: true, publishedAt: true },
+          select: { id: true, title: true, orderIndex: true, wordCount: true, publishedAt: true, chapterTitle: true },
         },
         qualityScore: true,
         _count: { select: { reviews: true, bookshelfEntries: true } },

@@ -239,6 +239,7 @@ model Episode {
   work   Work @relation(fields: [workId], references: [id], onDelete: Cascade)
   author User @relation(fields: [authorId], references: [id], onDelete: Cascade)
 
+  chapterTitle        String?  // Chapter divider displayed above this episode (e.g. "第一章")
   contentVersion      Int      @default(0)
   extractedCharacters Json?    // [{name, role}] — auto-extracted by Haiku on first read
 

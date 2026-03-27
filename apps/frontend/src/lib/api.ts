@@ -1455,7 +1455,7 @@ export interface Work {
   author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
   tags: { id: string; tag: string; type: string }[];
   qualityScore?: { overall: number } | null;
-  episodes?: { id: string; title: string; orderIndex: number; wordCount: number }[];
+  episodes?: { id: string; title: string; orderIndex: number; wordCount: number; chapterTitle?: string | null }[];
   _count?: { reviews: number; episodes: number };
   readerCounts?: Record<string, number>;
   createdAt: string;
@@ -1490,6 +1490,7 @@ export interface Episode {
   orderIndex: number;
   wordCount: number;
   publishedAt: string | null;
+  chapterTitle?: string | null;
 }
 
 export interface ReadingProgress {

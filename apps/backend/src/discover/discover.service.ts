@@ -201,7 +201,7 @@ export class DiscoverService {
       include: {
         work: {
           include: {
-            episodes: { select: { id: true, title: true, orderIndex: true, wordCount: true }, orderBy: { orderIndex: 'asc' } },
+            episodes: { select: { id: true, title: true, orderIndex: true, wordCount: true, chapterTitle: true }, orderBy: { orderIndex: 'asc' } },
             author: { select: { id: true, name: true, displayName: true } },
           },
         },

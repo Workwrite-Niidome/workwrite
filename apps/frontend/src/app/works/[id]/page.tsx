@@ -681,6 +681,11 @@ export default function WorkDetailPage() {
                 ?.sort((a, b) => a.orderIndex - b.orderIndex)
                 .map((ep) => (
                   <li key={ep.id}>
+                    {ep.chapterTitle && (
+                      <div className="px-4 py-2.5 bg-muted/30 border-b border-border/50">
+                        <span className="text-sm font-semibold text-foreground">{ep.chapterTitle}</span>
+                      </div>
+                    )}
                     <Link
                       href={`/read/${ep.id}`}
                       className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors min-h-[44px]"

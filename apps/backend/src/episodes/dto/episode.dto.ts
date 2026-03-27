@@ -26,6 +26,12 @@ export class CreateEpisodeDto {
   @IsOptional()
   @IsBoolean()
   publish?: boolean;
+
+  @ApiPropertyOptional({ description: 'Chapter divider title shown above this episode (e.g. "第一章")' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  chapterTitle?: string;
 }
 
 export class UpdateEpisodeDto {
@@ -50,4 +56,10 @@ export class UpdateEpisodeDto {
   @IsOptional()
   @IsDateString()
   scheduledAt?: string;
+
+  @ApiPropertyOptional({ description: 'Chapter divider title shown above this episode (e.g. "第一章"). Set to empty string to remove.' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  chapterTitle?: string;
 }
