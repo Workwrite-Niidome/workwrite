@@ -22,9 +22,13 @@ const mockPrismaService = () => ({
     findMany: jest.fn().mockResolvedValue([]),
     create: jest.fn(),
     update: jest.fn(),
+    deleteMany: jest.fn(),
+    updateMany: jest.fn(),
   },
   worldSetting: {
     upsert: jest.fn(),
+    deleteMany: jest.fn(),
+    updateMany: jest.fn(),
   },
   characterDialogueSample: {
     deleteMany: jest.fn(),
