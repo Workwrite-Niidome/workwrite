@@ -98,7 +98,19 @@ export class AiAssistService {
 
     // Replace variable placeholders
     for (const [key, value] of Object.entries(variables)) {
-      const truncated = value.slice(0, MAX_CONTENT_LENGTH);
+      let truncated: string;
+      if (key === 'content' && value.length > MAX_CONTENT_LENGTH) {
+        // For content, keep the END of the text (most relevant for continue-writing)
+        // Prefix with note about truncation so the LLM understands context
+        const tail = value.slice(-MAX_CONTENT_LENGTH);
+        // Find the first paragraph or sentence break to avoid cutting mid-sentence
+        const firstBreak = tail.indexOf('\n');
+        truncated = firstBreak > 0 && firstBreak < 500
+          ? '（前略）\n' + tail.slice(firstBreak + 1)
+          : '（前略）\n' + tail;
+      } else {
+        truncated = value.slice(0, MAX_CONTENT_LENGTH);
+      }
       prompt = prompt.replace(new RegExp(`\\{\\{${key}\\}\\}`, 'g'), truncated);
     }
 
