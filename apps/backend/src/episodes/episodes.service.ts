@@ -116,23 +116,96 @@ export class EpisodesService {
     const workId = episode.workId;
     const deletedOrder = episode.orderIndex;
 
-    await this.prisma.episode.delete({ where: { id } });
+    await this.prisma.$transaction(async (tx) => {
+      // 1. Clear FK references that would block deletion
+      await tx.storyScene.updateMany({
+        where: { episodeId: id },
+        data: { episodeId: null },
+      });
 
-    // Reindex remaining episodes to fill the gap
-    const remaining = await this.prisma.episode.findMany({
-      where: { workId },
-      orderBy: { orderIndex: 'asc' },
-      select: { id: true, orderIndex: true },
-    });
+      // 2. Delete the episode (cascades: EpisodeAnalysis, EpisodeReaction, etc.)
+      await tx.episode.delete({ where: { id } });
 
-    await this.prisma.$transaction(
-      remaining.map((ep, i) =>
-        this.prisma.episode.update({
-          where: { id: ep.id },
+      // 3. Clean up orphaned data (no FK relation)
+      await tx.episodeSnapshot.deleteMany({ where: { episodeId: id } });
+
+      // 4. Fix orderIndex-based references
+      // Foreshadowing: planted in deleted episode → remove
+      await tx.foreshadowing.deleteMany({
+        where: { workId, plantedIn: deletedOrder },
+      });
+      // Foreshadowing: resolved in deleted episode → revert to open
+      await tx.foreshadowing.updateMany({
+        where: { workId, resolvedIn: deletedOrder },
+        data: { resolvedIn: null, status: 'open' },
+      });
+      // Foreshadowing: shift down indices above deleted
+      await tx.foreshadowing.updateMany({
+        where: { workId, plantedIn: { gt: deletedOrder } },
+        data: { plantedIn: { decrement: 1 } },
+      });
+      await tx.foreshadowing.updateMany({
+        where: { workId, resolvedIn: { gt: deletedOrder } },
+        data: { resolvedIn: { decrement: 1 } },
+      });
+
+      // CharacterDialogueSample: from deleted episode → remove
+      await tx.characterDialogueSample.deleteMany({
+        where: { workId, episodeOrder: deletedOrder },
+      });
+      // CharacterDialogueSample: shift down indices above deleted
+      await tx.characterDialogueSample.updateMany({
+        where: { workId, episodeOrder: { gt: deletedOrder } },
+        data: { episodeOrder: { decrement: 1 } },
+      });
+
+      // WorldSetting: only appeared in deleted episode → remove
+      await tx.worldSetting.deleteMany({
+        where: { workId, firstEpisode: deletedOrder, lastEpisode: deletedOrder },
+      });
+      // WorldSetting: last seen in deleted episode → shrink range
+      await tx.worldSetting.updateMany({
+        where: { workId, lastEpisode: deletedOrder, firstEpisode: { lt: deletedOrder } },
+        data: { lastEpisode: deletedOrder > 0 ? deletedOrder - 1 : null },
+      });
+      // WorldSetting: first seen in deleted episode but also in later ones → shift forward
+      await tx.worldSetting.updateMany({
+        where: { workId, firstEpisode: deletedOrder, lastEpisode: { gt: deletedOrder } },
+        data: { firstEpisode: deletedOrder + 1 },
+      });
+      // WorldSetting: shift down indices above deleted
+      await tx.worldSetting.updateMany({
+        where: { workId, firstEpisode: { gt: deletedOrder } },
+        data: { firstEpisode: { decrement: 1 } },
+      });
+      await tx.worldSetting.updateMany({
+        where: { workId, lastEpisode: { gt: deletedOrder } },
+        data: { lastEpisode: { decrement: 1 } },
+      });
+
+      // 5. Invalidate scores (work structure changed)
+      await tx.scoreHistory.deleteMany({ where: { workId } });
+      await tx.qualityScore.deleteMany({ where: { workId } });
+
+      // 6. Reindex remaining episodes (negative-index trick to avoid unique constraint)
+      const remaining = await tx.episode.findMany({
+        where: { workId },
+        orderBy: { orderIndex: 'asc' },
+        select: { id: true },
+      });
+      for (let i = 0; i < remaining.length; i++) {
+        await tx.episode.update({
+          where: { id: remaining[i].id },
+          data: { orderIndex: -(i + 1) },
+        });
+      }
+      for (let i = 0; i < remaining.length; i++) {
+        await tx.episode.update({
+          where: { id: remaining[i].id },
           data: { orderIndex: i },
-        }),
-      ),
-    );
+        });
+      }
+    }, { timeout: 15000 });
 
     return { deleted: true };
   }

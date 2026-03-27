@@ -84,13 +84,19 @@ export class EpisodesController {
     @Body() dto: UpdateEpisodeDto,
     @Query('skipAnalysis') skipAnalysis?: string,
   ) {
+    // Capture old content before update for change detection
+    let oldContent: string | null = null;
+    if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
+      const oldEpisode = await this.episodesService.findOne(id, userId);
+      oldContent = oldEpisode.content;
+    }
     const result = await this.episodesService.update(id, userId, dto);
     if (dto.content && dto.content.length > 100 && skipAnalysis !== 'true') {
       const episode = await this.episodesService.findOne(id, userId);
       this.triggerOriginalityCheck(episode.workId);
       // For published episodes: re-analyze if content changed meaningfully
       if (episode.publishedAt) {
-        this.triggerAnalysisIfSignificantChange(episode, dto.content, userId);
+        this.triggerAnalysisIfSignificantChange(episode, oldContent, dto.content, userId);
       }
     }
     return result;
@@ -215,10 +221,10 @@ export class EpisodesController {
 
   /**
    * For published episodes: re-run analysis only if content changed meaningfully.
-   * Strips whitespace/newlines before comparing to ignore formatting-only changes.
+   * Compares actual character differences (not just length) to detect rewrites.
    */
   private async triggerAnalysisIfSignificantChange(
-    episode: EpisodeWithWork, newContent: string, userId: string,
+    episode: EpisodeWithWork, oldContent: string | null, newContent: string, userId: string,
   ) {
     try {
       const analysis = await this.episodeAnalysis.getAnalysis(episode.id);
@@ -230,15 +236,40 @@ export class EpisodesController {
       // Skip if analysis version matches current content version
       if (analysis.version === (episode.contentVersion ?? 0)) return;
 
-      // Normalize: strip all whitespace/newlines/fullwidth spaces
-      const normalize = (s: string) => s.replace(/[\s\n\r\u3000]+/g, '').length;
-      const newLen = normalize(newContent);
-      const prevLen = normalize(episode.content ?? '');
+      if (!oldContent) {
+        this.triggerEpisodeAnalysis(episode.workId, episode.id);
+        return;
+      }
 
-      // If normalized length differs by less than 20%, it's likely formatting-only
-      const changeRatio = prevLen > 0 ? Math.abs(newLen - prevLen) / prevLen : 1;
-      if (changeRatio > 0.2) {
-        this.logger.log(`Published episode ${episode.id} content changed ${Math.round(changeRatio * 100)}% (normalized), re-analyzing`);
+      // Normalize: strip whitespace/newlines/fullwidth spaces
+      const normalize = (s: string) => s.replace(/[\s\n\r\u3000]+/g, '');
+      const normNew = normalize(newContent);
+      const normOld = normalize(oldContent);
+
+      // Quick check: length difference > 20%
+      const maxLen = Math.max(normOld.length, normNew.length);
+      if (maxLen === 0) return;
+      const lenRatio = Math.abs(normNew.length - normOld.length) / maxLen;
+      if (lenRatio > 0.2) {
+        this.logger.log(`Published episode ${episode.id} content length changed ${Math.round(lenRatio * 100)}%, re-analyzing`);
+        this.triggerEpisodeAnalysis(episode.workId, episode.id);
+        return;
+      }
+
+      // Character-level sampling: compare at evenly spaced positions
+      const minLen = Math.min(normOld.length, normNew.length);
+      const sampleSize = Math.min(100, minLen);
+      if (sampleSize === 0) return;
+      const step = Math.max(1, Math.floor(minLen / sampleSize));
+      let diffCount = 0;
+      for (let i = 0; i < minLen && diffCount < sampleSize; i += step) {
+        if (normOld[i] !== normNew[i]) diffCount++;
+      }
+      const sampled = Math.min(sampleSize, Math.ceil(minLen / step));
+      const diffRatio = sampled > 0 ? diffCount / sampled : 0;
+
+      if (diffRatio >= 0.2) {
+        this.logger.log(`Published episode ${episode.id} content changed ~${Math.round(diffRatio * 100)}% (sampled), re-analyzing`);
         this.triggerEpisodeAnalysis(episode.workId, episode.id);
       }
     } catch {

@@ -201,6 +201,27 @@ ${episode.content}`;
         return;
       }
 
+      // Clean up stale structural data from previous analysis of this episode
+      const orderIdx = episode.orderIndex;
+      // Foreshadowing: remove those planted in this episode (will be re-created from new analysis)
+      await this.prisma.foreshadowing.deleteMany({
+        where: { workId, plantedIn: orderIdx },
+      });
+      // Foreshadowing: re-open those resolved in this episode (resolution may no longer exist)
+      await this.prisma.foreshadowing.updateMany({
+        where: { workId, resolvedIn: orderIdx },
+        data: { resolvedIn: null, status: 'open' },
+      });
+      // WorldSetting: remove those that only appeared in this episode
+      await this.prisma.worldSetting.deleteMany({
+        where: { workId, firstEpisode: orderIdx, lastEpisode: orderIdx },
+      });
+      // WorldSetting: shrink range for those last seen in this episode
+      await this.prisma.worldSetting.updateMany({
+        where: { workId, lastEpisode: orderIdx, firstEpisode: { lt: orderIdx } },
+        data: { lastEpisode: orderIdx > 0 ? orderIdx - 1 : null },
+      });
+
       // Upsert EpisodeAnalysis
       await this.prisma.episodeAnalysis.upsert({
         where: { episodeId },
