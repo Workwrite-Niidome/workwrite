@@ -118,8 +118,14 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
 
   const prevStreamingRef = useRef(false);
   useEffect(() => {
-    if (prevStreamingRef.current && !isStreaming && result && result.length > 0) {
-      loadHistory();
+    if (prevStreamingRef.current && !isStreaming) {
+      // Streaming ended — refresh credit balance in header
+      api.getAiStatus()
+        .then((res) => { if (res.data.tier) setTier(res.data.tier); })
+        .catch(() => {});
+      if (result && result.length > 0) {
+        loadHistory();
+      }
     }
     prevStreamingRef.current = isStreaming;
   }, [isStreaming, result]);
@@ -315,6 +321,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     const vars = buildContextVars();
     try {
       const res = await api.estimateAiCost({ templateSlug: slug, variables: vars, aiMode });
+      // Update header credit display with fresh balance
+      if (res.balance) {
+        setTier((prev: any) => prev ? { ...prev, credits: res.balance } : prev);
+      }
       if (res.isLightFeature || res.estimate.credits === 0) {
         // Free feature — skip confirmation
         setChatMessages([]);
@@ -359,6 +369,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         conversationId: conversationId || undefined,
         followUpMessage: msg,
       });
+      // Update header credit display with fresh balance
+      if (res.balance) {
+        setTier((prev: any) => prev ? { ...prev, credits: res.balance } : prev);
+      }
       if (res.isLightFeature || res.estimate.credits === 0) {
         executeFollowUp(msg, vars);
       } else {

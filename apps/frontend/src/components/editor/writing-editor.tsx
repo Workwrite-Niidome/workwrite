@@ -5,14 +5,14 @@ import { useRouter } from 'next/navigation';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { ConfirmDialog } from '@/components/ui/dialog';
+import { ConfirmDialog, Dialog, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { AiAssistPanel } from './ai-assist-panel';
 import { VersionHistoryPanel } from './version-history-panel';
 import { ReferencePanel } from './reference-panel';
 import { AiConsistencyCheck } from './ai-consistency-check';
 import { useAutosave } from '@/lib/use-autosave';
 import { api } from '@/lib/api';
-import { Sparkles, Maximize2, Minimize2, History, BookOpen, HelpCircle, Type } from 'lucide-react';
+import { Sparkles, Maximize2, Minimize2, History, BookOpen, HelpCircle, Type, ArrowLeft } from 'lucide-react';
 
 interface WritingEditorProps {
   workId: string;
@@ -48,6 +48,7 @@ export function WritingEditor({
   const [rubyPopover, setRubyPopover] = useState<{ base: string; start: number; end: number } | null>(null);
   const [rubyReading, setRubyReading] = useState('');
   const [cursorLine, setCursorLine] = useState('');
+  const [showBackConfirm, setShowBackConfirm] = useState(false);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rubyInputRef = useRef<HTMLInputElement>(null);
 
@@ -247,6 +248,45 @@ export function WritingEditor({
     }
   }
 
+  function handleBack() {
+    const hasChanges = title !== initialTitle || content !== initialContent;
+    if (hasChanges && (title.trim() || content.trim())) {
+      setShowBackConfirm(true);
+    } else {
+      router.push(`/works/${workId}/edit`);
+    }
+  }
+
+  async function handleBackWithDraft() {
+    setShowBackConfirm(false);
+    if (title.trim() && content.trim()) {
+      setSubmitting(true);
+      try {
+        if (onSaveDraft) {
+          // onSaveDraft callback handles navigation itself
+          await onSaveDraft({ title, content });
+          await deleteDraft();
+          return;
+        } else if (episodeId) {
+          await api.updateEpisode(episodeId, { title, content });
+        } else {
+          await api.createEpisode(workId, { title, content, publish: false });
+        }
+        await deleteDraft();
+      } catch {
+        // Draft save failed, but still navigate back
+      } finally {
+        setSubmitting(false);
+      }
+    }
+    router.push(`/works/${workId}/edit`);
+  }
+
+  function handleBackWithoutSave() {
+    setShowBackConfirm(false);
+    router.push(`/works/${workId}/edit`);
+  }
+
   function handleVersionRestore(restoredTitle: string, restoredContent: string) {
     setTitle(restoredTitle);
     setContent(restoredContent);
@@ -259,6 +299,17 @@ export function WritingEditor({
       <div className={`flex-shrink-0 border-b ${focusMode ? '' : ''}`}>
         {/* Row 1: Title */}
         <div className={`flex items-center gap-2 px-4 pt-2 pb-1 ${focusMode ? 'justify-center' : ''}`}>
+          {!focusMode && (
+            <Button
+              size="sm"
+              variant="ghost"
+              onClick={handleBack}
+              className="shrink-0 -ml-2"
+              title="戻る"
+            >
+              <ArrowLeft className="h-4 w-4" />
+            </Button>
+          )}
           <div className={`flex-1 min-w-0 ${focusMode ? 'max-w-2xl' : ''}`}>
             <Input
               value={title}
@@ -493,6 +544,25 @@ export function WritingEditor({
         }}
         onCancel={() => setConfirmDraft(null)}
       />
+
+      {/* Back confirmation dialog */}
+      <Dialog open={showBackConfirm} onOpenChange={setShowBackConfirm}>
+        <DialogHeader>
+          <DialogTitle>下書きを保存しますか？</DialogTitle>
+        </DialogHeader>
+        <DialogDescription>変更が保存されていません。下書きとして保存してから戻りますか？</DialogDescription>
+        <DialogFooter>
+          <Button variant="outline" onClick={() => setShowBackConfirm(false)}>
+            キャンセル
+          </Button>
+          <Button variant="ghost" onClick={handleBackWithoutSave}>
+            保存せず戻る
+          </Button>
+          <Button onClick={handleBackWithDraft} disabled={submitting}>
+            {submitting ? '保存中...' : '下書き保存して戻る'}
+          </Button>
+        </DialogFooter>
+      </Dialog>
     </div>
   );
 }
