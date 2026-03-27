@@ -599,7 +599,7 @@ export default function EditWorkPage() {
           ) : editingChapterId ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                「{episodes.find((e) => e.id === editingChapterId)?.title}」の上に表示する章見出しを入力してください。空欄で保存すると章区切りを解除します。
+                「{episodes.find((e) => e.id === editingChapterId)?.title}」の上に表示する章見出しを入力してください。
               </p>
               <Input
                 value={chapterTitleInput}
@@ -610,9 +610,16 @@ export default function EditWorkPage() {
                   if (e.key === 'Enter') handleSaveChapterTitle(editingChapterId);
                 }}
               />
-              <DialogFooter>
-                <Button variant="outline" onClick={() => setEditingChapterId(null)}>キャンセル</Button>
-                <Button onClick={() => handleSaveChapterTitle(editingChapterId)}>保存</Button>
+              <DialogFooter className="flex justify-between sm:justify-between">
+                {episodes.find((e) => e.id === editingChapterId)?.chapterTitle ? (
+                  <Button variant="destructive" size="sm" onClick={() => { setChapterTitleInput(''); handleSaveChapterTitle(editingChapterId); }}>
+                    <Trash2 className="h-3 w-3 mr-1" /> 削除
+                  </Button>
+                ) : <div />}
+                <div className="flex gap-2">
+                  <Button variant="outline" onClick={() => setEditingChapterId(null)}>キャンセル</Button>
+                  <Button onClick={() => handleSaveChapterTitle(editingChapterId)}>保存</Button>
+                </div>
               </DialogFooter>
             </div>
           ) : null}
