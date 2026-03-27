@@ -213,29 +213,24 @@ export default function Home() {
                 すべて見る →
               </Link>
             </div>
-            <div className="space-y-2">
+            <div className="divide-y divide-border rounded-lg border">
               {data.recentEpisodes.slice(0, 10).map((ep) => (
                 <Link
                   key={ep.id}
                   href={`/works/${ep.work.id}`}
-                  className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
+                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
                 >
-                  <div className="flex-1 min-w-0">
-                    <p className="text-sm font-medium truncate">
-                      {ep.chapterTitle ? `${ep.chapterTitle} ` : ''}
-                      {ep.title}
-                    </p>
+                  <div className="min-w-0">
+                    <p className="text-sm font-medium truncate">{ep.work.title}</p>
                     <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {ep.work.title}
-                      <span className="mx-1">·</span>
                       {ep.work.author.displayName || ep.work.author.name}
+                      <span className="mx-1">·</span>
+                      第{ep.orderIndex + 1}話「{ep.title}」更新
                     </p>
                   </div>
-                  <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
-                    <span>{ep.wordCount.toLocaleString()}字</span>
-                    <Clock className="h-3 w-3" />
-                    <span>{new Date(ep.publishedAt || ep.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}</span>
-                  </div>
+                  <span className="text-[10px] text-muted-foreground shrink-0">
+                    {new Date(ep.publishedAt || ep.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
+                  </span>
                 </Link>
               ))}
             </div>
