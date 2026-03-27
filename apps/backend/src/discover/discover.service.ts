@@ -15,15 +15,16 @@ export class DiscoverService {
   }
 
   async getTopPage() {
-    const [popular, recent, hiddenGems, trendingTags, highImmersion, greatWorlds] = await Promise.all([
+    const [popular, recent, hiddenGems, trendingTags, highImmersion, greatWorlds, recentEpisodes] = await Promise.all([
       this.getPopularWorks(6),
       this.getRecentWorks(6),
       this.getHiddenGems(6),
       this.getTrendingEmotionTags(),
       this.getHighImmersionWorks(6),
       this.getGreatWorldBuilding(6),
+      this.getRecentEpisodes(10),
     ]);
-    return { popular, recent, hiddenGems, trendingTags, highImmersion, greatWorlds };
+    return { popular, recent, hiddenGems, trendingTags, highImmersion, greatWorlds, recentEpisodes };
   }
 
   async getPopularWorks(limit = 10) {
@@ -282,6 +283,35 @@ export class DiscoverService {
         tags: true,
         qualityScore: { select: { overall: true, worldBuilding: true } },
         _count: { select: { reviews: true, episodes: true } },
+      },
+    });
+  }
+
+  async getRecentEpisodes(limit = 10, offset = 0) {
+    return this.prisma.episode.findMany({
+      where: {
+        publishedAt: { not: null },
+        work: { status: 'PUBLISHED' },
+      },
+      orderBy: { publishedAt: 'desc' },
+      take: limit,
+      skip: offset,
+      select: {
+        id: true,
+        title: true,
+        orderIndex: true,
+        wordCount: true,
+        publishedAt: true,
+        chapterTitle: true,
+        work: {
+          select: {
+            id: true,
+            title: true,
+            genre: true,
+            coverUrl: true,
+            author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+          },
+        },
       },
     });
   }

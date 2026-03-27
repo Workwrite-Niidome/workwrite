@@ -3,7 +3,7 @@
 import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
-import { Search, ArrowRight, BookOpen } from 'lucide-react';
+import { Search, ArrowRight, BookOpen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -12,7 +12,7 @@ import { useAuth } from '@/lib/auth-context';
 import { estimateReadingTime } from '@/lib/utils';
 import { WorkCard, WorkCardSkeleton } from '@/components/work-card';
 import { CharacterMatchCarousel } from '@/components/character-match-carousel';
-import { api, type Work, type TopPageData, type ContinueReadingItem } from '@/lib/api';
+import { api, type Work, type TopPageData, type ContinueReadingItem, type RecentEpisode } from '@/lib/api';
 
 function FollowingFeedSection() {
   const [feed, setFeed] = useState<Work[]>([]);
@@ -203,6 +203,48 @@ export default function Home() {
               : data?.recent.slice(0, 6).map((work) => <WorkCard key={work.id} work={work} />)}
           </div>
         </section>
+
+        {/* Recent Episodes */}
+        {data?.recentEpisodes && data.recentEpisodes.length > 0 && (
+          <section>
+            <div className="flex justify-between items-center mb-4">
+              <h2 className="text-sm font-medium">新着エピソード</h2>
+              <Link href="/discover/recent-episodes" className="text-xs text-muted-foreground hover:text-foreground transition-colors">
+                すべて見る →
+              </Link>
+            </div>
+            <div className="space-y-2">
+              {data.recentEpisodes.slice(0, 10).map((ep) => (
+                <Link
+                  key={ep.id}
+                  href={`/works/${ep.work.id}/read/${ep.id}`}
+                  className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
+                >
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium truncate">
+                      {ep.chapterTitle ? `${ep.chapterTitle} ` : ''}
+                      {ep.title}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
+                      {ep.work.title}
+                      <span className="mx-1">·</span>
+                      {ep.work.author.displayName || ep.work.author.name}
+                    </p>
+                  </div>
+                  <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
+                    <span>{ep.wordCount.toLocaleString()}字</span>
+                    {ep.publishedAt && (
+                      <>
+                        <Clock className="h-3 w-3" />
+                        <span>{new Date(ep.publishedAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}</span>
+                      </>
+                    )}
+                  </div>
+                </Link>
+              ))}
+            </div>
+          </section>
+        )}
 
         {/* Character Match — after novels, visually distinct */}
         <CharacterMatchCarousel limit={10} />

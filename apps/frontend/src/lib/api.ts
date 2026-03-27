@@ -512,6 +512,10 @@ class ApiClient {
     return this.request<{ data: TopPageData }>('/discover/top');
   }
 
+  async getRecentEpisodes(limit = 20, offset = 0) {
+    return this.request<{ data: RecentEpisode[] }>(`/discover/recent-episodes?limit=${limit}&offset=${offset}`);
+  }
+
   async getNextForMe(workId: string) {
     return this.request<{ data: Work[] }>(`/discover/next-for-me?workId=${workId}`);
   }
@@ -1754,11 +1758,28 @@ export interface Announcement {
   creator: { id: string; name: string; displayName: string | null };
 }
 
+export interface RecentEpisode {
+  id: string;
+  title: string;
+  orderIndex: number;
+  wordCount: number;
+  publishedAt: string | null;
+  chapterTitle: string | null;
+  work: {
+    id: string;
+    title: string;
+    genre: string | null;
+    coverUrl: string | null;
+    author: { id: string; name: string; displayName: string | null; avatarUrl: string | null };
+  };
+}
+
 export interface TopPageData {
   popular: Work[];
   recent: Work[];
   hiddenGems: Work[];
   trendingTags: (EmotionTag & { count: number })[];
+  recentEpisodes: RecentEpisode[];
 }
 
 export interface PromptTemplate {

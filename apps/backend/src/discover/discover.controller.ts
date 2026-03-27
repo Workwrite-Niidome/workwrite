@@ -87,6 +87,20 @@ export class DiscoverController {
     return this.discoverService.getNextForMe(workId);
   }
 
+  @Get('recent-episodes')
+  @ApiOperation({ summary: 'Get recently published episodes' })
+  @ApiQuery({ name: 'limit', required: false })
+  @ApiQuery({ name: 'offset', required: false })
+  getRecentEpisodes(
+    @Query('limit') limit?: string,
+    @Query('offset') offset?: string,
+  ) {
+    return this.discoverService.getRecentEpisodes(
+      limit ? parseInt(limit, 10) : 20,
+      offset ? parseInt(offset, 10) : 0,
+    );
+  }
+
   @Get('emotion/:tagName')
   @ApiOperation({ summary: 'Get works by emotion tag' })
   getByEmotionTag(
