@@ -288,12 +288,16 @@ export class DiscoverService {
   }
 
   async getRecentEpisodes(limit = 10, offset = 0) {
+    // publishedAt may be null for episodes created via import or bulk creation,
+    // so fall back to work being PUBLISHED and sort by createdAt
     return this.prisma.episode.findMany({
       where: {
-        publishedAt: { not: null },
         work: { status: 'PUBLISHED' },
       },
-      orderBy: { publishedAt: 'desc' },
+      orderBy: [
+        { publishedAt: { sort: 'desc', nulls: 'last' } },
+        { createdAt: 'desc' },
+      ],
       take: limit,
       skip: offset,
       select: {
@@ -302,6 +306,7 @@ export class DiscoverService {
         orderIndex: true,
         wordCount: true,
         publishedAt: true,
+        createdAt: true,
         chapterTitle: true,
         work: {
           select: {

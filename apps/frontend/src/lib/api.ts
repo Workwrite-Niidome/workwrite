@@ -1764,6 +1764,7 @@ export interface RecentEpisode {
   orderIndex: number;
   wordCount: number;
   publishedAt: string | null;
+  createdAt: string;
   chapterTitle: string | null;
   work: {
     id: string;

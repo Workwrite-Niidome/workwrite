@@ -233,12 +233,8 @@ export default function Home() {
                   </div>
                   <div className="flex items-center gap-2 text-xs text-muted-foreground shrink-0">
                     <span>{ep.wordCount.toLocaleString()}字</span>
-                    {ep.publishedAt && (
-                      <>
-                        <Clock className="h-3 w-3" />
-                        <span>{new Date(ep.publishedAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}</span>
-                      </>
-                    )}
+                    <Clock className="h-3 w-3" />
+                    <span>{new Date(ep.publishedAt || ep.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}</span>
                   </div>
                 </Link>
               ))}
