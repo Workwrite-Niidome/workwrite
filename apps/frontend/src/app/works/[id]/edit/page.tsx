@@ -209,8 +209,8 @@ export default function EditWorkPage() {
     }
   }
 
-  async function handleSaveChapterTitle(epId: string, moveToEpId?: string) {
-    const trimmed = chapterTitleInput.trim();
+  async function handleSaveChapterTitle(epId: string, moveToEpId?: string, overrideTitle?: string) {
+    const trimmed = (overrideTitle !== undefined ? overrideTitle : chapterTitleInput).trim();
     try {
       if (moveToEpId && moveToEpId !== epId) {
         // Move: remove from old, add to new
@@ -644,7 +644,7 @@ export default function EditWorkPage() {
               )}
               <DialogFooter className="flex justify-between sm:justify-between">
                 {episodes.find((e) => e.id === editingChapterId)?.chapterTitle ? (
-                  <Button variant="destructive" size="sm" onClick={() => { setChapterTitleInput(''); handleSaveChapterTitle(editingChapterId); }}>
+                  <Button variant="destructive" size="sm" onClick={() => handleSaveChapterTitle(editingChapterId, undefined, '')}>
                     <Trash2 className="h-3 w-3 mr-1" /> 削除
                   </Button>
                 ) : <div />}
