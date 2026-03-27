@@ -6,6 +6,7 @@ import { useRouter } from 'next/navigation';
 import { Search, ArrowRight, BookOpen, Clock } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Input } from '@/components/ui/input';
 import { useAuth } from '@/lib/auth-context';
@@ -213,24 +214,22 @@ export default function Home() {
                 すべて見る →
               </Link>
             </div>
-            <div className="divide-y divide-border rounded-lg border">
-              {data.recentEpisodes.slice(0, 10).map((ep) => (
-                <Link
-                  key={ep.id}
-                  href={`/works/${ep.work.id}`}
-                  className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
-                >
-                  <div className="min-w-0">
-                    <p className="text-sm font-medium truncate">{ep.work.title}</p>
-                    <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                      {ep.work.author.displayName || ep.work.author.name}
-                      <span className="mx-1">·</span>
-                      第{ep.orderIndex + 1}話「{ep.title}」更新
-                    </p>
-                  </div>
-                  <span className="text-[10px] text-muted-foreground shrink-0">
-                    {new Date(ep.publishedAt || ep.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
-                  </span>
+            <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
+              {data.recentEpisodes.slice(0, 8).map((ep) => (
+                <Link key={ep.id} href={`/works/${ep.work.id}`} className="group block">
+                  <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
+                    <CardContent className="p-3 space-y-1.5">
+                      <p className="text-xs font-medium line-clamp-1 group-hover:text-foreground/80 transition-colors">
+                        {ep.work.title}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground truncate">
+                        {ep.work.author.displayName || ep.work.author.name}
+                      </p>
+                      <p className="text-[11px] text-muted-foreground">
+                        第{ep.orderIndex + 1}話 更新
+                      </p>
+                    </CardContent>
+                  </Card>
                 </Link>
               ))}
             </div>
