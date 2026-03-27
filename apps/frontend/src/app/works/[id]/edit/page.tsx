@@ -80,6 +80,7 @@ export default function EditWorkPage() {
   // Chapter divider editing
   const [editingChapterId, setEditingChapterId] = useState<string | null>(null);
   const [chapterTitleInput, setChapterTitleInput] = useState('');
+  const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
 
   // Drag state
   const dragItemRef = useRef<number | null>(null);
@@ -208,18 +209,33 @@ export default function EditWorkPage() {
     }
   }
 
-  async function handleSaveChapterTitle(epId: string) {
+  async function handleSaveChapterTitle(epId: string, moveToEpId?: string) {
     const trimmed = chapterTitleInput.trim();
     try {
-      await api.updateEpisode(epId, { chapterTitle: trimmed || '' } as any);
-      setEpisodes((prev) =>
-        prev.map((e) => e.id === epId ? { ...e, chapterTitle: trimmed || null } : e),
-      );
-      setMessage(trimmed ? '章区切りを設定しました' : '章区切りを解除しました');
+      if (moveToEpId && moveToEpId !== epId) {
+        // Move: remove from old, add to new
+        await api.updateEpisode(epId, { chapterTitle: '' } as any);
+        await api.updateEpisode(moveToEpId, { chapterTitle: trimmed || '' } as any);
+        setEpisodes((prev) =>
+          prev.map((e) => {
+            if (e.id === epId) return { ...e, chapterTitle: null };
+            if (e.id === moveToEpId) return { ...e, chapterTitle: trimmed || null };
+            return e;
+          }),
+        );
+        setMessage('章区切りを移動しました');
+      } else {
+        await api.updateEpisode(epId, { chapterTitle: trimmed || '' } as any);
+        setEpisodes((prev) =>
+          prev.map((e) => e.id === epId ? { ...e, chapterTitle: trimmed || null } : e),
+        );
+        setMessage(trimmed ? '章区切りを設定しました' : '章区切りを解除しました');
+      }
     } catch {
       setMessage('章区切りの保存に失敗しました');
     }
     setEditingChapterId(null);
+    setMoveTargetId(null);
   }
 
   async function handleDragEnd() {
@@ -599,7 +615,7 @@ export default function EditWorkPage() {
           ) : editingChapterId ? (
             <div className="space-y-3">
               <p className="text-sm text-muted-foreground">
-                「{episodes.find((e) => e.id === editingChapterId)?.title}」の上に表示する章見出しを入力してください。
+                「{episodes.find((e) => e.id === editingChapterId)?.title}」の上に表示する章見出し
               </p>
               <Input
                 value={chapterTitleInput}
@@ -607,9 +623,25 @@ export default function EditWorkPage() {
                 placeholder="例：第一章、第二章"
                 autoFocus
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter') handleSaveChapterTitle(editingChapterId);
+                  if (e.key === 'Enter') handleSaveChapterTitle(editingChapterId, moveTargetId || undefined);
                 }}
               />
+              {episodes.find((e) => e.id === editingChapterId)?.chapterTitle && (
+                <div>
+                  <p className="text-sm text-muted-foreground mb-1">表示位置を変更</p>
+                  <select
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={moveTargetId || editingChapterId}
+                    onChange={(e) => setMoveTargetId(e.target.value)}
+                  >
+                    {episodes.map((ep) => (
+                      <option key={ep.id} value={ep.id}>
+                        {ep.orderIndex + 1}. {ep.title}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              )}
               <DialogFooter className="flex justify-between sm:justify-between">
                 {episodes.find((e) => e.id === editingChapterId)?.chapterTitle ? (
                   <Button variant="destructive" size="sm" onClick={() => { setChapterTitleInput(''); handleSaveChapterTitle(editingChapterId); }}>
@@ -617,8 +649,8 @@ export default function EditWorkPage() {
                   </Button>
                 ) : <div />}
                 <div className="flex gap-2">
-                  <Button variant="outline" onClick={() => setEditingChapterId(null)}>キャンセル</Button>
-                  <Button onClick={() => handleSaveChapterTitle(editingChapterId)}>保存</Button>
+                  <Button variant="outline" onClick={() => { setEditingChapterId(null); setMoveTargetId(null); }}>キャンセル</Button>
+                  <Button onClick={() => handleSaveChapterTitle(editingChapterId, moveTargetId || undefined)}>保存</Button>
                 </div>
               </DialogFooter>
             </div>
