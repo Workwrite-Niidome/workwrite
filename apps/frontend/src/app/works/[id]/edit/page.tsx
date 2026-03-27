@@ -381,9 +381,14 @@ export default function EditWorkPage() {
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0">
               <CardTitle className="text-base">エピソード</CardTitle>
-              <Link href={`/works/${workId}/episodes/new`}>
-                <Button size="sm" variant="outline"><Plus className="h-3 w-3 mr-1" /> 追加</Button>
-              </Link>
+              <div className="flex items-center gap-2">
+                <Button size="sm" variant="outline" onClick={() => { setEditingChapterId('__pick__'); setChapterTitleInput(''); }}>
+                  <BookMarked className="h-3 w-3 mr-1" /> 章区切り
+                </Button>
+                <Link href={`/works/${workId}/episodes/new`}>
+                  <Button size="sm" variant="outline"><Plus className="h-3 w-3 mr-1" /> 追加</Button>
+                </Link>
+              </div>
             </CardHeader>
             <CardContent>
               <ul className="space-y-1">
@@ -421,37 +426,17 @@ export default function EditWorkPage() {
                         onDrop={handleDragEnd}
                         className="group"
                       >
-                        {/* Chapter divider display / edit */}
-                        {editingChapterId === ep.id ? (
-                          <div className="flex items-center gap-1.5 px-2 py-1.5 -mx-2 bg-muted/50 rounded-md mb-1">
-                            <BookMarked className="h-3.5 w-3.5 text-primary shrink-0" />
-                            <Input
-                              value={chapterTitleInput}
-                              onChange={(e) => setChapterTitleInput(e.target.value)}
-                              placeholder="例：第一章"
-                              className="h-7 text-sm flex-1"
-                              autoFocus
-                              onKeyDown={(e) => {
-                                if (e.key === 'Enter') handleSaveChapterTitle(ep.id);
-                                if (e.key === 'Escape') setEditingChapterId(null);
-                              }}
-                            />
-                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => handleSaveChapterTitle(ep.id)}>
-                              <Check className="h-3 w-3" />
-                            </Button>
-                            <Button size="sm" variant="ghost" className="h-6 w-6 p-0" onClick={() => setEditingChapterId(null)}>
-                              <X className="h-3 w-3" />
-                            </Button>
-                          </div>
-                        ) : ep.chapterTitle ? (
+                        {/* Chapter divider display */}
+                        {ep.chapterTitle && (
                           <button
                             onClick={() => { setEditingChapterId(ep.id); setChapterTitleInput(ep.chapterTitle || ''); }}
                             className="flex items-center gap-1.5 px-2 py-1.5 -mx-2 text-sm font-semibold text-primary hover:bg-muted/50 rounded-md mb-1 w-full text-left"
                           >
                             <BookMarked className="h-3.5 w-3.5 shrink-0" />
                             {ep.chapterTitle}
+                            <span className="text-[10px] text-muted-foreground font-normal ml-auto">クリックで編集</span>
                           </button>
-                        ) : null}
+                        )}
 
                         <div className="flex items-center justify-between rounded-md px-2 py-2 -mx-2 hover:bg-muted transition-colors">
                           <div className="flex items-center gap-1.5 min-w-0">
@@ -465,13 +450,6 @@ export default function EditWorkPage() {
                             </Link>
                           </div>
                           <div className="flex items-center gap-1.5 shrink-0">
-                            <button
-                              onClick={() => { setEditingChapterId(ep.id); setChapterTitleInput(ep.chapterTitle || ''); }}
-                              title="章区切りを設定"
-                              className="text-muted-foreground hover:text-primary opacity-0 group-hover:opacity-100 transition-opacity"
-                            >
-                              <BookMarked className="h-3 w-3" />
-                            </button>
                             <button
                               onClick={(e) => { e.preventDefault(); handleToggleEpisodePublish(ep); }}
                               title={ep.publishedAt ? '下書きに戻す' : '公開する'}
@@ -591,6 +569,55 @@ export default function EditWorkPage() {
         variant="destructive"
         onConfirm={handleDeleteEpisode}
       />
+
+      {/* Chapter divider dialog */}
+      <Dialog open={editingChapterId !== null} onOpenChange={(v) => { if (!v) setEditingChapterId(null); }}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>章区切りを設定</DialogTitle>
+          </DialogHeader>
+          {editingChapterId === '__pick__' ? (
+            <div className="space-y-2">
+              <p className="text-sm text-muted-foreground">章区切りを入れるエピソードを選んでください。そのエピソードの上に章見出しが表示されます。</p>
+              <ul className="space-y-1 max-h-60 overflow-y-auto">
+                {episodes.map((ep) => (
+                  <li key={ep.id}>
+                    <button
+                      onClick={() => { setEditingChapterId(ep.id); setChapterTitleInput(ep.chapterTitle || ''); }}
+                      className="w-full text-left px-3 py-2 rounded-md hover:bg-muted text-sm flex items-center gap-2"
+                    >
+                      <span className="text-muted-foreground w-6">{ep.orderIndex + 1}.</span>
+                      <span>{ep.title}</span>
+                      {ep.chapterTitle && (
+                        <Badge variant="secondary" className="text-[10px] ml-auto">{ep.chapterTitle}</Badge>
+                      )}
+                    </button>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          ) : editingChapterId ? (
+            <div className="space-y-3">
+              <p className="text-sm text-muted-foreground">
+                「{episodes.find((e) => e.id === editingChapterId)?.title}」の上に表示する章見出しを入力してください。空欄で保存すると章区切りを解除します。
+              </p>
+              <Input
+                value={chapterTitleInput}
+                onChange={(e) => setChapterTitleInput(e.target.value)}
+                placeholder="例：第一章、第二章"
+                autoFocus
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveChapterTitle(editingChapterId);
+                }}
+              />
+              <DialogFooter>
+                <Button variant="outline" onClick={() => setEditingChapterId(null)}>キャンセル</Button>
+                <Button onClick={() => handleSaveChapterTitle(editingChapterId)}>保存</Button>
+              </DialogFooter>
+            </div>
+          ) : null}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
