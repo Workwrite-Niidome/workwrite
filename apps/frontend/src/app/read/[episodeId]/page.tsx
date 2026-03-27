@@ -569,24 +569,26 @@ export default function ReaderPage() {
 
   return (
     <div className={`min-h-screen ${themeStyle.bg} ${themeStyle.text} transition-colors`}>
-      {/* Progress bar */}
-      <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted" style={{ transform: 'translateZ(0)' }}>
-        <div
-          className="h-full bg-primary transition-all duration-300"
-          style={{ width: `${progressPct * 100}%` }}
-        />
-      </div>
+      {/* Progress bar — horizontal only (vertical has its own) */}
+      {!isVertical && (
+        <div className="fixed top-0 left-0 right-0 z-50 h-1 bg-muted" style={{ transform: 'translateZ(0)' }}>
+          <div
+            className="h-full bg-primary transition-all duration-300"
+            style={{ width: `${progressPct * 100}%` }}
+          />
+        </div>
+      )}
 
-      {/* Swipe edge indicators */}
-      {swipeEdge === 'left' && prevEp && (
+      {/* Swipe edge indicators — horizontal only */}
+      {!isVertical && swipeEdge === 'left' && prevEp && (
         <div className="fixed left-0 top-0 bottom-0 w-1 bg-primary/50 z-50 animate-in fade-in" />
       )}
-      {swipeEdge === 'right' && nextEp && (
+      {!isVertical && swipeEdge === 'right' && nextEp && (
         <div className="fixed right-0 top-0 bottom-0 w-1 bg-primary/50 z-50 animate-in fade-in" />
       )}
 
-      {/* Top nav */}
-      <header
+      {/* Top nav — hidden in vertical mode (vertical reader has its own header) */}
+      {!isVertical && <header
         className={`sticky top-1 z-40 flex items-center justify-between px-4 py-2 transition-all duration-300 ${
           immersiveMode && !headerVisible ? 'opacity-0 pointer-events-none -translate-y-full' : 'opacity-100'
         }`}
@@ -612,7 +614,7 @@ export default function ReaderPage() {
             <Settings className="h-4 w-4" />
           </Button>
         </div>
-      </header>
+      </header>}
 
       {/* Settings panel - desktop: popover, mobile: bottom sheet */}
       {showSettings && !isMobile && (

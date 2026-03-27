@@ -112,7 +112,10 @@ export function VerticalReader({
           WebkitWritingMode: 'vertical-rl',
           overflowX: 'hidden',
           overflowY: 'hidden',
-          padding: '1.5rem 2rem',
+          paddingTop: '1.5rem',
+          paddingBottom: '1.5rem',
+          paddingLeft: '2.5rem',
+          paddingRight: '2.5rem',
         } as React.CSSProperties}
       >
         {/* Title */}

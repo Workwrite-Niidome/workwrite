@@ -176,7 +176,7 @@ export function useVerticalPager({
     };
   }, [containerRef, enabled, goNext, goPrev]);
 
-  // Tap detection (mobile)
+  // Touch: tap (small move) and swipe (large horizontal move)
   useEffect(() => {
     const el = containerRef.current;
     if (!el || !enabled) return;
@@ -194,21 +194,33 @@ export function useVerticalPager({
     function handleTouchEnd(e: TouchEvent) {
       if (!touchStart) return;
       const end = e.changedTouches[0];
-      const dx = Math.abs(end.clientX - touchStart.x);
-      const dy = Math.abs(end.clientY - touchStart.y);
+      const dx = end.clientX - touchStart.x; // signed: positive = swipe right
+      const absDx = Math.abs(dx);
+      const absDy = Math.abs(end.clientY - touchStart.y);
       const dt = Date.now() - touchStart.time;
       touchStart = null;
-
-      // Only tap: small movement, short duration
-      if (dx > 20 || dy > 20 || dt > 300) return;
 
       const target = e.target as HTMLElement;
       if (target.closest('button, a, input, textarea, select, [role="button"], [data-no-nav]')) return;
       if (window.getSelection()?.toString().trim()) return;
 
+      // Swipe: horizontal dominant, distance > 50px
+      if (absDx > 50 && absDx > absDy * 1.5) {
+        // 縦書き: 左スワイプ=次ページ, 右スワイプ=前ページ
+        if (dx < 0) {
+          goNext();
+        } else {
+          goPrev();
+        }
+        return;
+      }
+
+      // Tap: small movement, short duration
+      if (absDx > 20 || absDy > 20 || dt > 300) return;
+
       const screenWidth = window.innerWidth;
       const x = end.clientX;
-      // 縦書き: 左タップ=次ページ(読み進む方向), 右タップ=前ページ
+      // 縦書き: 左タップ=次ページ, 右タップ=前ページ
       if (x < screenWidth * 0.4) {
         goNext();
       } else if (x > screenWidth * 0.6) {
