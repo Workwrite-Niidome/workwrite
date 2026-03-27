@@ -65,7 +65,7 @@ export default function RecentEpisodesPage() {
           : episodes.map((ep) => (
               <Link
                 key={ep.id}
-                href={`/works/${ep.work.id}/read/${ep.id}`}
+                href={`/works/${ep.work.id}`}
                 className="flex items-start gap-3 p-3 rounded-lg border border-border hover:bg-secondary/50 transition-colors"
               >
                 <div className="flex-1 min-w-0">
