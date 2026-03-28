@@ -51,6 +51,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [historyItems, setHistoryItems] = useState<AiGenerationHistoryItem[]>([]);
   const [showHistory, setShowHistory] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
+  const [historyScope, setHistoryScope] = useState<'episode' | 'work'>(episodeId ? 'episode' : 'work');
 
   // Cost estimation & confirmation state
   const [pendingAction, setPendingAction] = useState<{
@@ -136,8 +137,11 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     }
   }
 
-  function loadHistory() {
-    api.getAiHistory(workId, { limit: 10 })
+  function loadHistory(scope?: 'episode' | 'work') {
+    const s = scope ?? historyScope;
+    const params: { limit: number; episodeId?: string } = { limit: 20 };
+    if (s === 'episode' && episodeId) params.episodeId = episodeId;
+    api.getAiHistory(workId, params)
       .then((res) => {
         setHistoryItems(res.data);
         setHistoryTotal(res.total);
@@ -522,7 +526,25 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         {/* History Panel */}
         {showHistory && (
           <div className="space-y-2">
-            <p className="text-xs font-medium text-muted-foreground">生成履歴 ({historyTotal}件)</p>
+            <div className="flex items-center justify-between">
+              <p className="text-xs font-medium text-muted-foreground">生成履歴 ({historyTotal}件)</p>
+              {episodeId && (
+                <div className="flex text-xs bg-muted rounded-md overflow-hidden">
+                  <button
+                    className={`px-2 py-0.5 transition-colors ${historyScope === 'episode' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => { setHistoryScope('episode'); loadHistory('episode'); }}
+                  >
+                    この話
+                  </button>
+                  <button
+                    className={`px-2 py-0.5 transition-colors ${historyScope === 'work' ? 'bg-primary text-primary-foreground' : 'text-muted-foreground hover:text-foreground'}`}
+                    onClick={() => { setHistoryScope('work'); loadHistory('work'); }}
+                  >
+                    作品全体
+                  </button>
+                </div>
+              )}
+            </div>
             {historyItems.length === 0 ? (
               <p className="text-xs text-muted-foreground text-center py-4">まだ生成履歴がありません</p>
             ) : (

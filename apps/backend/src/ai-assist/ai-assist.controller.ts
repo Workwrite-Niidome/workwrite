@@ -123,18 +123,23 @@ export class AiAssistController {
     @Param('workId') workId: string,
     @Query('limit') limit?: string,
     @Query('offset') offset?: string,
+    @Query('episodeId') episodeId?: string,
   ) {
     const take = Math.min(parseInt(limit || '20', 10), 50);
     const skip = parseInt(offset || '0', 10);
 
+    const where: any = { userId, workId };
+    if (episodeId) where.episodeId = episodeId;
+
     const [items, total] = await Promise.all([
       this.prisma.aiGenerationHistory.findMany({
-        where: { userId, workId },
+        where,
         orderBy: { updatedAt: 'desc' },
         take,
         skip,
         select: {
           id: true,
+          episodeId: true,
           templateSlug: true,
           promptSummary: true,
           messages: true,
@@ -145,7 +150,7 @@ export class AiAssistController {
           updatedAt: true,
         },
       }),
-      this.prisma.aiGenerationHistory.count({ where: { userId, workId } }),
+      this.prisma.aiGenerationHistory.count({ where }),
     ]);
 
     return { data: items, total };

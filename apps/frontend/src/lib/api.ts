@@ -1107,10 +1107,11 @@ class ApiClient {
   }
 
   // AI Generation History
-  async getAiHistory(workId: string, params?: { limit?: number; offset?: number }) {
+  async getAiHistory(workId: string, params?: { limit?: number; offset?: number; episodeId?: string }) {
     const qs = new URLSearchParams();
     if (params?.limit) qs.set('limit', String(params.limit));
     if (params?.offset) qs.set('offset', String(params.offset));
+    if (params?.episodeId) qs.set('episodeId', params.episodeId);
     const query = qs.toString() ? `?${qs.toString()}` : '';
     return this.request<{ data: AiGenerationHistoryItem[]; total: number }>(`/ai/history/${workId}${query}`);
   }
