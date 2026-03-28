@@ -85,7 +85,8 @@ export class SearchService implements OnModuleInit {
     aiGenerated?: boolean;
   }) {
     // Category/AI filters require Postgres (Meili doesn't have these fields)
-    if (options?.category || options?.aiGenerated) {
+    // Popular sort uses ReadingProgress data which only exists in Postgres
+    if (options?.category || options?.aiGenerated || options?.sort === 'popular') {
       return this.searchPostgres(query, options);
     }
     if (this.meiliAvailable && this.worksIndex) {
@@ -112,7 +113,6 @@ export class SearchService implements OnModuleInit {
       const sortMap: Record<string, string[]> = {
         newest: ['publishedAt:desc'],
         score: ['qualityScore:desc'],
-        popular: ['totalViews:desc'],
       };
 
       const result = await this.worksIndex!.search(query, {
@@ -181,6 +181,11 @@ export class SearchService implements OnModuleInit {
       where.isAiGenerated = true;
     }
 
+    // Popular sort: use 30-day distinct reader count (same as top page)
+    if (options?.sort === 'popular') {
+      return this.searchPopularPostgres(query, where, limit, offset);
+    }
+
     let orderBy: any = { publishedAt: 'desc' };
     let scoreSort = false;
     if (options?.sort === 'score') {
@@ -188,8 +193,6 @@ export class SearchService implements OnModuleInit {
       scoreSort = true;
     } else if (options?.sort === 'newest') {
       orderBy = { publishedAt: 'desc' };
-    } else if (options?.sort === 'popular') {
-      orderBy = { totalViews: 'desc' };
     }
 
     const [works, total] = await Promise.all([
@@ -216,6 +219,92 @@ export class SearchService implements OnModuleInit {
           return sb - sa;
         })
       : works;
+
+    return {
+      hits: sorted.map((w) => ({
+        ...w,
+        authorName: w.author?.displayName || w.author?.name || '',
+        publishedAt: w.publishedAt?.getTime() || 0,
+      })),
+      total,
+      processingTimeMs: 0,
+    };
+  }
+
+  private async searchPopularPostgres(query: string, where: any, limit: number, offset: number) {
+    const thirtyDaysAgo = new Date();
+    thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+
+    // Get work IDs ranked by distinct readers in last 30 days (same logic as DiscoverService.getPopularWorks)
+    const recentActivity = await this.prisma.$queryRaw<
+      { workId: string; userCount: bigint }[]
+    >`
+      SELECT "workId", COUNT(DISTINCT "userId") AS "userCount"
+      FROM "ReadingProgress"
+      WHERE "updatedAt" >= ${thirtyDaysAgo}
+      GROUP BY "workId"
+      ORDER BY "userCount" DESC
+    `;
+
+    // Filter: at least 2 distinct readers, fallback to all if none qualify
+    const qualifiedActivity = recentActivity.filter((r) => Number(r.userCount) >= 2);
+    const popularWorkIds = (qualifiedActivity.length > 0 ? qualifiedActivity : recentActivity).map((r) => r.workId);
+
+    // Merge with search filters
+    const popularWhere = {
+      ...where,
+      qualityScore: { overall: { gte: 70 } },
+      ...(popularWorkIds.length > 0 ? { id: { in: popularWorkIds } } : {}),
+    };
+
+    // Fallback: if no recent reading activity, sort by totalViews with quality filter
+    if (popularWorkIds.length === 0) {
+      const [works, total] = await Promise.all([
+        this.prisma.work.findMany({
+          where: popularWhere,
+          include: {
+            author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+            tags: true,
+            qualityScore: { select: { overall: true } },
+            _count: { select: { episodes: true, reviews: true } },
+          },
+          orderBy: { totalViews: 'desc' },
+          take: limit,
+          skip: offset,
+        }),
+        this.prisma.work.count({ where: popularWhere }),
+      ]);
+      return {
+        hits: works.map((w) => ({
+          ...w,
+          authorName: w.author?.displayName || w.author?.name || '',
+          publishedAt: w.publishedAt?.getTime() || 0,
+        })),
+        total,
+        processingTimeMs: 0,
+      };
+    }
+
+    // Fetch works matching both search filters and popular IDs
+    const [works, total] = await Promise.all([
+      this.prisma.work.findMany({
+        where: popularWhere,
+        include: {
+          author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
+          tags: true,
+          qualityScore: { select: { overall: true } },
+          _count: { select: { episodes: true, reviews: true } },
+        },
+      }),
+      this.prisma.work.count({ where: popularWhere }),
+    ]);
+
+    // Sort by reader count order (same as top page)
+    const workMap = new Map(works.map((w) => [w.id, w]));
+    const sorted = popularWorkIds
+      .map((id) => workMap.get(id))
+      .filter(Boolean)
+      .slice(offset, offset + limit) as typeof works;
 
     return {
       hits: sorted.map((w) => ({
