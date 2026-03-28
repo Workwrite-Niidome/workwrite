@@ -54,7 +54,7 @@ interface UseAiStreamReturn {
   isStreaming: boolean;
   error: string | null;
   conversationId: string | null;
-  generate: (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean, aiMode?: AiMode) => Promise<void>;
+  generate: (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean, aiMode?: AiMode, episodeId?: string) => Promise<void>;
   generateFollowUp: (opts: GenerateOptions) => Promise<void>;
   abort: () => void;
   reset: () => void;
@@ -169,9 +169,9 @@ export function useAiStream(): UseAiStreamReturn {
     }
   }, [abort]);
 
-  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean, aiMode?: AiMode) => {
+  const generate = useCallback(async (templateSlug: string, variables: Record<string, string>, premiumMode?: boolean, aiMode?: AiMode, episodeId?: string) => {
     setConversationId(null);
-    await doGenerate({ templateSlug, variables, premiumMode, aiMode });
+    await doGenerate({ templateSlug, variables, premiumMode, aiMode, episodeId });
   }, [doGenerate]);
 
   const generateFollowUp = useCallback(async (opts: GenerateOptions) => {

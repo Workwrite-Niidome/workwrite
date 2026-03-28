@@ -5,7 +5,8 @@ import { Button } from '@/components/ui/button';
 import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream, type AiMode } from '@/lib/use-ai-stream';
 import { api, type AiGenerationHistoryItem } from '@/lib/api';
-import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, FileText, Send, UserPlus, Check, Loader2, History, Trash2, MessageSquare, RotateCcw, ChevronDown, ChevronUp } from 'lucide-react';
+import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, FileText, Send, UserPlus, Check, Loader2, History, Trash2, MessageSquare, RotateCcw, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
 
 interface AiAssistPanelProps {
   workId: string;
@@ -52,6 +53,14 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [showHistory, setShowHistory] = useState(false);
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyScope, setHistoryScope] = useState<'episode' | 'work'>(episodeId ? 'episode' : 'work');
+
+  // Consultation chat state
+  const [showConsult, setShowConsult] = useState(false);
+  const [consultMessages, setConsultMessages] = useState<{ role: string; content: string }[]>([]);
+  const [consultInput, setConsultInput] = useState('');
+  const [consultStreaming, setConsultStreaming] = useState(false);
+  const consultAbortRef = useRef<AbortController | null>(null);
+  const consultEndRef = useRef<HTMLDivElement | null>(null);
 
   // Cost estimation & confirmation state
   const [pendingAction, setPendingAction] = useState<{
@@ -335,7 +344,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         setCurrentSlug(slug);
         setNewChars(null);
         reset();
-        generate(slug, vars, undefined, aiMode);
+        generate(slug, vars, undefined, aiMode, episodeId);
       } else {
         setPendingAction({
           type: 'quick',
@@ -422,7 +431,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
       setCurrentSlug(pendingAction.slug);
       setNewChars(null);
       reset();
-      generate(pendingAction.slug, pendingAction.vars, undefined, pendingAction.aiMode);
+      generate(pendingAction.slug, pendingAction.vars, undefined, pendingAction.aiMode, episodeId);
     } else if (pendingAction.type === 'followUp' && pendingAction.followUpMessage) {
       executeFollowUp(pendingAction.followUpMessage, pendingAction.vars);
     } else if (pendingAction.type === 'freePrompt') {
@@ -430,7 +439,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
       setCurrentSlug(pendingAction.slug);
       setNewChars(null);
       reset();
-      generate(pendingAction.slug, pendingAction.vars, undefined, pendingAction.aiMode);
+      generate(pendingAction.slug, pendingAction.vars, undefined, pendingAction.aiMode, episodeId);
     }
     setPendingAction(null);
   }
@@ -443,6 +452,60 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     setChatMessages([]);
     setNewChars(null);
     reset();
+  }
+
+  async function handleConsultSend() {
+    const msg = consultInput.trim();
+    if (!msg || consultStreaming) return;
+
+    const userMsg = { role: 'user', content: msg };
+    setConsultMessages((prev) => [...prev, userMsg]);
+    setConsultInput('');
+    setConsultStreaming(true);
+
+    const controller = new AbortController();
+    consultAbortRef.current = controller;
+
+    let assistantText = '';
+    setConsultMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
+
+    try {
+      const history = [...consultMessages, userMsg].slice(-10);
+      const response = await api.fetchSSE('/ai/consult', {
+        workId,
+        episodeId,
+        message: msg,
+        history: history.filter(m => m.role === 'user' || m.role === 'assistant'),
+      }, controller.signal);
+
+      await consumeSSEStream(response, (parsed) => {
+        if (parsed.text) {
+          assistantText += parsed.text;
+          setConsultMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: assistantText };
+            return updated;
+          });
+        }
+        if (parsed.error) {
+          setConsultMessages((prev) => {
+            const updated = [...prev];
+            updated[updated.length - 1] = { role: 'assistant', content: `エラー: ${parsed.error}` };
+            return updated;
+          });
+        }
+      });
+    } catch (err: unknown) {
+      if (err instanceof Error && err.name === 'AbortError') return;
+      setConsultMessages((prev) => {
+        const updated = [...prev];
+        updated[updated.length - 1] = { role: 'assistant', content: 'エラーが発生しました' };
+        return updated;
+      });
+    } finally {
+      setConsultStreaming(false);
+      setTimeout(() => consultEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    }
   }
 
   function handleInsertFromHistory(item: AiGenerationHistoryItem) {
@@ -738,7 +801,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">AIに自由に指示する</p>
               <div className="flex gap-1.5">
-                <textarea value={freePrompt} onChange={(e) => setFreePrompt(e.target.value)}
+                <textarea value={freePrompt} onChange={(e) => { setFreePrompt(e.target.value); if (e.target.value.trim()) setCustomPrompt(''); }}
                   onKeyDown={(e) => {
                     if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && freePrompt.trim() && !isStreaming && !estimatingCost) {
                       e.preventDefault();
@@ -747,8 +810,9 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                       handleQuickAction('free-prompt');
                     }
                   }}
-                  placeholder="例: 主人公の心情をもっと丁寧に描写して..."
-                  rows={2} className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+                  disabled={!!customPrompt.trim()}
+                  placeholder={customPrompt.trim() ? '追加指示と併用できません' : '例: 主人公の心情をもっと丁寧に描写して...'}
+                  rows={2} className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed" />
                 <Button size="sm" variant="default" className="self-end h-9 px-3"
                   disabled={!freePrompt.trim() || isStreaming || estimatingCost}
                   onClick={() => {
@@ -777,9 +841,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   {/* Custom instruction */}
                   <div className="space-y-1.5">
                     <p className="text-xs font-medium text-muted-foreground">追加の指示</p>
-                    <textarea value={customPrompt} onChange={(e) => setCustomPrompt(e.target.value)}
-                      placeholder="例: 緊張感のある場面にして..."
-                      rows={2} className="w-full text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring" />
+                    <textarea value={customPrompt} onChange={(e) => { setCustomPrompt(e.target.value); if (e.target.value.trim()) setFreePrompt(''); }}
+                      disabled={!!freePrompt.trim()}
+                      placeholder={freePrompt.trim() ? '自由指示と併用できません' : '例: 緊張感のある場面にして...'}
+                      rows={2} className="w-full text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring disabled:opacity-50 disabled:cursor-not-allowed" />
                   </div>
 
                   {/* Context indicator */}
@@ -805,6 +870,78 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 </div>
               )}
             </div>
+          </div>
+        )}
+
+        {/* AI Consultation Chat */}
+        {!pendingAction && !hasConversation && (
+          <div className="border-t border-border pt-3">
+            <button
+              onClick={() => setShowConsult(!showConsult)}
+              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
+            >
+              <HelpCircle className="h-3.5 w-3.5" />
+              AIに相談する
+              <span className="text-[10px] opacity-60 ml-auto">1cr/回</span>
+            </button>
+
+            {showConsult && (
+              <div className="mt-3 space-y-2">
+                {consultMessages.length === 0 && (
+                  <p className="text-[11px] text-muted-foreground">名前のアイデア、プロットの相談、セリフの改善など、気軽に聞いてみましょう</p>
+                )}
+
+                {/* Messages */}
+                <div className="max-h-64 overflow-y-auto space-y-2">
+                  {consultMessages.map((msg, i) => (
+                    <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
+                      <p className="text-[10px] font-medium text-muted-foreground mb-1">
+                        {msg.role === 'user' ? 'あなた' : 'AI'}
+                      </p>
+                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                    </div>
+                  ))}
+                  {consultStreaming && consultMessages.length > 0 && !consultMessages[consultMessages.length - 1]?.content && (
+                    <div className="flex items-center gap-2 py-2 px-3">
+                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                      <span className="text-xs text-muted-foreground">考え中...</span>
+                    </div>
+                  )}
+                  <div ref={consultEndRef} />
+                </div>
+
+                {/* Input */}
+                <div className="flex gap-1.5">
+                  <textarea
+                    value={consultInput}
+                    onChange={(e) => setConsultInput(e.target.value)}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !consultStreaming) {
+                        e.preventDefault();
+                        handleConsultSend();
+                      }
+                    }}
+                    placeholder="例: カフェの名前を5つ考えて"
+                    rows={2}
+                    className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                  />
+                  <Button size="sm" variant="default" className="self-end h-9 px-3"
+                    disabled={!consultInput.trim() || consultStreaming}
+                    onClick={handleConsultSend}>
+                    {consultStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                  </Button>
+                </div>
+
+                {consultMessages.length > 0 && (
+                  <button
+                    onClick={() => { setConsultMessages([]); consultAbortRef.current?.abort(); setConsultStreaming(false); }}
+                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
+                  >
+                    <RotateCcw className="h-3 w-3" /> リセット
+                  </button>
+                )}
+              </div>
+            )}
           </div>
         )}
 
