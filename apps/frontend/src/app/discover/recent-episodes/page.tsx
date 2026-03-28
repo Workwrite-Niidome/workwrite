@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Clock } from 'lucide-react';
+import { ArrowLeft } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { api, type RecentEpisode } from '@/lib/api';
 
@@ -41,7 +42,7 @@ export default function RecentEpisodesPage() {
   }, [episodes.length, loadingMore, hasMore]);
 
   return (
-    <div className="min-h-screen px-4 md:px-6 py-8 max-w-3xl mx-auto">
+    <div className="min-h-screen px-4 md:px-6 py-8 max-w-4xl mx-auto">
       <div className="flex items-center gap-3 mb-8">
         <Link href="/">
           <Button variant="ghost" size="icon" className="h-8 w-8">
@@ -51,34 +52,32 @@ export default function RecentEpisodesPage() {
         <h1 className="text-lg font-medium">新着エピソード</h1>
       </div>
 
-      <div className="space-y-2">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-3">
         {loading
           ? Array.from({ length: 8 }).map((_, i) => (
-              <div key={i} className="flex items-start gap-3 p-3 rounded-lg border border-border">
-                <div className="flex-1 space-y-2">
-                  <Skeleton className="h-4 w-3/4" />
+              <Card key={i}>
+                <CardContent className="p-3 space-y-2">
+                  <Skeleton className="h-3.5 w-3/4" />
                   <Skeleton className="h-3 w-1/2" />
-                </div>
-                <Skeleton className="h-3 w-16" />
-              </div>
+                  <Skeleton className="h-3 w-2/3" />
+                </CardContent>
+              </Card>
             ))
           : episodes.map((ep) => (
-              <Link
-                key={ep.id}
-                href={`/works/${ep.work.id}`}
-                className="flex items-center justify-between gap-3 px-4 py-3 hover:bg-muted/50 transition-colors"
-              >
-                <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{ep.work.title}</p>
-                  <p className="text-xs text-muted-foreground mt-0.5 truncate">
-                    {ep.work.author.displayName || ep.work.author.name}
-                    <span className="mx-1">·</span>
-                    第{ep.orderIndex + 1}話「{ep.title}」更新
-                  </p>
-                </div>
-                <span className="text-[10px] text-muted-foreground shrink-0">
-                  {new Date(ep.publishedAt || ep.createdAt).toLocaleDateString('ja-JP', { month: 'short', day: 'numeric' })}
-                </span>
+              <Link key={ep.id} href={`/works/${ep.work.id}`} className="group block">
+                <Card className="h-full hover:shadow-md hover:border-primary/20 transition-all">
+                  <CardContent className="p-3 space-y-1.5">
+                    <p className="text-xs font-medium line-clamp-1 group-hover:text-foreground/80 transition-colors">
+                      {ep.work.title}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground truncate">
+                      {ep.work.author.displayName || ep.work.author.name}
+                    </p>
+                    <p className="text-[11px] text-muted-foreground">
+                      第{ep.orderIndex + 1}話 更新
+                    </p>
+                  </CardContent>
+                </Card>
               </Link>
             ))}
       </div>
