@@ -472,12 +472,13 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     setConsultMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
 
     try {
-      const history = [...consultMessages, userMsg].slice(-10);
+      // Send only completed messages as history (exclude current message — backend adds it)
+      const history = consultMessages.filter(m => (m.role === 'user' || m.role === 'assistant') && m.content).slice(-10);
       const response = await api.fetchSSE('/ai/consult', {
         workId,
         episodeId,
         message: msg,
-        history: history.filter(m => m.role === 'user' || m.role === 'assistant'),
+        history,
       }, controller.signal);
 
       await consumeSSEStream(response, (parsed) => {
@@ -911,7 +912,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   執筆中のちょっとした相談に。作品の情報を踏まえて回答します。
                 </p>
                 <div className="flex flex-wrap gap-1.5">
-                  {['カフェの名前を5つ考えて', 'プロットの改善案を出して', 'この場面のセリフを磨きたい', 'どこを直したらもっと良くなる？'].map((example) => (
+                  {['この話の改善点は？', 'プロットの展開案を出して', 'キャラの名前を提案して', 'このセリフをもっと自然に'].map((example) => (
                     <button
                       key={example}
                       onClick={() => setConsultInput(example)}
