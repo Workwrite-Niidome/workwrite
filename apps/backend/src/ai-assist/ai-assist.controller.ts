@@ -4,7 +4,7 @@ import { Response } from 'express';
 import { AiAssistService } from './ai-assist.service';
 import { EpisodeAnalysisService } from './episode-analysis.service';
 import { AiContextBuilderService } from './ai-context-builder.service';
-import { AiAssistDto, ExtractCharactersDto, SaveDraftDto } from './dto/ai-assist.dto';
+import { AiAssistDto, AiConsultDto, ExtractCharactersDto, SaveDraftDto } from './dto/ai-assist.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
 import { Roles } from '../auth/decorators/roles.decorator';
@@ -97,6 +97,42 @@ export class AiAssistController {
       res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
     } finally {
       clearInterval(keepAlive);
+      res.end();
+    }
+  }
+
+  @Post('ai/consult')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'AI consultation chat (SSE stream, Haiku, free)' })
+  async consult(
+    @CurrentUser('id') userId: string,
+    @Body() dto: AiConsultDto,
+    @Res() res: Response,
+  ) {
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    try {
+      const stream = this.aiAssist.streamConsult(
+        userId,
+        dto.workId,
+        dto.message,
+        dto.history || [],
+        dto.episodeId,
+      );
+      for await (const chunk of stream) {
+        if (res.destroyed) break;
+        res.write(`data: ${JSON.stringify({ text: chunk })}\n\n`);
+      }
+      res.write(`data: [DONE]\n\n`);
+    } catch (err: unknown) {
+      const message = err instanceof Error ? err.message : 'Unknown error';
+      res.write(`data: ${JSON.stringify({ error: message })}\n\n`);
+    } finally {
       res.end();
     }
   }

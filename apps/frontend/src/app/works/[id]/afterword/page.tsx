@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import {
@@ -68,6 +68,7 @@ export default function AfterwordPage() {
   // AI Insights
   const [insights, setInsights] = useState<AiInsightData | null>(null);
   const [insightsLoading, setInsightsLoading] = useState(false);
+  const [insightsError, setInsightsError] = useState(false);
 
   // Review
   const [reviewText, setReviewText] = useState('');
@@ -115,26 +116,34 @@ export default function AfterwordPage() {
       .catch(() => {});
   }, [workId, isAuthenticated, router]);
 
-  // Explicit reaction send (no more auto-send)
-  const handleSendReaction = useCallback(async () => {
-    if (claps === 0 || !lastEpisodeId) return;
-    setSendingReaction(true);
-    try {
-      await api.sendReaction(lastEpisodeId, { claps, emotion: selectedEmotion || undefined });
-      setReactionSent(true);
-    } catch { /* ignore */ }
-    setSendingReaction(false);
-  }, [claps, selectedEmotion, lastEpisodeId]);
+  // Auto-send reaction (debounced to batch rapid taps)
+  const sendReactionRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+
+  const scheduleReactionSend = useCallback((newClaps: number, emotion: string | null) => {
+    if (!lastEpisodeId || newClaps === 0) return;
+    if (sendReactionRef.current) clearTimeout(sendReactionRef.current);
+    sendReactionRef.current = setTimeout(async () => {
+      setSendingReaction(true);
+      try {
+        await api.sendReaction(lastEpisodeId, { claps: newClaps, emotion: emotion || undefined });
+        setReactionSent(true);
+      } catch { /* ignore */ }
+      setSendingReaction(false);
+    }, 800);
+  }, [lastEpisodeId]);
 
   function handleClap() {
     const newClaps = Math.min(claps + 1, 5);
     setClaps(newClaps);
-    setReactionSent(false); // Mark as unsaved
+    setReactionSent(false);
+    scheduleReactionSend(newClaps, selectedEmotion);
   }
 
   function handleEmotion(value: string) {
-    setSelectedEmotion(selectedEmotion === value ? null : value);
+    const newEmotion = selectedEmotion === value ? null : value;
+    setSelectedEmotion(newEmotion);
     setReactionSent(false);
+    scheduleReactionSend(claps, newEmotion);
   }
 
   async function handleSubmitTags() {
@@ -162,11 +171,19 @@ export default function AfterwordPage() {
 
   function handleLoadInsights() {
     setShowInsights(!showInsights);
-    if (!insights && !insightsLoading) {
+    if (!insights && !insightsLoading && !insightsError) {
       setInsightsLoading(true);
+      setInsightsError(false);
       api.getAiInsights(workId)
-        .then((res) => setInsights(res.data))
-        .catch(() => {})
+        .then((res) => {
+          const data = res.data;
+          if (data && Array.isArray(data.themes)) {
+            setInsights(data);
+          } else {
+            setInsightsError(true);
+          }
+        })
+        .catch(() => setInsightsError(true))
         .finally(() => setInsightsLoading(false));
     }
   }
@@ -187,8 +204,6 @@ export default function AfterwordPage() {
 
   if (loading) return <div className="min-h-screen flex items-center justify-center"><Skeleton className="h-40 w-80" /></div>;
   if (!work) return null;
-
-  const hasUnsavedReaction = claps > 0 && !reactionSent;
 
   return (
     <div className="min-h-screen bg-gradient-to-b from-primary/5 to-background">
@@ -255,23 +270,16 @@ export default function AfterwordPage() {
             </div>
           )}
 
-          {/* Explicit send button */}
+          {/* Auto-send status */}
           {claps > 0 && (
             <div className="pt-1">
-              {hasUnsavedReaction ? (
-                <Button
-                  size="sm"
-                  onClick={handleSendReaction}
-                  disabled={sendingReaction}
-                  className="gap-1.5"
-                >
-                  {sendingReaction ? '送信中...' : '作者に届ける'}
-                </Button>
-              ) : (
+              {sendingReaction ? (
+                <p className="text-[11px] text-muted-foreground text-center">送信中...</p>
+              ) : reactionSent ? (
                 <p className="text-[11px] text-primary flex items-center justify-center gap-1">
                   <Check className="h-3 w-3" /> 作者に届きました
                 </p>
-              )}
+              ) : null}
             </div>
           )}
         </div>
@@ -392,13 +400,13 @@ export default function AfterwordPage() {
                 <div className="space-y-2"><Skeleton className="h-12 w-full" /><Skeleton className="h-12 w-full" /></div>
               ) : insights ? (
                 <>
-                  {insights.themes.length > 0 && (
+                  {(insights.themes?.length ?? 0) > 0 && (
                     <InsightCard title="テーマ" defaultOpen>
                       <ul className="space-y-1">{insights.themes.map((t, i) => <li key={i}><span className="font-medium">{t.name}</span> - {t.explanation}</li>)}</ul>
                     </InsightCard>
                   )}
                   {insights.emotionalJourney && <InsightCard title="感情の旅路"><p>{insights.emotionalJourney}</p></InsightCard>}
-                  {insights.characterInsights.length > 0 && (
+                  {(insights.characterInsights?.length ?? 0) > 0 && (
                     <InsightCard title="キャラクター分析">
                       <ul className="space-y-1">{insights.characterInsights.map((c, i) => <li key={i}><span className="font-medium">{c.name}</span> - {c.arc}</li>)}</ul>
                     </InsightCard>

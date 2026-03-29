@@ -54,8 +54,10 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [historyTotal, setHistoryTotal] = useState(0);
   const [historyScope, setHistoryScope] = useState<'episode' | 'work'>(episodeId ? 'episode' : 'work');
 
+  // Tab: 'assist' (text generation) or 'consult' (chat consultation)
+  const [activeTab, setActiveTab] = useState<'assist' | 'consult'>('assist');
+
   // Consultation chat state
-  const [showConsult, setShowConsult] = useState(false);
   const [consultMessages, setConsultMessages] = useState<{ role: string; content: string }[]>([]);
   const [consultInput, setConsultInput] = useState('');
   const [consultStreaming, setConsultStreaming] = useState(false);
@@ -585,6 +587,32 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         </div>
       </div>
 
+      {/* Tab switcher */}
+      <div className="flex-shrink-0 flex border-b">
+        <button
+          onClick={() => setActiveTab('assist')}
+          className={`flex-1 py-2 text-xs font-medium text-center transition-colors ${
+            activeTab === 'assist'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <PenLine className="h-3.5 w-3.5 inline mr-1" />
+          執筆アシスト
+        </button>
+        <button
+          onClick={() => setActiveTab('consult')}
+          className={`flex-1 py-2 text-xs font-medium text-center transition-colors ${
+            activeTab === 'consult'
+              ? 'text-primary border-b-2 border-primary'
+              : 'text-muted-foreground hover:text-foreground'
+          }`}
+        >
+          <HelpCircle className="h-3.5 w-3.5 inline mr-1" />
+          AIに相談
+        </button>
+      </div>
+
       <div className="flex-1 min-h-0 overflow-y-auto p-3 pb-8 space-y-4" style={{ WebkitOverflowScrolling: 'touch' }}>
         {/* History Panel */}
         {showHistory && (
@@ -694,8 +722,9 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
+        {/* ===== ASSIST TAB ===== */}
         {/* AI quality mode + character count — always visible at top */}
-        {!pendingAction && (
+        {activeTab === 'assist' && !pendingAction && (
           <div className="space-y-3">
             <div className="space-y-1.5">
               <p className="text-xs font-medium text-muted-foreground">生成品質</p>
@@ -752,49 +781,49 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
-        {/* Main actions — always visible */}
-        {!pendingAction && (
+        {/* Main actions — assist tab only */}
+        {activeTab === 'assist' && !pendingAction && (
           <div className="space-y-3">
-            {!hasConversation && (
-              <p className="text-xs font-medium text-muted-foreground">
-                {estimatingCost ? '見積もり取得中...' : '何をしますか？'}
-              </p>
+            {estimatingCost && (
+              <p className="text-xs text-muted-foreground">見積もり取得中...</p>
             )}
-            <div className="grid grid-cols-2 gap-2">
-              <button
-                onClick={() => handleQuickAction('chapter-opening')}
-                disabled={isStreaming || estimatingCost}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
-              >
-                <FileText className="h-5 w-5 text-primary" />
-                <span className="text-xs font-medium">章の書き出し</span>
-                <span className="text-[10px] text-muted-foreground">{charCount.toLocaleString()}字</span>
-              </button>
-              <button
-                onClick={() => handleQuickAction('continue-writing')}
-                disabled={isStreaming || estimatingCost || !currentContent.trim()}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
-              >
-                <PenLine className="h-5 w-5 text-primary" />
-                <span className="text-xs font-medium">続きを書く</span>
-                <span className="text-[10px] text-muted-foreground">{charCount.toLocaleString()}字</span>
-              </button>
-              <button
-                onClick={() => handleQuickAction('proofread')}
-                disabled={isStreaming || estimatingCost || !currentContent.trim()}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
-              >
-                <BookCheck className="h-5 w-5 text-primary" />
-                <span className="text-xs font-medium">校正・推敲</span>
-              </button>
-              <button
-                onClick={() => handleQuickAction('style-adjust')}
-                disabled={isStreaming || estimatingCost || !currentContent.trim()}
-                className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
-              >
-                <Wand2 className="h-5 w-5 text-primary" />
-                <span className="text-xs font-medium">文体調整</span>
-              </button>
+            <div className="space-y-1.5">
+              <div className="grid grid-cols-2 gap-2">
+                <button
+                  onClick={() => handleQuickAction('chapter-opening')}
+                  disabled={isStreaming || estimatingCost}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
+                >
+                  <FileText className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-medium">章の書き出し</span>
+                  <span className="text-[10px] text-muted-foreground">{charCount.toLocaleString()}字</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('continue-writing')}
+                  disabled={isStreaming || estimatingCost || !currentContent.trim()}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
+                >
+                  <PenLine className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-medium">続きを書く</span>
+                  <span className="text-[10px] text-muted-foreground">{charCount.toLocaleString()}字</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('proofread')}
+                  disabled={isStreaming || estimatingCost || !currentContent.trim()}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
+                >
+                  <BookCheck className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-medium">校正・推敲</span>
+                </button>
+                <button
+                  onClick={() => handleQuickAction('style-adjust')}
+                  disabled={isStreaming || estimatingCost || !currentContent.trim()}
+                  className="flex flex-col items-center gap-1.5 p-3 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors disabled:opacity-50"
+                >
+                  <Wand2 className="h-5 w-5 text-primary" />
+                  <span className="text-xs font-medium">文体調整</span>
+                </button>
+              </div>
             </div>
 
             {/* Free-form prompt */}
@@ -873,84 +902,88 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
-        {/* AI Consultation Chat */}
-        {!pendingAction && !hasConversation && (
-          <div className="border-t border-border pt-3">
-            <button
-              onClick={() => setShowConsult(!showConsult)}
-              className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground transition-colors w-full"
-            >
-              <HelpCircle className="h-3.5 w-3.5" />
-              AIに相談する
-              <span className="text-[10px] opacity-60 ml-auto">1cr/回</span>
-            </button>
-
-            {showConsult && (
-              <div className="mt-3 space-y-2">
-                {consultMessages.length === 0 && (
-                  <p className="text-[11px] text-muted-foreground">名前のアイデア、プロットの相談、セリフの改善など、気軽に聞いてみましょう</p>
-                )}
-
-                {/* Messages */}
-                <div className="max-h-64 overflow-y-auto space-y-2">
-                  {consultMessages.map((msg, i) => (
-                    <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20' : 'bg-secondary/50'}`}>
-                      <p className="text-[10px] font-medium text-muted-foreground mb-1">
-                        {msg.role === 'user' ? 'あなた' : 'AI'}
-                      </p>
-                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-                    </div>
+        {/* ===== CONSULT TAB ===== */}
+        {activeTab === 'consult' && (
+          <div className="space-y-3 flex flex-col h-full">
+            {consultMessages.length === 0 && (
+              <div className="space-y-2">
+                <p className="text-xs text-muted-foreground leading-relaxed">
+                  執筆中のちょっとした相談に。作品の情報を踏まえて回答します。
+                </p>
+                <div className="flex flex-wrap gap-1.5">
+                  {['カフェの名前を5つ考えて', 'プロットの改善案を出して', 'この場面のセリフを磨きたい', 'どこを直したらもっと良くなる？'].map((example) => (
+                    <button
+                      key={example}
+                      onClick={() => setConsultInput(example)}
+                      className="text-[10px] px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+                    >
+                      {example}
+                    </button>
                   ))}
-                  {consultStreaming && consultMessages.length > 0 && !consultMessages[consultMessages.length - 1]?.content && (
-                    <div className="flex items-center gap-2 py-2 px-3">
-                      <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                      <span className="text-xs text-muted-foreground">考え中...</span>
-                    </div>
-                  )}
-                  <div ref={consultEndRef} />
                 </div>
-
-                {/* Input */}
-                <div className="flex gap-1.5">
-                  <textarea
-                    value={consultInput}
-                    onChange={(e) => setConsultInput(e.target.value)}
-                    onKeyDown={(e) => {
-                      if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !consultStreaming) {
-                        e.preventDefault();
-                        handleConsultSend();
-                      }
-                    }}
-                    placeholder="例: カフェの名前を5つ考えて"
-                    rows={2}
-                    className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-                  />
-                  <Button size="sm" variant="default" className="self-end h-9 px-3"
-                    disabled={!consultInput.trim() || consultStreaming}
-                    onClick={handleConsultSend}>
-                    {consultStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-                  </Button>
-                </div>
-
-                {consultMessages.length > 0 && (
-                  <button
-                    onClick={() => { setConsultMessages([]); consultAbortRef.current?.abort(); setConsultStreaming(false); }}
-                    className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1"
-                  >
-                    <RotateCcw className="h-3 w-3" /> リセット
-                  </button>
-                )}
               </div>
             )}
+
+            {/* Messages */}
+            {consultMessages.length > 0 && (
+              <div className="flex-1 min-h-0 max-h-[50vh] overflow-y-auto space-y-2">
+                {consultMessages.map((msg, i) => (
+                  <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20 ml-6' : 'bg-secondary/50 mr-6'}`}>
+                    <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                  </div>
+                ))}
+                {consultStreaming && consultMessages.length > 0 && !consultMessages[consultMessages.length - 1]?.content && (
+                  <div className="flex items-center gap-2 py-2 px-3">
+                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                    <span className="text-xs text-muted-foreground">考え中...</span>
+                  </div>
+                )}
+                <div ref={consultEndRef} />
+              </div>
+            )}
+
+            {/* Input */}
+            <div className="flex gap-1.5 mt-auto">
+              <textarea
+                value={consultInput}
+                onChange={(e) => setConsultInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !consultStreaming) {
+                    e.preventDefault();
+                    handleConsultSend();
+                  }
+                }}
+                placeholder="なんでも聞いてみましょう..."
+                rows={2}
+                className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+              />
+              <Button size="sm" variant="default" className="self-end h-9 px-3"
+                disabled={!consultInput.trim() || consultStreaming}
+                onClick={handleConsultSend}>
+                {consultStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+              </Button>
+            </div>
+
+            <div className="flex items-center justify-between">
+              <span className="text-[10px] text-muted-foreground">1cr/回</span>
+              {consultMessages.length > 0 && (
+                <button
+                  onClick={() => { setConsultMessages([]); consultAbortRef.current?.abort(); setConsultStreaming(false); }}
+                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
+                >
+                  <RotateCcw className="h-3 w-3" /> リセット
+                </button>
+              )}
+            </div>
           </div>
         )}
 
-        {error && (
+        {activeTab === 'assist' && error && (
           <div className="p-3 text-xs text-destructive bg-destructive/10 rounded-lg">{error}</div>
         )}
 
-        {/* Chat conversation view */}
-        {hasConversation && (
+        {/* Chat conversation view — assist tab */}
+        {activeTab === 'assist' && hasConversation && (
           <div className="space-y-2">
             <div className="flex items-center justify-between">
               <p className="text-xs font-medium text-muted-foreground flex items-center gap-1">

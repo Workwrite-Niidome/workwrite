@@ -449,6 +449,171 @@ export class AiAssistService {
     }
   }
 
+  /** Lightweight consultation chat using Haiku (1cr per message) */
+  async *streamConsult(
+    userId: string,
+    workId: string,
+    message: string,
+    history: { role: string; content: string }[] = [],
+    episodeId?: string,
+  ): AsyncGenerator<string> {
+    const enabled = await this.aiSettings.isAiEnabled();
+    if (!enabled) throw new ServiceUnavailableException('AI is currently disabled');
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    if (!this.checkRateLimit(userId)) {
+      throw new ServiceUnavailableException('Rate limit exceeded. Please try again later.');
+    }
+
+    // Consume 1 credit per consultation message
+    const creditCost = 1;
+    let transactionId: string | null = null;
+    let contentDelivered = false;
+
+    const consumeResult = await this.creditService.consumeCredits(
+      userId,
+      creditCost,
+      'consult_chat',
+      HAIKU_MODEL,
+    );
+    transactionId = consumeResult.transactionId;
+
+    // Build lightweight context
+    let contextText = '';
+    try {
+      const work = await this.prisma.work.findUnique({
+        where: { id: workId },
+        select: { title: true, synopsis: true, genre: true },
+      });
+      if (work) {
+        contextText += `作品「${work.title}」（${work.genre || 'ジャンル不明'}）\n`;
+        if (work.synopsis) contextText += `あらすじ: ${work.synopsis}\n`;
+      }
+
+      const characters = await this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: { name: true, role: true, personality: true },
+        orderBy: { sortOrder: 'asc' },
+        take: 10,
+      });
+      if (characters.length > 0) {
+        contextText += `\n登場人物: ${characters.map(c => `${c.name}(${c.role}${c.personality ? '/' + c.personality : ''})`).join('、')}\n`;
+      }
+
+      if (episodeId) {
+        const episode = await this.prisma.episode.findUnique({
+          where: { id: episodeId },
+          select: { title: true, content: true },
+        });
+        if (episode) {
+          contextText += `\n現在のエピソード「${episode.title}」:\n${episode.content?.slice(-3000) || '（内容なし）'}\n`;
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to build consult context: ${e}`);
+    }
+
+    const systemPrompt = `あなたは小説執筆のアシスタントです。作家からの相談に簡潔に答えてください。
+アイデア出し、命名、プロット相談、セリフの改善提案など、創作に関する質問に気軽に応じてください。
+回答は具体的で実用的に。長すぎず、箇条書きも活用してください。
+
+${contextText ? `【作品情報】\n${contextText}` : ''}`;
+
+    const messages = [
+      ...history.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10),
+      { role: 'user' as const, content: message },
+    ];
+
+    const startTime = Date.now();
+    let inputTokens = 0;
+    let outputTokens = 0;
+
+    const response = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'x-api-key': apiKey,
+        'anthropic-version': ANTHROPIC_VERSION,
+      },
+      body: JSON.stringify({
+        model: HAIKU_MODEL,
+        max_tokens: 1500,
+        stream: true,
+        system: systemPrompt,
+        messages,
+      }),
+    });
+
+    if (!response.ok) {
+      const errorText = await response.text();
+      this.logger.error(`Consult API error: ${response.status} ${errorText}`);
+      if (transactionId) await this.creditService.refundTransaction(transactionId).catch(() => {});
+      throw new ServiceUnavailableException(`AI service error (${response.status})`);
+    }
+
+    const reader = response.body?.getReader();
+    if (!reader) {
+      if (transactionId) await this.creditService.refundTransaction(transactionId).catch(() => {});
+      throw new ServiceUnavailableException('No response stream');
+    }
+
+    const decoder = new TextDecoder();
+    let buffer = '';
+
+    try {
+      while (true) {
+        const { done, value } = await reader.read();
+        if (done) break;
+
+        buffer += decoder.decode(value, { stream: true });
+        const lines = buffer.split('\n');
+        buffer = lines.pop() || '';
+
+        for (const line of lines) {
+          if (!line.startsWith('data: ')) continue;
+          const data = line.slice(6).trim();
+          if (data === '[DONE]') break;
+          try {
+            const event = JSON.parse(data);
+            if (event.type === 'content_block_delta' && event.delta?.text) {
+              contentDelivered = true;
+              yield event.delta.text;
+            }
+            if (event.type === 'message_start' && event.message?.usage) {
+              inputTokens = event.message.usage.input_tokens || 0;
+            }
+            if (event.type === 'message_delta' && event.usage) {
+              outputTokens = event.usage.output_tokens || 0;
+            }
+          } catch { /* skip */ }
+        }
+      }
+    } finally {
+      reader.releaseLock();
+      await this.prisma.aiUsageLog.create({
+        data: {
+          userId,
+          feature: 'consult_chat',
+          inputTokens,
+          outputTokens,
+          model: HAIKU_MODEL,
+          durationMs: Date.now() - startTime,
+        },
+      }).catch((e) => this.logger.error('Failed to log consult usage', e));
+
+      // Confirm or refund credit
+      if (transactionId) {
+        if (contentDelivered) {
+          await this.creditService.confirmTransaction(transactionId).catch((e) => this.logger.error(`Consult credit confirm failed`, e));
+        } else {
+          await this.creditService.refundTransaction(transactionId).catch((e) => this.logger.error(`Consult credit refund failed`, e));
+        }
+      }
+    }
+  }
+
   /** Extract new characters/settings from generated text using Haiku */
   async extractNewCharacters(
     generatedText: string,

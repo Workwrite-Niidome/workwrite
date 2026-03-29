@@ -235,7 +235,9 @@ export class SearchService implements OnModuleInit {
     const thirtyDaysAgo = new Date();
     thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
 
-    // Get work IDs ranked by distinct readers in last 30 days (same logic as DiscoverService.getPopularWorks)
+    // Get work IDs ranked by distinct readers in last 30 days
+    // Identical to DiscoverService.getPopularWorks: LIMIT, filter, fallback
+    const fetchLimit = (limit + offset) * 2;
     const recentActivity = await this.prisma.$queryRaw<
       { workId: string; userCount: bigint }[]
     >`
@@ -244,24 +246,16 @@ export class SearchService implements OnModuleInit {
       WHERE "updatedAt" >= ${thirtyDaysAgo}
       GROUP BY "workId"
       ORDER BY "userCount" DESC
+      LIMIT ${fetchLimit}
     `;
 
-    // Filter: at least 2 distinct readers, fallback to all if none qualify
-    const qualifiedActivity = recentActivity.filter((r) => Number(r.userCount) >= 2);
-    const popularWorkIds = (qualifiedActivity.length > 0 ? qualifiedActivity : recentActivity).map((r) => r.workId);
+    // Fallback: no reading activity at all → sort by totalViews
+    const qualityWhere = { ...where, qualityScore: { overall: { gte: 70 } } };
 
-    // Merge with search filters
-    const popularWhere = {
-      ...where,
-      qualityScore: { overall: { gte: 70 } },
-      ...(popularWorkIds.length > 0 ? { id: { in: popularWorkIds } } : {}),
-    };
-
-    // Fallback: if no recent reading activity, sort by totalViews with quality filter
-    if (popularWorkIds.length === 0) {
+    if (recentActivity.length === 0) {
       const [works, total] = await Promise.all([
         this.prisma.work.findMany({
-          where: popularWhere,
+          where: qualityWhere,
           include: {
             author: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
             tags: true,
@@ -272,7 +266,7 @@ export class SearchService implements OnModuleInit {
           take: limit,
           skip: offset,
         }),
-        this.prisma.work.count({ where: popularWhere }),
+        this.prisma.work.count({ where: qualityWhere }),
       ]);
       return {
         hits: works.map((w) => ({
@@ -285,7 +279,15 @@ export class SearchService implements OnModuleInit {
       };
     }
 
+    // Filter: at least 2 distinct readers, fallback to all if none qualify
+    const qualifiedActivity = recentActivity.filter((r) => Number(r.userCount) >= 2);
+    const popularWorkIds = (qualifiedActivity.length > 0 ? qualifiedActivity : recentActivity).map((r) => r.workId);
+
     // Fetch works matching both search filters and popular IDs
+    const popularWhere = {
+      ...qualityWhere,
+      id: { in: popularWorkIds },
+    };
     const [works, total] = await Promise.all([
       this.prisma.work.findMany({
         where: popularWhere,
