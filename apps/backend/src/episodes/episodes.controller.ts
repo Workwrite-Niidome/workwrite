@@ -12,6 +12,7 @@ import { PostsService } from '../posts/posts.service';
 import { WorksService } from '../works/works.service';
 import { CharacterExtractionService } from '../character-talk/character-extraction.service';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { OriginalityService } from '../originality/originality.service';
 import { PostType, Episode } from '@prisma/client';
 
 interface EpisodeWithWork extends Episode {
@@ -31,6 +32,7 @@ export class EpisodesController {
     private worksService: WorksService,
     private characterExtraction: CharacterExtractionService,
     private prisma: PrismaService,
+    private originalityService: OriginalityService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -106,8 +108,12 @@ export class EpisodesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Delete episode' })
-  delete(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.episodesService.delete(id, userId);
+  async delete(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    const episode = await this.episodesService.findOne(id, userId);
+    const workId = episode.workId;
+    const result = await this.episodesService.delete(id, userId);
+    this.triggerOriginalityCheck(workId);
+    return result;
   }
 
   @Patch('works/:workId/episodes/reorder')
@@ -149,8 +155,11 @@ export class EpisodesController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Unpublish episode' })
-  unpublish(@Param('id') id: string, @CurrentUser('id') userId: string) {
-    return this.episodesService.unpublish(id, userId);
+  async unpublish(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    const result = await this.episodesService.unpublish(id, userId);
+    const episode = await this.episodesService.findOne(id, userId);
+    this.triggerOriginalityCheck(episode.workId);
+    return result;
   }
 
   @Post('episodes/:id/schedule')
@@ -279,7 +288,7 @@ export class EpisodesController {
 
   /** Fire-and-forget originality check (non-blocking) */
   private triggerOriginalityCheck(workId: string) {
-    this.worksService.calculateAndFlagAiGenerated(workId).catch((e) => {
+    this.originalityService.recalculate(workId).catch((e) => {
       this.logger.warn(`Failed to check originality for work ${workId}: ${e.message}`);
     });
   }

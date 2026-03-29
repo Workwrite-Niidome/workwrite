@@ -2,6 +2,7 @@ import { Test, TestingModule } from '@nestjs/testing';
 import { CreationWizardController } from './creation-wizard.controller';
 import { CreationWizardService } from './creation-wizard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { OriginalityService } from '../originality/originality.service';
 
 // ─── Mock service factory ────────────────────────────────────────────────────
 
@@ -54,6 +55,7 @@ describe('CreationWizardController', () => {
       controllers: [CreationWizardController],
       providers: [
         { provide: CreationWizardService, useValue: service },
+        { provide: OriginalityService, useValue: { getBreakdown: jest.fn().mockResolvedValue({ originality: 1.0, isAiGenerated: false, templateCounts: {} }), recalculate: jest.fn() } },
       ],
     })
       .overrideGuard(JwtAuthGuard)

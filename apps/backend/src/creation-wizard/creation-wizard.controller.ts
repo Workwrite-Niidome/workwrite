@@ -14,6 +14,7 @@ import { Response } from 'express';
 import { CreationWizardService } from './creation-wizard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { OriginalityService } from '../originality/originality.service';
 import {
   GenerateCharactersDto,
   GeneratePlotDto,
@@ -32,7 +33,10 @@ import {
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class CreationWizardController {
-  constructor(private creationWizardService: CreationWizardService) {}
+  constructor(
+    private creationWizardService: CreationWizardService,
+    private originalityService: OriginalityService,
+  ) {}
 
   // ─── SSE streaming endpoints ─────────────────────────────────
 
@@ -406,7 +410,7 @@ export class CreationWizardController {
   @Get('works/:workId/originality')
   @ApiOperation({ summary: 'Get originality score with breakdown' })
   getOriginality(@Param('workId') workId: string) {
-    return this.creationWizardService.calculateOriginality(workId);
+    return this.originalityService.getBreakdown(workId);
   }
 
   // ─── Story Summary ──────────────────────────────────────

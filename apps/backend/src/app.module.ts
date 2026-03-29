@@ -40,6 +40,8 @@ import { TimelineModule } from './timeline/timeline.module';
 import { BillingModule } from './billing/billing.module';
 import { ReactionsModule } from './reactions/reactions.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
+import { WorkExportModule } from './work-export/work-export.module';
+import { OriginalityModule } from './originality/originality.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -88,6 +90,8 @@ import { HealthController } from './health.controller';
     TimelineModule,
     ReactionsModule,
     AnnouncementsModule,
+    WorkExportModule,
+    OriginalityModule,
   ],
   controllers: [HealthController],
 })
