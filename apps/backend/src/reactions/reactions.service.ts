@@ -158,6 +158,7 @@ export class ReactionsService {
     const reactionItems = reactions.map(r => ({
       id: r.id,
       type: 'reaction' as const,
+      workId: r.workId,
       userDisplayName: r.user.displayName ?? r.user.name,
       workTitle: workMap.get(r.workId) || '',
       episodeTitle: r.episode.title,
@@ -171,6 +172,7 @@ export class ReactionsService {
     const reviewItems = reviews.map(r => ({
       id: r.id,
       type: 'review' as const,
+      workId: r.workId,
       userDisplayName: r.user.displayName ?? r.user.name,
       workTitle: workMap.get(r.workId) || '',
       episodeTitle: null as string | null,

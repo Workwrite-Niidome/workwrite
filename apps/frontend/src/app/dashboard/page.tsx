@@ -376,7 +376,8 @@ const EMOTION_LABELS: Record<string, string> = {
 };
 
 function ReactionFeed() {
-  const [feed, setFeed] = useState<{ id: string; type?: string; userDisplayName: string; workTitle: string; episodeTitle: string | null; claps: number; emotion: string | null; content?: string | null; createdAt: string }[]>([]);
+  const [feed, setFeed] = useState<{ id: string; type?: string; workId?: string; userDisplayName: string; workTitle: string; episodeTitle: string | null; claps: number; emotion: string | null; content?: string | null; createdAt: string }[]>([]);
+  const [filter, setFilter] = useState<'all' | 'reaction' | 'review'>('all');
 
   useEffect(() => {
     api.getMyReactionFeed()
@@ -385,6 +386,8 @@ function ReactionFeed() {
   }, []);
 
   if (feed.length === 0) return null;
+
+  const filtered = filter === 'all' ? feed : feed.filter((item) => item.type === filter);
 
   function timeAgo(date: string) {
     const diff = Date.now() - new Date(date).getTime();
@@ -399,39 +402,62 @@ function ReactionFeed() {
 
   return (
     <div className="mb-8">
-      <h2 className="text-lg font-semibold mb-3">最近の読者リアクション</h2>
+      <div className="flex items-center justify-between mb-3">
+        <h2 className="text-lg font-semibold">最近の読者リアクション</h2>
+        <div className="flex gap-1">
+          {([['all', 'すべて'], ['reaction', '拍手'], ['review', 'レビュー']] as const).map(([key, label]) => (
+            <button
+              key={key}
+              onClick={() => setFilter(key)}
+              className={`text-xs px-2.5 py-1 rounded-full transition-colors ${filter === key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+      </div>
       <Card>
         <CardContent className="pt-4 pb-2">
-          <div className="space-y-0 divide-y divide-border">
-            {feed.slice(0, 15).map((item) => (
-              <div key={item.id} className="py-2.5 text-sm">
-                <div className="flex items-center gap-3">
-                  <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
-                  <div className="min-w-0 flex-1">
-                    <span className="text-muted-foreground">{item.userDisplayName}</span>
-                    <span className="text-muted-foreground mx-1">が</span>
-                    <span className="font-medium truncate">『{item.workTitle}』</span>
-                    {item.type === 'review' ? (
-                      <span className="text-muted-foreground ml-1">にレビュー</span>
-                    ) : (
-                      <>
-                        <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
-                        <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
-                        {item.emotion && (
-                          <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
-                        )}
-                      </>
-                    )}
+          {filtered.length === 0 ? (
+            <p className="text-sm text-muted-foreground text-center py-4">該当するリアクションはありません</p>
+          ) : (
+            <div className="space-y-0 divide-y divide-border">
+              {filtered.slice(0, 20).map((item) => (
+                <div key={item.id} className="py-2.5 text-sm">
+                  <div className="flex items-center gap-3">
+                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
+                    <div className="min-w-0 flex-1">
+                      <span className="text-muted-foreground">{item.userDisplayName}</span>
+                      <span className="text-muted-foreground mx-1">が</span>
+                      {item.workId ? (
+                        <Link href={`/dashboard/works/${item.workId}`} className="font-medium hover:text-primary transition-colors">
+                          『{item.workTitle}』
+                        </Link>
+                      ) : (
+                        <span className="font-medium">『{item.workTitle}』</span>
+                      )}
+                      {item.type === 'review' ? (
+                        <span className="text-muted-foreground ml-1">にレビュー</span>
+                      ) : (
+                        <>
+                          <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
+                          <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
+                          {item.emotion && (
+                            <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
+                          )}
+                        </>
+                      )}
+                    </div>
                   </div>
+                  {item.type === 'review' && item.content && (
+                    <div className="ml-[calc(4rem+0.75rem)] mt-1.5 p-2.5 bg-muted/50 rounded-md">
+                      <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{item.content}</p>
+                    </div>
+                  )}
                 </div>
-                {item.type === 'review' && item.content && (
-                  <div className="ml-[calc(4rem+0.75rem)] mt-1.5 p-2.5 bg-muted/50 rounded-md">
-                    <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{item.content}</p>
-                  </div>
-                )}
-              </div>
-            ))}
-          </div>
+              ))}
+            </div>
+          )}
         </CardContent>
       </Card>
     </div>
