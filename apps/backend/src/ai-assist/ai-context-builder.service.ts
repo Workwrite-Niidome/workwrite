@@ -302,7 +302,10 @@ export class AiContextBuilderService {
       if (eb && typeof eb === 'object') {
         const lines: string[] = [];
         if (eb.coreMessage) lines.push(`コアメッセージ: ${eb.coreMessage}`);
-        if (eb.targetEmotions && eb.targetEmotions.length > 0) lines.push(`感情目標: ${eb.targetEmotions.join('、')}`);
+        if (eb.targetEmotions) {
+          const emotions = Array.isArray(eb.targetEmotions) ? eb.targetEmotions.join('、') : String(eb.targetEmotions);
+          if (emotions) lines.push(`感情目標: ${emotions}`);
+        }
         if (eb.readerJourney) lines.push(`読者の旅路: ${eb.readerJourney}`);
         if (lines.length > 0) {
           emotionGoals = lines.join('\n');
