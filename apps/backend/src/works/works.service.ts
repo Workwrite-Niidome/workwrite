@@ -321,14 +321,17 @@ export class WorksService {
 
   /** Auto-score, generate emotion tags, and index to search after publishing */
   async autoProcessWork(workId: string) {
-    // 1. Score the work (auto-adopts on first scoring)
-    const result = await this.scoringService.scoreWork(workId);
-    const score = result?.newScore ?? null;
-    // If not auto-adopted (existing score), force-adopt for auto-process
-    if (result && !result.autoAdopted) {
-      await this.scoringService.adoptScore(workId, result.historyId);
+    // 1. Score the work — skip if already has a score
+    const existingScore = await this.prisma.qualityScore.findUnique({ where: { workId } });
+    let score: any = null;
+    if (existingScore) {
+      this.logger.log(`Work ${workId} already has score (overall=${existingScore.overall}), skipping auto-scoring`);
+      score = existingScore;
+    } else {
+      const result = await this.scoringService.scoreWork(workId);
+      score = result?.newScore ?? null;
+      this.logger.log(`Auto-scored work ${workId}: overall=${score?.overall}`);
     }
-    this.logger.log(`Auto-scored work ${workId}: overall=${score?.overall}`);
 
     // 2. Generate emotion tags from scoring result
     if (score && (score as any).emotionTags?.length) {
