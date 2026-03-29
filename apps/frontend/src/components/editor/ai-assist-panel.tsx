@@ -495,7 +495,8 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   function buildConsultPrompt(): string {
     const cat = CONSULT_CATEGORIES.find(c => c.id === consultCategory);
     const det = consultDetail ? CONSULT_DETAILS[consultCategory || '']?.find(d => d.id === consultDetail) : null;
-    let prompt = cat ? cat.label : '';
+    let prompt = '【指示】小説執筆の相談に答えてください。絵文字は使わないでください。表（テーブル）は使わず、箇条書きや段落で回答してください。回答は簡潔に。\n\n';
+    prompt += cat ? cat.label : '';
     if (det) prompt += `（${det.label}）`;
     if (consultExtra.trim()) prompt += `\n\n補足: ${consultExtra.trim()}`;
     return prompt;
