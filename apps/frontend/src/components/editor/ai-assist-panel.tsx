@@ -6,7 +6,6 @@ import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream, type AiMode } from '@/lib/use-ai-stream';
 import { api, type AiGenerationHistoryItem } from '@/lib/api';
 import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, FileText, Send, UserPlus, Check, Loader2, History, Trash2, MessageSquare, RotateCcw, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
-import { consumeSSEStream } from '@/lib/use-ai-stream';
 
 interface AiAssistPanelProps {
   workId: string;
@@ -58,10 +57,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [activeTab, setActiveTab] = useState<'assist' | 'consult'>('consult');
 
   // Consultation chat state
-  const [consultMessages, setConsultMessages] = useState<{ role: string; content: string }[]>([]);
   const [consultInput, setConsultInput] = useState('');
-  const [consultStreaming, setConsultStreaming] = useState(false);
-  const consultAbortRef = useRef<AbortController | null>(null);
   const consultEndRef = useRef<HTMLDivElement | null>(null);
 
   // Cost estimation & confirmation state
@@ -458,56 +454,33 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
 
   async function handleConsultSend() {
     const msg = consultInput.trim();
-    if (!msg || consultStreaming) return;
+    if (!msg || isStreaming) return;
 
-    const userMsg = { role: 'user', content: msg };
-    setConsultMessages((prev) => [...prev, userMsg]);
     setConsultInput('');
-    setConsultStreaming(true);
 
-    const controller = new AbortController();
-    consultAbortRef.current = controller;
+    // Use existing AI assist infrastructure: free-prompt template + normal mode (Haiku, 1cr)
+    const vars = buildContextVars();
+    vars.user_prompt = msg;
 
-    let assistantText = '';
-    setConsultMessages((prev) => [...prev, { role: 'assistant', content: '' }]);
-
-    try {
-      // Send only completed messages as history (exclude current message — backend adds it)
-      const history = consultMessages.filter(m => (m.role === 'user' || m.role === 'assistant') && m.content).slice(-10);
-      const response = await api.fetchSSE('/ai/consult', {
-        workId,
+    if (conversationId) {
+      // Follow-up in existing conversation
+      setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
+      setCurrentSlug('free-prompt');
+      generateFollowUp({
+        templateSlug: 'free-prompt',
+        variables: vars,
+        aiMode: 'normal',
+        conversationId: conversationId || undefined,
+        followUpMessage: msg,
         episodeId,
-        message: msg,
-        history,
-      }, controller.signal);
-
-      await consumeSSEStream(response, (parsed) => {
-        if (parsed.text) {
-          assistantText += parsed.text;
-          setConsultMessages((prev) => {
-            const updated = [...prev];
-            updated[updated.length - 1] = { role: 'assistant', content: assistantText };
-            return updated;
-          });
-        }
-        if (parsed.error) {
-          setConsultMessages((prev) => {
-            const updated = [...prev];
-            updated[updated.length - 1] = { role: 'assistant', content: `エラー: ${parsed.error}` };
-            return updated;
-          });
-        }
       });
-    } catch (err: unknown) {
-      if (err instanceof Error && err.name === 'AbortError') return;
-      setConsultMessages((prev) => {
-        const updated = [...prev];
-        updated[updated.length - 1] = { role: 'assistant', content: 'エラーが発生しました' };
-        return updated;
-      });
-    } finally {
-      setConsultStreaming(false);
-      setTimeout(() => consultEndRef.current?.scrollIntoView({ behavior: 'smooth' }), 100);
+    } else {
+      // New conversation
+      setChatMessages([]);
+      setCurrentSlug('free-prompt');
+      setNewChars(null);
+      reset();
+      generate('free-prompt', vars, undefined, 'normal');
     }
   }
 
@@ -906,7 +879,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
         {/* ===== CONSULT TAB ===== */}
         {activeTab === 'consult' && (
           <div className="space-y-3 flex flex-col h-full">
-            {consultMessages.length === 0 && (
+            {!hasConversation && (
               <div className="space-y-2">
                 <p className="text-xs text-muted-foreground leading-relaxed">
                   執筆中のちょっとした相談に。作品の情報を踏まえて回答します。
@@ -925,21 +898,46 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
               </div>
             )}
 
-            {/* Messages */}
-            {consultMessages.length > 0 && (
-              <div className="flex-1 min-h-0 max-h-[50vh] overflow-y-auto space-y-2">
-                {consultMessages.map((msg, i) => (
-                  <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20 ml-6' : 'bg-secondary/50 mr-6'}`}>
-                    <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
-                  </div>
-                ))}
-                {consultStreaming && consultMessages.length > 0 && !consultMessages[consultMessages.length - 1]?.content && (
-                  <div className="flex items-center gap-2 py-2 px-3">
-                    <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
-                    <span className="text-xs text-muted-foreground">考え中...</span>
-                  </div>
-                )}
-                <div ref={consultEndRef} />
+            {/* Conversation view — reuses same chatMessages/result/isStreaming as assist tab */}
+            {hasConversation && (
+              <div className="space-y-2">
+                <div className="flex items-center justify-end gap-1">
+                  {isStreaming && (
+                    <button onClick={abort} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted">
+                      <StopCircle className="h-3.5 w-3.5" /> 停止
+                    </button>
+                  )}
+                  <button onClick={handleNewConversation} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted">
+                    <RotateCcw className="h-3.5 w-3.5" /> リセット
+                  </button>
+                </div>
+
+                {/* Past messages */}
+                <div className="max-h-[50vh] overflow-y-auto space-y-2">
+                  {chatMessages.map((msg, i) => (
+                    <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20 ml-6' : 'bg-secondary/50 mr-6'}`}>
+                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                    </div>
+                  ))}
+
+                  {/* Current streaming result */}
+                  {(isStreaming || result) && (
+                    <div className="text-xs rounded-lg p-2.5 bg-secondary/50 mr-6">
+                      {isStreaming && !result ? (
+                        <div className="flex items-center gap-2">
+                          <Loader2 className="h-3 w-3 animate-spin text-muted-foreground" />
+                          <span className="text-muted-foreground">考え中...</span>
+                        </div>
+                      ) : (
+                        <div className="whitespace-pre-wrap leading-relaxed">
+                          {result}
+                          {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                  <div ref={consultEndRef} />
+                </div>
               </div>
             )}
 
@@ -949,7 +947,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 value={consultInput}
                 onChange={(e) => setConsultInput(e.target.value)}
                 onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !consultStreaming) {
+                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !isStreaming) {
                     e.preventDefault();
                     handleConsultSend();
                   }
@@ -959,22 +957,14 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
               />
               <Button size="sm" variant="default" className="self-end h-9 px-3"
-                disabled={!consultInput.trim() || consultStreaming}
+                disabled={!consultInput.trim() || isStreaming}
                 onClick={handleConsultSend}>
-                {consultStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
+                {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
               </Button>
             </div>
 
             <div className="flex items-center justify-between">
               <span className="text-[10px] text-muted-foreground">1cr/回</span>
-              {consultMessages.length > 0 && (
-                <button
-                  onClick={() => { setConsultMessages([]); consultAbortRef.current?.abort(); setConsultStreaming(false); }}
-                  className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-1"
-                >
-                  <RotateCcw className="h-3 w-3" /> リセット
-                </button>
-              )}
             </div>
           </div>
         )}
