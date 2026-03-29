@@ -458,11 +458,11 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
 
   // Guided consultation categories & details
   const CONSULT_CATEGORIES = [
-    { id: 'improve', label: 'この話の改善点を知りたい', icon: '📝' },
-    { id: 'plot', label: 'ストーリーをよくしたい', icon: '📖' },
-    { id: 'dialogue', label: '魅力的なセリフを作りたい', icon: '💬' },
-    { id: 'naming', label: 'キャラクターの名前を提案して', icon: '🏷' },
-    { id: 'other', label: 'その他の相談', icon: '✨' },
+    { id: 'improve', label: 'この話の改善点を知りたい' },
+    { id: 'plot', label: 'ストーリーをよくしたい' },
+    { id: 'dialogue', label: '魅力的なセリフを作りたい' },
+    { id: 'naming', label: 'キャラクターの名前を提案して' },
+    { id: 'other', label: 'その他の相談' },
   ];
 
   const CONSULT_DETAILS: Record<string, { id: string; label: string }[]> = {
@@ -951,10 +951,9 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                         setConsultCategory(cat.id);
                         setConsultStep(cat.id === 'other' ? 'extra' : 'detail');
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
+                      className="w-full px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left text-xs font-medium"
                     >
-                      <span className="text-sm">{cat.icon}</span>
-                      <span className="text-xs font-medium">{cat.label}</span>
+                      {cat.label}
                     </button>
                   ))}
                 </div>
