@@ -2,7 +2,7 @@
 
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift, Coins, Link2, Check } from 'lucide-react';
+import { Plus, Eye, BookOpen, MessageSquare, TrendingUp, BarChart3, Pencil, ChevronLeft, ChevronRight, Upload, FileEdit, Trash2, Mail, DollarSign, Send, Users, Bot, Gift, Coins, Link2, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { ConfirmDialog } from '@/components/ui/dialog';
@@ -375,9 +375,12 @@ const EMOTION_LABELS: Record<string, string> = {
   moved: '泣いた', warm: '温かい', surprised: '驚いた', fired_up: '燃えた', thoughtful: '深い',
 };
 
+const PAGE_SIZE = 10;
+
 function ReactionFeed() {
   const [feed, setFeed] = useState<{ id: string; type?: string; workId?: string; userDisplayName: string; workTitle: string; episodeTitle: string | null; claps: number; emotion: string | null; content?: string | null; createdAt: string }[]>([]);
   const [filter, setFilter] = useState<'all' | 'reaction' | 'review'>('all');
+  const [page, setPage] = useState(0);
 
   useEffect(() => {
     api.getMyReactionFeed()
@@ -388,6 +391,13 @@ function ReactionFeed() {
   if (feed.length === 0) return null;
 
   const filtered = filter === 'all' ? feed : feed.filter((item) => item.type === filter);
+  const totalPages = Math.ceil(filtered.length / PAGE_SIZE);
+  const paged = filtered.slice(page * PAGE_SIZE, (page + 1) * PAGE_SIZE);
+
+  function handleFilterChange(f: typeof filter) {
+    setFilter(f);
+    setPage(0);
+  }
 
   function timeAgo(date: string) {
     const diff = Date.now() - new Date(date).getTime();
@@ -408,7 +418,7 @@ function ReactionFeed() {
           {([['all', 'すべて'], ['reaction', '拍手'], ['review', 'レビュー']] as const).map(([key, label]) => (
             <button
               key={key}
-              onClick={() => setFilter(key)}
+              onClick={() => handleFilterChange(key)}
               className={`text-xs px-2.5 py-1 rounded-full transition-colors ${filter === key ? 'bg-primary text-primary-foreground' : 'bg-muted text-muted-foreground hover:bg-muted/80'}`}
             >
               {label}
@@ -421,42 +431,55 @@ function ReactionFeed() {
           {filtered.length === 0 ? (
             <p className="text-sm text-muted-foreground text-center py-4">該当するリアクションはありません</p>
           ) : (
-            <div className="space-y-0 divide-y divide-border">
-              {filtered.slice(0, 20).map((item) => (
-                <div key={item.id} className="py-2.5 text-sm">
-                  <div className="flex items-center gap-3">
-                    <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
-                    <div className="min-w-0 flex-1">
-                      <span className="text-muted-foreground">{item.userDisplayName}</span>
-                      <span className="text-muted-foreground mx-1">が</span>
-                      {item.workId ? (
-                        <Link href={`/dashboard/works/${item.workId}`} className="font-medium hover:text-primary transition-colors">
-                          『{item.workTitle}』
-                        </Link>
-                      ) : (
-                        <span className="font-medium">『{item.workTitle}』</span>
-                      )}
-                      {item.type === 'review' ? (
-                        <span className="text-muted-foreground ml-1">にレビュー</span>
-                      ) : (
-                        <>
-                          <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
-                          <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
-                          {item.emotion && (
-                            <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
-                          )}
-                        </>
-                      )}
+            <>
+              <div className="space-y-0 divide-y divide-border">
+                {paged.map((item) => (
+                  <div key={item.id} className="py-2.5 text-sm">
+                    <div className="flex items-center gap-3">
+                      <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
+                      <div className="min-w-0 flex-1">
+                        <span className="text-muted-foreground">{item.userDisplayName}</span>
+                        <span className="text-muted-foreground mx-1">が</span>
+                        {item.workId ? (
+                          <Link href={`/dashboard/works/${item.workId}`} className="font-medium hover:text-primary transition-colors">
+                            『{item.workTitle}』
+                          </Link>
+                        ) : (
+                          <span className="font-medium">『{item.workTitle}』</span>
+                        )}
+                        {item.type === 'review' ? (
+                          <span className="text-muted-foreground ml-1">にレビュー</span>
+                        ) : (
+                          <>
+                            <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
+                            <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
+                            {item.emotion && (
+                              <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
+                            )}
+                          </>
+                        )}
+                      </div>
                     </div>
+                    {item.type === 'review' && item.content && (
+                      <div className="ml-[calc(4rem+0.75rem)] mt-1.5 p-2.5 bg-muted/50 rounded-md">
+                        <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{item.content}</p>
+                      </div>
+                    )}
                   </div>
-                  {item.type === 'review' && item.content && (
-                    <div className="ml-[calc(4rem+0.75rem)] mt-1.5 p-2.5 bg-muted/50 rounded-md">
-                      <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{item.content}</p>
-                    </div>
-                  )}
+                ))}
+              </div>
+              {totalPages > 1 && (
+                <div className="flex items-center justify-center gap-2 pt-3 pb-1">
+                  <Button variant="ghost" size="sm" className="text-xs h-7" disabled={page === 0} onClick={() => setPage(page - 1)}>
+                    <ChevronLeft className="h-3.5 w-3.5" />
+                  </Button>
+                  <span className="text-xs text-muted-foreground">{page + 1} / {totalPages}</span>
+                  <Button variant="ghost" size="sm" className="text-xs h-7" disabled={page >= totalPages - 1} onClick={() => setPage(page + 1)}>
+                    <ChevronRight className="h-3.5 w-3.5" />
+                  </Button>
                 </div>
-              ))}
-            </div>
+              )}
+            </>
           )}
         </CardContent>
       </Card>

@@ -3,7 +3,7 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Users, BarChart, MessageSquare, ThumbsUp } from 'lucide-react';
+import { ArrowLeft, Users, BarChart, MessageSquare, ThumbsUp, ChevronLeft, ChevronRight } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -40,6 +40,8 @@ export default function WorkAnalyticsPage() {
   const [creationPlan, setCreationPlan] = useState<any>(null);
   const [reactionFeed, setReactionFeed] = useState<any[]>([]);
   const [reviews, setReviews] = useState<Review[]>([]);
+  const [reviewPage, setReviewPage] = useState(0);
+  const REVIEW_PAGE_SIZE = 10;
 
   useEffect(() => {
     Promise.all([
@@ -205,28 +207,41 @@ export default function WorkAnalyticsPage() {
             {reviews.length === 0 ? (
               <p className="text-sm text-muted-foreground text-center py-4">まだレビューはありません</p>
             ) : (
-              <div className="space-y-4">
-                {reviews.map((review) => {
-                  const diff = Date.now() - new Date(review.createdAt).getTime();
-                  const mins = Math.floor(diff / 60000);
-                  const timeAgo = mins < 60 ? `${mins}分前` : mins < 1440 ? `${Math.floor(mins / 60)}時間前` : `${Math.floor(mins / 1440)}日前`;
-                  return (
-                    <div key={review.id} className="border border-border rounded-lg p-4">
-                      <div className="flex items-center justify-between mb-2">
-                        <span className="text-sm font-medium">{review.user.displayName || review.user.name}</span>
-                        <span className="text-xs text-muted-foreground">{timeAgo}</span>
-                      </div>
-                      <p className="text-sm whitespace-pre-wrap">{review.content}</p>
-                      {review._count.helpfuls > 0 && (
-                        <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
-                          <ThumbsUp className="h-3 w-3" />
-                          <span>{review._count.helpfuls}</span>
+              <>
+                <div className="space-y-4">
+                  {reviews.slice(reviewPage * REVIEW_PAGE_SIZE, (reviewPage + 1) * REVIEW_PAGE_SIZE).map((review) => {
+                    const diff = Date.now() - new Date(review.createdAt).getTime();
+                    const mins = Math.floor(diff / 60000);
+                    const timeAgo = mins < 60 ? `${mins}分前` : mins < 1440 ? `${Math.floor(mins / 60)}時間前` : `${Math.floor(mins / 1440)}日前`;
+                    return (
+                      <div key={review.id} className="border border-border rounded-lg p-4">
+                        <div className="flex items-center justify-between mb-2">
+                          <span className="text-sm font-medium">{review.user.displayName || review.user.name}</span>
+                          <span className="text-xs text-muted-foreground">{timeAgo}</span>
                         </div>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
+                        <p className="text-sm whitespace-pre-wrap">{review.content}</p>
+                        {review._count.helpfuls > 0 && (
+                          <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                            <ThumbsUp className="h-3 w-3" />
+                            <span>{review._count.helpfuls}</span>
+                          </div>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+                {Math.ceil(reviews.length / REVIEW_PAGE_SIZE) > 1 && (
+                  <div className="flex items-center justify-center gap-2 pt-4">
+                    <Button variant="ghost" size="sm" className="text-xs h-7" disabled={reviewPage === 0} onClick={() => setReviewPage(reviewPage - 1)}>
+                      <ChevronLeft className="h-3.5 w-3.5" />
+                    </Button>
+                    <span className="text-xs text-muted-foreground">{reviewPage + 1} / {Math.ceil(reviews.length / REVIEW_PAGE_SIZE)}</span>
+                    <Button variant="ghost" size="sm" className="text-xs h-7" disabled={reviewPage >= Math.ceil(reviews.length / REVIEW_PAGE_SIZE) - 1} onClick={() => setReviewPage(reviewPage + 1)}>
+                      <ChevronRight className="h-3.5 w-3.5" />
+                    </Button>
+                  </div>
+                )}
+              </>
             )}
           </CardContent>
         </Card>

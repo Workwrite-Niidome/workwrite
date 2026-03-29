@@ -125,7 +125,7 @@ export class ReactionsService {
   }
 
   /** Get reaction feed across ALL works by a specific author */
-  async getAuthorReactionFeed(authorId: string, limit = 20) {
+  async getAuthorReactionFeed(authorId: string, limit = 50) {
     const works = await this.prisma.work.findMany({
       where: { authorId },
       select: { id: true, title: true },
