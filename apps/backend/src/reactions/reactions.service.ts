@@ -135,17 +135,27 @@ export class ReactionsService {
     const workIds = works.map(w => w.id);
     const workMap = new Map(works.map(w => [w.id, w.title]));
 
-    const feed = await this.prisma.episodeReaction.findMany({
-      where: { workId: { in: workIds } },
-      orderBy: { createdAt: 'desc' },
-      take: limit,
-      include: {
-        user: { select: { displayName: true, name: true } },
-        episode: { select: { title: true, orderIndex: true } },
-      },
-    });
+    const [reactions, reviews] = await Promise.all([
+      this.prisma.episodeReaction.findMany({
+        where: { workId: { in: workIds } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: {
+          user: { select: { displayName: true, name: true } },
+          episode: { select: { title: true, orderIndex: true } },
+        },
+      }),
+      this.prisma.review.findMany({
+        where: { workId: { in: workIds } },
+        orderBy: { createdAt: 'desc' },
+        take: limit,
+        include: {
+          user: { select: { displayName: true, name: true } },
+        },
+      }),
+    ]);
 
-    return feed.map(r => ({
+    const reactionItems = reactions.map(r => ({
       id: r.id,
       type: 'reaction' as const,
       userDisplayName: r.user.displayName ?? r.user.name,
@@ -154,7 +164,25 @@ export class ReactionsService {
       episodeOrderIndex: r.episode.orderIndex,
       claps: r.claps,
       emotion: r.emotion,
+      content: null as string | null,
       createdAt: r.createdAt,
     }));
+
+    const reviewItems = reviews.map(r => ({
+      id: r.id,
+      type: 'review' as const,
+      userDisplayName: r.user.displayName ?? r.user.name,
+      workTitle: workMap.get(r.workId) || '',
+      episodeTitle: null as string | null,
+      episodeOrderIndex: null as number | null,
+      claps: 0,
+      emotion: null as string | null,
+      content: r.content,
+      createdAt: r.createdAt,
+    }));
+
+    return [...reactionItems, ...reviewItems]
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime())
+      .slice(0, limit);
   }
 }

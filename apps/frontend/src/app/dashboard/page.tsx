@@ -376,7 +376,7 @@ const EMOTION_LABELS: Record<string, string> = {
 };
 
 function ReactionFeed() {
-  const [feed, setFeed] = useState<{ id: string; userDisplayName: string; workTitle: string; episodeTitle: string; claps: number; emotion: string | null; createdAt: string }[]>([]);
+  const [feed, setFeed] = useState<{ id: string; type?: string; userDisplayName: string; workTitle: string; episodeTitle: string | null; claps: number; emotion: string | null; content?: string | null; createdAt: string }[]>([]);
 
   useEffect(() => {
     api.getMyReactionFeed()
@@ -403,19 +403,32 @@ function ReactionFeed() {
       <Card>
         <CardContent className="pt-4 pb-2">
           <div className="space-y-0 divide-y divide-border">
-            {feed.slice(0, 10).map((item) => (
-              <div key={item.id} className="flex items-center gap-3 py-2.5 text-sm">
-                <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
-                <div className="min-w-0 flex-1">
-                  <span className="text-muted-foreground">{item.userDisplayName}</span>
-                  <span className="text-muted-foreground mx-1">が</span>
-                  <span className="font-medium truncate">『{item.workTitle}』</span>
-                  <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
-                  <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
-                  {item.emotion && (
-                    <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
-                  )}
+            {feed.slice(0, 15).map((item) => (
+              <div key={item.id} className="py-2.5 text-sm">
+                <div className="flex items-center gap-3">
+                  <span className="text-xs text-muted-foreground w-16 shrink-0 text-right">{timeAgo(item.createdAt)}</span>
+                  <div className="min-w-0 flex-1">
+                    <span className="text-muted-foreground">{item.userDisplayName}</span>
+                    <span className="text-muted-foreground mx-1">が</span>
+                    <span className="font-medium truncate">『{item.workTitle}』</span>
+                    {item.type === 'review' ? (
+                      <span className="text-muted-foreground ml-1">にレビュー</span>
+                    ) : (
+                      <>
+                        <span className="text-muted-foreground mx-1">第{(item as any).episodeOrderIndex != null ? (item as any).episodeOrderIndex + 1 : '?'}話に</span>
+                        <span className="text-foreground">拍手{item.claps > 1 ? `(${item.claps}回)` : ''}</span>
+                        {item.emotion && (
+                          <span className="text-muted-foreground ml-1">「{EMOTION_LABELS[item.emotion] || item.emotion}」</span>
+                        )}
+                      </>
+                    )}
+                  </div>
                 </div>
+                {item.type === 'review' && item.content && (
+                  <div className="ml-[calc(4rem+0.75rem)] mt-1.5 p-2.5 bg-muted/50 rounded-md">
+                    <p className="text-xs text-muted-foreground line-clamp-3 whitespace-pre-wrap">{item.content}</p>
+                  </div>
+                )}
               </div>
             ))}
           </div>
