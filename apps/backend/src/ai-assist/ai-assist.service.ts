@@ -480,37 +480,14 @@ export class AiAssistService {
     );
     transactionId = consumeResult.transactionId;
 
-    // Build lightweight context
+    // Build full context using the same context builder as writing assist
     let contextText = '';
     try {
-      const work = await this.prisma.work.findUnique({
-        where: { id: workId },
-        select: { title: true, synopsis: true, genre: true },
-      });
-      if (work) {
-        contextText += `作品「${work.title}」（${work.genre || 'ジャンル不明'}）\n`;
-        if (work.synopsis) contextText += `あらすじ: ${work.synopsis}\n`;
-      }
-
-      const characters = await this.prisma.storyCharacter.findMany({
-        where: { workId },
-        select: { name: true, role: true, personality: true },
-        orderBy: { sortOrder: 'asc' },
-        take: 10,
-      });
-      if (characters.length > 0) {
-        contextText += `\n登場人物: ${characters.map(c => `${c.name}(${c.role}${c.personality ? '/' + c.personality : ''})`).join('、')}\n`;
-      }
-
-      if (episodeId) {
-        const episode = await this.prisma.episode.findUnique({
-          where: { id: episodeId },
-          select: { title: true, content: true },
-        });
-        if (episode) {
-          contextText += `\n現在のエピソード「${episode.title}」:\n${episode.content?.slice(-3000) || '（内容なし）'}\n`;
-        }
-      }
+      const episodeOrder = episodeId
+        ? await this.prisma.episode.findUnique({ where: { id: episodeId }, select: { orderIndex: true } }).then(e => e?.orderIndex ?? 999)
+        : 999;
+      const ctx = await this.contextBuilder.buildContext(workId, episodeOrder);
+      contextText = this.contextBuilder.formatForPrompt(ctx);
     } catch (e) {
       this.logger.warn(`Failed to build consult context: ${e}`);
     }

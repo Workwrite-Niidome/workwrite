@@ -55,7 +55,7 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   const [historyScope, setHistoryScope] = useState<'episode' | 'work'>(episodeId ? 'episode' : 'work');
 
   // Tab: 'assist' (text generation) or 'consult' (chat consultation)
-  const [activeTab, setActiveTab] = useState<'assist' | 'consult'>('assist');
+  const [activeTab, setActiveTab] = useState<'assist' | 'consult'>('consult');
 
   // Consultation chat state
   const [consultMessages, setConsultMessages] = useState<{ role: string; content: string }[]>([]);
