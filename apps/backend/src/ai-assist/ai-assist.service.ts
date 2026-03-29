@@ -498,8 +498,26 @@ export class AiAssistService {
 
 ${contextText ? `【作品情報】\n${contextText}` : ''}`;
 
+    // Sanitize history: filter valid roles, non-empty content, enforce alternation
+    const validHistory = history
+      .filter(m => (m.role === 'user' || m.role === 'assistant') && m.content && m.content.trim())
+      .slice(-10);
+
+    // Enforce role alternation (Claude API requirement)
+    const sanitized: { role: 'user' | 'assistant'; content: string }[] = [];
+    for (const m of validHistory) {
+      const role = m.role as 'user' | 'assistant';
+      if (sanitized.length === 0 && role !== 'user') continue; // must start with user
+      if (sanitized.length > 0 && sanitized[sanitized.length - 1].role === role) continue; // skip consecutive same role
+      sanitized.push({ role, content: m.content });
+    }
+    // Ensure last history message is from assistant (so we can append user message)
+    if (sanitized.length > 0 && sanitized[sanitized.length - 1].role === 'user') {
+      sanitized.pop();
+    }
+
     const messages = [
-      ...history.filter(m => m.role === 'user' || m.role === 'assistant').slice(-10),
+      ...sanitized,
       { role: 'user' as const, content: message },
     ];
 
