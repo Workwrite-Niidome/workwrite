@@ -6,6 +6,7 @@ import { TemplateSelector, type PromptTemplate } from './template-selector';
 import { useAiStream, type AiMode } from '@/lib/use-ai-stream';
 import { api, type AiGenerationHistoryItem } from '@/lib/api';
 import { X, Copy, ArrowDownToLine, StopCircle, Replace, Wand2, BookCheck, PenLine, Crown, FileText, Send, UserPlus, Check, Loader2, History, Trash2, MessageSquare, RotateCcw, ChevronDown, ChevronUp, HelpCircle } from 'lucide-react';
+import { MarkdownContent } from '@/components/ui/markdown-content';
 
 interface AiAssistPanelProps {
   workId: string;
@@ -1056,7 +1057,11 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                 <div className="max-h-[50vh] overflow-y-auto space-y-2">
                   {chatMessages.map((msg, i) => (
                     <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20 ml-6' : 'bg-secondary/50 mr-6'}`}>
-                      <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                      {msg.role === 'assistant' ? (
+                        <MarkdownContent content={msg.content} className="text-xs" />
+                      ) : (
+                        <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                      )}
                     </div>
                   ))}
 
@@ -1068,8 +1073,8 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                           <span className="text-muted-foreground">考え中...</span>
                         </div>
                       ) : (
-                        <div className="whitespace-pre-wrap leading-relaxed">
-                          {result}
+                        <div>
+                          <MarkdownContent content={result} className="text-xs" />
                           {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
                         </div>
                       )}
@@ -1143,9 +1148,13 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   <p className="text-xs font-medium text-muted-foreground mb-1.5">
                     {msg.role === 'user' ? 'あなた' : 'AI'}
                   </p>
-                  <div className={`whitespace-pre-wrap leading-relaxed ${
-                    isLastAssistant ? 'max-h-80 overflow-y-auto' : isOlderAssistant ? 'line-clamp-6' : ''
-                  }`}>{msg.content}</div>
+                  {msg.role === 'assistant' ? (
+                    <div className={isLastAssistant ? 'max-h-80 overflow-y-auto' : isOlderAssistant ? 'line-clamp-6 overflow-hidden' : ''}>
+                      <MarkdownContent content={msg.content} className="text-xs" />
+                    </div>
+                  ) : (
+                    <div className="whitespace-pre-wrap leading-relaxed">{msg.content}</div>
+                  )}
                   {isOlderAssistant && (
                     <div className="flex gap-1 mt-2">
                       {currentSlug === 'proofread' && onReplace ? (
@@ -1214,8 +1223,8 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                     </span>
                   </div>
                 ) : (
-                  <div className="whitespace-pre-wrap leading-relaxed max-h-80 overflow-y-auto">
-                    {result}
+                  <div className="max-h-80 overflow-y-auto">
+                    <MarkdownContent content={result} className="text-xs" />
                     {isStreaming && <span className="inline-block w-1 h-4 bg-foreground animate-pulse ml-0.5" />}
                   </div>
                 )}

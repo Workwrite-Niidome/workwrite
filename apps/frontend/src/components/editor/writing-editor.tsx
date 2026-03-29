@@ -49,8 +49,27 @@ export function WritingEditor({
   const [rubyReading, setRubyReading] = useState('');
   const [cursorLine, setCursorLine] = useState('');
   const [showBackConfirm, setShowBackConfirm] = useState(false);
+  const [aiPanelWidth, setAiPanelWidth] = useState(320);
+  const aiResizeRef = useRef<{ startX: number; startWidth: number } | null>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
   const rubyInputRef = useRef<HTMLInputElement>(null);
+
+  const handleAiResizeStart = useCallback((e: React.MouseEvent) => {
+    e.preventDefault();
+    aiResizeRef.current = { startX: e.clientX, startWidth: aiPanelWidth };
+    const handleMove = (ev: MouseEvent) => {
+      if (!aiResizeRef.current) return;
+      const delta = aiResizeRef.current.startX - ev.clientX;
+      setAiPanelWidth(Math.min(600, Math.max(280, aiResizeRef.current.startWidth + delta)));
+    };
+    const handleUp = () => {
+      aiResizeRef.current = null;
+      document.removeEventListener('mousemove', handleMove);
+      document.removeEventListener('mouseup', handleUp);
+    };
+    document.addEventListener('mousemove', handleMove);
+    document.addEventListener('mouseup', handleUp);
+  }, [aiPanelWidth]);
 
   const { status: saveStatus, deleteDraft } = useAutosave({
     workId,
@@ -478,7 +497,12 @@ export function WritingEditor({
 
         {/* AI Panel */}
         {showAi && !focusMode && (
-          <div className="w-80 flex-shrink-0 border-l hidden md:flex md:flex-col min-h-0 overflow-hidden">
+          <div className="flex-shrink-0 border-l hidden md:flex md:flex-col min-h-0 overflow-hidden relative" style={{ width: aiPanelWidth }}>
+            {/* Resize handle */}
+            <div
+              onMouseDown={handleAiResizeStart}
+              className="absolute left-0 top-0 bottom-0 w-1 cursor-col-resize hover:bg-primary/30 active:bg-primary/50 transition-colors z-10"
+            />
             <AiAssistPanel
               workId={workId}
               episodeId={episodeId}
