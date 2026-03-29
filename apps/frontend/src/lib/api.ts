@@ -604,6 +604,10 @@ class ApiClient {
   }
 
   // Reviews
+  async getWorkReviews(workId: string) {
+    return this.request<{ data: Review[] }>(`/reviews/work/${workId}`);
+  }
+
   async createReview(data: { workId: string; content: string }) {
     return this.request<{ data: Review }>('/reviews', {
       method: 'POST',

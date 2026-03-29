@@ -3,13 +3,14 @@
 import { useState, useEffect } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
-import { ArrowLeft, Users, BarChart } from 'lucide-react';
+import { ArrowLeft, Users, BarChart, MessageSquare, ThumbsUp } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ScoreCard } from '@/components/scoring/score-card';
-import { api, type QualityScoreDetail, type Work } from '@/lib/api';
+import { ExportDialog } from '@/components/work-export/export-dialog';
+import { api, type QualityScoreDetail, type Work, type Review } from '@/lib/api';
 
 interface HeatmapEntry {
   episodeId: string;
@@ -38,6 +39,7 @@ export default function WorkAnalyticsPage() {
   const [workReactions, setWorkReactions] = useState<any>(null);
   const [creationPlan, setCreationPlan] = useState<any>(null);
   const [reactionFeed, setReactionFeed] = useState<any[]>([]);
+  const [reviews, setReviews] = useState<Review[]>([]);
 
   useEffect(() => {
     Promise.all([
@@ -55,6 +57,7 @@ export default function WorkAnalyticsPage() {
     api.getWorkReactions(workId).then((res) => setWorkReactions(res.data)).catch(() => {});
     api.getCreationPlan(workId).then((res) => setCreationPlan(res.data)).catch(() => {});
     api.getWorkReactionFeed(workId).then((res) => setReactionFeed(res.data || [])).catch(() => {});
+    api.getWorkReviews(workId).then((res) => setReviews(res.data || [])).catch(() => {});
   }, [workId]);
 
   if (loading) {
@@ -76,7 +79,10 @@ export default function WorkAnalyticsPage() {
             <ArrowLeft className="h-4 w-4 mr-1" /> ダッシュボードへ戻る
           </Button>
         </Link>
-        <h1 className="text-2xl font-bold">作品分析</h1>
+        <div className="flex items-center gap-3">
+          <h1 className="text-2xl font-bold">作品分析</h1>
+          {workTitle && <ExportDialog workId={workId} workTitle={workTitle} />}
+        </div>
       </div>
 
       <div className="grid gap-6 md:grid-cols-2">
@@ -187,6 +193,43 @@ export default function WorkAnalyticsPage() {
             </CardContent>
           </Card>
         )}
+
+        {/* Reviews */}
+        <Card className="md:col-span-2">
+          <CardHeader>
+            <CardTitle className="text-base flex items-center gap-2">
+              <MessageSquare className="h-4 w-4" /> レビュー ({reviews.length})
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            {reviews.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-4">まだレビューはありません</p>
+            ) : (
+              <div className="space-y-4">
+                {reviews.map((review) => {
+                  const diff = Date.now() - new Date(review.createdAt).getTime();
+                  const mins = Math.floor(diff / 60000);
+                  const timeAgo = mins < 60 ? `${mins}分前` : mins < 1440 ? `${Math.floor(mins / 60)}時間前` : `${Math.floor(mins / 1440)}日前`;
+                  return (
+                    <div key={review.id} className="border border-border rounded-lg p-4">
+                      <div className="flex items-center justify-between mb-2">
+                        <span className="text-sm font-medium">{review.user.displayName || review.user.name}</span>
+                        <span className="text-xs text-muted-foreground">{timeAgo}</span>
+                      </div>
+                      <p className="text-sm whitespace-pre-wrap">{review.content}</p>
+                      {review._count.helpfuls > 0 && (
+                        <div className="flex items-center gap-1 mt-2 text-xs text-muted-foreground">
+                          <ThumbsUp className="h-3 w-3" />
+                          <span>{review._count.helpfuls}</span>
+                        </div>
+                      )}
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+          </CardContent>
+        </Card>
 
         {/* Reaction Feed for this work */}
         {reactionFeed.length > 0 && (
