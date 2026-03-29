@@ -22,6 +22,13 @@ const DEFAULT_WEIGHT = 0.5;
 
 const AI_RATIO_THRESHOLD = 0.5;
 
+/**
+ * N-gram size for matching. 10 characters is long enough to avoid
+ * matching common short phrases, but short enough that partial edits
+ * only break a few N-grams rather than an entire sentence.
+ */
+const NGRAM_SIZE = 10;
+
 @Injectable()
 export class OriginalityService {
   private readonly logger = new Logger(OriginalityService.name);
@@ -32,13 +39,17 @@ export class OriginalityService {
    * Calculate originality by comparing AI-generated text against episode content.
    * Uses sentence-level matching with template-based weighting.
    *
-   * Algorithm:
-   * 1. Get all AI generation history for this work (grouped by templateSlug)
-   * 2. Get all episode content combined
-   * 3. Split AI outputs into sentences, match against episode text
-   * 4. Apply template weight to matched characters
+   * Algorithm (N-gram matching):
+   * 1. Build a Set of all N-grams (10-char sliding window) from episode text
+   * 2. For each AI output, extract N-grams and count how many exist in the episode set
+   * 3. matched ratio per AI output = matched N-grams / total N-grams in that output
+   * 4. Convert matched ratio to estimated matched characters, apply template weight
    * 5. originality = 1.0 - (weightedMatchedChars / totalChars)
-   * 6. Auto-flag isAiGenerated if originality < 0.5
+   *
+   * N-gram approach advantages over exact substring:
+   * - Partial edits only break a few N-grams, not entire sentences
+   * - No false positives from very short common phrases (N=10 is specific enough)
+   * - Handles sentence restructuring gracefully
    */
   async recalculate(workId: string): Promise<void> {
     // 1. Get all AI generation history with template info
@@ -61,12 +72,13 @@ export class OriginalityService {
       return;
     }
 
+    // 3. Build N-gram set from all episode text
     const allEpisodeText = episodes.map((ep) => ep.content).join('\n');
+    const episodeNgrams = this.buildNgramSet(allEpisodeText);
 
-    // 3. Extract AI texts grouped by template weight
+    // 4. Match each AI output against episode N-grams
     let weightedMatchedChars = 0;
     let totalMatchedChars = 0;
-    const alreadyCounted = new Set<string>();
 
     for (const h of histories) {
       const msgs = h.messages as Array<{ role: string; content: string }>;
@@ -78,30 +90,34 @@ export class OriginalityService {
       for (const msg of msgs) {
         if (msg.role !== 'assistant' || !msg.content) continue;
         const text = msg.content.trim();
-        if (text.length < 50) continue;
+        if (text.length < NGRAM_SIZE) continue;
 
-        // Split into sentences for more granular matching
-        const sentences = this.splitIntoSentences(text);
+        // Calculate match ratio for this AI output
+        const aiNgrams = this.extractNgrams(text);
+        if (aiNgrams.length === 0) continue;
 
-        for (const sentence of sentences) {
-          if (sentence.length < 20) continue; // Skip very short sentences
-          if (alreadyCounted.has(sentence)) continue;
-
-          if (allEpisodeText.includes(sentence)) {
-            totalMatchedChars += sentence.length;
-            weightedMatchedChars += sentence.length * weight;
-            alreadyCounted.add(sentence);
-          }
+        let matched = 0;
+        for (const ng of aiNgrams) {
+          if (episodeNgrams.has(ng)) matched++;
         }
+
+        const matchRatio = matched / aiNgrams.length;
+        const estimatedMatchedChars = Math.round(text.length * matchRatio);
+
+        totalMatchedChars += estimatedMatchedChars;
+        weightedMatchedChars += estimatedMatchedChars * weight;
       }
     }
 
-    // 4. Calculate ratios
+    // 5. Cap at total chars (can't exceed 100% AI)
+    weightedMatchedChars = Math.min(weightedMatchedChars, totalChars);
+
+    // 6. Calculate ratios
     const aiRatio = weightedMatchedChars / Math.max(totalChars, 1);
     const originality = Math.max(0, Math.min(1, 1.0 - aiRatio));
     const isAiGenerated = aiRatio >= AI_RATIO_THRESHOLD;
 
-    // 5. Update work
+    // 7. Update work
     await this.prisma.work.update({
       where: { id: workId },
       data: { originality, isAiGenerated },
@@ -116,31 +132,28 @@ export class OriginalityService {
   }
 
   /**
-   * Split text into sentences using Japanese punctuation.
-   * Returns sentences of reasonable length for matching.
+   * Build a Set of N-grams from text for O(1) lookup.
+   * Strips whitespace/newlines from N-grams to handle formatting differences.
    */
-  private splitIntoSentences(text: string): string[] {
-    // Split on Japanese sentence-ending punctuation, keeping delimiters
-    const raw = text.split(/(?<=[。！？」』）\n])/);
-    const sentences: string[] = [];
-    let buffer = '';
-
-    for (const part of raw) {
-      buffer += part;
-      // Flush when buffer is long enough (30+ chars) or at end
-      if (buffer.length >= 30) {
-        sentences.push(buffer.trim());
-        buffer = '';
-      }
+  private buildNgramSet(text: string): Set<string> {
+    const normalized = text.replace(/\s+/g, '');
+    const set = new Set<string>();
+    for (let i = 0; i <= normalized.length - NGRAM_SIZE; i++) {
+      set.add(normalized.slice(i, i + NGRAM_SIZE));
     }
-    // Remaining buffer — merge with last sentence or add as new
-    if (buffer.trim().length >= 20) {
-      sentences.push(buffer.trim());
-    } else if (buffer.trim() && sentences.length > 0) {
-      sentences[sentences.length - 1] += buffer;
-    }
+    return set;
+  }
 
-    return sentences;
+  /**
+   * Extract N-grams from text as an array (preserving duplicates for ratio calculation).
+   */
+  private extractNgrams(text: string): string[] {
+    const normalized = text.replace(/\s+/g, '');
+    const ngrams: string[] = [];
+    for (let i = 0; i <= normalized.length - NGRAM_SIZE; i++) {
+      ngrams.push(normalized.slice(i, i + NGRAM_SIZE));
+    }
+    return ngrams;
   }
 
   /**
