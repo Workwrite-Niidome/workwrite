@@ -37,7 +37,7 @@ function getNotificationLink(n: NotificationItem): string | null {
     case 'comment':
       return data.episodeId ? `/read/${data.episodeId}` : data.workId ? `/works/${data.workId}` : null;
     case 'review':
-      return data.workId ? `/works/${data.workId}` : null;
+      return data.workId ? `/dashboard/works/${data.workId}` : null;
     case 'score_ready':
       return data.workId ? `/dashboard/works/${data.workId}` : null;
     case 'reaction':

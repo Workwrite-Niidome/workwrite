@@ -123,6 +123,9 @@ export function NotificationDropdown() {
                     } else if (n.type === 'editor_mode') {
                       const workId = (n as any).data?.workId;
                       router.push(workId ? `/works/${workId}/edit` : '/dashboard');
+                    } else if (n.type === 'review') {
+                      const workId = (n as any).data?.workId;
+                      router.push(workId ? `/dashboard/works/${workId}` : '/notifications');
                     } else {
                       router.push('/notifications');
                     }

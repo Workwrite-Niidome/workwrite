@@ -2,6 +2,7 @@ import { Injectable, NotFoundException, ForbiddenException, Logger } from '@nest
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostsService } from '../posts/posts.service';
 import { CreditService } from '../billing/credit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PostType } from '@prisma/client';
 
 const REVIEW_REWARD_CR = 5;
@@ -15,6 +16,7 @@ export class ReviewsService {
     private prisma: PrismaService,
     private postsService: PostsService,
     private creditService: CreditService,
+    private notificationsService: NotificationsService,
   ) {}
 
   async create(userId: string, data: { workId: string; content: string }) {
@@ -29,7 +31,7 @@ export class ReviewsService {
       create: { userId, workId: data.workId, content: data.content },
       include: {
         user: { select: { id: true, name: true, displayName: true, avatarUrl: true } },
-        work: { select: { id: true, title: true } },
+        work: { select: { id: true, title: true, authorId: true } },
         _count: { select: { helpfuls: true } },
       },
     });
@@ -42,6 +44,17 @@ export class ReviewsService {
         content: `『${title}』にレビューを投稿しました\n\n${excerpt}${data.content.length > 100 ? '...' : ''}`,
         workId: data.workId,
       }).catch((e) => this.logger.warn(`Auto-post failed: ${e}`));
+
+      // Notify the work author
+      if (review.work?.authorId && review.work.authorId !== userId) {
+        const reviewerName = review.user.displayName || review.user.name;
+        this.notificationsService.createNotification(review.work.authorId, {
+          type: 'review',
+          title: `${reviewerName}さんが『${review.work.title}』にレビューを投稿しました`,
+          body: data.content.slice(0, 100) + (data.content.length > 100 ? '...' : ''),
+          data: { workId: data.workId },
+        }).catch((e) => this.logger.warn(`Review notification failed: ${e}`));
+      }
 
       // Grant Cr reward for new review (minimum length required)
       if (data.content.length >= MIN_REVIEW_LENGTH) {
