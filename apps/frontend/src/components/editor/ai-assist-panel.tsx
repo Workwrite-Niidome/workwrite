@@ -56,7 +56,11 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
   // Tab: 'assist' (text generation) or 'consult' (chat consultation)
   const [activeTab, setActiveTab] = useState<'assist' | 'consult'>('consult');
 
-  // Consultation chat state
+  // Consultation guided flow state
+  const [consultStep, setConsultStep] = useState<'category' | 'detail' | 'extra' | 'confirm' | 'done'>('category');
+  const [consultCategory, setConsultCategory] = useState<string | null>(null);
+  const [consultDetail, setConsultDetail] = useState<string | null>(null);
+  const [consultExtra, setConsultExtra] = useState('');
   const [consultInput, setConsultInput] = useState('');
   const consultEndRef = useRef<HTMLDivElement | null>(null);
 
@@ -452,36 +456,91 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
     reset();
   }
 
-  async function handleConsultSend() {
-    const msg = consultInput.trim();
-    if (!msg || isStreaming) return;
+  // Guided consultation categories & details
+  const CONSULT_CATEGORIES = [
+    { id: 'improve', label: 'この話の改善点を知りたい', icon: '📝' },
+    { id: 'plot', label: 'ストーリーをよくしたい', icon: '📖' },
+    { id: 'dialogue', label: '魅力的なセリフを作りたい', icon: '💬' },
+    { id: 'naming', label: 'キャラクターの名前を提案して', icon: '🏷' },
+    { id: 'other', label: 'その他の相談', icon: '✨' },
+  ];
 
+  const CONSULT_DETAILS: Record<string, { id: string; label: string }[]> = {
+    improve: [
+      { id: 'overall', label: '全体的に見てほしい' },
+      { id: 'readability', label: '文章の読みやすさ' },
+      { id: 'character_consistency', label: 'キャラの一貫性' },
+      { id: 'pacing', label: 'テンポ・構成' },
+    ],
+    plot: [
+      { id: 'development', label: 'プロットの展開案がほしい' },
+      { id: 'foreshadowing', label: '伏線のアイデアがほしい' },
+      { id: 'climax', label: '盛り上がりが足りない' },
+      { id: 'ending', label: '結末に悩んでいる' },
+    ],
+    dialogue: [
+      { id: 'natural', label: 'もっと自然にしたい' },
+      { id: 'personality', label: 'キャラらしさを出したい' },
+      { id: 'emotional', label: '感情を込めたい' },
+      { id: 'tension', label: '緊張感のあるやり取り' },
+    ],
+    naming: [
+      { id: 'japanese', label: '和風の名前' },
+      { id: 'western', label: '洋風の名前' },
+      { id: 'fantasy', label: 'ファンタジー風' },
+      { id: 'modern', label: '現代的な名前' },
+    ],
+  };
+
+  function buildConsultPrompt(): string {
+    const cat = CONSULT_CATEGORIES.find(c => c.id === consultCategory);
+    const det = consultDetail ? CONSULT_DETAILS[consultCategory || '']?.find(d => d.id === consultDetail) : null;
+    let prompt = cat ? cat.label : '';
+    if (det) prompt += `（${det.label}）`;
+    if (consultExtra.trim()) prompt += `\n\n補足: ${consultExtra.trim()}`;
+    return prompt;
+  }
+
+  function handleConsultConfirm() {
+    const prompt = buildConsultPrompt();
+    const vars = buildContextVars();
+    vars.user_prompt = prompt;
+
+    setConsultStep('done');
+    setChatMessages([]);
+    setCurrentSlug('free-prompt');
+    setNewChars(null);
+    reset();
+    generate('free-prompt', vars, undefined, 'normal');
+  }
+
+  function handleConsultFollowUp() {
+    const msg = consultInput.trim();
+    if (!msg || isStreaming || !conversationId) return;
     setConsultInput('');
 
-    // Use existing AI assist infrastructure: free-prompt template + normal mode (Haiku, 1cr)
     const vars = buildContextVars();
     vars.user_prompt = msg;
+    setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
+    generateFollowUp({
+      templateSlug: 'free-prompt',
+      variables: vars,
+      aiMode: 'normal',
+      conversationId: conversationId || undefined,
+      followUpMessage: msg,
+      episodeId,
+    });
+  }
 
-    if (conversationId) {
-      // Follow-up in existing conversation
-      setChatMessages((prev) => [...prev, { role: 'user', content: msg }]);
-      setCurrentSlug('free-prompt');
-      generateFollowUp({
-        templateSlug: 'free-prompt',
-        variables: vars,
-        aiMode: 'normal',
-        conversationId: conversationId || undefined,
-        followUpMessage: msg,
-        episodeId,
-      });
-    } else {
-      // New conversation
-      setChatMessages([]);
-      setCurrentSlug('free-prompt');
-      setNewChars(null);
-      reset();
-      generate('free-prompt', vars, undefined, 'normal');
-    }
+  function handleConsultReset() {
+    setConsultStep('category');
+    setConsultCategory(null);
+    setConsultDetail(null);
+    setConsultExtra('');
+    setConsultInput('');
+    setChatMessages([]);
+    setNewChars(null);
+    reset();
   }
 
   function handleInsertFromHistory(item: AiGenerationHistoryItem) {
@@ -876,43 +935,124 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
           </div>
         )}
 
-        {/* ===== CONSULT TAB ===== */}
+        {/* ===== CONSULT TAB — Guided chatbot flow ===== */}
         {activeTab === 'consult' && (
-          <div className="space-y-3 flex flex-col h-full">
-            {!hasConversation && (
-              <div className="space-y-2">
-                <p className="text-xs text-muted-foreground leading-relaxed">
-                  執筆中のちょっとした相談に。作品の情報を踏まえて回答します。
-                </p>
-                <div className="flex flex-wrap gap-1.5">
-                  {['この話の改善点は？', 'プロットの展開案を出して', 'キャラの名前を提案して', 'このセリフをもっと自然に'].map((example) => (
+          <div className="space-y-3">
+
+            {/* Step 1: Category selection */}
+            {consultStep === 'category' && (
+              <div className="space-y-3 animate-in fade-in duration-200">
+                <p className="text-xs text-muted-foreground">相談したいことは何ですか？</p>
+                <div className="space-y-1.5">
+                  {CONSULT_CATEGORIES.map((cat) => (
                     <button
-                      key={example}
-                      onClick={() => setConsultInput(example)}
-                      className="text-[10px] px-2.5 py-1 rounded-full border border-border text-muted-foreground hover:border-primary/40 hover:text-foreground transition-colors"
+                      key={cat.id}
+                      onClick={() => {
+                        setConsultCategory(cat.id);
+                        setConsultStep(cat.id === 'other' ? 'extra' : 'detail');
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left"
                     >
-                      {example}
+                      <span className="text-sm">{cat.icon}</span>
+                      <span className="text-xs font-medium">{cat.label}</span>
                     </button>
                   ))}
                 </div>
               </div>
             )}
 
-            {/* Conversation view — reuses same chatMessages/result/isStreaming as assist tab */}
-            {hasConversation && (
-              <div className="space-y-2">
-                <div className="flex items-center justify-end gap-1">
-                  {isStreaming && (
-                    <button onClick={abort} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted">
-                      <StopCircle className="h-3.5 w-3.5" /> 停止
+            {/* Step 2: Detail selection */}
+            {consultStep === 'detail' && consultCategory && CONSULT_DETAILS[consultCategory] && (
+              <div className="space-y-3 animate-in fade-in duration-200">
+                <button onClick={() => { setConsultStep('category'); setConsultCategory(null); }} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                  ← 戻る
+                </button>
+                <p className="text-xs text-muted-foreground">もう少し教えてください</p>
+                <div className="space-y-1.5">
+                  {CONSULT_DETAILS[consultCategory].map((det) => (
+                    <button
+                      key={det.id}
+                      onClick={() => { setConsultDetail(det.id); setConsultStep('extra'); }}
+                      className="w-full px-3 py-2.5 rounded-lg border border-border hover:border-primary/40 hover:bg-primary/5 transition-colors text-left text-xs font-medium"
+                    >
+                      {det.label}
                     </button>
+                  ))}
+                </div>
+              </div>
+            )}
+
+            {/* Step 3: Optional extra detail */}
+            {consultStep === 'extra' && (
+              <div className="space-y-3 animate-in fade-in duration-200">
+                <button onClick={() => { setConsultStep(consultCategory === 'other' ? 'category' : 'detail'); setConsultDetail(null); }} className="text-[10px] text-muted-foreground hover:text-foreground flex items-center gap-0.5">
+                  ← 戻る
+                </button>
+                <p className="text-xs text-muted-foreground">
+                  {consultCategory === 'other' ? '相談内容を教えてください' : '補足があれば入力してください（任意）'}
+                </p>
+                <textarea
+                  value={consultExtra}
+                  onChange={(e) => setConsultExtra(e.target.value)}
+                  placeholder={consultCategory === 'other' ? '例: 主人公の性格をもっと際立たせたい...' : '例: 特に3話目の展開が気になっています...'}
+                  rows={3}
+                  className="w-full text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                />
+                <Button
+                  size="sm"
+                  onClick={() => setConsultStep('confirm')}
+                  disabled={consultCategory === 'other' && !consultExtra.trim()}
+                  className="w-full text-xs"
+                >
+                  {consultCategory === 'other' ? '確認へ進む' : consultExtra.trim() ? '確認へ進む' : 'このまま相談する'}
+                </Button>
+              </div>
+            )}
+
+            {/* Step 4: Credit confirmation */}
+            {consultStep === 'confirm' && (
+              <div className="space-y-3 animate-in fade-in duration-200">
+                <p className="text-xs text-muted-foreground">以下の内容でAIに相談します</p>
+                <div className="p-3 rounded-lg bg-muted/50 border border-border text-xs space-y-1">
+                  <p className="font-medium">{CONSULT_CATEGORIES.find(c => c.id === consultCategory)?.label}</p>
+                  {consultDetail && (
+                    <p className="text-muted-foreground">{CONSULT_DETAILS[consultCategory || '']?.find(d => d.id === consultDetail)?.label}</p>
                   )}
-                  <button onClick={handleNewConversation} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted">
-                    <RotateCcw className="h-3.5 w-3.5" /> リセット
-                  </button>
+                  {consultExtra.trim() && (
+                    <p className="text-muted-foreground mt-1">補足: {consultExtra.trim()}</p>
+                  )}
+                </div>
+                <div className="flex gap-2">
+                  <Button size="sm" onClick={handleConsultConfirm} className="flex-1 text-xs">
+                    1cr で相談する
+                  </Button>
+                  <Button size="sm" variant="ghost" onClick={() => setConsultStep('extra')} className="text-xs">
+                    戻る
+                  </Button>
+                </div>
+              </div>
+            )}
+
+            {/* Step 5: AI response + follow-up */}
+            {consultStep === 'done' && (
+              <div className="space-y-3 animate-in fade-in duration-200">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">
+                    {CONSULT_CATEGORIES.find(c => c.id === consultCategory)?.label}
+                  </p>
+                  <div className="flex items-center gap-1">
+                    {isStreaming && (
+                      <button onClick={abort} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted">
+                        <StopCircle className="h-3.5 w-3.5" /> 停止
+                      </button>
+                    )}
+                    <button onClick={handleConsultReset} className="text-xs text-muted-foreground hover:text-foreground flex items-center gap-1 px-2 py-1 rounded hover:bg-muted">
+                      <RotateCcw className="h-3.5 w-3.5" /> 新しい相談
+                    </button>
+                  </div>
                 </div>
 
-                {/* Past messages */}
+                {/* Messages */}
                 <div className="max-h-[50vh] overflow-y-auto space-y-2">
                   {chatMessages.map((msg, i) => (
                     <div key={i} className={`text-xs rounded-lg p-2.5 ${msg.role === 'user' ? 'bg-primary/5 border border-primary/20 ml-6' : 'bg-secondary/50 mr-6'}`}>
@@ -920,7 +1060,6 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                     </div>
                   ))}
 
-                  {/* Current streaming result */}
                   {(isStreaming || result) && (
                     <div className="text-xs rounded-lg p-2.5 bg-secondary/50 mr-6">
                       {isStreaming && !result ? (
@@ -938,34 +1077,36 @@ export function AiAssistPanel({ workId, episodeId, currentContent, currentTitle,
                   )}
                   <div ref={consultEndRef} />
                 </div>
+
+                {/* Follow-up input */}
+                {!isStreaming && conversationId && (
+                  <div className="flex gap-1.5 pt-2 border-t border-border">
+                    <textarea
+                      value={consultInput}
+                      onChange={(e) => setConsultInput(e.target.value)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !isStreaming) {
+                          e.preventDefault();
+                          handleConsultFollowUp();
+                        }
+                      }}
+                      placeholder="続けて質問する..."
+                      rows={2}
+                      className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
+                    />
+                    <Button size="sm" variant="default" className="self-end h-9 px-3"
+                      disabled={!consultInput.trim() || isStreaming}
+                      onClick={handleConsultFollowUp}>
+                      <Send className="h-4 w-4" />
+                    </Button>
+                  </div>
+                )}
+
+                {error && (
+                  <div className="p-3 text-xs text-destructive bg-destructive/10 rounded-lg">{error}</div>
+                )}
               </div>
             )}
-
-            {/* Input */}
-            <div className="flex gap-1.5 mt-auto">
-              <textarea
-                value={consultInput}
-                onChange={(e) => setConsultInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && consultInput.trim() && !isStreaming) {
-                    e.preventDefault();
-                    handleConsultSend();
-                  }
-                }}
-                placeholder="なんでも聞いてみましょう..."
-                rows={2}
-                className="flex-1 text-xs p-2.5 rounded-lg border border-border bg-background resize-none focus:outline-none focus:ring-1 focus:ring-ring"
-              />
-              <Button size="sm" variant="default" className="self-end h-9 px-3"
-                disabled={!consultInput.trim() || isStreaming}
-                onClick={handleConsultSend}>
-                {isStreaming ? <Loader2 className="h-4 w-4 animate-spin" /> : <Send className="h-4 w-4" />}
-              </Button>
-            </div>
-
-            <div className="flex items-center justify-between">
-              <span className="text-[10px] text-muted-foreground">1cr/回</span>
-            </div>
           </div>
         )}
 
