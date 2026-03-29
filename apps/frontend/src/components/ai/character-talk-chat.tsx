@@ -21,6 +21,7 @@ export function CharacterTalkChat({ workId, episodeId, initialCharacterId, initi
   const [mode, setMode] = useState<'companion' | 'character'>('companion');
   const [selectedCharacter, setSelectedCharacter] = useState<TalkableCharacter | null>(null);
   const [characters, setCharacters] = useState<TalkableCharacter[]>([]);
+  const [characterStatus, setCharacterStatus] = useState<string>('extracting');
   const [conversations, setConversations] = useState<ConversationSummary[]>([]);
   const [messages, setMessages] = useState<CompanionMessage[]>([]);
   const [input, setInput] = useState('');
@@ -65,13 +66,18 @@ export function CharacterTalkChat({ workId, episodeId, initialCharacterId, initi
 
     // Normal path: extract characters
     Promise.all([
-      api.getCharacterTalkCharacters(workId, episodeId).catch(() => ({ data: [] })),
+      api.getCharacterTalkCharacters(workId, episodeId).catch(() => ({ data: { characters: [], status: 'extracting' } })),
       api.getAiStatus().catch(() => ({ data: { available: false, model: '', tier: undefined } })),
       api.getCharacterTalkConversations(workId).catch(() => ({ data: [] })),
     ]).then(([charsRes, statusRes, convsRes]) => {
-      const chars = (charsRes as any).data || [];
-      const charList: TalkableCharacter[] = Array.isArray(chars) ? chars : [];
+      const charsData = (charsRes as any).data || {};
+      // Handle both old format (array) and new format ({ characters, status })
+      const charList: TalkableCharacter[] = Array.isArray(charsData)
+        ? charsData
+        : Array.isArray(charsData.characters) ? charsData.characters : [];
+      const status = charsData.status || (charList.length > 0 ? 'ready' : 'extracting');
       setCharacters(charList);
+      setCharacterStatus(status);
 
       const statusData = (statusRes as any).data || statusRes;
       if (statusData.tier?.credits) {
@@ -255,11 +261,24 @@ export function CharacterTalkChat({ workId, episodeId, initialCharacterId, initi
           </button>
 
           {/* Character cards */}
-          {characters.length === 0 && (
+          {characters.length === 0 && characterStatus === 'extracting' && (
             <div className="text-center py-6 text-muted-foreground">
               <Users className="h-6 w-6 mx-auto mb-2 animate-pulse" />
               <p className="text-xs">登場人物を抽出中</p>
               <p className="text-[10px] mt-1">完了までお待ちください</p>
+            </div>
+          )}
+          {characters.length === 0 && (characterStatus === 'disabled' || characterStatus === 'not_public') && (
+            <div className="text-center py-6 text-muted-foreground">
+              <Lock className="h-6 w-6 mx-auto mb-2" />
+              <p className="text-xs">この作品ではキャラクタートークを利用できません</p>
+              <p className="text-[10px] mt-1">作者がキャラクター情報を公開していません</p>
+            </div>
+          )}
+          {characters.length === 0 && characterStatus === 'no_episode' && (
+            <div className="text-center py-6 text-muted-foreground">
+              <Users className="h-6 w-6 mx-auto mb-2" />
+              <p className="text-xs">エピソードを読むとキャラクタートークが使えます</p>
             </div>
           )}
           {characters.length > 0 && (

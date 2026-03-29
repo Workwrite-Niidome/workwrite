@@ -479,13 +479,23 @@ ${structuredContext ? `\n${structuredContext}\n` : ''}${workText ? `\n作品テ�
       }),
       this.prisma.storyCharacter.findMany({
         where: { workId },
-        select: { id: true, name: true, role: true, personality: true, speechStyle: true },
+        select: { id: true, name: true, role: true, personality: true, speechStyle: true, isPublic: true },
         orderBy: { sortOrder: 'asc' },
       }),
     ]);
 
     if (!work) throw new NotFoundException('Work not found');
-    if (!work.enableCharacterTalk) return [];
+    if (!work.enableCharacterTalk) {
+      return { characters: [], status: 'disabled' as const };
+    }
+
+    // Filter to public characters only
+    const publicCharacters = allCharacters.filter((c) => c.isPublic !== false);
+
+    // If author has characters but all are non-public
+    if (allCharacters.length > 0 && publicCharacters.length === 0) {
+      return { characters: [], status: 'not_public' as const };
+    }
 
     // Use specified episode, or fall back to most recently read
     let targetEpisode: typeof work.episodes[number] | null = null;
@@ -512,31 +522,31 @@ ${structuredContext ? `\n${structuredContext}\n` : ''}${workText ? `\n作品テ�
     }
 
     if (!targetEpisode) {
-      return [];
+      return { characters: [], status: 'no_episode' as const };
     }
 
     // Priority 1: extractedCharacters (dedicated Haiku extraction — most accurate)
     const extractedChars = targetEpisode.extractedCharacters as any[] | null;
     if (Array.isArray(extractedChars) && extractedChars.length > 0) {
       const names = new Set(extractedChars.map((c: any) => c.name).filter(Boolean));
-      const matched = this.matchStoryCharacters(allCharacters, names);
-      this.logger.log(`[charTalk] ep=${targetEpisode.id} extracted=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] matched=${matched.length}`);
-      return matched;
+      const matched = this.matchStoryCharacters(publicCharacters, names);
+      this.logger.log(`[charTalk] ep=${targetEpisode.id} extracted=[${[...names].join(',')}] storyChars=[${publicCharacters.map(c=>c.name).join(',')}] matched=${matched.length}`);
+      return { characters: matched, status: 'ready' as const };
     }
 
     // Priority 2: episodeAnalysis.characters (from scoring, free fallback)
     const analysisChars = targetEpisode.aiAnalysis?.characters as any[] | null;
     if (Array.isArray(analysisChars) && analysisChars.length > 0) {
       const names = new Set(analysisChars.map((c: any) => c.name).filter(Boolean));
-      this.logger.log(`[charTalk] ep=${targetEpisode.id} analysis=[${[...names].join(',')}] storyChars=[${allCharacters.map(c=>c.name).join(',')}] (fallback)`);
+      this.logger.log(`[charTalk] ep=${targetEpisode.id} analysis=[${[...names].join(',')}] storyChars=[${publicCharacters.map(c=>c.name).join(',')}] (fallback)`);
       this.characterExtraction.triggerIfNeeded(targetEpisode.id);
-      return this.matchStoryCharacters(allCharacters, names);
+      return { characters: this.matchStoryCharacters(publicCharacters, names), status: 'ready' as const };
     }
 
     // Neither exists — trigger extraction, return empty for now
     this.logger.log(`[charTalk] ep=${targetEpisode.id} no character data, triggering extraction`);
     this.characterExtraction.triggerIfNeeded(targetEpisode.id);
-    return [];
+    return { characters: [], status: 'extracting' as const };
   }
 
   /** Normalize a name for matching: strip spaces, parenthetical readings, punctuation */

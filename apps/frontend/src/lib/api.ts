@@ -269,6 +269,32 @@ class ApiClient {
     return this.request<{ data: WorkReaderStats }>(`/works/${id}/reader-stats`);
   }
 
+  /** Download work export as file */
+  async exportWork(workId: string, format: 'txt' | 'epub' | 'html', includeDrafts = false): Promise<void> {
+    const token = this.getToken();
+    const params = new URLSearchParams({ format });
+    if (includeDrafts) params.set('includeDrafts', 'true');
+    const res = await fetch(`${API_BASE}/works/${workId}/export?${params}`, {
+      headers: token ? { Authorization: `Bearer ${token}` } : {},
+    });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: { message: 'エクスポートに失敗しました' } }));
+      throw new Error(err.error?.message || 'エクスポートに失敗しました');
+    }
+    const blob = await res.blob();
+    const disposition = res.headers.get('Content-Disposition') || '';
+    const filenameMatch = disposition.match(/filename\*=UTF-8''(.+)/);
+    const filename = filenameMatch ? decodeURIComponent(filenameMatch[1]) : `export.${format}`;
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    document.body.removeChild(a);
+    URL.revokeObjectURL(url);
+  }
+
   // Creation Wizard
   async saveCreationPlan(workId: string, plan: {
     characters?: any[];
@@ -1169,7 +1195,7 @@ class ApiClient {
   // Character Talk
   async getCharacterTalkCharacters(workId: string, episodeId?: string) {
     const qs = episodeId ? `?episodeId=${episodeId}` : '';
-    return this.request<{ data: TalkableCharacter[] }>(`/ai/character-talk/${workId}/characters${qs}`);
+    return this.request<{ data: { characters: TalkableCharacter[]; status: 'ready' | 'extracting' | 'disabled' | 'not_public' | 'no_episode' } }>(`/ai/character-talk/${workId}/characters${qs}`);
   }
 
   async getCharacterTalkConversations(workId: string) {
