@@ -109,34 +109,43 @@ export default function ExperiencePage() {
 
       if (cancelled) return;
 
-      // Get intro text from first episode's opening — preserve paragraph structure
+      // Get AI-curated intro text from build-status (generated during buildWorld)
       let introParas: string[] = [];
       try {
-        const workRes = await api.getEpisodes(workId);
-        const eps = ((workRes as any)?.data ?? workRes ?? []) as any[];
-        const sorted = eps.sort((a: any, b: any) => a.orderIndex - b.orderIndex);
-        if (sorted.length > 0) {
-          const firstEp = sorted[0];
-          let content = firstEp.content;
-          if (!content || content.length < 50) {
-            const epRes = await api.getEpisode(firstEp.id);
-            content = (epRes as any)?.data?.content ?? (epRes as any)?.content ?? '';
-          }
-          if (content) {
-            // Use the novel's own opening — it's already the best intro
-            const paras = content.split(/\n{2,}/);
-            for (const para of paras) {
-              const t = para.trim();
-              if (!t) continue;
-              if (t === '***' || t === '---') break;
-              introParas.push(t);
-              if (introParas.length >= 3) break;
-            }
-          }
+        const status = await apiGet('/build-status');
+        if (status.data?.introText && Array.isArray(status.data.introText)) {
+          introParas = status.data.introText;
         }
       } catch {}
 
-      // Fallback
+      // Fallback: fetch first episode opening
+      if (introParas.length === 0) {
+        try {
+          const workRes = await api.getEpisodes(workId);
+          const eps = ((workRes as any)?.data ?? workRes ?? []) as any[];
+          const sorted = eps.sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+          if (sorted.length > 0) {
+            const firstEp = sorted[0];
+            let content = firstEp.content;
+            if (!content || content.length < 50) {
+              const epRes = await api.getEpisode(firstEp.id);
+              content = (epRes as any)?.data?.content ?? (epRes as any)?.content ?? '';
+            }
+            if (content) {
+              const paras = content.split(/\n{2,}/);
+              for (const para of paras) {
+                const t = para.trim();
+                if (!t) continue;
+                if (t === '***' || t === '---') break;
+                introParas.push(t);
+                if (introParas.length >= 3) break;
+              }
+            }
+          }
+        } catch {}
+      }
+
+      // Last resort fallback
       if (introParas.length === 0) {
         introParas = [`${work?.title || '物語'}の世界が広がっている。`];
       }

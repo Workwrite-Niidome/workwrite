@@ -29,7 +29,18 @@ export class WorldBuilderService {
       this.prisma.storyEvent.count({ where: { workId } }),
       this.prisma.characterSchedule.count({ where: { workId } }),
     ]);
-    return { locations, events, schedules };
+
+    // Retrieve stored intro text
+    let introText: string[] | null = null;
+    const introRendering = await this.prisma.locationRendering.findFirst({
+      where: { location: { workId }, timeOfDay: 'intro' },
+    });
+    if (introRendering) {
+      const data = introRendering.sensoryText as any;
+      introText = data?.paragraphs || null;
+    }
+
+    return { locations, events, schedules, introText };
   }
 
   /**
@@ -159,7 +170,10 @@ export class WorldBuilderService {
         scheduleCount = schedules.length;
       }
 
-      // Step 6: Split episodes into StoryEvents
+      // Step 6: Generate intro text with AI
+      await this.generateIntroText(workId, episodes, workContext);
+
+      // Step 7: Split episodes into StoryEvents
       const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
 
       // Mark as ready
@@ -450,6 +464,124 @@ export class WorldBuilderService {
       this.logger.warn(`AI rendering failed for "${loc.name}": ${err?.message}`);
       return this.generateBasicRenderings(loc);
     }
+  }
+
+  /**
+   * Generate an atmospheric intro from the novel's opening text.
+   * AI selects the best portion and natural cutoff point for entering the story world.
+   * Stored as a special LocationRendering with timeOfDay='intro' on the first location.
+   */
+  private async generateIntroText(
+    workId: string,
+    episodes: { id: string; orderIndex: number; content: string | null }[],
+    workContext?: { genre?: string; settingEra?: string },
+  ): Promise<void> {
+    const firstEp = episodes[0];
+    if (!firstEp?.content) return;
+
+    // Get first location to attach intro rendering to
+    const firstLocation = await this.prisma.worldLocation.findFirst({
+      where: { workId },
+      orderBy: { createdAt: 'asc' },
+    });
+    if (!firstLocation) return;
+
+    const opening = firstEp.content.slice(0, 3000);
+
+    try {
+      const apiKey = await this.aiSettings.getApiKey();
+      if (!apiKey) {
+        await this.saveFallbackIntro(firstLocation.id, opening);
+        return;
+      }
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model: HAIKU,
+          max_tokens: 600,
+          system: [
+            'あなたは小説のインタラクティブ体験の導入演出を設計するアシスタントです。',
+            '',
+            '小説の冒頭テキストを受け取り、読者が「物語の世界に入る」前に表示する導入文を構成してください。',
+            '',
+            'ルール:',
+            '- 原文をそのまま活かす。創作・要約・改変はしない',
+            '- 読者を物語の空気に引き込む自然な切れ目を見つける',
+            '- 短すぎず長すぎず（2-4段落が理想）',
+            '- 段落の途中で切らない。文の途中で切らない',
+            '- セリフ（「」）が始まる直前で止めるのが自然なことが多い',
+            '- 導入として余韻が残る位置を選ぶ',
+            '',
+            'JSON配列で返してください。各要素が1段落です。',
+            '例: ["最初の段落。", "二番目の段落。"]',
+          ].join('\n'),
+          messages: [{
+            role: 'user',
+            content: [
+              workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
+              workContext?.settingEra ? `世界観: ${workContext.settingEra}` : '',
+              '',
+              '以下の冒頭テキストから導入文を構成してください:',
+              '',
+              opening,
+            ].filter(Boolean).join('\n'),
+          }],
+        }),
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`Intro generation failed: HTTP ${response.status}`);
+        await this.saveFallbackIntro(firstLocation.id, opening);
+        return;
+      }
+
+      const data = await response.json();
+      const text = data?.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\[[\s\S]*\]/);
+      if (!jsonMatch) {
+        await this.saveFallbackIntro(firstLocation.id, opening);
+        return;
+      }
+
+      const paragraphs = JSON.parse(jsonMatch[0]) as string[];
+      if (!Array.isArray(paragraphs) || paragraphs.length === 0) {
+        await this.saveFallbackIntro(firstLocation.id, opening);
+        return;
+      }
+
+      await this.prisma.locationRendering.upsert({
+        where: { locationId_timeOfDay: { locationId: firstLocation.id, timeOfDay: 'intro' } },
+        create: { locationId: firstLocation.id, timeOfDay: 'intro', sensoryText: { paragraphs } },
+        update: { sensoryText: { paragraphs } },
+      });
+
+      this.logger.log(`Intro generated: ${paragraphs.length} paragraphs`);
+    } catch (err: any) {
+      this.logger.warn(`Intro generation failed: ${err?.message}`);
+      await this.saveFallbackIntro(firstLocation.id, opening);
+    }
+  }
+
+  private async saveFallbackIntro(locationId: string, opening: string): Promise<void> {
+    // Fallback: take first 3 paragraphs from opening as-is
+    const paragraphs = opening.split(/\n{2,}/)
+      .map(p => p.trim())
+      .filter(p => p && p !== '***' && p !== '---')
+      .slice(0, 3);
+
+    if (paragraphs.length === 0) return;
+
+    await this.prisma.locationRendering.upsert({
+      where: { locationId_timeOfDay: { locationId, timeOfDay: 'intro' } },
+      create: { locationId, timeOfDay: 'intro', sensoryText: { paragraphs } },
+      update: { sensoryText: { paragraphs } },
+    });
   }
 
   /**
