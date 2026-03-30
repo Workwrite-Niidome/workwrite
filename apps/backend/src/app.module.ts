@@ -42,6 +42,7 @@ import { ReactionsModule } from './reactions/reactions.module';
 import { AnnouncementsModule } from './announcements/announcements.module';
 import { WorkExportModule } from './work-export/work-export.module';
 import { OriginalityModule } from './originality/originality.module';
+import { InteractiveNovelModule } from './interactive-novel/interactive-novel.module';
 import { HealthController } from './health.controller';
 
 @Module({
@@ -92,6 +93,7 @@ import { HealthController } from './health.controller';
     AnnouncementsModule,
     WorkExportModule,
     OriginalityModule,
+    InteractiveNovelModule,
   ],
   controllers: [HealthController],
 })

@@ -7,6 +7,6 @@ import { CharacterExtractionService } from './character-extraction.service';
 @Module({
   controllers: [CharacterTalkController],
   providers: [CharacterTalkService, CharacterTalkRevenueService, CharacterExtractionService],
-  exports: [CharacterExtractionService],
+  exports: [CharacterExtractionService, CharacterTalkService],
 })
 export class CharacterTalkModule {}
