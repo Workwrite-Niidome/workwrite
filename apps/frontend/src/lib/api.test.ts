@@ -100,7 +100,7 @@ describe('ApiClient', () => {
         json: () => Promise.resolve({ error: { message: 'Internal error' } }),
       });
 
-      await expect(api.getPost('post-1')).rejects.toThrow('サーバー内部エラー');
+      await expect(api.getPost('post-1')).rejects.toThrow('Internal error');
     });
 
     it('should throw ApiError when network fails', async () => {

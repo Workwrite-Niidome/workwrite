@@ -18,6 +18,7 @@ import { ScoreBadge } from '@/components/scoring/score-badge';
 import { ShareScoreButton } from '@/components/scoring/share-score-button';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { OriginalityBadge } from '@/components/originality/originality-badge';
+import { ExportDialog } from '@/components/work-export/export-dialog';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -525,6 +526,13 @@ export default function WorkDetailPage() {
             </Link>
           )}
         </div>
+
+        {/* Author-only export */}
+        {user?.id === work.author.id && (
+          <div className="flex justify-end">
+            <ExportDialog workId={workId} workTitle={work.title} />
+          </div>
+        )}
 
         {/* Author-only analytics */}
         {user?.id === work.author.id && readerStats && (

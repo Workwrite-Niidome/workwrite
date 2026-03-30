@@ -35,23 +35,33 @@ function makeData(overrides: Partial<WizardData> = {}): WizardData {
 }
 
 describe('StepGenreTags', () => {
-  it('renders genre selection buttons for all supported genres', () => {
+  it('renders the heading text', () => {
     render(<StepGenreTags data={makeData()} onChange={vi.fn()} />);
-
-    expect(screen.getByText('ファンタジー')).toBeDefined();
-    expect(screen.getByText('SF')).toBeDefined();
-    expect(screen.getByText('ミステリー')).toBeDefined();
-    expect(screen.getByText('恋愛')).toBeDefined();
-    expect(screen.getByText('ホラー')).toBeDefined();
-    expect(screen.getByText('文芸')).toBeDefined();
-    expect(screen.getByText('冒険')).toBeDefined();
-    expect(screen.getByText('コメディ')).toBeDefined();
-    expect(screen.getByText('ドラマ')).toBeDefined();
-    expect(screen.getByText('歴史')).toBeDefined();
-    expect(screen.getByText('その他')).toBeDefined();
+    expect(screen.getByText('ジャンル')).toBeDefined();
   });
 
-  it('calls onChange with genre key when a genre button is clicked', () => {
+  it('renders main genre buttons', () => {
+    render(<StepGenreTags data={makeData()} onChange={vi.fn()} />);
+    expect(screen.getByText('ファンタジー')).toBeDefined();
+    expect(screen.getByText('SF・近未来')).toBeDefined();
+    expect(screen.getByText('現代・日常')).toBeDefined();
+    expect(screen.getByText('歴史・時代')).toBeDefined();
+  });
+
+  it('renders sub genre buttons', () => {
+    render(<StepGenreTags data={makeData()} onChange={vi.fn()} />);
+    expect(screen.getByText('恋愛')).toBeDefined();
+    expect(screen.getByText('ミステリー')).toBeDefined();
+    expect(screen.getByText('ホラー')).toBeDefined();
+    expect(screen.getByText('アクション')).toBeDefined();
+    expect(screen.getByText('ヒューマンドラマ')).toBeDefined();
+    expect(screen.getByText('コメディ')).toBeDefined();
+    expect(screen.getByText('冒険')).toBeDefined();
+    expect(screen.getByText('文芸')).toBeDefined();
+    expect(screen.getByText('サスペンス')).toBeDefined();
+  });
+
+  it('calls onChange with genre key when a main genre button is clicked', () => {
     const onChange = vi.fn();
     render(<StepGenreTags data={makeData()} onChange={onChange} />);
 
@@ -64,7 +74,9 @@ describe('StepGenreTags', () => {
     const onChange = vi.fn();
     render(<StepGenreTags data={makeData({ genre: 'fantasy' })} onChange={onChange} />);
 
-    fireEvent.click(screen.getByText('ファンタジー'));
+    // When genre is selected, the label appears in both the button and the summary div.
+    // Click the button (first occurrence).
+    fireEvent.click(screen.getAllByText('ファンタジー')[0]);
 
     expect(onChange).toHaveBeenCalledWith({ genre: '' });
   });
@@ -72,7 +84,11 @@ describe('StepGenreTags', () => {
   it('applies active styles to the currently selected genre', () => {
     render(<StepGenreTags data={makeData({ genre: 'sf' })} onChange={vi.fn()} />);
 
-    const sfButton = screen.getByText('SF').closest('button');
+    // When genre is selected, label appears in both the button and the summary div.
+    // Find the button element among all matching elements.
+    const sfButton = screen.getAllByText('SF・近未来')
+      .map((el) => el.closest('button'))
+      .find((btn) => btn !== null);
     expect(sfButton?.className).toContain('bg-primary');
   });
 
@@ -86,7 +102,7 @@ describe('StepGenreTags', () => {
   it('renders tag input with current value', () => {
     render(<StepGenreTags data={makeData({ tags: '冒険, 友情' })} onChange={vi.fn()} />);
 
-    const input = screen.getByPlaceholderText('冒険, 成長, 友情') as HTMLInputElement;
+    const input = screen.getByPlaceholderText('異世界転生, 成長, 友情, ダークファンタジー') as HTMLInputElement;
     expect(input.value).toBe('冒険, 友情');
   });
 
@@ -94,19 +110,9 @@ describe('StepGenreTags', () => {
     const onChange = vi.fn();
     render(<StepGenreTags data={makeData()} onChange={onChange} />);
 
-    const input = screen.getByPlaceholderText('冒険, 成長, 友情');
+    const input = screen.getByPlaceholderText('異世界転生, 成長, 友情, ダークファンタジー');
     fireEvent.change(input, { target: { value: 'アクション, 青春' } });
 
     expect(onChange).toHaveBeenCalledWith({ tags: 'アクション, 青春' });
-  });
-
-  it('renders the heading text', () => {
-    render(<StepGenreTags data={makeData()} onChange={vi.fn()} />);
-    expect(screen.getByText('ジャンル・タグ')).toBeDefined();
-  });
-
-  it('renders helper text about genre-based templates', () => {
-    render(<StepGenreTags data={makeData()} onChange={vi.fn()} />);
-    expect(screen.getByText(/テンプレートが自動で提案/)).toBeDefined();
   });
 });

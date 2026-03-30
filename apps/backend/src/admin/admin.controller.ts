@@ -2,6 +2,7 @@ import {
   Controller, Get, Patch, Post, Delete, Param, Body, Query, UseGuards,
   ParseIntPipe, DefaultValuePipe, Logger, UnauthorizedException,
 } from '@nestjs/common';
+import { timingSafeEqual } from 'crypto';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { AdminService } from './admin.service';
 import { AiTierService } from '../ai-settings/ai-tier.service';
@@ -39,7 +40,9 @@ export class AdminController {
     if (!adminPassword) {
       throw new UnauthorizedException('ADMIN_PANEL_PASSWORD is not configured');
     }
-    if (body.password !== adminPassword) {
+    const input = Buffer.from(String(body.password ?? ''));
+    const expected = Buffer.from(adminPassword);
+    if (input.length !== expected.length || !timingSafeEqual(input, expected)) {
       throw new UnauthorizedException('Invalid admin password');
     }
     return { verified: true };

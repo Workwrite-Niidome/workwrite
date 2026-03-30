@@ -110,6 +110,11 @@ const defaultProps = {
 // Helpers
 // ---------------------------------------------------------------------------
 
+/** Switch to the "執筆アシスト" tab so assist-tab content is visible. */
+function switchToAssistTab() {
+  fireEvent.click(screen.getByText('執筆アシスト'));
+}
+
 /** Open the "詳細設定" (advanced settings) accordion to reveal customPrompt textarea. */
 function openAdvancedSettings() {
   const toggle = screen.getByText('詳細設定');
@@ -142,6 +147,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
   describe('initial state', () => {
     it('renders freePrompt textarea as enabled when both inputs are empty', async () => {
       render(<AiAssistPanel {...defaultProps} />);
+      switchToAssistTab();
 
       await waitFor(() => {
         expect(getFreePromptTextarea()).not.toBeDisabled();
@@ -150,6 +156,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('renders freePrompt textarea with correct initial placeholder', async () => {
       render(<AiAssistPanel {...defaultProps} />);
+      switchToAssistTab();
 
       await waitFor(() => {
         expect(getFreePromptTextarea()).toBeInTheDocument();
@@ -158,8 +165,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('renders customPrompt textarea as enabled when both inputs are empty (after opening advanced settings)', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       expect(getCustomPromptTextarea()).not.toBeDisabled();
@@ -173,8 +179,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
   describe('when freePrompt receives text', () => {
     it('disables the customPrompt textarea', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       // Capture a reference to the textarea before its placeholder changes
@@ -187,8 +192,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('changes the customPrompt placeholder to indicate mutual exclusion', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getFreePromptTextarea(), { target: { value: 'ドラゴンが登場する' } });
@@ -199,8 +203,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('keeps the freePrompt textarea enabled', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getFreePromptTextarea(), { target: { value: 'ドラゴンが登場する' } });
@@ -211,8 +214,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('re-enables customPrompt when freePrompt is cleared', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getFreePromptTextarea(), { target: { value: 'ドラゴンが登場する' } });
@@ -223,8 +225,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('re-enables customPrompt when freePrompt is whitespace-only', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getFreePromptTextarea(), { target: { value: '   ' } });
@@ -240,8 +241,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
   describe('when customPrompt receives text', () => {
     it('disables the freePrompt textarea', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
 
       // Capture freePrompt before its placeholder changes
       const freeTA = getFreePromptTextarea();
@@ -254,8 +254,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('changes the freePrompt placeholder to indicate mutual exclusion', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getCustomPromptTextarea(), { target: { value: '緊張感を高めて' } });
@@ -266,8 +265,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('keeps the customPrompt textarea enabled', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       // Capture customPrompt before placeholder potentially changes
@@ -279,8 +277,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('re-enables freePrompt when customPrompt is cleared', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
 
       // Capture freePrompt before placeholder potentially changes
       const freeTA = getFreePromptTextarea();
@@ -301,8 +298,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
   describe('cross-clearing', () => {
     it('clears customPrompt when text is typed into freePrompt', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       // Capture customPrompt reference before any placeholder changes
@@ -321,8 +317,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('clears freePrompt when text is typed into customPrompt', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
 
       // Capture freePrompt before any placeholder changes
       const freeTA = getFreePromptTextarea();
@@ -340,8 +335,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('clears customPrompt immediately when freePrompt is typed while customPrompt had a value', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       // Capture both refs before any placeholder changes
@@ -367,8 +361,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
   describe('edge cases', () => {
     it('treats whitespace-only freePrompt as empty (does not disable customPrompt)', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getFreePromptTextarea(), { target: { value: '  \n  ' } });
@@ -379,8 +372,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('treats whitespace-only customPrompt as empty (does not disable freePrompt)', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       fireEvent.change(getCustomPromptTextarea(), { target: { value: '  \t  ' } });
@@ -390,8 +382,7 @@ describe('AiAssistPanel — freePrompt / customPrompt mutual exclusion', () => {
 
     it('does not clear the other field when a whitespace-only value is entered', async () => {
       render(<AiAssistPanel {...defaultProps} />);
-
-      await waitFor(() => screen.getByText('詳細設定'));
+      switchToAssistTab();
       openAdvancedSettings();
 
       // customPrompt gets a real value first (while freePrompt is empty)

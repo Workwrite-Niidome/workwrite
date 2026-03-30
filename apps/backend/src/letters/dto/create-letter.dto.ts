@@ -1,4 +1,4 @@
-import { IsString, IsEnum, IsOptional, IsInt, Min, MaxLength } from 'class-validator';
+import { IsString, IsEnum, IsOptional, IsInt, Min, Max, MaxLength } from 'class-validator';
 import { ApiProperty } from '@nestjs/swagger';
 
 export enum LetterTypeDto {
@@ -33,5 +33,6 @@ export class CreateLetterDto {
   @IsOptional()
   @IsInt()
   @Min(1000)
+  @Max(100000)
   giftAmount?: number;
 }

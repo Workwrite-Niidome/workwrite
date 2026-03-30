@@ -47,16 +47,6 @@ export class RefreshTokenDto {
   refreshToken: string;
 }
 
-export class OAuthCallbackDto {
-  @ApiProperty()
-  @IsString()
-  code: string;
-
-  @ApiPropertyOptional()
-  @IsOptional()
-  @IsString()
-  state?: string;
-}
 
 export class AuthResponseDto {
   accessToken: string;

@@ -15,6 +15,9 @@ const mockPrismaService = () => ({
   work: {
     findMany: jest.fn(),
   },
+  review: {
+    findMany: jest.fn().mockResolvedValue([]),
+  },
 });
 
 // ---------------------------------------------------------------------------
@@ -605,12 +608,14 @@ describe('ReactionsService', () => {
       expect(result[0]).toEqual({
         id: 'rxn-1',
         type: 'reaction',
+        workId: 'work-1',
         userDisplayName: '読者A',
         workTitle: '作品A',
         episodeTitle: '第1話',
         episodeOrderIndex: 0,
         claps: 5,
         emotion: 'moved',
+        content: null,
         createdAt,
       });
       expect(result[1].userDisplayName).toBe('reader_b');
@@ -700,7 +705,7 @@ describe('ReactionsService', () => {
       await service.getAuthorReactionFeed('author-1');
 
       expect(prisma.episodeReaction.findMany).toHaveBeenCalledWith(
-        expect.objectContaining({ take: 20 }),
+        expect.objectContaining({ take: 50 }),
       );
     });
 

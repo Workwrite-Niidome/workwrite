@@ -191,13 +191,14 @@ describe('AfterwordPage', () => {
     expect(mockApi.getEpisodeReactions).toHaveBeenCalledWith('ep-3');
   });
 
-  it('should NOT auto-send reaction (no implicit API call)', async () => {
+  it('should auto-send reaction after clapping (debounced)', async () => {
     await renderAfterword();
     // Clap once
     fireEvent.click(screen.getByTestId('icon-hand').closest('button')!);
-    // Wait a bit — should NOT auto-send
-    await new Promise((r) => setTimeout(r, 2000));
-    expect(mockApi.sendReaction).not.toHaveBeenCalled();
+    // Wait for debounce (800ms) to fire
+    await waitFor(() => {
+      expect(mockApi.sendReaction).toHaveBeenCalledWith('ep-3', { claps: 1, emotion: undefined });
+    }, { timeout: 2000 });
   });
 
   // ---- Clap + Emotion + Explicit send ----
@@ -213,21 +214,22 @@ describe('AfterwordPage', () => {
     expect(screen.getByText('温かい')).toBeInTheDocument();
   });
 
-  it('should show explicit send button after clapping', async () => {
+  it('should show "作者に届きました" after auto-send completes', async () => {
     await renderAfterword();
     fireEvent.click(screen.getByTestId('icon-hand').closest('button')!);
-    expect(screen.getByText('作者に届ける')).toBeInTheDocument();
+    await waitFor(() => {
+      expect(screen.getByText('作者に届きました')).toBeInTheDocument();
+    }, { timeout: 2000 });
   });
 
-  it('should send reaction only when send button is clicked', async () => {
+  it('should auto-send reaction with emotion after clapping and selecting emotion', async () => {
     await renderAfterword();
     fireEvent.click(screen.getByTestId('icon-hand').closest('button')!);
     fireEvent.click(screen.getByText('泣いた'));
 
-    fireEvent.click(screen.getByText('作者に届ける'));
     await waitFor(() => {
       expect(mockApi.sendReaction).toHaveBeenCalledWith('ep-3', { claps: 1, emotion: 'moved' });
-    });
+    }, { timeout: 2000 });
     expect(screen.getByText('作者に届きました')).toBeInTheDocument();
   });
 

@@ -3,7 +3,7 @@ import { NextRequest } from 'next/server';
 
 export const runtime = 'edge';
 
-const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'https://backend-production-db434.up.railway.app/api/v1';
+const API_BASE = process.env.NEXT_PUBLIC_API_URL || '';
 
 const GENRE_LABELS: Record<string, string> = {
   fantasy: 'ファンタジー', sf: 'SF', mystery: 'ミステリー', romance: '恋愛',

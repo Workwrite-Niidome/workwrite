@@ -14,6 +14,10 @@ import { useAutosave } from '@/lib/use-autosave';
 import { api } from '@/lib/api';
 import { Sparkles, Maximize2, Minimize2, History, BookOpen, HelpCircle, Type, ArrowLeft } from 'lucide-react';
 
+function escapeHtml(str: string): string {
+  return str.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+}
+
 interface WritingEditorProps {
   workId: string;
   episodeId?: string;
@@ -483,7 +487,7 @@ export function WritingEditor({
                 className="text-base leading-loose"
                 style={{ fontFamily: '"Noto Serif JP", "游明朝", "YuMincho", serif' }}
                 dangerouslySetInnerHTML={{
-                  __html: cursorLine
+                  __html: escapeHtml(cursorLine)
                     .replace(/[｜|]([^｜|《》\n]+)《([^》\n]+)》/g, '<ruby>$1<rp>(</rp><rt>$2</rt><rp>)</rp></ruby>')
                     .replace(/([一-龥々〇ヶ]+)《([^》\n]+)》/g, '<ruby>$1<rp>(</rp><rt>$2</rt><rp>)</rp></ruby>'),
                 }}

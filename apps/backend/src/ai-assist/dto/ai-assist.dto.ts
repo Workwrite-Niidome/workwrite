@@ -59,25 +59,6 @@ export class ExtractCharactersDto {
   existingCharacters?: ExistingCharacterDto[];
 }
 
-export class AiConsultDto {
-  @ApiProperty({ description: 'Work ID for context' })
-  @IsString()
-  workId: string;
-
-  @ApiPropertyOptional({ description: 'Episode ID for additional context' })
-  @IsOptional()
-  @IsString()
-  episodeId?: string;
-
-  @ApiProperty({ description: 'User message' })
-  @IsString()
-  message: string;
-
-  @ApiPropertyOptional({ description: 'Previous conversation messages' })
-  @IsOptional()
-  @IsArray()
-  history?: { role: string; content: string }[];
-}
 
 export class SaveDraftDto {
   @ApiProperty()

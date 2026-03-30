@@ -4,6 +4,7 @@ import { ReviewsService } from './reviews.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { PostsService } from '../posts/posts.service';
 import { CreditService } from '../billing/credit.service';
+import { NotificationsService } from '../notifications/notifications.service';
 import { PostType } from '@prisma/client';
 
 // ---------------------------------------------------------------------------
@@ -41,6 +42,10 @@ const mockCreditService = () => ({
   grantRewardCredits: jest.fn().mockResolvedValue(true),
 });
 
+const mockNotificationsService = () => ({
+  createNotification: jest.fn().mockResolvedValue({}),
+});
+
 // ---------------------------------------------------------------------------
 // Fixture builders
 // ---------------------------------------------------------------------------
@@ -67,6 +72,8 @@ describe('ReviewsService', () => {
   let prisma: ReturnType<typeof mockPrismaService>;
   let postsService: ReturnType<typeof mockPostsService>;
   let creditService: ReturnType<typeof mockCreditService>;
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  let notificationsService: ReturnType<typeof mockNotificationsService>;
 
   beforeEach(async () => {
     const module: TestingModule = await Test.createTestingModule({
@@ -75,6 +82,7 @@ describe('ReviewsService', () => {
         { provide: PrismaService, useFactory: mockPrismaService },
         { provide: PostsService, useFactory: mockPostsService },
         { provide: CreditService, useFactory: mockCreditService },
+        { provide: NotificationsService, useFactory: mockNotificationsService },
       ],
     }).compile();
 
@@ -82,6 +90,7 @@ describe('ReviewsService', () => {
     prisma = module.get(PrismaService);
     postsService = module.get(PostsService);
     creditService = module.get(CreditService);
+    notificationsService = module.get(NotificationsService);
   });
 
   afterEach(() => {

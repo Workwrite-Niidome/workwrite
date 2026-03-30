@@ -322,7 +322,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ characters: [], status: 'disabled' });
     });
 
     it('does not query reading progress', async () => {
@@ -346,7 +346,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ characters: [], status: 'no_episode' });
     });
 
     it('does not trigger extraction', async () => {
@@ -372,7 +372,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([]);
+      expect(result).toEqual({ characters: [], status: 'extracting' });
     });
 
     it('calls triggerIfNeeded with the latest read episode id', async () => {
@@ -416,7 +416,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
       // Charlie from extractedCharacters; Alice from aiAnalysis is ignored
-      expect(result).toEqual([charlie]);
+      expect(result).toEqual({ characters: [charlie], status: 'ready' });
     });
   });
 
@@ -432,7 +432,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([makeChar('c1', 'Alice')]);
+      expect(result).toEqual({ characters: [makeChar('c1', 'Alice')], status: 'ready' });
       expect(extraction.triggerIfNeeded).toHaveBeenCalledWith('ep-1');
     });
   });
@@ -454,7 +454,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([bob]);
+      expect(result).toEqual({ characters: [bob], status: 'ready' });
     });
 
     it('does not call triggerIfNeeded when extractedCharacters has data', async () => {
@@ -497,8 +497,8 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([bob]);
-      expect(result).not.toContainEqual(alice);
+      expect(result.characters).toEqual([bob]);
+      expect(result.characters).not.toContainEqual(alice);
     });
 
     it('ignores episodes that the user has not read', async () => {
@@ -518,7 +518,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([alice]);
+      expect(result.characters).toEqual([alice]);
     });
   });
 
@@ -537,7 +537,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toContainEqual(alice);
+      expect(result.characters).toContainEqual(alice);
     });
 
     it('matches when StoryCharacter name contains the extracted name (c.name.includes(name))', async () => {
@@ -553,7 +553,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toContainEqual(aliceSmith);
+      expect(result.characters).toContainEqual(aliceSmith);
     });
 
     it('matches when extracted name contains the StoryCharacter name (name.includes(c.name))', async () => {
@@ -569,7 +569,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toContainEqual(alice);
+      expect(result.characters).toContainEqual(alice);
     });
 
     it('does not match when names share no substring relationship', async () => {
@@ -584,7 +584,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([]);
+      expect(result.characters).toEqual([]);
     });
 
     it('excludes StoryCharacters whose name is not referenced by any extracted name', async () => {
@@ -600,8 +600,8 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toContainEqual(alice);
-      expect(result).not.toContainEqual(charlie);
+      expect(result.characters).toContainEqual(alice);
+      expect(result.characters).not.toContainEqual(charlie);
     });
 
     it('ignores extracted character entries that have no name field', async () => {
@@ -616,7 +616,7 @@ describe('CharacterTalkService - getAvailableCharacters', () => {
 
       const result = await service.getAvailableCharacters(USER_ID, WORK_ID);
 
-      expect(result).toEqual([]);
+      expect(result.characters).toEqual([]);
     });
   });
 });

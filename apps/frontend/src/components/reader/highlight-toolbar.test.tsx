@@ -6,6 +6,7 @@ import { HighlightToolbar } from './highlight-toolbar';
 vi.mock('lucide-react', () => ({
   Sparkles: () => <span>Sparkles</span>,
   Save: () => <span>Save</span>,
+  X: () => <span>X</span>,
 }));
 
 // Mock Button
