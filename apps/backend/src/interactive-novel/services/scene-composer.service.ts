@@ -16,43 +16,50 @@ export class SceneComposerService {
   ) {}
 
   async composeScene(userId: string, workId: string): Promise<RenderedScene> {
-    const state = await this.readerState.getOrCreateState(userId, workId);
+    let state = await this.readerState.getOrCreateState(userId, workId);
 
-    // Get location
+    // If no location, assign the first WorldLocation for this work
+    if (!state.locationId) {
+      const firstLocation = await this.prisma.worldLocation.findFirst({
+        where: { workId },
+        orderBy: { createdAt: 'asc' },
+      });
+      if (firstLocation) {
+        state = await this.readerState.updateLocation(userId, workId, firstLocation.id);
+      }
+    }
+
     const location = state.locationId
       ? await this.prisma.worldLocation.findUnique({ where: { id: state.locationId } })
       : null;
 
     const timeOfDay = this.getTimeOfDay(state.timelinePosition);
 
-    // Get characters at this location/time
+    // Characters at this location/time
     const characters = state.locationId
       ? await this.characterPresence.getCharactersAt(workId, state.locationId, state.timelinePosition)
       : [];
 
-    // Get events at this location/time
+    // Events at this location/time (only if StoryEvents exist)
     const events = state.locationId
       ? await this.prisma.storyEvent.findMany({
           where: {
             workId,
             locationId: state.locationId,
-            timelinePosition: {
-              gte: state.timelinePosition - 0.02,
-              lte: state.timelinePosition + 0.02,
-            },
+            timelinePosition: { gte: state.timelinePosition - 0.02, lte: state.timelinePosition + 0.02 },
           },
           orderBy: { orderInEpisode: 'asc' },
           take: 5,
         })
       : [];
 
-    // Get reading progress for spoiler protection
+    // Reading progress for spoiler protection
     const readProgress = await this.prisma.readingProgress.findMany({
       where: { userId, episode: { workId } },
       select: { episodeId: true, completed: true },
     });
 
-    // Render events with perspective
+    // Render events
     const renderedEvents = await Promise.all(
       events.map(e => this.perspectiveRenderer.renderEvent(
         e,
@@ -61,24 +68,40 @@ export class SceneComposerService {
       )),
     );
 
-    // Get environment rendering (cached)
-    let environmentText = location?.description || '';
-    if (state.locationId) {
-      const rendering = await this.prisma.locationRendering.findUnique({
-        where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay } },
-      });
-      if (rendering) {
-        const sensory = rendering.sensoryText as any;
-        const parts = [sensory?.visual, sensory?.auditory, sensory?.olfactory, sensory?.atmospheric].filter(Boolean);
-        if (parts.length > 0) environmentText = parts.join('\n');
+    // Environment text from LocationRendering (sensory data)
+    const environmentParts: string[] = [];
+    if (location) {
+      environmentParts.push(location.description);
+
+      if (state.locationId) {
+        const rendering = await this.prisma.locationRendering.findUnique({
+          where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay } },
+        });
+        if (rendering) {
+          const sensory = rendering.sensoryText as Record<string, string>;
+          // Add individual sensory lines (visual, auditory, etc.)
+          for (const val of Object.values(sensory)) {
+            if (val) environmentParts.push(val);
+          }
+        }
+      }
+
+      // Character presence descriptions
+      for (const char of characters) {
+        const sn = this.shortName(char.name);
+        if (char.activity) {
+          environmentParts.push(`${sn}が${char.activity}。`);
+        }
       }
     }
 
-    // Generate action suggestions
     const actions = await this.generateActions(workId, state, characters);
 
     return {
-      environment: { text: environmentText, source: location ? 'cached' : 'generated' },
+      environment: {
+        text: environmentParts.join('\n'),
+        source: location ? 'cached' : 'generated',
+      },
       events: renderedEvents,
       characters: characters.map(c => ({
         characterId: c.id,
@@ -104,10 +127,9 @@ export class SceneComposerService {
 
     // Talk to present characters
     for (const char of characters) {
-      const shortName = char.name.split('（')[0].split('(')[0];
       actions.push({
         type: 'talk',
-        label: `${shortName}と話す`,
+        label: `${this.shortName(char.name)}と話す`,
         params: { characterId: char.id },
       });
     }
@@ -127,17 +149,20 @@ export class SceneComposerService {
       }
     }
 
-    // Observe
     actions.push({ type: 'observe', label: '周りを見る', params: { target: 'environment' } });
-
-    // Time advance
     actions.push({ type: 'time', label: '次の日へ', params: {} });
 
     return actions;
   }
 
-  private getTimeOfDay(timelinePosition: number): TimeOfDay {
-    // Map 0.0-1.0 to time of day based on position within "day"
+  private shortName(fullName: string): string {
+    let name = fullName.split('（')[0].split('(')[0].trim();
+    if (name.includes(' ')) name = name.split(' ')[0];
+    if (name.includes('　')) name = name.split('　')[0];
+    return name;
+  }
+
+  getTimeOfDay(timelinePosition: number): TimeOfDay {
     const dayPhase = (timelinePosition * 6) % 6;
     if (dayPhase < 1) return 'dawn';
     if (dayPhase < 2) return 'morning';

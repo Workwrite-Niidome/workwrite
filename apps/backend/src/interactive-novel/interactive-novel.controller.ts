@@ -130,6 +130,31 @@ export class InteractiveNovelController {
     return { data: result };
   }
 
+  @Post(':workId/observe')
+  async observe(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    const state = await this.readerState.getState(userId, workId);
+    if (!state?.locationId) return { data: { text: '周りを見渡す。' } };
+
+    const timeOfDay = this.sceneComposer.getTimeOfDay(state.timelinePosition);
+    const rendering = await this.sceneComposer['prisma'].locationRendering.findUnique({
+      where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay } },
+    });
+
+    if (rendering) {
+      const sensory = rendering.sensoryText as Record<string, string>;
+      const parts = Object.values(sensory).filter(Boolean);
+      // Return one random sensory detail
+      const text = parts[Math.floor(Math.random() * parts.length)] || '静かだ。';
+      await this.readerState.recordJourney(userId, workId, 'observe', { timeOfDay }, state);
+      return { data: { text } };
+    }
+
+    return { data: { text: '静かだ。時間がゆっくりと流れている。' } };
+  }
+
   // ===== SSE Endpoints (streaming) =====
 
   @Post(':workId/talk')
