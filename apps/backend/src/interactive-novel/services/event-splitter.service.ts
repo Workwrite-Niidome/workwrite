@@ -148,53 +148,58 @@ export class EventSplitterService {
 
   private createScene(text: string, start: number, end: number): RawScene {
     const hasDialogue = /「[^」]+」/.test(text);
-    const isKey = text.length > 300 || /やっと会えた|知ってた|書かないと|人間離れ|名前のない街/.test(text);
 
     return {
       startOffset: start,
       endOffset: end,
       text,
-      locationHint: this.detectLocationHint(text),
+      locationHint: null, // Determined by matchLocation using WorldLocation data
       characters: [],
       hasDialogue,
-      significance: isKey ? 'key' : hasDialogue ? 'normal' : 'ambient',
+      significance: hasDialogue && text.length > 200 ? 'key' : hasDialogue ? 'normal' : 'ambient',
     };
   }
 
-  private detectLocationHint(text: string): string | null {
-    if (/栞堂|古書店|本棚|レジ|カフェスペース/.test(text)) return '栞堂';
-    if (/アパート|六畳|布団|パソコン|ノートパソコン|コーヒーを淹れ/.test(text)) return 'アパート';
-    if (/下北沢|路地|駅/.test(text)) return '下北沢';
-    if (/名前のない街|夕焼けと朝焼けの間/.test(text)) return '名前のない街';
-    if (/図書館|わし|先生/.test(text) && /街|名前のない/.test(text)) return '図書館';
-    return null;
-  }
-
   /**
-   * Match a scene to a WorldLocation by keyword matching.
+   * Match a scene to a WorldLocation by checking if location name
+   * or description keywords appear in the scene text.
+   * Fully generic — works for any work with WorldLocation data.
    */
   private matchLocation(scene: RawScene, locations: any[]): string | null {
-    if (!scene.locationHint) return null;
+    // Score each location by how many keywords match
+    let bestMatch: { id: string; score: number } | null = null;
 
     for (const loc of locations) {
-      if (loc.name.includes(scene.locationHint) || scene.locationHint.includes(loc.name)) {
-        return loc.id;
+      let score = 0;
+
+      // Direct name match in text
+      if (scene.text.includes(loc.name)) {
+        score += 10;
       }
-      // Also check description
-      if (loc.description && scene.text.includes(loc.name)) {
-        return loc.id;
+
+      // Short name match (first part before の or spaces)
+      const shortName = loc.name.replace(/の.+$/, '').trim();
+      if (shortName.length >= 2 && scene.text.includes(shortName)) {
+        score += 5;
+      }
+
+      // Description keyword match (extract key nouns from description)
+      if (loc.description) {
+        const descWords = loc.description
+          .replace(/[。、！？「」（）\s]/g, ' ')
+          .split(/\s+/)
+          .filter((w: string) => w.length >= 2);
+        for (const word of descWords.slice(0, 10)) {
+          if (scene.text.includes(word)) score += 1;
+        }
+      }
+
+      if (score > 0 && (!bestMatch || score > bestMatch.score)) {
+        bestMatch = { id: loc.id, score };
       }
     }
 
-    // Fuzzy match: check if location name appears in scene text
-    for (const loc of locations) {
-      const shortName = loc.name.split('の')[0];
-      if (scene.text.includes(shortName) && shortName.length >= 2) {
-        return loc.id;
-      }
-    }
-
-    return null;
+    return bestMatch?.id || null;
   }
 
   /**
