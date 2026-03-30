@@ -12,17 +12,22 @@ export class PerspectiveRendererService {
       id: string; episodeId: string;
       textStartOffset: number; textEndOffset: number;
       significance: string; emotionalTone: string | null;
+      summary?: string | null;
     },
     perspective: PerspectiveMode,
     readProgress: { episodeId: string; completed: boolean }[],
   ): Promise<EventBlock> {
-    // Get original text from episode using offsets
-    const episode = await this.prisma.episode.findUnique({
-      where: { id: event.episodeId },
-      select: { content: true },
-    });
-
-    const originalText = episode?.content?.slice(event.textStartOffset, event.textEndOffset) || '';
+    // Use summary (full scene text) if available, fall back to offset-based extraction
+    let originalText = '';
+    if (event.summary) {
+      originalText = event.summary;
+    } else {
+      const episode = await this.prisma.episode.findUnique({
+        where: { id: event.episodeId },
+        select: { content: true },
+      });
+      originalText = episode?.content?.slice(event.textStartOffset, event.textEndOffset) || '';
+    }
     if (!originalText.trim()) {
       return {
         storyEventId: event.id,

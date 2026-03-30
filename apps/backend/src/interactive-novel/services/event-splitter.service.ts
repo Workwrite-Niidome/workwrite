@@ -64,9 +64,9 @@ export class EventSplitterService {
           characters: charIds.length > 0 ? charIds : undefined,
           emotionalTone: this.detectEmotion(scene.text),
           significance: scene.significance,
-          textStartOffset: scene.startOffset,
-          textEndOffset: scene.endOffset,
-          summary: scene.text.slice(0, 100).replace(/^　+/, '').trim(),
+          textStartOffset: 0,
+          textEndOffset: 0,
+          summary: scene.text,
         };
       });
 
@@ -87,65 +87,45 @@ export class EventSplitterService {
    */
   private splitContent(content: string): RawScene[] {
     const scenes: RawScene[] = [];
-    const parts = content.split(/(\n\s*\*\*\*\s*\n)/);
 
-    let offset = 0;
+    // Split by *** scene breaks first
+    const sections = content.split(/\n\s*\*\*\*\s*\n/);
 
-    for (const part of parts) {
-      const trimmed = part.trim();
+    for (const section of sections) {
+      if (!section.trim()) continue;
 
-      // Skip scene break markers
-      if (/^\*\*\*$/.test(trimmed)) {
-        offset += part.length;
-        continue;
-      }
+      // Split section into paragraphs
+      const paragraphs = section.split(/\n{2,}/).map(p => p.trim()).filter(Boolean);
+      let currentParas: string[] = [];
 
-      if (!trimmed) {
-        offset += part.length;
-        continue;
-      }
-
-      // Split this section into smaller scenes by paragraph groups (max ~500 chars per scene)
-      const paragraphs = part.split(/\n{2,}/);
-      let currentScene: string[] = [];
-      let sceneStart = offset;
+      const flush = () => {
+        if (currentParas.length === 0) return;
+        const text = currentParas.join('\n\n');
+        if (text.length > 10) {
+          scenes.push(this.createScene(text, 0, 0));
+        }
+        currentParas = [];
+      };
 
       for (const para of paragraphs) {
-        const t = para.trim();
-        if (!t) {
-          offset += para.length + 2; // +2 for \n\n
-          continue;
-        }
+        currentParas.push(para);
+        const joined = currentParas.join('\n\n');
 
-        currentScene.push(t);
-        const currentText = currentScene.join('\n');
+        // Check if we should flush
+        const lastPara = currentParas.length >= 2 ? currentParas[currentParas.length - 2] : '';
+        const isDialogueContinuation = lastPara.startsWith('「') && para.startsWith('「');
 
-        // Flush scene if it's getting long enough
-        // But don't split in the middle of a dialogue sequence
-        const prevIsDialogue = currentScene.length > 0 && currentScene[currentScene.length - 1].startsWith('「');
-        const currentIsDialogue = t.startsWith('「');
-        const inDialogueSequence = prevIsDialogue && currentIsDialogue;
-
-        if (currentText.length > 600 || (!inDialogueSequence && currentText.length > 400 && currentScene.length > 1)) {
-          const sceneText = currentScene.slice(0, -1).join('\n');
-          if (sceneText.length > 10) {
-            const endPos = offset;
-            scenes.push(this.createScene(sceneText, sceneStart, endPos));
-          }
-          sceneStart = offset;
-          currentScene = [t];
-        }
-
-        offset += para.length + 2;
-      }
-
-      // Flush remaining
-      if (currentScene.length > 0) {
-        const sceneText = currentScene.join('\n');
-        if (sceneText.length > 10) {
-          scenes.push(this.createScene(sceneText, sceneStart, offset));
+        if (joined.length > 800) {
+          // Too long — flush everything
+          flush();
+        } else if (joined.length > 400 && currentParas.length > 1 && !isDialogueContinuation) {
+          // Long enough and not in dialogue sequence — flush all but last
+          const last = currentParas.pop()!;
+          flush();
+          currentParas = [last];
         }
       }
+      flush();
     }
 
     return scenes;
