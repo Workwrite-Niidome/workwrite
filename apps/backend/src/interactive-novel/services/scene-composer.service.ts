@@ -18,7 +18,7 @@ export class SceneComposerService {
   async composeScene(userId: string, workId: string): Promise<RenderedScene> {
     let state = await this.readerState.getOrCreateState(userId, workId);
 
-    // If no location, assign the first WorldLocation for this work
+    // Auto-assign first location if needed
     if (!state.locationId) {
       const firstLocation = await this.prisma.worldLocation.findFirst({
         where: { workId },
@@ -40,24 +40,41 @@ export class SceneComposerService {
       ? await this.characterPresence.getCharactersAt(workId, state.locationId, state.timelinePosition)
       : [];
 
-    // Events at this location/time
-    // Search within current episode's range (1/totalEpisodes)
+    // ===== EVENTS ARE THE MAIN CONTENT =====
+    // Find StoryEvents at this location and time
     const episodeCount = await this.prisma.episode.count({ where: { workId } });
-    const searchRange = episodeCount > 0 ? 1 / episodeCount / 2 : 0.05;
+    const searchRange = episodeCount > 0 ? 1 / episodeCount : 0.05;
+
     const events = state.locationId
       ? await this.prisma.storyEvent.findMany({
           where: {
             workId,
             locationId: state.locationId,
             timelinePosition: {
-              gte: state.timelinePosition - searchRange,
+              gte: state.timelinePosition,
               lte: state.timelinePosition + searchRange,
             },
           },
-          orderBy: { orderInEpisode: 'asc' },
-          take: 3, // Max 3 events per scene to avoid overwhelming
+          orderBy: [{ timelinePosition: 'asc' }, { orderInEpisode: 'asc' }],
+          take: 5,
         })
       : [];
+
+    // Also get events WITHOUT location (unassigned) at this timeline position
+    const unlocatedEvents = await this.prisma.storyEvent.findMany({
+      where: {
+        workId,
+        locationId: null,
+        timelinePosition: {
+          gte: state.timelinePosition,
+          lte: state.timelinePosition + searchRange,
+        },
+      },
+      orderBy: [{ timelinePosition: 'asc' }, { orderInEpisode: 'asc' }],
+      take: 3,
+    });
+
+    const allEvents = [...events, ...unlocatedEvents].slice(0, 5);
 
     // Reading progress for spoiler protection
     const readProgress = await this.prisma.readingProgress.findMany({
@@ -65,49 +82,48 @@ export class SceneComposerService {
       select: { episodeId: true, completed: true },
     });
 
-    // Render events
+    // Render events with original text
     const renderedEvents = await Promise.all(
-      events.map(e => this.perspectiveRenderer.renderEvent(
+      allEvents.map(e => this.perspectiveRenderer.renderEvent(
         e,
         state.perspective as PerspectiveMode,
         readProgress.map(p => ({ episodeId: p.episodeId, completed: !!p.completed })),
       )),
     );
 
-    // Environment text from LocationRendering (sensory data)
-    const environmentParts: string[] = [];
+    // ===== ENVIRONMENT IS MINIMAL =====
+    // Just one line: location name + one sensory detail
+    let environmentText = '';
     if (location) {
-      environmentParts.push(location.description);
-
+      // Try to get one sensory line from LocationRendering
       if (state.locationId) {
         const rendering = await this.prisma.locationRendering.findUnique({
           where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay } },
         });
         if (rendering) {
           const sensory = rendering.sensoryText as Record<string, string>;
-          // Add individual sensory lines (visual, auditory, etc.)
-          for (const val of Object.values(sensory)) {
-            if (val) environmentParts.push(val);
-          }
+          // Pick just the visual or atmospheric (most evocative)
+          environmentText = sensory?.visual || sensory?.atmospheric || location.description;
+        } else {
+          environmentText = location.description;
         }
+      } else {
+        environmentText = location.description;
       }
 
-      // Character presence descriptions
-      for (const char of characters) {
-        const sn = this.shortName(char.name);
-        if (char.activity) {
-          environmentParts.push(`${sn}が${char.activity}。`);
-        }
+      // Add character presence as brief lines
+      if (characters.length > 0) {
+        const charLines = characters
+          .map(c => `${this.shortName(c.name)}が${c.activity || 'いる'}。`)
+          .join(' ');
+        environmentText += '\n' + charLines;
       }
     }
 
     const actions = await this.generateActions(workId, state, characters);
 
     return {
-      environment: {
-        text: environmentParts.join('\n'),
-        source: location ? 'cached' : 'generated',
-      },
+      environment: { text: environmentText, source: 'cached' },
       events: renderedEvents,
       characters: characters.map(c => ({
         characterId: c.id,
@@ -131,7 +147,6 @@ export class SceneComposerService {
   ): Promise<ActionSuggestion[]> {
     const actions: ActionSuggestion[] = [];
 
-    // Talk to present characters
     for (const char of characters) {
       actions.push({
         type: 'talk',
@@ -140,7 +155,6 @@ export class SceneComposerService {
       });
     }
 
-    // Move to connected locations
     if (state.locationId) {
       const connections = await this.prisma.locationConnection.findMany({
         where: { fromLocationId: state.locationId },

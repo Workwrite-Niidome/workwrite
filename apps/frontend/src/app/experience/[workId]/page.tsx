@@ -248,6 +248,16 @@ export default function ExperiencePage() {
       add([{ id: bid(), type: 'environment', source: 'generated', text: `（${displayName}は静かにこちらを見ている）` }]);
     } finally {
       setIsStreaming(false);
+      // Refresh actions from backend (correct short names)
+      try {
+        const stateRes = await apiPost('/enter', { entryType: 'explore' });
+        if (stateRes.data?.scene?.actions) {
+          setWorldState(prev => ({
+            ...prev,
+            actions: stateRes.data.scene.actions.map((a: any) => ({ type: a.type, label: a.label, params: a.params || {} })),
+          }));
+        }
+      } catch {}
     }
   }
 
