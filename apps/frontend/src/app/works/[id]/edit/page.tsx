@@ -16,6 +16,7 @@ import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work, type QualityScoreDetail } from '@/lib/api';
 import { CharacterRegistryPanel } from '@/components/editor/character-registry-panel';
 import { cn } from '@/lib/utils';
+import { normalizeChapterRecord, buildEmotionBlueprintPayload } from '@/lib/wizard-derive';
 
 const MAIN_GENRES = [
   { key: 'fantasy', label: 'ファンタジー' },
@@ -681,6 +682,8 @@ function CreationPlanCard({
   const [coreMessage, setCoreMessage] = useState('');
   const [targetEmotions, setTargetEmotions] = useState('');
   const [readerJourney, setReaderJourney] = useState('');
+  const [inspiration, setInspiration] = useState('');
+  const [readerOneLiner, setReaderOneLiner] = useState('');
   const [plotText, setPlotText] = useState('');
   const [worldText, setWorldText] = useState('');
   const [chapters, setChapters] = useState<{ title: string; summary: string; reason: string; readerEmotion: string }[]>([]);
@@ -692,6 +695,8 @@ function CreationPlanCard({
     setCoreMessage(eb.coreMessage || '');
     setTargetEmotions(eb.targetEmotions || '');
     setReaderJourney(eb.readerJourney || '');
+    setInspiration(eb.inspiration || '');
+    setReaderOneLiner(eb.readerOneLiner || '');
     const po = creationPlan?.plotOutline;
     if (po?.type === 'structured' && po.actGroups?.length > 0) {
       // Convert structured plot to readable text for editing
@@ -721,12 +726,7 @@ function CreationPlanCard({
       setWorldText('');
     }
     setChapters(
-      (creationPlan?.chapterOutline || []).map((ch: any) => ({
-        title: ch.title || '',
-        summary: ch.summary || '',
-        reason: ch.reason || '',
-        readerEmotion: ch.readerEmotion || '',
-      }))
+      (creationPlan?.chapterOutline || []).map((ch: any) => normalizeChapterRecord(ch))
     );
     setEditing(true);
   }
@@ -737,9 +737,13 @@ function CreationPlanCard({
     try {
       // Send all fields explicitly — null to clear, value to update
       const plan: any = {
-        emotionBlueprint: (coreMessage || targetEmotions || readerJourney)
-          ? { coreMessage, targetEmotions, readerJourney }
-          : null,
+        emotionBlueprint: buildEmotionBlueprintPayload({
+          coreMessage,
+          targetEmotions,
+          readerJourney,
+          inspiration,
+          readerOneLiner,
+        }),
         plotOutline: plotText.trim()
           ? { text: plotText, aiAssisted: false }
           : null,
@@ -838,6 +842,18 @@ function CreationPlanCard({
                   value={readerJourney}
                   onChange={(e) => setReaderJourney(e.target.value)}
                   placeholder="読者の旅路"
+                  className="text-xs h-8"
+                />
+                <Input
+                  value={inspiration}
+                  onChange={(e) => setInspiration(e.target.value)}
+                  placeholder="インスピレーション（音楽、映画、体験など）"
+                  className="text-xs h-8"
+                />
+                <Input
+                  value={readerOneLiner}
+                  onChange={(e) => setReaderOneLiner(e.target.value)}
+                  placeholder="読者が読み終えた後に言う一言"
                   className="text-xs h-8"
                 />
               </div>
@@ -1060,6 +1076,12 @@ function CreationPlanCard({
                   {creationPlan.emotionBlueprint.readerJourney && (
                     <p className="text-xs text-muted-foreground mt-1">読者の旅路: {creationPlan.emotionBlueprint.readerJourney}</p>
                   )}
+                  {creationPlan.emotionBlueprint.inspiration && (
+                    <p className="text-xs text-muted-foreground mt-1">インスピレーション: {creationPlan.emotionBlueprint.inspiration}</p>
+                  )}
+                  {creationPlan.emotionBlueprint.readerOneLiner && (
+                    <p className="text-xs text-muted-foreground mt-1">読後の一言: {creationPlan.emotionBlueprint.readerOneLiner}</p>
+                  )}
                 </div>
               )}
               {creationPlan.characters?.length > 0 && (
@@ -1107,7 +1129,7 @@ function CreationPlanCard({
                           <span className="text-[10px] text-muted-foreground shrink-0 w-5">{i + 1}.</span>
                           <span className="text-xs font-medium">{ch.title || '（無題）'}</span>
                         </div>
-                        {(ch.summary || ch.reason || ch.readerEmotion) && (
+                        {(ch.summary || ch.reason || ch.readerEmotion || ch.emotionTarget) && (
                           <div className="space-y-2 pl-5 pt-1 border-t border-border mt-2">
                             {ch.summary && (
                               <div>
@@ -1121,10 +1143,10 @@ function CreationPlanCard({
                                 <p className="text-xs leading-relaxed">{ch.reason}</p>
                               </div>
                             )}
-                            {ch.readerEmotion && (
+                            {(ch.readerEmotion || ch.emotionTarget) && (
                               <div>
                                 <p className="text-[10px] text-muted-foreground mb-0.5">読者の感情</p>
-                                <p className="text-xs leading-relaxed">{ch.readerEmotion}</p>
+                                <p className="text-xs leading-relaxed">{ch.readerEmotion || ch.emotionTarget}</p>
                               </div>
                             )}
                           </div>

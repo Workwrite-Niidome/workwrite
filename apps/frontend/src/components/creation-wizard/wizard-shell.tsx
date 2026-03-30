@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
 import { saveDraft as saveDraftToStorage, loadDraft, deleteDraft } from '@/lib/wizard-drafts';
+import { deriveChaptersFromActGroups, buildEmotionBlueprintPayload } from '@/lib/wizard-derive';
 import { StepGenreTags } from './step-genre-tags';
 import { StepEmotionBlueprint } from './step-emotion-blueprint';
 import { StepCharacterDesigner } from './step-character-designer';
@@ -171,22 +172,7 @@ export function WizardShell() {
     return true;
   }
 
-  /** Derive chapterOutline from actGroups for backward compatibility */
-  function deriveChaptersFromActGroups(groups: ActGroup[]): any[] {
-    const chapters: any[] = [];
-    for (const group of groups) {
-      for (const ep of group.episodes) {
-        chapters.push({
-          title: ep.title,
-          summary: [ep.whatHappens, ep.whyItHappens].filter(Boolean).join('\n'),
-          characters: ep.characters,
-          emotionTarget: ep.emotionTarget,
-          aiSuggested: ep.aiSuggested,
-        });
-      }
-    }
-    return chapters;
-  }
+  // deriveChaptersFromActGroups is imported from @/lib/wizard-derive
 
   async function handleCreate() {
     if (!data.title.trim()) {
@@ -224,14 +210,13 @@ export function WizardShell() {
           await api.saveCreationPlan(workId, {
             characters: data.characters.length > 0 ? data.characters : undefined,
             plotOutline: plotData || undefined,
-            emotionBlueprint: (data.coreMessage || data.inspiration) ? {
+            emotionBlueprint: buildEmotionBlueprintPayload({
               coreMessage: data.coreMessage,
               targetEmotions: data.targetEmotions,
               readerJourney: data.readerJourney,
               inspiration: data.inspiration,
               readerOneLiner: data.readerOneLiner,
-              emotionMode: data.emotionMode,
-            } : undefined,
+            }) ?? undefined,
             chapterOutline: derivedChapters.length > 0 ? derivedChapters : undefined,
             customFieldDefinitions: data.customFieldDefinitions.length > 0 ? data.customFieldDefinitions : undefined,
             worldBuildingData: data.worldBuilding,
