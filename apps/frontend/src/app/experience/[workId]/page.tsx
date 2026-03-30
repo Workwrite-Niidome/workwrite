@@ -84,21 +84,58 @@ export default function ExperiencePage() {
     load();
   }, [workId]);
 
-  // Intro sequence
+  // Intro sequence: fetch first location and build atmospheric intro
   useEffect(() => {
     if (phase !== 'intro') return;
-    const introBlocks: SceneBlock[] = [
-      { id: bid(), type: 'environment', source: 'generated', text: work?.prologue?.split('\n')[0] || `${work?.title || '物語'}の世界が広がっている。` },
-    ];
-    let i = 0;
-    const timer = setInterval(() => {
-      if (i < introBlocks.length) { setBlocks(prev => [...prev, introBlocks[i]]); i++; }
-      else {
-        clearInterval(timer);
-        setWorldState(prev => ({ ...prev, actions: [{ type: 'move', label: '中に入る', params: { locationId: 'initial' } }] }));
+    let cancelled = false;
+
+    async function buildIntro() {
+      // Get locations for this work
+      let introLines: string[] = [];
+      try {
+        const res = await apiGet('/locations');
+        const locations = res.data?.locations || [];
+        if (locations.length > 0) {
+          const first = locations[0];
+          // Split description into atmospheric sentences
+          introLines = splitIntoSentences(first.description || '');
+          if (introLines.length === 0) introLines = [first.name];
+        }
+      } catch {
+        // Fallback
       }
-    }, 800);
-    return () => clearInterval(timer);
+
+      // If no location data, use work info
+      if (introLines.length === 0) {
+        if (work?.synopsis) {
+          introLines = splitIntoSentences(work.synopsis).slice(0, 3);
+        } else {
+          introLines = [`${work?.title || '物語'}の世界が広がっている。`];
+        }
+      }
+
+      if (cancelled) return;
+
+      // Reveal lines one by one
+      let i = 0;
+      const timer = setInterval(() => {
+        if (cancelled) { clearInterval(timer); return; }
+        if (i < introLines.length) {
+          setBlocks(prev => [...prev, { id: bid(), type: 'environment', source: 'generated', text: introLines[i] }]);
+          i++;
+        } else {
+          clearInterval(timer);
+          // Show "中に入る" after all intro text
+          setWorldState(prev => ({
+            ...prev,
+            actions: [{ type: 'move', label: '中に入る', params: { locationId: 'initial' } }],
+          }));
+        }
+      }, 1000);
+    }
+
+    buildIntro();
+    return () => { cancelled = true; };
   }, [phase, work]);
 
   // Auto-save
