@@ -155,7 +155,7 @@ export default function ExperiencePage() {
 
   // Add blocks helper
   const addBlocks = useCallback((newBlocks: SceneBlock[]) => {
-    setBlocks(prev => [...prev, ...newBlocks]);
+    setBlocks(prev => [...prev, ...newBlocks.filter(Boolean)]);
   }, []);
 
   // Auto-save session on state changes
@@ -284,7 +284,7 @@ export default function ExperiencePage() {
         if (parsed.text) {
           setBlocks(prev => {
             const updated = [...prev];
-            const idx = updated.findIndex(b => b.id === dialogueBlockId);
+            const idx = updated.findIndex(b => b?.id === dialogueBlockId);
             if (idx >= 0) {
               updated[idx] = { ...updated[idx], text: updated[idx].text + parsed.text };
             }
