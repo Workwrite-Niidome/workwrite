@@ -9,9 +9,10 @@ import { ReaderStateService } from './services/reader-state.service';
 import { WorldConversationService } from './services/world-conversation.service';
 import { IntentParserService } from './services/intent-parser.service';
 import { CharacterTalkModule } from '../character-talk/character-talk.module';
+import { AiSettingsModule } from '../ai-settings/ai-settings.module';
 
 @Module({
-  imports: [CharacterTalkModule],
+  imports: [CharacterTalkModule, AiSettingsModule],
   controllers: [InteractiveNovelController],
   providers: [
     SceneComposerService,

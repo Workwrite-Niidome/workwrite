@@ -1,6 +1,10 @@
 import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { EventSplitterService } from './event-splitter.service';
+
+const HAIKU = 'claude-haiku-4-5-20251001';
+const ANTHROPIC_VERSION = '2023-06-01';
 
 interface ExtractedLocation {
   name: string;
@@ -15,6 +19,7 @@ export class WorldBuilderService {
 
   constructor(
     private prisma: PrismaService,
+    private aiSettings: AiSettingsService,
     private eventSplitter: EventSplitterService,
   ) {}
 

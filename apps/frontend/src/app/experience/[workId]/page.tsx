@@ -84,35 +84,63 @@ export default function ExperiencePage() {
     load();
   }, [workId]);
 
-  // Intro sequence: fetch first location and build atmospheric intro
+  // Intro sequence: build world if needed, then atmospheric intro from first episode
   useEffect(() => {
     if (phase !== 'intro') return;
     let cancelled = false;
 
     async function buildIntro() {
-      // Get locations for this work
+      // Check if world is built, if not trigger build
+      try {
+        const status = await apiGet('/build-status');
+        if (status.data?.locations === 0) {
+          // Auto-build the world (may take a few seconds)
+          setBlocks([{ id: bid(), type: 'environment', source: 'generated', text: '世界を構築しています...' }]);
+          try {
+            await apiPost('/build');
+          } catch {
+            // Build might fail (not completed, etc.) — continue anyway
+          }
+          if (cancelled) return;
+          setBlocks([]);
+        }
+      } catch {}
+
+      if (cancelled) return;
+
+      // Get intro text from first episode's opening (the ACTUAL story text)
       let introLines: string[] = [];
       try {
-        const res = await apiGet('/locations');
-        const locations = res.data?.locations || [];
-        if (locations.length > 0) {
-          const first = locations[0];
-          // Split description into atmospheric sentences
-          introLines = splitIntoSentences(first.description || '');
-          if (introLines.length === 0) introLines = [first.name];
+        const workRes = await api.getEpisodes(workId);
+        const eps = ((workRes as any)?.data ?? workRes ?? []) as any[];
+        const sorted = eps.sort((a: any, b: any) => a.orderIndex - b.orderIndex);
+        if (sorted.length > 0) {
+          const firstEp = sorted[0];
+          let content = firstEp.content;
+          if (!content || content.length < 50) {
+            const epRes = await api.getEpisode(firstEp.id);
+            content = (epRes as any)?.data?.content ?? (epRes as any)?.content ?? '';
+          }
+          if (content) {
+            // Take the opening paragraphs (before first dialogue or scene break)
+            const paras = content.split(/\n{2,}/);
+            for (const para of paras) {
+              const t = para.trim().replace(/^　+/, '');
+              if (!t) continue;
+              if (t.startsWith('「') || t === '***') break; // Stop at first dialogue or break
+              const sentences = splitIntoSentences(t);
+              introLines.push(...sentences);
+              if (introLines.length >= 4) break; // Max 4 intro lines
+            }
+          }
         }
-      } catch {
-        // Fallback
-      }
+      } catch {}
 
-      // If no location data, use work info
+      // Fallback
       if (introLines.length === 0) {
-        if (work?.synopsis) {
-          introLines = splitIntoSentences(work.synopsis).slice(0, 3);
-        } else {
-          introLines = [`${work?.title || '物語'}の世界が広がっている。`];
-        }
+        introLines = [`${work?.title || '物語'}の世界が広がっている。`];
       }
+      introLines = introLines.slice(0, 5);
 
       if (cancelled) return;
 
@@ -121,17 +149,17 @@ export default function ExperiencePage() {
       const timer = setInterval(() => {
         if (cancelled) { clearInterval(timer); return; }
         if (i < introLines.length) {
-          setBlocks(prev => [...prev, { id: bid(), type: 'environment', source: 'generated', text: introLines[i] }]);
+          setBlocks(prev => [...prev, { id: bid(), type: 'environment', source: 'original', text: introLines[i] }]);
           i++;
         } else {
           clearInterval(timer);
-          // Show "中に入る" after all intro text
+          // Contextual entry action
           setWorldState(prev => ({
             ...prev,
-            actions: [{ type: 'move', label: '中に入る', params: { locationId: 'initial' } }],
+            actions: [{ type: 'move', label: '物語に入る', params: { locationId: 'initial' } }],
           }));
         }
-      }, 1000);
+      }, 1200);
     }
 
     buildIntro();
