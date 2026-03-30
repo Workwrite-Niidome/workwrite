@@ -123,14 +123,15 @@ export default function ExperiencePage() {
             content = (epRes as any)?.data?.content ?? (epRes as any)?.content ?? '';
           }
           if (content) {
-            // Take opening paragraphs as-is (no sentence splitting)
+            // Take short opening paragraphs — stop at long narrative blocks
             const paras = content.split(/\n{2,}/);
             for (const para of paras) {
               const t = para.trim();
               if (!t) continue;
               if (t === '***' || t === '---') break;
+              if (t.length > 80) break; // Long paragraph = narrative has started, stop here
               introParas.push(t);
-              if (introParas.length >= 3) break;
+              if (introParas.length >= 4) break;
             }
           }
         }
