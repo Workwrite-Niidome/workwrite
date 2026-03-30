@@ -130,35 +130,34 @@ export default function ExperiencePage() {
   }
 
   function applyScene(scene: any) {
-    const newBlocks: SceneBlock[] = [];
+    // Split all text into short sentence-level blocks
+    const allBlocks: SceneBlock[] = [];
 
-    // Environment text (split by newlines into separate blocks)
+    // Environment: split into individual sentences
     if (scene.environment?.text) {
-      for (const line of scene.environment.text.split('\n')) {
-        const trimmed = line.trim();
-        if (trimmed) {
-          newBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: trimmed });
-        }
+      const sentences = splitIntoSentences(scene.environment.text);
+      for (const s of sentences) {
+        allBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: s });
       }
     }
 
-    // Events
+    // Events: split each event's text into sentences
     if (scene.events) {
       for (const ev of scene.events) {
-        if (ev.renderedText) {
-          newBlocks.push({
+        if (!ev.renderedText?.trim()) continue;
+        const sentences = splitIntoSentences(ev.renderedText);
+        for (const s of sentences) {
+          allBlocks.push({
             id: bid(), type: 'event',
             source: ev.originalPassage ? 'original' : 'generated',
-            text: ev.renderedText,
+            text: s,
             spoilerProtected: ev.spoilerProtected,
           });
         }
       }
     }
 
-    add(newBlocks);
-
-    // Update world state from scene meta + characters + actions
+    // Update world state immediately (actions become available)
     setWorldState(prev => ({
       ...prev,
       locationName: scene.meta?.locationName || prev.locationName,
@@ -171,6 +170,38 @@ export default function ExperiencePage() {
         type: a.type, label: a.label, params: a.params || {},
       })),
     }));
+
+    // Add blocks one by one with delay (typing effect)
+    let i = 0;
+    const timer = setInterval(() => {
+      if (i < allBlocks.length) {
+        setBlocks(prev => [...prev, allBlocks[i]]);
+        i++;
+      } else {
+        clearInterval(timer);
+      }
+    }, 600); // 600ms between each sentence
+  }
+
+  /** Split text into short sentences for gradual reveal */
+  function splitIntoSentences(text: string): string[] {
+    const results: string[] = [];
+    // Split by newlines first
+    for (const line of text.split('\n')) {
+      const trimmed = line.trim();
+      if (!trimmed) continue;
+      // Split long lines by sentence endings (。！？)
+      if (trimmed.length > 80) {
+        const parts = trimmed.split(/(?<=[。！？])\s*/);
+        for (const part of parts) {
+          const p = part.trim();
+          if (p) results.push(p);
+        }
+      } else {
+        results.push(trimmed);
+      }
+    }
+    return results;
   }
 
   // ===== Action Handlers =====
