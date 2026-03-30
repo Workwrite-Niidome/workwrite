@@ -12,14 +12,13 @@ interface TheaterViewProps {
  * TheaterView — 一本のテキストの流れ
  *
  * 全てがここに流れる。環境描写、セリフ、読者の行動、場面転換。
- * チャットUIではない。ゲームUIでもない。
  * 物語が書かれていくのを中に入って見ている画面。
  */
 export function TheaterView({ blocks, isStreaming }: TheaterViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
+  const isIntro = blocks.length <= 5 && blocks.every(b => b.type === 'environment');
 
-  // Auto-scroll to bottom when new blocks arrive
   useEffect(() => {
     if (endRef.current) {
       endRef.current.scrollIntoView({ behavior: 'smooth', block: 'end' });
@@ -29,44 +28,46 @@ export function TheaterView({ blocks, isStreaming }: TheaterViewProps) {
   return (
     <div
       ref={containerRef}
-      className="flex-1 overflow-y-auto px-6 py-8 md:px-10"
+      className={`flex-1 overflow-y-auto px-6 md:px-10 ${isIntro ? 'flex items-center justify-center' : 'pt-16'}`}
     >
-      <div className="mx-auto max-w-xl space-y-1">
+      <div className={`mx-auto max-w-lg ${isIntro ? 'text-center' : ''}`}>
         {blocks.map((block) => (
-          <BlockRenderer key={block.id} block={block} />
+          <BlockRenderer key={block.id} block={block} centered={isIntro} />
         ))}
 
         {isStreaming && (
           <div className="py-2">
-            <span className="text-muted-foreground/40 animate-pulse">...</span>
+            <span className="text-[#55555f] animate-pulse">...</span>
           </div>
         )}
 
-        <div ref={endRef} className="h-8" />
+        <div ref={endRef} className="h-12" />
       </div>
     </div>
   );
 }
 
-function BlockRenderer({ block }: { block: SceneBlock }) {
+function BlockRenderer({ block, centered }: { block: SceneBlock; centered?: boolean }) {
+  const fadeClass = 'animate-[fadeUp_0.8s_ease_forwards]';
+
   switch (block.type) {
     case 'break':
       return (
-        <div className="py-6 text-center text-muted-foreground/30 text-sm tracking-[0.5em]">
+        <div className="py-8 text-center text-[#3a3a40] text-sm tracking-[0.5em]">
           * * *
         </div>
       );
 
     case 'perspective_label':
       return (
-        <div className="py-4 text-center text-xs text-muted-foreground/50 tracking-widest">
+        <div className="py-6 text-center text-[10px] text-[#55555f] tracking-[0.3em]">
           {block.text}
         </div>
       );
 
     case 'action':
       return (
-        <div className="py-2 text-sm text-muted-foreground/50 font-sans">
+        <div className="py-3 text-sm text-[#55555f] font-sans">
           {block.text}
         </div>
       );
@@ -74,12 +75,12 @@ function BlockRenderer({ block }: { block: SceneBlock }) {
     case 'environment':
       return (
         <div
-          className={`py-2 leading-8 font-serif ${
+          className={`py-3 leading-[2.2] text-[15px] ${fadeClass} ${
             block.source === 'original'
-              ? 'text-foreground'
-              : 'text-foreground/80 font-light'
-          }`}
-          style={{ textIndent: '1em' }}
+              ? 'text-[#d8d5d0]'
+              : 'text-[#a8a5a0]'
+          } ${centered ? 'text-center' : ''}`}
+          style={centered ? undefined : { textIndent: '1em' }}
         >
           {block.text}
         </div>
@@ -88,17 +89,17 @@ function BlockRenderer({ block }: { block: SceneBlock }) {
     case 'event':
       if (block.spoilerProtected) {
         return (
-          <div className="py-2 leading-8 font-serif text-foreground/60 font-light italic" style={{ textIndent: '1em' }}>
+          <div className={`py-3 leading-[2.2] text-[15px] text-[#6a6a70] italic ${fadeClass}`} style={{ textIndent: '1em' }}>
             {block.text}
           </div>
         );
       }
       return (
         <div
-          className={`py-2 leading-8 font-serif ${
+          className={`py-3 leading-[2.2] text-[15px] ${fadeClass} ${
             block.source === 'original'
-              ? 'text-foreground'
-              : 'text-foreground/80 font-light'
+              ? 'text-[#d8d5d0]'
+              : 'text-[#a8a5a0]'
           }`}
           style={{ textIndent: '1em' }}
         >
@@ -108,20 +109,20 @@ function BlockRenderer({ block }: { block: SceneBlock }) {
 
     case 'dialogue':
       return (
-        <div className="py-2 leading-8 font-serif">
+        <div className={`py-3 leading-[2.2] text-[15px] ${fadeClass}`}>
           {block.speaker && (
             <div
-              className="text-xs font-sans font-medium tracking-wide mb-0.5 ml-4"
-              style={{ color: block.speakerColor || 'var(--color-accent)' }}
+              className="text-[11px] font-sans tracking-wider mb-1 ml-5"
+              style={{ color: block.speakerColor || '#8a8a95' }}
             >
               {block.speaker}
             </div>
           )}
           <div
-            className="pl-4"
+            className="pl-5 text-[#d8d5d0]"
             style={{
               borderLeft: block.speaker
-                ? `2px solid ${block.speakerColor || 'var(--color-border)'}`
+                ? `2px solid ${block.speakerColor || '#3a3a45'}33`
                 : undefined,
             }}
           >
@@ -132,7 +133,7 @@ function BlockRenderer({ block }: { block: SceneBlock }) {
 
     default:
       return (
-        <div className="py-2 leading-8 font-serif" style={{ textIndent: '1em' }}>
+        <div className={`py-3 leading-[2.2] text-[15px] text-[#d8d5d0] ${fadeClass}`} style={{ textIndent: '1em' }}>
           {block.text}
         </div>
       );

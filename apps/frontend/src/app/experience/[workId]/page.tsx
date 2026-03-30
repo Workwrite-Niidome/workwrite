@@ -88,7 +88,6 @@ export default function ExperiencePage() {
         { id: nextBlockId(), type: 'environment', source: 'generated', text: '午後の光が、磨りガラスを通って柔らかく広がっている。' },
         { id: nextBlockId(), type: 'environment', source: 'generated', text: '古い紙とインクと、ほんの少しの埃の匂い。' },
         { id: nextBlockId(), type: 'environment', source: 'generated', text: '天井まで届く本棚が、薄暗い奥まで続いている。' },
-        { id: nextBlockId(), type: 'environment', source: 'generated', text: '' },
         { id: nextBlockId(), type: 'environment', source: 'generated', text: '古書店の扉が、開いている。' },
       );
     } else {
@@ -351,14 +350,14 @@ export default function ExperiencePage() {
   // Loading
   if (phase === 'loading') {
     return (
-      <div className="min-h-screen bg-background flex items-center justify-center">
-        <div className="text-muted-foreground/40 text-sm tracking-widest animate-pulse">...</div>
+      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
+        <div className="text-[#55555f] text-sm tracking-widest animate-pulse">...</div>
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-background text-foreground flex flex-col">
+    <div className="min-h-screen bg-[#0a0a0f] text-[#d8d5d0] flex flex-col" style={{ fontFamily: "'Noto Serif JP', serif" }}>
       <ExperienceHeader
         state={worldState}
         onPerspectiveChange={handlePerspectiveChange}

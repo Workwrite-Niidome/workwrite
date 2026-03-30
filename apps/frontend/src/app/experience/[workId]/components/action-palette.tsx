@@ -10,12 +10,6 @@ interface ActionPaletteProps {
   disabled: boolean;
 }
 
-/**
- * ActionPalette — コンテキストアクションと自由入力
- *
- * 選択肢はプロースタイルで提示。ボタンではなく、テキストとして。
- * 自由入力は折り畳み式。パワーユーザー向け。
- */
 export function ActionPalette({ actions, onAction, onFreeInput, disabled }: ActionPaletteProps) {
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
@@ -36,9 +30,8 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
   };
 
   return (
-    <div className="border-t border-border bg-background px-6 py-4 md:px-10">
-      <div className="mx-auto max-w-xl">
-        {/* Action suggestions */}
+    <div className="border-t border-[#1a1a25] bg-[#0a0a0f] px-6 py-4 md:px-10">
+      <div className="mx-auto max-w-lg">
         {actions.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
             {actions.map((action, i) => (
@@ -46,7 +39,7 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
                 key={i}
                 onClick={() => !disabled && onAction(action)}
                 disabled={disabled}
-                className="px-4 py-2 text-sm text-muted-foreground hover:text-foreground border border-border rounded-full hover:border-foreground/20 transition-all disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer"
+                className="px-4 py-2 text-sm text-[#8a8a95] hover:text-[#d8d5d0] border border-[#2a2a35] rounded-full hover:border-[#4a4a55] transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
               >
                 {action.label}
               </button>
@@ -54,11 +47,10 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
           </div>
         )}
 
-        {/* Free input (collapsed) */}
         {!expanded ? (
           <button
             onClick={() => setExpanded(true)}
-            className="text-xs text-muted-foreground/40 hover:text-muted-foreground/60 transition-colors cursor-pointer"
+            className="text-xs text-[#3a3a45] hover:text-[#55555f] transition-colors cursor-pointer"
           >
             &#9656; 自分の言葉で
           </button>
@@ -72,12 +64,12 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
               placeholder="何をしますか？"
               disabled={disabled}
               autoFocus
-              className="flex-1 px-4 py-2 bg-transparent border border-border rounded-lg text-sm focus:outline-none focus:border-foreground/30 transition-colors disabled:opacity-40 font-sans"
+              className="flex-1 px-4 py-2 bg-transparent border border-[#2a2a35] rounded-lg text-sm text-[#d8d5d0] placeholder:text-[#3a3a45] focus:outline-none focus:border-[#4a4a55] transition-colors disabled:opacity-30 font-sans"
             />
             <button
               type="submit"
               disabled={disabled || !input.trim()}
-              className="px-4 py-2 text-sm border border-border rounded-lg hover:border-foreground/20 transition-all disabled:opacity-40 cursor-pointer"
+              className="px-4 py-2 text-sm text-[#8a8a95] border border-[#2a2a35] rounded-lg hover:border-[#4a4a55] transition-all disabled:opacity-30 cursor-pointer"
             >
               送る
             </button>
