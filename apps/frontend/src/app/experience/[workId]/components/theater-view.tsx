@@ -12,21 +12,35 @@ interface TheaterViewProps {
 export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
-  const [prevCount, setPrevCount] = useState(0);
+  // Use a Set to track which block IDs have already been rendered (no re-render on update)
+  const renderedIds = useRef(new Set<string>());
 
-  // Track how many blocks are "new" (for staggered animation)
-  const newStartIndex = prevCount;
+  // Mark blocks as "new" if not yet rendered, then remember them
+  const newBlockIds = new Set<string>();
+  for (const block of blocks) {
+    if (block && !renderedIds.current.has(block.id)) {
+      newBlockIds.add(block.id);
+    }
+  }
+  // Schedule marking as rendered after paint (won't cause re-render since it's a ref)
   useEffect(() => {
-    setPrevCount(blocks.length);
-  }, [blocks.length]);
+    const timer = setTimeout(() => {
+      for (const block of blocks) {
+        if (block) renderedIds.current.add(block.id);
+      }
+    }, 100);
+    return () => clearTimeout(timer);
+  }, [blocks]);
 
-  // Scroll to new content (not to bottom, just to where new content starts)
+  // Scroll to new content
+  const prevCountRef = useRef(0);
   useEffect(() => {
-    if (blocks.length > prevCount) {
+    if (blocks.length > prevCountRef.current) {
       setTimeout(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }, 300);
     }
+    prevCountRef.current = blocks.length;
   }, [blocks.length]);
 
   // IntersectionObserver on the sentinel element
@@ -58,8 +72,8 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
               )}
               <BlockRenderer
                 block={block}
-                isNew={idx >= newStartIndex}
-                animDelay={idx >= newStartIndex ? (idx - newStartIndex) * 2.0 : 0}
+                isNew={newBlockIds.has(block.id)}
+                animDelay={newBlockIds.has(block.id) ? [...newBlockIds].indexOf(block.id) * 2.0 : 0}
               />
             </div>
           ) : null
