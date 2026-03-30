@@ -59,7 +59,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
               <BlockRenderer
                 block={block}
                 isNew={idx >= newStartIndex}
-                animDelay={idx >= newStartIndex ? (idx - newStartIndex) * 0.15 : 0}
+                animDelay={idx >= newStartIndex ? (idx - newStartIndex) * 0.6 : 0}
               />
             </div>
           ) : null
@@ -80,7 +80,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
 function BlockRenderer({ block, isNew, animDelay }: { block: SceneBlock; isNew: boolean; animDelay: number }) {
   const animStyle = isNew ? {
     opacity: 0,
-    animation: `fadeUp 0.8s ease ${animDelay}s forwards`,
+    animation: `fadeUp 1.2s ease-out ${animDelay}s forwards`,
   } : {};
 
   switch (block.type) {

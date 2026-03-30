@@ -109,8 +109,8 @@ export default function ExperiencePage() {
 
       if (cancelled) return;
 
-      // Get intro text from first episode's opening (the ACTUAL story text)
-      let introLines: string[] = [];
+      // Get intro text from first episode's opening — preserve paragraph structure
+      let introParas: string[] = [];
       try {
         const workRes = await api.getEpisodes(workId);
         const eps = ((workRes as any)?.data ?? workRes ?? []) as any[];
@@ -123,45 +123,40 @@ export default function ExperiencePage() {
             content = (epRes as any)?.data?.content ?? (epRes as any)?.content ?? '';
           }
           if (content) {
-            // Take the opening paragraphs (before first dialogue or scene break)
+            // Take opening paragraphs as-is (no sentence splitting)
             const paras = content.split(/\n{2,}/);
             for (const para of paras) {
-              const t = para.trim().replace(/^　+/, '');
+              const t = para.trim();
               if (!t) continue;
-              if (t.startsWith('「') || t === '***') break; // Stop at first dialogue or break
-              const sentences = splitIntoSentences(t);
-              introLines.push(...sentences);
-              if (introLines.length >= 4) break; // Max 4 intro lines
+              if (t === '***' || t === '---') break;
+              introParas.push(t);
+              if (introParas.length >= 3) break;
             }
           }
         }
       } catch {}
 
       // Fallback
-      if (introLines.length === 0) {
-        introLines = [`${work?.title || '物語'}の世界が広がっている。`];
+      if (introParas.length === 0) {
+        introParas = [`${work?.title || '物語'}の世界が広がっている。`];
       }
-      // Deduplicate and limit
-      introLines = [...new Set(introLines)].slice(0, 5);
 
       if (cancelled) return;
 
-      // Reveal lines one by one
-      let i = 0;
-      const timer = setInterval(() => {
-        if (cancelled) { clearInterval(timer); return; }
-        if (i < introLines.length) {
-          setBlocks(prev => [...prev, { id: bid(), type: 'environment', source: 'original', text: introLines[i] }]);
-          i++;
-        } else {
-          clearInterval(timer);
-          // Contextual entry action
-          setWorldState(prev => ({
-            ...prev,
-            actions: [{ type: 'move', label: '物語に入る', params: { locationId: 'initial' } }],
-          }));
-        }
-      }, 1200);
+      // Add all intro blocks at once — TheaterView's staggered fadeUp handles smooth reveal
+      const introBlocks: SceneBlock[] = introParas.map(text => ({
+        id: bid(), type: 'environment' as const, source: 'original' as const, text,
+      }));
+      setBlocks(introBlocks);
+
+      // Show entry action after animation completes
+      setTimeout(() => {
+        if (cancelled) return;
+        setWorldState(prev => ({
+          ...prev,
+          actions: [{ type: 'move', label: '物語に入る', params: { locationId: 'initial' } }],
+        }));
+      }, introParas.length * 800 + 500);
     }
 
     buildIntro();
@@ -260,25 +255,6 @@ export default function ExperiencePage() {
         type: a.type, label: a.label, params: a.params || {},
       })),
     }));
-  }
-
-  /** Split text into sentences (used for intro only) */
-  function splitIntoSentences(text: string): string[] {
-    const results: string[] = [];
-    for (const line of text.split('\n')) {
-      const trimmed = line.trim();
-      if (!trimmed) continue;
-      // Only split very long lines at sentence endings
-      if (trimmed.length > 120) {
-        const parts = trimmed.split(/(?<=[。！？」』])\s*/);
-        for (const p of parts) {
-          if (p.trim()) results.push(p.trim());
-        }
-      } else {
-        results.push(trimmed);
-      }
-    }
-    return results;
   }
 
   // ===== Action Handlers =====
