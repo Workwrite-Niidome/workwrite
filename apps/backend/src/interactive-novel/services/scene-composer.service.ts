@@ -98,22 +98,19 @@ export class SceneComposerService {
       )),
     );
 
-    // ===== ENVIRONMENT: Rich sensory description =====
-    // LocationRendering is the core of the experience — use all available senses
+    // ===== ENVIRONMENT IS MINIMAL =====
+    // Just one line: location name + one sensory detail
     let environmentText = '';
     if (location) {
+      // Try to get one sensory line from LocationRendering
       if (state.locationId) {
         const rendering = await this.prisma.locationRendering.findUnique({
           where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay } },
         });
         if (rendering) {
           const sensory = rendering.sensoryText as Record<string, string>;
-          const paragraphs: string[] = [];
-          if (sensory?.visual) paragraphs.push(sensory.visual);
-          if (sensory?.auditory) paragraphs.push(sensory.auditory);
-          if (sensory?.olfactory) paragraphs.push(sensory.olfactory);
-          if (sensory?.atmospheric) paragraphs.push(sensory.atmospheric);
-          environmentText = paragraphs.length > 0 ? paragraphs.join('\n') : location.description;
+          // Pick just the visual or atmospheric (most evocative)
+          environmentText = sensory?.visual || sensory?.atmospheric || location.description;
         } else {
           environmentText = location.description;
         }
@@ -131,7 +128,7 @@ export class SceneComposerService {
     }
 
     const eventsText = renderedEvents.map(e => e.renderedText).filter(Boolean).join('\n');
-    const actions = await this.generateActions(workId, state, characters, eventsText, location?.name || '', allEvents);
+    const actions = await this.generateActions(workId, state, characters, eventsText, location?.name || '');
 
     return {
       environment: { text: environmentText, source: 'cached' },
@@ -157,7 +154,6 @@ export class SceneComposerService {
     characters: { id: string; name: string }[],
     eventsText: string,
     locationName: string,
-    allEvents: { episodeId: string | null }[] = [],
   ): Promise<ActionSuggestion[]> {
     // Gather move connections for both AI context and fallback
     let connections: { toLocation: { id: string; name: string }; description: string | null }[] = [];
@@ -179,9 +175,7 @@ export class SceneComposerService {
       if (aiActions && aiActions.length > 0) {
         // Always append fixed actions
         aiActions.push({ type: 'observe', label: '周りを見る', params: { target: 'environment' } });
-        if (allEvents.length > 0 && allEvents[0].episodeId) {
-          aiActions.push({ type: 'read', label: 'この場面を読む', params: { episodeId: allEvents[0].episodeId } });
-        }
+        aiActions.push({ type: 'time', label: '次の日へ', params: {} });
         return aiActions;
       }
     } catch (err) {
@@ -189,14 +183,13 @@ export class SceneComposerService {
     }
 
     // Fallback: mechanical generation
-    return this.generateActionsFallback(state, characters, connections, allEvents);
+    return this.generateActionsFallback(state, characters, connections);
   }
 
   private generateActionsFallback(
     state: any,
     characters: { id: string; name: string }[],
     connections: { toLocation: { id: string; name: string }; description: string | null }[],
-    allEvents: { episodeId: string | null }[] = [],
   ): ActionSuggestion[] {
     const actions: ActionSuggestion[] = [];
 
@@ -217,9 +210,7 @@ export class SceneComposerService {
     }
 
     actions.push({ type: 'observe', label: '周りを見る', params: { target: 'environment' } });
-    if (allEvents.length > 0 && allEvents[0].episodeId) {
-      actions.push({ type: 'read', label: 'この場面を読む', params: { episodeId: allEvents[0].episodeId } });
-    }
+    actions.push({ type: 'time', label: '次の日へ', params: {} });
 
     return actions;
   }
@@ -247,7 +238,7 @@ export class SceneComposerService {
 - "move"の場合、paramsにlocationIdを含める（"LOC:場所名"の形式で）
 - "observe"の場合、paramsにtarget: "environment"を含める
 - シーンの雰囲気や状況に合った選択肢にする
-- 「周りを見る」「この場面を読む」は不要（自動追加される）
+- 「周りを見る」「次の日へ」は不要（自動追加される）
 
 JSON配列のみ返してください。`;
 

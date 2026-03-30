@@ -29,7 +29,7 @@ export interface CharacterBlock {
 }
 
 export interface ActionSuggestion {
-  type: 'move' | 'observe' | 'talk' | 'perspective' | 'read';
+  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time';
   label: string;
   params: Record<string, string>;
 }

@@ -46,42 +46,20 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled, visibl
         }`}
       >
       <div className="mx-auto max-w-lg">
-        {actions.length > 0 && (() => {
-          const primary = actions.filter(a => a.type !== 'read');
-          const secondary = actions.filter(a => a.type === 'read');
-          return (
-            <>
-              {primary.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3">
-                  {primary.map((action, i) => (
-                    <button
-                      key={i}
-                      onClick={() => !disabled && onAction(action)}
-                      disabled={disabled}
-                      className="px-4 py-2 text-sm text-[#8a8a95] hover:text-[#d8d5d0] border border-[#2a2a35] rounded-full hover:border-[#4a4a55] transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-              {secondary.length > 0 && (
-                <div className="flex flex-wrap gap-2 mb-3 mt-1">
-                  {secondary.map((action, i) => (
-                    <button
-                      key={`read-${i}`}
-                      onClick={() => !disabled && onAction(action)}
-                      disabled={disabled}
-                      className="px-4 py-2 text-sm text-[#6a7a8a] hover:text-[#9ab0c0] border border-[#1e2a35] rounded-full hover:border-[#3a4a55] transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
-                    >
-                      {action.label}
-                    </button>
-                  ))}
-                </div>
-              )}
-            </>
-          );
-        })()}
+        {actions.length > 0 && (
+          <div className="flex flex-wrap gap-2 mb-3">
+            {actions.map((action, i) => (
+              <button
+                key={i}
+                onClick={() => !disabled && onAction(action)}
+                disabled={disabled}
+                className="px-4 py-2 text-sm text-[#8a8a95] hover:text-[#d8d5d0] border border-[#2a2a35] rounded-full hover:border-[#4a4a55] transition-all disabled:opacity-30 disabled:cursor-not-allowed cursor-pointer"
+              >
+                {action.label}
+              </button>
+            ))}
+          </div>
+        )}
 
         {!expanded ? (
           <button

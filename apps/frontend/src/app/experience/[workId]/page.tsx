@@ -300,11 +300,10 @@ export default function ExperiencePage() {
         if (res.data?.text) {
           add([{ id: bid(), type: 'environment', source: 'generated', text: res.data.text }]);
         }
-      } else if (action.type === 'read') {
-        const episodeId = action.params.episodeId;
-        if (episodeId) {
-          window.open(`/works/${workId}/episodes/${episodeId}`, '_blank');
-        }
+      } else if (action.type === 'time') {
+        const res = await apiPost('/time-advance');
+        add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
+        applyScene(res.data.scene);
       } else if (action.type === 'perspective') {
         const mode = action.params.mode as PerspectiveMode;
         const labels: Record<string, string> = { protagonist: '主人公', character: 'あなた', omniscient: '俯瞰' };
