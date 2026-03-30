@@ -41,6 +41,15 @@ export class InteractiveNovelController {
     return { data: { state, scene } };
   }
 
+  @Post(':workId/reset')
+  async reset(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    await this.readerState.resetState(userId, workId);
+    return { data: { reset: true } };
+  }
+
   @Post(':workId/move')
   async move(
     @CurrentUser('id') userId: string,

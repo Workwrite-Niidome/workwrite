@@ -37,6 +37,10 @@ function bid(): string { return `b-${++blockId}`; }
 function saveSession(workId: string, blocks: SceneBlock[], state: WorldState) {
   try { localStorage.setItem(`exp-${workId}`, JSON.stringify({ blocks: blocks.slice(-50), state, t: Date.now() })); } catch {}
 }
+function clearSession(workId: string) {
+  try { localStorage.removeItem(`exp-${workId}`); } catch {}
+}
+
 function loadSession(workId: string): { blocks: SceneBlock[]; state: WorldState } | null {
   try {
     const d = JSON.parse(localStorage.getItem(`exp-${workId}`) || 'null');
@@ -54,7 +58,7 @@ export default function ExperiencePage() {
     timelinePosition: 0, perspective: 'character', presentCharacters: [], actions: [],
   });
   const [isStreaming, setIsStreaming] = useState(false);
-  const [phase, setPhase] = useState<'loading' | 'intro' | 'world'>('loading');
+  const [phase, setPhase] = useState<'loading' | 'menu' | 'intro' | 'world'>('loading');
   const [work, setWork] = useState<any>(null);
   const abortRef = useRef<AbortController | null>(null);
 
@@ -69,9 +73,7 @@ export default function ExperiencePage() {
         // Check saved session
         const saved = loadSession(workId);
         if (saved) {
-          setBlocks(saved.blocks);
-          setWorldState(saved.state);
-          setPhase('world');
+          setPhase('menu'); // Show menu: resume or restart
         } else {
           setPhase('intro');
         }
@@ -288,6 +290,40 @@ export default function ExperiencePage() {
     return (
       <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
         <div className="text-[#55555f] text-sm tracking-widest animate-pulse">...</div>
+      </div>
+    );
+  }
+
+  if (phase === 'menu') {
+    return (
+      <div className="min-h-screen bg-[#0a0a0f] text-[#d8d5d0] flex flex-col items-center justify-center px-6" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+        <h1 className="text-2xl font-light tracking-widest mb-2">{work?.title || 'Interactive Novel'}</h1>
+        <p className="text-xs text-[#55555f] mb-12">{work?.author?.displayName || work?.author?.name || ''}</p>
+        <div className="flex flex-col gap-3 w-full max-w-xs">
+          <button
+            onClick={() => {
+              const saved = loadSession(workId);
+              if (saved) { setBlocks(saved.blocks); setWorldState(saved.state); }
+              setPhase('world');
+            }}
+            className="px-6 py-3 border border-[#2a2a35] rounded-lg text-sm text-[#d8d5d0] hover:border-[#4a4a55] transition-all cursor-pointer"
+          >
+            続きから
+          </button>
+          <button
+            onClick={async () => {
+              clearSession(workId);
+              // Reset DB state too
+              try { await apiPost('/reset'); } catch {}
+              setBlocks([]);
+              setWorldState({ locationId: null, locationName: '', timeOfDay: 'afternoon', timelinePosition: 0, perspective: 'character', presentCharacters: [], actions: [] });
+              setPhase('intro');
+            }}
+            className="px-6 py-3 border border-[#2a2a35] rounded-lg text-sm text-[#8a8a95] hover:border-[#4a4a55] transition-all cursor-pointer"
+          >
+            最初から
+          </button>
+        </div>
       </div>
     );
   }

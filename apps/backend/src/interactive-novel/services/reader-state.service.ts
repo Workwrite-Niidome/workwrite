@@ -88,4 +88,14 @@ export class ReaderStateService {
       take: limit,
     });
   }
+
+  async resetState(userId: string, workId: string) {
+    // Delete state, witnessed events, discovered locations, journey logs
+    await Promise.all([
+      this.prisma.readerWorldState.deleteMany({ where: { userId, workId } }),
+      this.prisma.readerWitnessedEvent.deleteMany({ where: { userId, workId } }),
+      this.prisma.readerDiscoveredLocation.deleteMany({ where: { userId, workId } }),
+      this.prisma.journeyLog.deleteMany({ where: { userId, workId } }),
+    ]);
+  }
 }
