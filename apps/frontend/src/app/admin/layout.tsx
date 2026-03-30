@@ -46,12 +46,7 @@ export default function AdminLayout({ children }: { children: React.ReactNode })
     }
 
     if (!isLoading && isAuthenticated && user?.role === 'ADMIN') {
-      api.getAdminStats()
-        .then(() => setServerVerified(true))
-        .catch(() => {
-          setServerVerified(false);
-          router.push('/');
-        });
+      setServerVerified(true);
     }
   }, [isLoading, isAuthenticated, user, router]);
 
