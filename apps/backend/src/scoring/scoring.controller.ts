@@ -1,12 +1,19 @@
-import { Controller, Get, Post, Param, Query, UseGuards, Req } from '@nestjs/common';
+import { Controller, Get, Post, Param, Query, UseGuards, Req, ForbiddenException } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth, ApiQuery } from '@nestjs/swagger';
 import { ScoringService } from './scoring.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 @ApiTags('Scoring')
 @Controller('scoring')
 export class ScoringController {
-  constructor(private scoringService: ScoringService) {}
+  constructor(private scoringService: ScoringService, private prisma: PrismaService) {}
+
+  private async verifyWorkOwnership(workId: string, userId: string) {
+    const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } });
+    if (!work || work.authorId !== userId) throw new ForbiddenException();
+  }
 
   @Get('works/:workId/estimate')
   @UseGuards(JwtAuthGuard)
@@ -90,7 +97,8 @@ export class ScoringController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Get scoring history for a work' })
-  async getHistory(@Param('workId') workId: string) {
+  async getHistory(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     const entries = await this.scoringService.getHistory(workId);
     return {
       data: entries.map((e: any) => ({
@@ -118,8 +126,11 @@ export class ScoringController {
   }
 
   @Get('works/:workId/analysis')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get detailed score analysis with improvement tips' })
-  getAnalysis(@Param('workId') workId: string) {
+  async getAnalysis(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.scoringService.getScoreWithAnalysis(workId);
   }
 

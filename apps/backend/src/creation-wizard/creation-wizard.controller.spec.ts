@@ -3,6 +3,7 @@ import { CreationWizardController } from './creation-wizard.controller';
 import { CreationWizardService } from './creation-wizard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { OriginalityService } from '../originality/originality.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 // ─── Mock service factory ────────────────────────────────────────────────────
 
@@ -56,6 +57,7 @@ describe('CreationWizardController', () => {
       providers: [
         { provide: CreationWizardService, useValue: service },
         { provide: OriginalityService, useValue: { getBreakdown: jest.fn().mockResolvedValue({ originality: 1.0, isAiGenerated: false, templateCounts: {} }), recalculate: jest.fn() } },
+        { provide: PrismaService, useValue: { work: { findUnique: jest.fn().mockResolvedValue({ authorId: 'user-1' }) } } },
       ],
     })
       .overrideGuard(JwtAuthGuard)
@@ -305,7 +307,7 @@ describe('CreationWizardController', () => {
         customFieldDefinitions: [],
         worldBuildingData: { basics: { era: '現代' } },
       };
-      const result = await controller.saveCreationPlan('work-1', dto as any);
+      const result = await controller.saveCreationPlan('work-1', 'user-1', dto as any);
 
       expect(service.saveCreationPlan).toHaveBeenCalledWith('work-1', dto);
       expect(result).toEqual(planData);
@@ -319,7 +321,7 @@ describe('CreationWizardController', () => {
       const plan = { workId: 'work-1', worldBuildingData: { basics: {} } };
       service.getCreationPlan.mockResolvedValue(plan);
 
-      const result = await controller.getCreationPlan('work-1');
+      const result = await controller.getCreationPlan('work-1', 'user-1');
 
       expect(service.getCreationPlan).toHaveBeenCalledWith('work-1');
       expect(result).toEqual(plan);
@@ -328,7 +330,7 @@ describe('CreationWizardController', () => {
     it('returns null when plan does not exist', async () => {
       service.getCreationPlan.mockResolvedValue(null);
 
-      const result = await controller.getCreationPlan('nonexistent');
+      const result = await controller.getCreationPlan('nonexistent', 'user-1');
       expect(result).toBeNull();
     });
   });

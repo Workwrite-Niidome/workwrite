@@ -183,8 +183,10 @@ export class StoryStructureController {
   // ─── AI Context ────────────────────────────────────
 
   @Get('works/:workId/story-context')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get structured context string for AI' })
-  getStructuredContext(@Param('workId') workId: string) {
+  getStructuredContext(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
     return this.service.buildStructuredContext(workId);
   }
 }

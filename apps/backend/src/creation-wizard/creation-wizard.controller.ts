@@ -8,6 +8,7 @@ import {
   Query,
   Res,
   UseGuards,
+  ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
@@ -15,6 +16,7 @@ import { CreationWizardService } from './creation-wizard.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { OriginalityService } from '../originality/originality.service';
+import { PrismaService } from '../common/prisma/prisma.service';
 import {
   GenerateCharactersDto,
   GeneratePlotDto,
@@ -36,7 +38,13 @@ export class CreationWizardController {
   constructor(
     private creationWizardService: CreationWizardService,
     private originalityService: OriginalityService,
+    private prisma: PrismaService,
   ) {}
+
+  private async verifyWorkOwnership(workId: string, userId: string) {
+    const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } });
+    if (!work || work.authorId !== userId) throw new ForbiddenException();
+  }
 
   // ─── SSE streaming endpoints ─────────────────────────────────
 
@@ -380,17 +388,24 @@ export class CreationWizardController {
   // ─── Plan CRUD ───────────────────────────────────────────────
 
   @Put('works/:workId/creation/plan')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Save/update creation plan' })
-  saveCreationPlan(
+  async saveCreationPlan(
     @Param('workId') workId: string,
+    @CurrentUser('id') userId: string,
     @Body() dto: SaveCreationPlanDto,
   ) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.creationWizardService.saveCreationPlan(workId, dto);
   }
 
   @Get('works/:workId/creation/plan')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get creation plan' })
-  getCreationPlan(@Param('workId') workId: string) {
+  async getCreationPlan(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.creationWizardService.getCreationPlan(workId);
   }
 
@@ -408,8 +423,11 @@ export class CreationWizardController {
   // ─── Originality ─────────────────────────────────────────────
 
   @Get('works/:workId/originality')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get originality score with breakdown' })
-  getOriginality(@Param('workId') workId: string) {
+  async getOriginality(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.originalityService.getBreakdown(workId);
   }
 
@@ -427,8 +445,11 @@ export class CreationWizardController {
   }
 
   @Get('works/:workId/creation/summary')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
   @ApiOperation({ summary: 'Get cached story summary' })
-  getStorySummary(@Param('workId') workId: string) {
+  async getStorySummary(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.creationWizardService.getStorySummary(workId);
   }
 
