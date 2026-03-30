@@ -47,7 +47,7 @@ export class WorldBuilderService {
   }> {
     const work = await this.prisma.work.findUnique({
       where: { id: workId },
-      select: { id: true, title: true, completionStatus: true },
+      select: { id: true, title: true, completionStatus: true, genre: true, settingEra: true },
     });
     if (!work) throw new BadRequestException('Work not found');
     if (work.completionStatus !== 'COMPLETED') {
@@ -122,12 +122,23 @@ export class WorldBuilderService {
       }
 
       // Step 4: Generate AI-powered LocationRenderings
+      const workContext = {
+        genre: work.genre || undefined,
+        settingEra: work.settingEra || undefined,
+      };
+      const analysisContext = analyses.map(a => ({
+        episodeIndex: a.episode?.orderIndex ?? 0,
+        tone: (a as any).tone || undefined,
+        summary: (a as any).summary || undefined,
+        locations: (a.locations as any[]) || [],
+      }));
+
       let renderCount = 0;
       for (const loc of extractedLocations) {
         const locId = locationMap.get(loc.name);
         if (!locId) continue;
 
-        const renderings = await this.generateAiRenderings(loc, episodes);
+        const renderings = await this.generateAiRenderings(loc, episodes, workContext, analysisContext);
         for (const r of renderings) {
           await this.prisma.locationRendering.upsert({
             where: { locationId_timeOfDay: { locationId: locId, timeOfDay: r.timeOfDay } },
@@ -308,15 +319,38 @@ export class WorldBuilderService {
   private async generateAiRenderings(
     loc: ExtractedLocation,
     episodes: { id: string; orderIndex: number; content: string | null }[],
+    workContext?: { genre?: string; settingEra?: string; tone?: string; themes?: string[] },
+    analyses?: { episodeIndex: number; tone?: string; summary?: string; locations?: any[] }[],
   ): Promise<{ timeOfDay: string; sensoryText: any }[]> {
     try {
-      // Gather episode text excerpts where this location appears
-      const relevantExcerpts = loc.episodeIndices
-        .map(idx => episodes.find(ep => ep.orderIndex === idx))
-        .filter(Boolean)
-        .map(ep => (ep!.content || '').slice(0, 1000))
-        .slice(0, 3) // Max 3 excerpts to control token usage
-        .join('\n---\n');
+      // Build rich context from EpisodeAnalysis metadata (no raw text truncation)
+      const relevantAnalyses = (analyses || [])
+        .filter(a => loc.episodeIndices.includes(a.episodeIndex));
+
+      const contextParts: string[] = [];
+
+      // Work-level context
+      if (workContext?.genre) contextParts.push(`ジャンル: ${workContext.genre}`);
+      if (workContext?.settingEra) contextParts.push(`時代・世界観: ${workContext.settingEra}`);
+
+      // Episode-level context: tone, summaries, location descriptions from analysis
+      const tones = relevantAnalyses.map(a => a.tone).filter(Boolean);
+      if (tones.length > 0) contextParts.push(`作品のトーン: ${[...new Set(tones)].join('、')}`);
+
+      const summaries = relevantAnalyses.map(a => a.summary).filter(Boolean).slice(0, 3);
+      if (summaries.length > 0) contextParts.push(`関連エピソードのあらすじ:\n${summaries.join('\n')}`);
+
+      // Location descriptions from analysis (these are already extracted by scoring)
+      const locDescs = relevantAnalyses
+        .flatMap(a => (a.locations || []) as any[])
+        .filter((l: any) => l.name === loc.name && l.description)
+        .map((l: any) => l.description);
+      if (locDescs.length > 0) contextParts.push(`分析から抽出された場所の描写: ${[...new Set(locDescs)].join(' / ')}`);
+
+      // Themes from work-level analysis
+      if (workContext?.themes && workContext.themes.length > 0) {
+        contextParts.push(`テーマ: ${workContext.themes.join('、')}`);
+      }
 
       const systemPrompt = [
         'あなたは文学的な場所描写を生成する作家です。',
@@ -344,8 +378,8 @@ export class WorldBuilderService {
         `場所の説明: ${loc.description}`,
         `場所タイプ: ${loc.type === 'exterior' ? '屋外' : loc.type === 'interior' ? '屋内' : '抽象的空間'}`,
         '',
-        relevantExcerpts
-          ? `以下はこの場所が登場する作品の原文抜粋です。作品のトーンや具体的な描写を参考にしてください：\n\n${relevantExcerpts}`
+        contextParts.length > 0
+          ? `以下はこの場所が登場する作品の文脈情報です。作品の世界観やトーンを忠実に反映した描写を生成してください：\n\n${contextParts.join('\n')}`
           : '',
       ].join('\n');
 
