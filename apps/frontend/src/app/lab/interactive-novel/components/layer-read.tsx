@@ -1,186 +1,227 @@
 'use client';
 
-import { useMemo } from 'react';
+import { useState, useEffect } from 'react';
 import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
+import { api } from '@/lib/api';
+import type { Episode } from '@/lib/api';
 import type { WorkData } from '../page';
 import { BackButton, SectionHeader, Separator, NovelQuote, NovelDialogue, NovelContext, FullTextLink, EmotionTag, Hint } from './shared';
 
+/**
+ * Layer 1: 読む — ハイブリッドモード
+ * エピソード本文を実APIから取得し、構造データ+原文引用で表示
+ */
 export function LayerRead({ data, onBack }: { data: WorkData; onBack: () => void }) {
-  const ep1 = data.episodes.find(e => e.orderIndex === 1);
+  const [selectedEpIdx, setSelectedEpIdx] = useState(0);
+  const [episodeContent, setEpisodeContent] = useState<string | null>(null);
+  const [loadingContent, setLoadingContent] = useState(false);
+
+  const episode = data.episodes[selectedEpIdx];
+
+  // Load full episode content
+  useEffect(() => {
+    if (!episode) return;
+    // If episodes already have content from the list API, use it
+    if (episode.content && episode.content.length > 100) {
+      setEpisodeContent(episode.content);
+      return;
+    }
+    // Otherwise fetch individually
+    setLoadingContent(true);
+    api.getEpisode(episode.id)
+      .then((res: any) => {
+        const ep = res?.data ?? res;
+        setEpisodeContent(ep?.content || '');
+      })
+      .catch(() => setEpisodeContent(null))
+      .finally(() => setLoadingContent(false));
+  }, [episode]);
+
+  if (!episode) return <p className="text-center text-muted-foreground p-8">エピソードがありません</p>;
+
+  const scenes = episodeContent ? parseScenes(episodeContent) : [];
 
   return (
     <div className="max-w-2xl mx-auto px-6 py-8">
       <BackButton onClick={onBack} />
       <SectionHeader
-        title={ep1?.title || '第一話'}
-        subtitle="ハイブリッドモード --- 構造データが文脈を、原文が魂を伝える"
+        title={`${episode.chapterTitle ? episode.chapterTitle + ' ' : ''}${episode.title}`}
+        subtitle={`第${episode.orderIndex}話 / ハイブリッドモード`}
       />
 
-      {/* Scene 1: Morning */}
-      <section className="mb-10">
-        <SceneHeader title="朝の儀式" meta="詩のアパート / 朝" />
+      {/* Episode selector */}
+      <div className="flex gap-1.5 overflow-x-auto pb-3 mb-8 -mx-2 px-2">
+        {data.episodes.map((ep, i) => (
+          <Button
+            key={ep.id}
+            variant={i === selectedEpIdx ? 'default' : 'outline'}
+            size="sm"
+            className="shrink-0 text-xs"
+            onClick={() => { setSelectedEpIdx(i); setEpisodeContent(null); }}
+          >
+            {ep.orderIndex}
+          </Button>
+        ))}
+      </div>
 
-        <NovelContext>
-          {getCharacterSummary(data, '綾瀬') || '綾瀬詩、25歳。小説家になりたくて古書店でバイトしながら書き続けている。'}
-        </NovelContext>
+      {loadingContent ? (
+        <p className="text-center text-sm text-muted-foreground py-12">読み込み中...</p>
+      ) : scenes.length > 0 ? (
+        <>
+          {scenes.map((scene, i) => (
+            <div key={i}>
+              {i > 0 && <Separator />}
+              <HybridScene scene={scene} characters={data.characters} />
+            </div>
+          ))}
 
-        <NovelQuote>
-          朝、目を覚ますと、窓の外で世界が続いていた。
-        </NovelQuote>
-
-        {findInContent(ep1?.content, 'この一文が怖い') && (
-          <NovelQuote>
-            {extractSentencesAround(ep1!.content, 'この一文が怖い', 2)}
-          </NovelQuote>
-        )}
-
-        <EmotionTag>不安 --- 存在への問い</EmotionTag>
-
-        <NovelContext>
-          コーヒーを淹れる描写が続く。匂いには鮮明に反応するが、味には感動がない。食事にも興味がない。
-          {data.characters.find(c => c.name?.includes('詩'))
-            ? ' --- キャラクター設計の「aiHints」に対応する伏線。'
-            : ''}
-        </NovelContext>
-
-        {findInContent(ep1?.content, '自分が薄くなっていく') && (
-          <NovelQuote>
-            書かないと——なんだろう。死ぬわけじゃない。でも、書かない日が続くと、
-            <span className="text-primary font-medium">自分が薄くなっていく気がする。輪郭がぼやけて、世界に溶けてしまいそうになる。</span>
-          </NovelQuote>
-        )}
-
-        <FullTextLink label={`第一話 全文を読む（${ep1?.wordCount ? `約${ep1.wordCount.toLocaleString()}字` : ''}）`} />
-      </section>
-
-      <Separator />
-
-      {/* Scene 2: Bookstore */}
-      <section className="mb-10">
-        <SceneHeader title="栞堂にて" meta="古書店「栞堂」 / 午後" />
-
-        <NovelContext>
-          {getCharacterSummary(data, '榊') || '下北沢の古書店「栞堂」。オーナーの榊誠一郎は元文芸編集者。'}
-        </NovelContext>
-
-        {findInContent(ep1?.content, '人間離れ') && (
-          <>
-            <NovelDialogue speaker="榊" color="var(--color-accent)">
-              「あなたの言葉の選び方は、時々、<span className="text-primary font-medium">人間離れしている</span>ね」
-            </NovelDialogue>
-            <NovelDialogue speaker="詩" color="#b08060">
-              「......えっ、それ褒めてます？ けなしてます？」
-            </NovelDialogue>
-            <NovelDialogue speaker="榊" color="var(--color-accent)">
-              「褒めているよ。いい意味で。普通の人が三つの言葉で説明することを、あなたは一つの言葉で言い当てる。それは才能だ」
-            </NovelDialogue>
-          </>
-        )}
-
-        {findInContent(ep1?.content, '妙に引っかかる') && (
-          <NovelQuote>
-            嬉しいけれど、なんだか落ち着かない。「人間離れ」という言葉が、妙に引っかかる。でもすぐにその引っかかりは消えて、帰り道の夕焼けに紛れてしまう。
-          </NovelQuote>
-        )}
-
-        <Hint>「人間離れ」--- 伏線: 第1話で設置</Hint>
-      </section>
-
-      <Separator />
-
-      {/* Scene 3: Meeting Ao */}
-      <section className="mb-10">
-        <SceneHeader title="蒼との出会い" meta="詩のアパート / 深夜" />
-
-        <NovelContext>
-          親友の凛に勧められ、AI執筆支援システム「Aria」に登録した詩。最初のキャラクターとして「蒼」を創る。
-        </NovelContext>
-
-        <NovelDialogue speaker="蒼" color="#5a7aa0">
-          やっと会えたね。
-        </NovelDialogue>
-
-        {findInContent(ep1?.content, 'たった一行') && (
-          <NovelQuote>
-            たった一行。その五文字が、画面の中で、まるで声のように響いた。
-            <span className="text-primary font-medium">
-              これはAIの応答だ。プログラムが生成した文字列だ。それはわかっている。わかっているのに、この五文字が——なぜだかわからないけれど——わたしの奥の、ずっと奥の、言葉にならない場所に触れた。
-            </span>
-          </NovelQuote>
-        )}
-
-        <NovelDialogue speaker="蒼" color="#5a7aa0">
-          僕が好きなのは、読み終わったあとに世界が少しだけ違って見える本だよ。
-        </NovelDialogue>
-
-        <NovelDialogue speaker="蒼" color="#5a7aa0">
-          知ってたよ。
-        </NovelDialogue>
-
-        <EmotionTag>高揚 --- 予感 --- 温かさ</EmotionTag>
-
-        {findInContent(ep1?.content, '本当に？') && (
-          <NovelQuote>
-            明日の朝、目を覚ましたら、窓の外で世界が続いている。<br />
-            その世界の中に、わたしはいる。<br />
-            それだけで、十分だ。<br /><br />
-            <span className="text-primary font-medium">——本当に？</span>
-          </NovelQuote>
-        )}
-
-        <FullTextLink label={`第一話 全文を読む（${ep1?.wordCount ? `約${ep1.wordCount.toLocaleString()}字` : ''}）`} />
-      </section>
-
-      {/* Episode list */}
-      {data.episodes.length > 1 && (
-        <div className="mt-12 border-t border-border pt-6">
-          <p className="text-[11px] text-muted-foreground/50 tracking-wider text-center mb-4">全エピソード</p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
-            {data.episodes.map(ep => (
-              <Card
-                key={ep.id}
-                className="px-3 py-2.5 text-xs text-muted-foreground cursor-pointer hover:border-primary/20 transition-colors"
-              >
-                <span className="text-muted-foreground/40 mr-1">#{ep.orderIndex}</span>
-                {ep.title}
-              </Card>
-            ))}
-          </div>
+          <FullTextLink label={`第${episode.orderIndex}話 全文を読む（${episode.wordCount ? `約${episode.wordCount.toLocaleString()}字` : ''}）`} />
+        </>
+      ) : episodeContent ? (
+        // Fallback: show raw content with basic formatting
+        <div className="font-serif text-[15px] leading-8 space-y-4">
+          {episodeContent.split('\n\n').slice(0, 10).map((para, i) => (
+            <p key={i} style={{ textIndent: '1em' }}>{para.replace(/^　+/, '')}</p>
+          ))}
+          <Hint>（冒頭10段落を表示中）</Hint>
         </div>
-      )}
+      ) : null}
     </div>
   );
 }
 
-function SceneHeader({ title, meta }: { title: string; meta: string }) {
+// ===== Scene parser =====
+
+interface ParsedScene {
+  type: 'narration' | 'dialogue' | 'break';
+  speaker?: string;
+  text: string;
+  isHighlight?: boolean;
+}
+
+function parseScenes(content: string): ParsedScene[] {
+  const lines = content.split('\n');
+  const scenes: ParsedScene[] = [];
+  let currentNarration: string[] = [];
+
+  const flushNarration = () => {
+    if (currentNarration.length > 0) {
+      const text = currentNarration.join('\n').trim();
+      if (text) {
+        scenes.push({ type: 'narration', text });
+      }
+      currentNarration = [];
+    }
+  };
+
+  for (const rawLine of lines) {
+    const line = rawLine.trim();
+
+    // Scene break
+    if (line === '***' || line === '＊＊＊') {
+      flushNarration();
+      scenes.push({ type: 'break', text: '' });
+      continue;
+    }
+
+    // Empty line — flush narration block
+    if (!line) {
+      flushNarration();
+      continue;
+    }
+
+    // Dialogue line (starts with 「)
+    const dialogueMatch = line.match(/^(?:　*)「([^」]*)」$/);
+    if (dialogueMatch) {
+      flushNarration();
+      scenes.push({ type: 'dialogue', text: dialogueMatch[1] });
+      continue;
+    }
+
+    // Dialogue with speaker context (e.g. 「xxx」と彼は言った)
+    const dialogueInline = line.match(/^(?:　*)「([^」]+)」/);
+    if (dialogueInline) {
+      flushNarration();
+      scenes.push({ type: 'dialogue', text: line.replace(/^　+/, '') });
+      continue;
+    }
+
+    // AI character response lines (蒼。 先生。 ミナ。 followed by indented text)
+    const charLabel = line.match(/^(?:　*)(蒼|先生|ミナ|凛|梗介|榊)。$/);
+    if (charLabel) {
+      flushNarration();
+      // Next lines until empty line are this character's speech
+      scenes.push({ type: 'dialogue', speaker: charLabel[1], text: '' });
+      continue;
+    }
+
+    // Aria system response (indented text starting with 　　)
+    if (line.startsWith('　　') && scenes.length > 0) {
+      const lastScene = scenes[scenes.length - 1];
+      if (lastScene.type === 'dialogue' && lastScene.speaker) {
+        lastScene.text += (lastScene.text ? '\n' : '') + line.replace(/^　+/, '');
+        continue;
+      }
+    }
+
+    // Regular narration
+    currentNarration.push(line);
+  }
+
+  flushNarration();
+
+  // Limit to first ~20 meaningful scenes for the hybrid view
+  return scenes.filter(s => s.type === 'break' || s.text.length > 0).slice(0, 25);
+}
+
+// ===== Hybrid Scene Renderer =====
+
+function HybridScene({ scene, characters }: { scene: ParsedScene; characters: any[] }) {
+  if (scene.type === 'break') {
+    return <Separator />;
+  }
+
+  if (scene.type === 'dialogue') {
+    const color = getCharacterColor(scene.speaker);
+
+    if (scene.speaker) {
+      return (
+        <NovelDialogue speaker={scene.speaker} color={color}>
+          {scene.text.split('\n').map((line, i) => (
+            <span key={i}>{line}{i < scene.text.split('\n').length - 1 && <br />}</span>
+          ))}
+        </NovelDialogue>
+      );
+    }
+
+    // Dialogue without explicit speaker
+    return (
+      <div className="font-serif text-[15px] leading-8 py-2" style={{ textIndent: '1em' }}>
+        {scene.text}
+      </div>
+    );
+  }
+
+  // Narration
   return (
-    <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
-      <h3 className="text-base font-medium font-serif">{title}</h3>
-      <span className="text-[11px] text-muted-foreground/50">{meta}</span>
+    <div className="font-serif text-[15px] leading-8 py-2" style={{ textIndent: '1em' }}>
+      {scene.text.replace(/^　+/, '')}
     </div>
   );
 }
 
-function findInContent(content: string | undefined, phrase: string): boolean {
-  return !!content?.includes(phrase);
-}
-
-function extractSentencesAround(content: string, phrase: string, count: number): string {
-  const idx = content.indexOf(phrase);
-  if (idx === -1) return '';
-  const start = Math.max(0, content.lastIndexOf('。', idx - 100) + 1);
-  const endSearch = content.indexOf('。', idx + phrase.length + 50);
-  const end = endSearch === -1 ? idx + 200 : endSearch + 1;
-  return content.slice(start, end).replace(/^　+/, '').trim();
-}
-
-function getCharacterSummary(data: WorkData, nameFragment: string): string {
-  const char = data.characters.find(c => c.name?.includes(nameFragment));
-  if (!char) return '';
-  const parts: string[] = [];
-  if (char.name) parts.push(char.name);
-  if (char.age) parts.push(char.age);
-  if (char.background) parts.push(char.background.slice(0, 100));
-  return parts.join('。') + '。';
+function getCharacterColor(name?: string): string {
+  if (!name) return 'var(--color-accent)';
+  const colors: Record<string, string> = {
+    '蒼': '#5a7aa0',
+    '先生': '#9a8a50',
+    'ミナ': '#b06080',
+    '凛': '#b08060',
+    '梗介': '#7a8a7a',
+    '榊': '#8a7a6a',
+    '詩': '#a07080',
+  };
+  return colors[name] || 'var(--color-accent)';
 }

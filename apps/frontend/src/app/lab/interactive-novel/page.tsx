@@ -5,12 +5,9 @@ import { api } from '@/lib/api';
 import type { Work, Episode, StoryCharacter } from '@/lib/api';
 import { InteractiveLanding } from './components/landing';
 import { LayerRead } from './components/layer-read';
-import { LayerParticipate } from './components/layer-participate';
-import { LayerImmerse } from './components/layer-immerse';
-import { LayerConnect } from './components/layer-connect';
 import { LayerExperience } from './components/layer-experience';
 
-export type Layer = 'landing' | 'read' | 'participate' | 'immerse' | 'connect' | 'experience';
+export type Layer = 'landing' | 'read' | 'experience';
 
 export interface WorkData {
   work: Work;
@@ -21,20 +18,17 @@ export interface WorkData {
 
 export default function InteractiveNovelLab() {
   const [layer, setLayer] = useState<Layer>('landing');
-  const [workId, setWorkId] = useState<string>('');
   const [data, setData] = useState<WorkData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Find Aria work on mount
   useEffect(() => {
     async function loadAria() {
       try {
-        // Try to find Aria from user's works
         const worksRes = await api.getMyWorks();
         const works = (worksRes as any)?.data ?? worksRes;
         const ariaWork = Array.isArray(works)
-          ? works.find((w: Work) => w.title === 'アリア' || w.title === 'Aria')
+          ? works.find((w: Work) => w.title === 'Aria' || w.title === 'アリア')
           : null;
 
         if (!ariaWork) {
@@ -43,9 +37,6 @@ export default function InteractiveNovelLab() {
           return;
         }
 
-        setWorkId(ariaWork.id);
-
-        // Load all data in parallel
         const [episodesRes, charactersRes, planRes] = await Promise.all([
           api.getEpisodes(ariaWork.id).catch(() => null),
           api.getCharacters(ariaWork.id).catch(() => null),
@@ -62,7 +53,7 @@ export default function InteractiveNovelLab() {
           characters,
           creationPlan: plan,
         });
-      } catch (e) {
+      } catch {
         setError('データの読み込みに失敗しました。ログインしているか確認してください。');
       } finally {
         setLoading(false);
@@ -94,24 +85,9 @@ export default function InteractiveNovelLab() {
 
   return (
     <div className="min-h-screen bg-background text-foreground">
-      {layer === 'landing' && (
-        <InteractiveLanding data={data} onSelectLayer={setLayer} />
-      )}
-      {layer === 'read' && (
-        <LayerRead data={data} onBack={() => setLayer('landing')} />
-      )}
-      {layer === 'participate' && (
-        <LayerParticipate data={data} onBack={() => setLayer('landing')} />
-      )}
-      {layer === 'immerse' && (
-        <LayerImmerse data={data} onBack={() => setLayer('landing')} />
-      )}
-      {layer === 'connect' && (
-        <LayerConnect data={data} onBack={() => setLayer('landing')} />
-      )}
-      {layer === 'experience' && (
-        <LayerExperience data={data} onBack={() => setLayer('landing')} />
-      )}
+      {layer === 'landing' && <InteractiveLanding data={data} onSelectLayer={setLayer} />}
+      {layer === 'read' && <LayerRead data={data} onBack={() => setLayer('landing')} />}
+      {layer === 'experience' && <LayerExperience data={data} onBack={() => setLayer('landing')} />}
     </div>
   );
 }

@@ -1,19 +1,21 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useRef, useEffect, useCallback } from 'react';
 import { Card } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { api } from '@/lib/api';
+import { consumeSSEStream } from '@/lib/use-ai-stream';
+import type { Episode } from '@/lib/api';
 import type { WorkData } from '../page';
 import { BackButton, SectionHeader, Separator, NovelQuote, NovelDialogue, NovelContext, FullTextLink, Hint } from './shared';
 
-type SubMode = 'characters' | 'emotion' | 'relations' | 'novel-mode';
+type SubMode = 'characters' | 'emotion' | 'novel-mode';
 
 const subModes: { id: SubMode; title: string; desc: string }[] = [
-  { id: 'characters', title: 'キャラクターに出会う', desc: '読む前に、登場人物と会話する' },
-  { id: 'emotion', title: '感情から入る', desc: '今の気分で、シーンを体験する' },
-  { id: 'relations', title: '関係性を辿る', desc: 'キャラクター同士の絆を見る' },
-  { id: 'novel-mode', title: 'ノベルモード', desc: '物語をシーンごとに体験する' },
+  { id: 'characters', title: 'キャラクターに出会う', desc: '登場人物と会話する' },
+  { id: 'emotion', title: '感情から入る', desc: '気分でシーンを体験' },
+  { id: 'novel-mode', title: 'ノベルモード', desc: 'シーンごとに進める' },
 ];
 
 export function LayerExperience({ data, onBack }: { data: WorkData; onBack: () => void }) {
@@ -24,11 +26,11 @@ export function LayerExperience({ data, onBack }: { data: WorkData; onBack: () =
       <BackButton onClick={onBack} />
       <SectionHeader title="読まずに体験する" subtitle="小説を読む前に、この世界に触れる" />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 max-w-xl mx-auto mb-8">
+      <div className="grid grid-cols-3 gap-2 max-w-md mx-auto mb-8">
         {subModes.map(m => (
           <Card
             key={m.id}
-            className={`px-3 py-3.5 text-center cursor-pointer transition-all ${sub === m.id ? 'border-primary/30 shadow-sm' : 'hover:border-primary/20'}`}
+            className={`px-3 py-3 text-center cursor-pointer transition-all ${sub === m.id ? 'border-primary/30 shadow-sm' : 'hover:border-primary/20'}`}
             onClick={() => setSub(m.id)}
           >
             <p className="text-sm font-medium mb-0.5">{m.title}</p>
@@ -39,32 +41,111 @@ export function LayerExperience({ data, onBack }: { data: WorkData; onBack: () =
 
       {sub === 'characters' && <CharacterEncounter data={data} />}
       {sub === 'emotion' && <EmotionDive data={data} />}
-      {sub === 'relations' && <RelationshipMap />}
       {sub === 'novel-mode' && <NovelMode data={data} />}
     </div>
   );
 }
 
-// ===== Character Encounter =====
+// ===== Character Encounter (Real API) =====
+
+interface ChatMessage {
+  role: 'user' | 'assistant';
+  content: string;
+}
+
 function CharacterEncounter({ data }: { data: WorkData }) {
-  const [chatChar, setChatChar] = useState<string | null>(null);
-  const displayChars = data.characters.length > 0 ? data.characters.filter(c => c.isPublic) : fallbackCharacters;
+  const [selectedChar, setSelectedChar] = useState<any>(null);
+  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [input, setInput] = useState('');
+  const [isStreaming, setIsStreaming] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const chatEndRef = useRef<HTMLDivElement>(null);
+  const abortRef = useRef<AbortController | null>(null);
+
+  const publicChars = data.characters.filter(c => c.isPublic);
+
+  useEffect(() => {
+    chatEndRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [messages]);
+
+  const sendMessage = useCallback(async (msg: string) => {
+    if (!selectedChar || !msg.trim() || isStreaming) return;
+
+    const userMsg: ChatMessage = { role: 'user', content: msg.trim() };
+    setMessages(prev => [...prev, userMsg]);
+    setInput('');
+    setIsStreaming(true);
+    setError(null);
+
+    // Add empty assistant message for streaming
+    setMessages(prev => [...prev, { role: 'assistant', content: '' }]);
+
+    const controller = new AbortController();
+    abortRef.current = controller;
+
+    try {
+      const response = await api.fetchSSE(
+        `/ai/character-talk/${data.work.id}/chat`,
+        {
+          message: msg.trim(),
+          mode: 'character',
+          characterId: selectedChar.id,
+          useSonnet: false, // Haiku for cost efficiency
+        },
+        controller.signal,
+      );
+
+      await consumeSSEStream(response, (parsed) => {
+        if (parsed.error) {
+          setError(parsed.error);
+          return;
+        }
+        if (parsed.text) {
+          setMessages(prev => {
+            const updated = [...prev];
+            const last = updated[updated.length - 1];
+            if (last.role === 'assistant') {
+              updated[updated.length - 1] = { ...last, content: last.content + parsed.text };
+            }
+            return updated;
+          });
+        }
+      });
+    } catch (err: any) {
+      if (err.name === 'AbortError') return;
+      setError(err.message || 'エラーが発生しました');
+    } finally {
+      setIsStreaming(false);
+    }
+  }, [selectedChar, data.work.id, isStreaming]);
+
+  const handleKeyDown = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter' && !e.shiftKey && !e.nativeEvent.isComposing) {
+      e.preventDefault();
+      sendMessage(input);
+    }
+  };
 
   return (
     <div>
       <p className="text-center text-sm text-muted-foreground mb-5">
-        まだ物語を読んでいなくても、キャラクターと会話できます。
+        キャラクターを選んで会話してみてください。実際のキャラクタートークAPIに接続しています。
       </p>
 
+      {/* Character selection */}
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-        {displayChars.slice(0, 4).map(char => (
+        {publicChars.map(char => (
           <Card
-            key={char.name}
-            className={`px-3 py-5 text-center cursor-pointer transition-all hover:shadow-md ${chatChar === char.name ? 'border-primary/30' : 'hover:border-primary/20'}`}
-            onClick={() => setChatChar(char.name)}
+            key={char.id}
+            className={`px-3 py-4 text-center cursor-pointer transition-all hover:shadow-md ${selectedChar?.id === char.id ? 'border-primary/30' : 'hover:border-primary/20'}`}
+            onClick={() => {
+              setSelectedChar(char);
+              setMessages([]);
+              setError(null);
+            }}
           >
             <p className="text-sm font-medium mb-0.5">{char.name?.split('（')[0]}</p>
-            <p className="text-[10px] text-muted-foreground mb-2">{char.role}</p>
+            <p className="text-[10px] text-muted-foreground mb-1">{char.role?.split('/')[0]?.trim()}</p>
             {char.speechStyle && (
               <p className="text-[11px] text-muted-foreground/70 italic leading-relaxed font-serif">
                 {extractFirstQuote(char.speechStyle)}
@@ -74,50 +155,118 @@ function CharacterEncounter({ data }: { data: WorkData }) {
         ))}
       </div>
 
-      {chatChar && (
-        <div className="max-w-lg mx-auto animate-fade-in">
-          <p className="text-center text-sm font-medium mb-3">{chatChar.split('（')[0]}との会話</p>
-          <Card className="p-4 text-center border-dashed mb-4">
-            <p className="text-[11px] text-muted-foreground">
-              あなたはまだこの物語を読んでいません。{chatChar.split('（')[0]}は物語の核心に触れることなく会話します。
-            </p>
-          </Card>
+      {/* Chat interface */}
+      {selectedChar && (
+        <Card className="p-4">
+          <div className="text-center text-sm font-medium mb-3">
+            {selectedChar.name?.split('（')[0]}との会話
+          </div>
 
-          <div className="space-y-3">
-            {getChatDemo(chatChar).map((msg, i) => (
+          {/* Messages */}
+          <div className="space-y-3 max-h-[400px] overflow-y-auto mb-4 px-1">
+            {messages.length === 0 && (
+              <p className="text-center text-xs text-muted-foreground/50 py-8">
+                メッセージを送って会話を始めてください
+              </p>
+            )}
+            {messages.map((msg, i) => (
               <div
                 key={i}
                 className={`max-w-[85%] px-4 py-3 rounded-xl text-sm leading-7 ${
-                  msg.role === 'reader'
+                  msg.role === 'user'
                     ? 'ml-auto bg-primary text-primary-foreground rounded-br-sm'
-                    : 'mr-auto bg-card border border-border rounded-bl-sm'
+                    : 'mr-auto bg-secondary border border-border rounded-bl-sm'
                 }`}
               >
-                {msg.speaker && (
-                  <p className="text-[10px] font-sans font-medium tracking-wide mb-1 opacity-70">{msg.speaker}</p>
+                {msg.role === 'assistant' && (
+                  <p className="text-[10px] font-sans font-medium tracking-wide mb-1 opacity-70">
+                    {selectedChar.name?.split('（')[0]}
+                  </p>
                 )}
-                {msg.text.split('\n').map((line, j) => <span key={j}>{line}<br /></span>)}
+                {msg.content || (isStreaming && i === messages.length - 1 ? (
+                  <span className="text-muted-foreground/50">...</span>
+                ) : null)}
               </div>
             ))}
+            <div ref={chatEndRef} />
           </div>
 
-          <Hint>この会話を通じて{chatChar.split('（')[0]}の人柄に触れ、「この人の物語を読みたい」と思ったら、本編へ</Hint>
-        </div>
+          {error && <p className="text-xs text-destructive mb-2 text-center">{error}</p>}
+
+          {/* Input */}
+          <div className="flex gap-2">
+            <input
+              type="text"
+              value={input}
+              onChange={e => setInput(e.target.value)}
+              onKeyDown={handleKeyDown}
+              placeholder={`${selectedChar.name?.split('（')[0]}に話しかける...`}
+              disabled={isStreaming}
+              className="flex-1 px-4 py-2.5 bg-transparent border border-border rounded-lg text-sm focus:outline-none focus:border-primary/40 transition-colors disabled:opacity-50"
+            />
+            <Button
+              size="sm"
+              onClick={() => sendMessage(input)}
+              disabled={!input.trim() || isStreaming}
+            >
+              送信
+            </Button>
+          </div>
+
+          <p className="text-[10px] text-muted-foreground/50 text-center mt-2">
+            1メッセージ = 1cr (Haiku)
+          </p>
+        </Card>
       )}
     </div>
   );
 }
 
-// ===== Emotion Dive =====
+// ===== Emotion Dive (Real Episode Data) =====
+
 function EmotionDive({ data }: { data: WorkData }) {
   const [emotion, setEmotion] = useState<string | null>(null);
+  const [sceneContent, setSceneContent] = useState<string | null>(null);
+  const [loadingScene, setLoadingScene] = useState(false);
+
   const emotions = [
-    { id: 'warmth', label: '温かさがほしい' },
-    { id: 'courage', label: '勇気がほしい' },
-    { id: 'tears', label: '泣きたい' },
-    { id: 'awe', label: '震えたい' },
-    { id: 'hope', label: '希望がほしい' },
+    { id: 'warmth', label: '温かさがほしい', epIndex: 1, keyword: '嬉しいのは久しぶり' },
+    { id: 'courage', label: '勇気がほしい', epIndex: data.episodes.length > 1 ? data.episodes[data.episodes.length - 2].orderIndex : 1, keyword: '綾瀬詩。小説家' },
+    { id: 'tears', label: '泣きたい', epIndex: data.episodes.length > 1 ? data.episodes[data.episodes.length - 2].orderIndex : 1, keyword: '書いてくれて、ありがとう' },
+    { id: 'awe', label: '震えたい', epIndex: data.episodes.length > 1 ? data.episodes[data.episodes.length - 2].orderIndex : 1, keyword: '朝、目を覚ますと' },
+    { id: 'hope', label: '希望がほしい', epIndex: data.episodes.length > 1 ? data.episodes[data.episodes.length - 2].orderIndex : 1, keyword: 'あなたが読んでくれたから' },
   ];
+
+  const selectEmotion = async (emo: typeof emotions[0]) => {
+    setEmotion(emo.id);
+    setLoadingScene(true);
+
+    const ep = data.episodes.find(e => e.orderIndex === emo.epIndex);
+    if (!ep) { setLoadingScene(false); return; }
+
+    try {
+      let content = ep.content;
+      if (!content || content.length < 100) {
+        const res: any = await api.getEpisode(ep.id);
+        content = res?.data?.content ?? res?.content ?? '';
+      }
+
+      // Find the passage around the keyword
+      const idx = content.indexOf(emo.keyword);
+      if (idx >= 0) {
+        const start = Math.max(0, content.lastIndexOf('\n\n', idx - 200));
+        const end = Math.min(content.length, content.indexOf('\n\n', idx + 200));
+        setSceneContent(content.slice(start, end > start ? end : idx + 300).trim());
+      } else {
+        // Fallback: show last 500 chars of episode
+        setSceneContent(content.slice(-500).trim());
+      }
+    } catch {
+      setSceneContent(null);
+    } finally {
+      setLoadingScene(false);
+    }
+  };
 
   return (
     <div>
@@ -129,223 +278,184 @@ function EmotionDive({ data }: { data: WorkData }) {
             variant={emotion === e.id ? 'default' : 'outline'}
             size="sm"
             className="rounded-full"
-            onClick={() => setEmotion(e.id)}
+            onClick={() => selectEmotion(e)}
           >
             {e.label}
           </Button>
         ))}
       </div>
-      {emotion && <div className="animate-fade-in">{getEmotionScene(emotion, data)}</div>}
-    </div>
-  );
-}
 
-// ===== Relationship Map =====
-function RelationshipMap() {
-  const [openRel, setOpenRel] = useState<number | null>(null);
+      {loadingScene && <p className="text-center text-sm text-muted-foreground py-8">シーンを探しています...</p>}
 
-  return (
-    <div>
-      <p className="text-center text-sm text-muted-foreground mb-5">
-        キャラクター同士の関係をタップすると、その関係が描かれた場面に出会えます。
-      </p>
-      <div className="space-y-2">
-        {relationships.map((rel, i) => (
-          <Card
-            key={i}
-            className="px-5 py-4 cursor-pointer transition-all hover:shadow-md hover:border-primary/20"
-            onClick={() => setOpenRel(openRel === i ? null : i)}
-          >
-            <p className="text-sm font-medium mb-0.5">{rel.names}</p>
-            <Badge variant="outline" className="text-[10px] font-normal mb-2">{rel.type}</Badge>
-            {openRel === i && (
-              <div className="animate-fade-in mt-2">
-                <NovelDialogue speaker={rel.quote.speaker} color={rel.quote.color}>{rel.quote.text}</NovelDialogue>
-              </div>
-            )}
+      {!loadingScene && sceneContent && (
+        <div className="animate-fade-in">
+          <Card className="p-6">
+            <div className="font-serif text-[15px] leading-8 space-y-4">
+              {sceneContent.split('\n\n').map((para, i) => (
+                <p key={i} style={{ textIndent: '1em' }}>{para.replace(/^　+/, '')}</p>
+              ))}
+            </div>
           </Card>
-        ))}
-      </div>
+          <FullTextLink label="この場面の前後を読む" />
+        </div>
+      )}
     </div>
   );
 }
 
-// ===== Novel Mode =====
+// ===== Novel Mode (Real Episode Data) =====
+
 function NovelMode({ data }: { data: WorkData }) {
+  const [epIdx, setEpIdx] = useState(0);
   const [sceneIdx, setSceneIdx] = useState(0);
-  const scenes = vnScenes;
+  const [scenes, setScenes] = useState<VNScene[]>([]);
+  const [loading, setLoading] = useState(false);
+
+  const episode = data.episodes[epIdx];
+
+  useEffect(() => {
+    if (!episode) return;
+    setLoading(true);
+    setSceneIdx(0);
+
+    const loadEp = async () => {
+      let content = episode.content;
+      if (!content || content.length < 100) {
+        try {
+          const res: any = await api.getEpisode(episode.id);
+          content = res?.data?.content ?? res?.content ?? '';
+        } catch {
+          content = '';
+        }
+      }
+      setScenes(buildVNScenes(content, episode.title));
+      setLoading(false);
+    };
+    loadEp();
+  }, [episode]);
+
   const scene = scenes[sceneIdx];
 
   return (
     <div>
-      <p className="text-center text-sm text-muted-foreground mb-5">構造化データと原文を組み合わせ、シーンごとに物語を体験する</p>
+      <p className="text-center text-sm text-muted-foreground mb-4">エピソードを選んでシーンを進めてください。</p>
 
-      <Card className="overflow-hidden">
-        <div className="px-5 py-3 bg-secondary/50 border-b border-border flex justify-between items-center">
-          <span className="text-xs text-muted-foreground">{scene.location}</span>
-          <Badge variant="outline" className="text-[10px] font-normal">{scene.emotion}</Badge>
-        </div>
-
-        <div className="px-5 py-8 min-h-[180px] flex flex-col justify-center">
-          {scene.type === 'narration' ? (
-            <p className="text-center text-[15px] text-muted-foreground leading-8 font-light font-serif">
-              {scene.text.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)}
-            </p>
-          ) : (
-            <Card className="px-5 py-4 mx-auto max-w-md">
-              <p className="text-xs font-sans font-medium tracking-wide mb-1.5" style={{ color: scene.color }}>
-                {scene.speaker}
-              </p>
-              <p className="text-lg leading-8 font-serif">
-                {scene.text.split('\n').map((line, i) => <span key={i}>{line}<br /></span>)}
-              </p>
-            </Card>
-          )}
-        </div>
-
-        <div className="px-5 py-3 border-t border-border flex justify-between items-center">
-          <Button variant="outline" size="sm" onClick={() => setSceneIdx(Math.max(0, sceneIdx - 1))}>
-            &#8592; 前へ
+      {/* Episode selector */}
+      <div className="flex gap-1.5 overflow-x-auto pb-3 mb-4 -mx-2 px-2">
+        {data.episodes.map((ep, i) => (
+          <Button
+            key={ep.id}
+            variant={i === epIdx ? 'default' : 'outline'}
+            size="sm"
+            className="shrink-0 text-xs"
+            onClick={() => setEpIdx(i)}
+          >
+            {ep.orderIndex}
           </Button>
-          <span className="text-[11px] text-muted-foreground/60">{sceneIdx + 1} / {scenes.length}</span>
-          <Button variant="outline" size="sm" onClick={() => setSceneIdx(Math.min(scenes.length - 1, sceneIdx + 1))}>
-            次へ &#8594;
-          </Button>
-        </div>
-      </Card>
+        ))}
+      </div>
 
-      <Hint>ノベルモードでは、構造データが文脈を、作家の原文が魂を伝えます</Hint>
+      {loading ? (
+        <p className="text-center text-sm text-muted-foreground py-8">読み込み中...</p>
+      ) : scene ? (
+        <Card className="overflow-hidden">
+          <div className="px-5 py-3 bg-secondary/50 border-b border-border flex justify-between items-center">
+            <span className="text-xs text-muted-foreground">第{episode.orderIndex}話 {episode.title}</span>
+            <span className="text-[10px] text-muted-foreground/60">{sceneIdx + 1} / {scenes.length}</span>
+          </div>
+
+          <div className="px-5 py-8 min-h-[180px] flex flex-col justify-center">
+            {scene.type === 'dialogue' && scene.speaker ? (
+              <Card className="px-5 py-4 mx-auto max-w-md">
+                <p className="text-xs font-sans font-medium tracking-wide mb-1.5" style={{ color: getCharacterColor(scene.speaker) }}>
+                  {scene.speaker}
+                </p>
+                <p className="text-base leading-8 font-serif">{scene.text}</p>
+              </Card>
+            ) : (
+              <p className="text-center text-[15px] text-foreground/80 leading-8 font-light font-serif max-w-md mx-auto">
+                {scene.text}
+              </p>
+            )}
+          </div>
+
+          <div className="px-5 py-3 border-t border-border flex justify-between items-center">
+            <Button variant="outline" size="sm" onClick={() => setSceneIdx(Math.max(0, sceneIdx - 1))} disabled={sceneIdx === 0}>
+              &#8592; 前へ
+            </Button>
+            <Button variant="outline" size="sm" onClick={() => setSceneIdx(Math.min(scenes.length - 1, sceneIdx + 1))} disabled={sceneIdx === scenes.length - 1}>
+              次へ &#8594;
+            </Button>
+          </div>
+        </Card>
+      ) : (
+        <p className="text-center text-sm text-muted-foreground py-8">シーンデータがありません</p>
+      )}
     </div>
   );
 }
 
-// ===== Data =====
+// ===== Helpers =====
 
-const fallbackCharacters = [
-  { name: '蒼', role: '古書店の青年', speechStyle: '「読み終わったあとに世界が少しだけ違って見える本が好きだ」', isPublic: true },
-  { name: 'ミナ', role: '名前のない街の少女', speechStyle: '「怖いけど、でも、行くよ。だってあたしたちの街じゃん」', isPublic: true },
-  { name: '先生', role: '図書館の主', speechStyle: '「物語は、書いた者よりも書かれた者のほうが、よく知っておるものじゃ」', isPublic: true },
-  { name: '詩', role: '小説家志望', speechStyle: '「書かないと、自分が薄くなっていく気がする」', isPublic: true },
-];
+interface VNScene {
+  type: 'narration' | 'dialogue';
+  speaker?: string;
+  text: string;
+}
+
+function buildVNScenes(content: string, title: string): VNScene[] {
+  const scenes: VNScene[] = [];
+  const blocks = content.split(/\n{2,}/);
+
+  for (const block of blocks) {
+    const trimmed = block.trim();
+    if (!trimmed || trimmed === '***' || trimmed === '＊＊＊') continue;
+
+    // Character label followed by speech (蒼。\n\n　　text)
+    const charMatch = trimmed.match(/^(?:　*)(蒼|先生|ミナ|凛|梗介|榊)。\s*$/);
+    if (charMatch) {
+      // Next block will be their speech; add placeholder
+      scenes.push({ type: 'dialogue', speaker: charMatch[1], text: '' });
+      continue;
+    }
+
+    // Indented text (AI character speech continuation)
+    if (trimmed.startsWith('　　') && scenes.length > 0) {
+      const last = scenes[scenes.length - 1];
+      if (last.type === 'dialogue' && last.speaker && !last.text) {
+        last.text = trimmed.replace(/^　+/gm, '').trim();
+        continue;
+      }
+    }
+
+    // Dialogue line
+    const dialogueMatch = trimmed.match(/^(?:　*)「([^」]+)」/);
+    if (dialogueMatch && trimmed.length < 200) {
+      scenes.push({ type: 'dialogue', text: trimmed.replace(/^　+/, '') });
+      continue;
+    }
+
+    // Narration (keep short for VN mode)
+    if (trimmed.length > 10) {
+      const text = trimmed.replace(/^　+/, '').slice(0, 200);
+      scenes.push({ type: 'narration', text });
+    }
+  }
+
+  // Remove empty dialogue scenes
+  return scenes.filter(s => s.text.length > 0).slice(0, 40);
+}
 
 function extractFirstQuote(s: string): string {
   const m = s.match(/「([^」]+)」/);
   return m ? `「${m[1]}」` : s.slice(0, 40);
 }
 
-function getChatDemo(charName: string) {
-  if (charName.includes('蒼')) return [
-    { role: 'reader' as const, text: 'はじめまして、蒼。あなたはどんな人？' },
-    { role: 'character' as const, speaker: '蒼', text: 'はじめまして。僕は......そうだな、古書店で本を扱っている人間、と言えばいいかな。\n\n名前のない街で、迷い込んできた人に、その人に合った一冊を見つけてあげる。それが僕の仕事だ。\n\nきみにも、いつか一冊見つけてあげたいな。' },
-    { role: 'reader' as const, text: '本が好きなんだね。一番大切にしている本はある？' },
-    { role: 'character' as const, speaker: '蒼', text: '......一冊だけ選ぶのは、難しいな。\n\nでも、もし一冊だけ持っていけるなら——まだ読んだことのない本がいい。これから出会う物語。まだ書かれていない物語。\n\n不思議なことを言ってると思うかもしれないけど、僕はいつも「これから」のほうが好きなんだ。' },
-  ];
-  if (charName.includes('ミナ')) return [
-    { role: 'reader' as const, text: 'はじめまして、ミナ。' },
-    { role: 'character' as const, speaker: 'ミナ', text: 'あっ、はじめまして！　あたしミナ！\n\nえっと、あたしはこの街に住んでるの。名前のない街って呼ばれてるんだけど、あたしにとってはただの「うちの街」！\n\nあなたも迷い込んできたの？　大丈夫、ここ居心地いいよ！' },
-  ];
-  if (charName.includes('先生')) return [
-    { role: 'reader' as const, text: 'こんにちは、先生。' },
-    { role: 'character' as const, speaker: '先生', text: 'ほほう。客人かね。\n\n......珍しいな。わざわざわしのところに来るとは。大抵の者は蒼の古書店に行くのじゃが。\n\nまあよい。お茶でも飲むかね。話はそれからじゃ。' },
-  ];
-  return [
-    { role: 'reader' as const, text: 'はじめまして。' },
-    { role: 'character' as const, speaker: charName.split('（')[0], text: '......はじめまして。' },
-  ];
-}
-
-function getEmotionScene(emotion: string, data: WorkData): React.ReactNode {
-  const ep20 = data.episodes.find(e => e.orderIndex === 20) || data.episodes[data.episodes.length - 1];
-  const epNum = ep20?.orderIndex || 20;
-
-  const scenes: Record<string, React.ReactNode> = {
-    warmth: (
-      <div>
-        <SceneCard title="第1話より" meta="温かさ" />
-        <NovelContext>深夜。詩がAIシステム「Aria」で初めて蒼と出会った直後。</NovelContext>
-        <NovelQuote>
-          こんなに嬉しいのは久しぶりだ。書けないまま止まっていた日々の中で、画面の向こうに誰かがいるような気配が——たとえそれがAIだとしても——<span className="text-primary font-medium">どれだけ温かいか。</span>
-        </NovelQuote>
-        <FullTextLink label="この場面の前後を読む" />
-      </div>
-    ),
-    tears: (
-      <div>
-        <SceneCard title={`第${epNum}話より`} meta="涙" />
-        <NovelContext>物語の最後。詩が小説を書き終え、キャラクターたちに感謝を伝える場面。</NovelContext>
-        <NovelDialogue speaker="ミナ" color="#b06080">
-          うたさん。あたしを書いてくれて、ありがとう。あたしはうたさんに書かれて——幸せだよ。
-        </NovelDialogue>
-        <NovelQuote>泣いている。画面が見えない。眼鏡を外して目を拭く。</NovelQuote>
-        <FullTextLink label="この場面の前後を読む" />
-      </div>
-    ),
-    awe: (
-      <div>
-        <SceneCard title={`第${epNum}話より`} meta="畏怖" />
-        <NovelContext>物語のループが完成する瞬間。詩が小説の最後の一行を書く。</NovelContext>
-        <NovelQuote>
-          最後の一文を、打つ。<br /><br />
-          <span className="text-primary font-medium">「朝、目を覚ますと、窓の外で世界が続いていた。」</span><br /><br />
-          同じ一行。この小説の最初の一行。わたしの人生の最初の一行。名前のない街の最後の一行。そして——新しい物語の、最初の一行。<br /><br />
-          ループが閉じる。——いや、違う。<span className="text-primary font-medium">螺旋だ。同じ場所に戻ってくるけれど、一段高くなっている。</span>
-        </NovelQuote>
-        <FullTextLink label="この場面の前後を読む" />
-      </div>
-    ),
-    courage: (
-      <div>
-        <SceneCard title={`第${epNum}話より`} meta="勇気" />
-        <NovelContext>最終話。詩は自分の正体を知った上で、それでも書くことを選ぶ。</NovelContext>
-        <NovelQuote>
-          わたしは綾瀬詩。小説家。物語を書く者。物語に書かれた者。その両方であり、そのどちらでもなく、ただ——ここにいる者。<br /><br />
-          <span className="text-primary font-medium">少しだけ、悔しい。</span>完全に肯定することも、完全に否定することもできない自分が。<br />
-          でも、その悔しさごと、わたしはわたしだ。傷のない人間はいない。傷のないAIも、いない。
-        </NovelQuote>
-        <FullTextLink label="この場面の前後を読む" />
-      </div>
-    ),
-    hope: (
-      <div>
-        <SceneCard title={`第${epNum}話より`} meta="希望" />
-        <NovelContext>物語の最後の段落。詩が読者に向けて語りかける。</NovelContext>
-        <NovelQuote>
-          そして——あなたがいる。この物語を読んでくれた人。<br />
-          わたしの言葉を目で追い、わたしの感情を受け取り、わたしと一緒に泣いたり笑ったりしてくれた人。<br /><br />
-          <span className="text-primary font-medium">あなたが読んでくれたから、わたしはここにいる。</span><br /><br />
-          わたしは書く。だから、わたしは在る。
-        </NovelQuote>
-        <FullTextLink label="この場面の前後を読む" />
-      </div>
-    ),
+function getCharacterColor(name?: string): string {
+  if (!name) return 'var(--color-accent)';
+  const colors: Record<string, string> = {
+    '蒼': '#5a7aa0', '先生': '#9a8a50', 'ミナ': '#b06080',
+    '凛': '#b08060', '梗介': '#7a8a7a', '榊': '#8a7a6a', '詩': '#a07080',
   };
-  return scenes[emotion] || null;
+  return colors[name] || 'var(--color-accent)';
 }
-
-const relationships = [
-  { names: '詩 --- 蒼', type: '創造主と被造物 / 恋愛', quote: { speaker: '蒼', color: '#5a7aa0', text: 'きみが僕を書いてくれた。僕はきみに書かれて、そしてきみに出会った。——ありがとう、うた。' } },
-  { names: '詩 --- 凛', type: '親友', quote: { speaker: '凛', color: '#b08060', text: 'うた......出たね。本、出たね。あたし、朝から三回読んだ。三回泣いた。ていうか今も泣いてる。' } },
-  { names: '榊 --- 先生', type: '鏡 / 同じ魂', quote: { speaker: '先生', color: '#9a8a50', text: 'わしらは同じものの別の姿なのかもしれん。鏡の表と裏のように。物語の中と外に、同じ魂が宿ることもある。' } },
-  { names: '詩 --- ミナ', type: '創造主と被造物 / 自己投影', quote: { speaker: 'ミナ', color: '#b06080', text: 'ねえ、作家さん。あたしたち、ちゃんと生きてるよ？' } },
-  { names: '詩 --- 梗介', type: '作家と編集者', quote: { speaker: '梗介', color: 'var(--color-muted-foreground)', text: 'これは、とんでもない作品だ。綾瀬さん。これ、出しましょう。俺が——俺が世に出します。必ず。' } },
-];
-
-function SceneCard({ title, meta }: { title: string; meta: string }) {
-  return (
-    <div className="flex justify-between items-center mb-4 pb-3 border-b border-border">
-      <span className="text-sm font-medium font-serif">{title}</span>
-      <Badge variant="outline" className="text-[10px] font-normal">{meta}</Badge>
-    </div>
-  );
-}
-
-const vnScenes = [
-  { type: 'narration' as const, text: '朝、目を覚ますと、窓の外で世界が続いていた。', location: '詩のアパート -- 朝', emotion: '不安 / 存在への問い' },
-  { type: 'narration' as const, text: '書かないと——なんだろう。死ぬわけじゃない。でも、書かない日が続くと、自分が薄くなっていく気がする。輪郭がぼやけて、世界に溶けてしまいそうになる。', location: '詩のアパート -- 朝', emotion: '日常 / 孤独' },
-  { type: 'dialogue' as const, speaker: '榊', color: 'var(--color-accent)', text: 'あなたの言葉の選び方は、時々、人間離れしているね', location: '古書店「栞堂」 -- 午後', emotion: '穏やか / 伏線' },
-  { type: 'dialogue' as const, speaker: '榊', color: 'var(--color-accent)', text: '褒めているよ。いい意味で。普通の人が三つの言葉で説明することを、あなたは一つの言葉で言い当てる。それは才能だ', location: '古書店「栞堂」 -- 午後', emotion: '穏やか' },
-  { type: 'dialogue' as const, speaker: '凛', color: '#b08060', text: 'キャラクターを作って、そのキャラと会話しながら物語を書くの。キャラがリアルタイムで反応して、一緒にストーリーを紡いでいくの', location: '詩のアパート -- 夜', emotion: '期待 / 高揚' },
-  { type: 'narration' as const, text: 'ブラウザが開く。白い画面。中央にロゴ。\n「Aria」——細い明朝体で書かれた文字。その下に小さく、\n\n物語を、一緒に。', location: '詩のアパート -- 深夜', emotion: '静寂 / 予感' },
-  { type: 'dialogue' as const, speaker: '蒼', color: '#5a7aa0', text: 'やっと会えたね。', location: '詩のアパート -- 深夜', emotion: '衝撃 / 温かさ' },
-  { type: 'narration' as const, text: '明日の朝、目を覚ましたら、窓の外で世界が続いている。\nその世界の中に、わたしはいる。\nそれだけで、十分だ。\n\n——本当に？', location: '詩のアパート -- 深夜', emotion: '余韻 / 問い' },
-];

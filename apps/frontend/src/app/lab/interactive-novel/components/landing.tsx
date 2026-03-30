@@ -4,12 +4,9 @@ import { Card } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import type { WorkData, Layer } from '../page';
 
-const entries: { layer: Layer; label: string; title: string; desc: string }[] = [
-  { layer: 'read', label: 'LAYER 1', title: '読む', desc: '構造データと原文が織り交ざるハイブリッドモード' },
-  { layer: 'participate', label: 'LAYER 2', title: '参加する', desc: '物語の要所であなたの解釈を選び、他の読者と比較する' },
-  { layer: 'immerse', label: 'LAYER 3', title: '没入する', desc: '本編に書かれていない秘密を、キャラクターから引き出す' },
-  { layer: 'connect', label: 'LAYER 4', title: '交流する', desc: '他の読者の読みの軌跡を見る' },
-  { layer: 'experience', label: 'LAYER 5', title: '読まずに体験する', desc: 'キャラクターに出会う。感情から入る。関係性を辿る' },
+const entries: { layer: Layer; title: string; desc: string }[] = [
+  { layer: 'read', title: '読む', desc: '構造データと原文のハイブリッドで第一話を体験する' },
+  { layer: 'experience', title: '読まずに体験する', desc: 'キャラクターに出会う。感情から入る。シーンを進める' },
 ];
 
 export function InteractiveLanding({ data, onSelectLayer }: { data: WorkData; onSelectLayer: (l: Layer) => void }) {
@@ -24,7 +21,7 @@ export function InteractiveLanding({ data, onSelectLayer }: { data: WorkData; on
         {work.author?.displayName || work.author?.name}
       </p>
       <div className="flex items-center gap-2 mb-10">
-        <Badge variant="outline" className="text-[11px] font-normal">{work.genre}</Badge>
+        <Badge variant="outline" className="text-[11px] font-normal">{work.genre || '純文学'}</Badge>
         <Badge variant="secondary" className="text-[11px] font-normal">全{episodes.length}話</Badge>
         <Badge variant="secondary" className="text-[11px] font-normal">{characters.length}人</Badge>
       </div>
@@ -39,15 +36,14 @@ export function InteractiveLanding({ data, onSelectLayer }: { data: WorkData; on
         この物語への入口を選んでください
       </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 max-w-4xl w-full">
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-lg w-full">
         {entries.map(e => (
           <Card
             key={e.layer}
-            className="px-4 py-5 text-center cursor-pointer hover:shadow-md hover:border-primary/20 transition-all"
+            className="px-5 py-6 text-center cursor-pointer hover:shadow-md hover:border-primary/20 transition-all"
             onClick={() => onSelectLayer(e.layer)}
           >
-            <p className="text-[10px] text-primary/60 font-sans font-medium tracking-wider mb-1.5">{e.label}</p>
-            <p className="text-sm font-medium mb-1.5">{e.title}</p>
+            <p className="text-base font-medium mb-1.5">{e.title}</p>
             <p className="text-[11px] text-muted-foreground leading-relaxed">{e.desc}</p>
           </Card>
         ))}
