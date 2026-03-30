@@ -13,9 +13,16 @@ export interface EnvironmentBlock {
   source: 'original' | 'generated' | 'cached';
 }
 
+export interface DialogueBlock {
+  text: string;
+  isDialogue: boolean;
+  speaker?: string;
+}
+
 export interface EventBlock {
   storyEventId: string;
   renderedText: string;
+  blocks?: DialogueBlock[];
   originalPassage: string | null;
   significance: 'key' | 'normal' | 'ambient';
   spoilerProtected: boolean;
@@ -30,7 +37,7 @@ export interface CharacterBlock {
 }
 
 export interface ActionSuggestion {
-  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time';
+  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time' | 'stay' | 'read';
   label: string;
   params: Record<string, string>;
 }

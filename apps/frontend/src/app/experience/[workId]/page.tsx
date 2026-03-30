@@ -31,6 +31,30 @@ function sn(fullName: string): string {
 let blockId = 0;
 function bid(): string { return `b-${++blockId}`; }
 
+function splitDialogue(text: string): { text: string; isDialogue: boolean; speaker?: string }[] {
+  const segments: { text: string; isDialogue: boolean; speaker?: string }[] = [];
+  const regex = /([^「]*)(「[^」]*」)/g;
+  let lastIndex = 0;
+  let match: RegExpExecArray | null;
+  let lastSpeaker: string | undefined;
+
+  while ((match = regex.exec(text)) !== null) {
+    const prose = match[1].trim();
+    if (prose) {
+      segments.push({ text: prose, isDialogue: false });
+      // Speaker inference: "XXは" "XXが" pattern
+      const sm = prose.match(/([\u3040-\u9fff]{1,8})[はがの]/);
+      if (sm) lastSpeaker = sm[1];
+    }
+    segments.push({ text: match[2], isDialogue: true, speaker: lastSpeaker });
+    lastIndex = regex.lastIndex;
+  }
+  const remaining = text.slice(lastIndex).trim();
+  if (remaining) segments.push({ text: remaining, isDialogue: false });
+  if (segments.length === 0) segments.push({ text, isDialogue: false });
+  return segments;
+}
+
 // Session persistence
 function saveSession(workId: string, blocks: SceneBlock[], state: WorldState) {
   try { localStorage.setItem(`exp-${workId}`, JSON.stringify({ blocks: blocks.slice(-50), state, t: Date.now() })); } catch {}
@@ -235,26 +259,39 @@ export default function ExperiencePage() {
         }
       }
 
-      // Events
+      // Events — split dialogue from prose
       if (scene.events) {
         for (const ev of scene.events) {
           const text = ev.renderedText?.trim();
           if (!text || seenTexts.has(text)) continue;
-          seenTexts.add(text);
-          newBlocks.push({
-            id: bid(), type: 'event',
-            source: ev.originalPassage ? 'original' : 'generated',
-            text,
-            spoilerProtected: ev.spoilerProtected,
-          });
+
+          const segments = splitDialogue(text);
+          for (const seg of segments) {
+            if (seenTexts.has(seg.text)) continue;
+            seenTexts.add(seg.text);
+            if (seg.isDialogue) {
+              newBlocks.push({
+                id: bid(), type: 'dialogue', source: 'original',
+                text: seg.text,
+                speaker: seg.speaker,
+                speakerColor: seg.speaker ? getCharColor(seg.speaker) : undefined,
+              });
+            } else {
+              newBlocks.push({
+                id: bid(), type: ev.isMemory ? 'memory' : 'event',
+                source: ev.originalPassage ? 'original' : 'generated',
+                text: seg.text,
+                spoilerProtected: ev.spoilerProtected,
+              });
+            }
+          }
         }
       }
 
       // Convert actions to awareness blocks (inline in the text flow)
       if (scene.actions) {
         const filteredActions = (scene.actions as any[])
-          .filter((a: any) => a.label && a.label.trim())
-          .filter((a: any) => a.type !== 'observe');
+          .filter((a: any) => a.label && a.label.trim());
         for (const action of filteredActions) {
           if (!seenTexts.has(action.label)) {
             seenTexts.add(action.label);
@@ -355,6 +392,14 @@ export default function ExperiencePage() {
       } else if (action.type === 'read') {
         const episodeId = action.params.episodeId;
         if (episodeId) window.open(`/works/${workId}/episodes/${episodeId}`, '_blank');
+      } else if (action.type === 'stay') {
+        // Stay = observe the environment more deeply (no server state change)
+        try {
+          const res = await apiPost('/observe');
+          if (res.data?.text) {
+            add([{ id: bid(), type: 'environment', source: 'generated', text: res.data.text }]);
+          }
+        } catch {}
       } else if (action.type === 'time') {
         const res = await apiPost('/time-advance');
         add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);

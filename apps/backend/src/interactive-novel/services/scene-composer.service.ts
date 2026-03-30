@@ -4,7 +4,7 @@ import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { ReaderStateService } from './reader-state.service';
 import { CharacterPresenceService } from './character-presence.service';
 import { PerspectiveRendererService } from './perspective-renderer.service';
-import type { RenderedScene, ActionSuggestion } from '../types/experience.types';
+import type { RenderedScene, ActionSuggestion, DialogueBlock } from '../types/experience.types';
 import type { TimeOfDay, PerspectiveMode } from '../types/world.types';
 
 const HAIKU = 'claude-haiku-4-5-20251001';
@@ -96,7 +96,7 @@ export class SceneComposerService {
     });
     const witnessedSet = new Set(witnessed.map(w => w.storyEventId));
 
-    // Render events with original text + isMemory flag
+    // Render events with original text + isMemory flag + dialogue blocks
     const renderedEvents = await Promise.all(
       allEvents.map(async e => {
         const rendered = await this.perspectiveRenderer.renderEvent(
@@ -104,7 +104,8 @@ export class SceneComposerService {
           state.perspective as PerspectiveMode,
           readProgress.map(p => ({ episodeId: p.episodeId, completed: !!p.completed })),
         );
-        return { ...rendered, isMemory: witnessedSet.has(e.id) };
+        const blocks = rendered.renderedText ? this.splitDialogue(rendered.renderedText) : undefined;
+        return { ...rendered, isMemory: witnessedSet.has(e.id), blocks };
       }),
     );
 
@@ -128,8 +129,12 @@ export class SceneComposerService {
         });
         if (rendering) {
           const sensory = rendering.sensoryText as Record<string, string>;
-          // Pick just the visual or atmospheric (most evocative)
-          environmentText = sensory?.visual || sensory?.atmospheric || location.description;
+          // Expand all available sensory fields
+          const sensoryLines: string[] = [];
+          for (const key of ['visual', 'auditory', 'olfactory', 'atmospheric']) {
+            if (sensory?.[key]) sensoryLines.push(sensory[key]);
+          }
+          environmentText = sensoryLines.length > 0 ? sensoryLines.join('\n') : location.description;
         } else {
           environmentText = location.description;
         }
@@ -147,7 +152,9 @@ export class SceneComposerService {
     }
 
     const eventsText = renderedEvents.map(e => e.renderedText).filter(Boolean).join('\n');
-    const actions = await this.generateActions(workId, state, characters, eventsText, location?.name || '');
+    // Collect episodeIds from displayed events for read actions
+    const eventEpisodeIds = [...new Set(allEvents.map(e => e.episodeId).filter(Boolean))] as string[];
+    const actions = await this.generateActions(workId, state, characters, eventsText, location?.name || '', eventEpisodeIds);
 
     return {
       environment: { text: environmentText, source: 'cached' },
@@ -173,6 +180,7 @@ export class SceneComposerService {
     characters: { id: string; name: string }[],
     eventsText: string,
     locationName: string,
+    eventEpisodeIds: string[] = [],
   ): Promise<ActionSuggestion[]> {
     // Gather move connections for both AI context and fallback
     let connections: { toLocation: { id: string; name: string }; description: string | null }[] = [];
@@ -195,6 +203,10 @@ export class SceneComposerService {
         // Always append fixed actions
         aiActions.push({ type: 'observe', label: '周りの空気を感じる', params: { target: 'environment' } });
         aiActions.push({ type: 'time', label: this.getTimeLabel(this.getTimeOfDay(state.timelinePosition)), params: {} });
+        // Add read actions for events with episodeIds
+        for (const episodeId of eventEpisodeIds) {
+          aiActions.push({ type: 'read', label: 'この場面を読む', params: { episodeId } });
+        }
         return aiActions;
       }
     } catch (err) {
@@ -202,13 +214,14 @@ export class SceneComposerService {
     }
 
     // Fallback: mechanical generation
-    return this.generateActionsFallback(state, characters, connections);
+    return this.generateActionsFallback(state, characters, connections, eventEpisodeIds);
   }
 
   private generateActionsFallback(
     state: any,
     characters: { id: string; name: string }[],
     connections: { toLocation: { id: string; name: string }; description: string | null }[],
+    eventEpisodeIds: string[] = [],
   ): ActionSuggestion[] {
     const actions: ActionSuggestion[] = [];
 
@@ -230,6 +243,11 @@ export class SceneComposerService {
 
     actions.push({ type: 'observe', label: '周りの空気を感じる', params: { target: 'environment' } });
     actions.push({ type: 'time', label: this.getTimeLabel(this.getTimeOfDay(state.timelinePosition)), params: {} });
+
+    // Add read actions for events with episodeIds
+    for (const episodeId of eventEpisodeIds) {
+      actions.push({ type: 'read', label: 'この場面を読む', params: { episodeId } });
+    }
 
     return actions;
   }
@@ -353,6 +371,50 @@ ${truncatedEvents || '(テキストなし)'}`;
     } finally {
       clearTimeout(timeout);
     }
+  }
+
+  private splitDialogue(text: string): DialogueBlock[] {
+    const blocks: DialogueBlock[] = [];
+    const regex = /「([^」]+)」/g;
+    let lastIndex = 0;
+    let match: RegExpExecArray | null;
+
+    while ((match = regex.exec(text)) !== null) {
+      // Narration text before this dialogue
+      const narration = text.slice(lastIndex, match.index);
+      if (narration.trim()) {
+        blocks.push({ text: narration.trim(), isDialogue: false });
+      }
+
+      // Try to extract speaker from the preceding narration
+      // Patterns: "XXは" "XXが" at the end of narration
+      let speaker: string | undefined;
+      const speakerMatch = narration.match(/([^\s、。「」]{1,10})[はが][、]?\s*$/);
+      if (speakerMatch) {
+        speaker = speakerMatch[1];
+      }
+
+      blocks.push({
+        text: `「${match[1]}」`,
+        isDialogue: true,
+        ...(speaker ? { speaker } : {}),
+      });
+
+      lastIndex = match.index + match[0].length;
+    }
+
+    // Remaining text after last dialogue
+    const remaining = text.slice(lastIndex);
+    if (remaining.trim()) {
+      blocks.push({ text: remaining.trim(), isDialogue: false });
+    }
+
+    // If no dialogue found, return the whole text as narration
+    if (blocks.length === 0) {
+      blocks.push({ text, isDialogue: false });
+    }
+
+    return blocks;
   }
 
   private shortName(fullName: string): string {

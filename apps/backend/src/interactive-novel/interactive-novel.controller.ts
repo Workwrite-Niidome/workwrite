@@ -90,6 +90,7 @@ export class InteractiveNovelController {
     return { data: { state, scene } };
   }
 
+
   @Get(':workId/state')
   async getState(
     @CurrentUser('id') userId: string,
