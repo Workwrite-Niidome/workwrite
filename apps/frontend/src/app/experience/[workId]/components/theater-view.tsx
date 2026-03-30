@@ -73,7 +73,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
               <BlockRenderer
                 block={block}
                 isNew={newBlockIds.has(block.id)}
-                animDelay={newBlockIds.has(block.id) ? [...newBlockIds].indexOf(block.id) * 2.0 : 0}
+                animDelay={newBlockIds.has(block.id) ? [...newBlockIds].indexOf(block.id) * 1.2 : 0}
               />
             </div>
           ) : null
@@ -94,7 +94,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
 function BlockRenderer({ block, isNew, animDelay }: { block: SceneBlock; isNew: boolean; animDelay: number }) {
   const animStyle = isNew ? {
     opacity: 0,
-    animation: `fadeUp 2.0s ease-out ${animDelay}s forwards`,
+    animation: `fadeUp 1.5s ease-out ${animDelay}s forwards`,
   } : {};
 
   switch (block.type) {

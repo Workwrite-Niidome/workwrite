@@ -165,7 +165,7 @@ export default function ExperiencePage() {
           ...prev,
           actions: [{ type: 'move', label: '物語に入る', params: { locationId: 'initial' } }],
         }));
-      }, introParas.length * 2500 + 1000);
+      }, introParas.length * 1500 + 1000);
     }
 
     buildIntro();
