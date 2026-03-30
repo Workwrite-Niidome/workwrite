@@ -42,10 +42,13 @@ export class SceneComposerService {
 
     const timeOfDay = this.getTimeOfDay(state.timelinePosition);
 
-    // Characters at this location/time
-    const characters = state.locationId
+    // Characters at this location/time (fallback to any location if none found)
+    let characters = state.locationId
       ? await this.characterPresence.getCharactersAt(workId, state.locationId, state.timelinePosition)
       : [];
+    if (characters.length === 0) {
+      characters = await this.characterPresence.getCharactersAtTime(workId, state.timelinePosition);
+    }
 
     // ===== EVENTS ARE THE MAIN CONTENT =====
     // Find StoryEvents at this location and time
@@ -81,7 +84,22 @@ export class SceneComposerService {
       take: 3,
     });
 
-    const allEvents = [...events, ...unlocatedEvents].slice(0, 5);
+    let allEvents = [...events, ...unlocatedEvents].slice(0, 5);
+
+    // Fallback: if no events at current location, search across all locations
+    if (allEvents.length === 0) {
+      allEvents = await this.prisma.storyEvent.findMany({
+        where: {
+          workId,
+          timelinePosition: {
+            gte: state.timelinePosition,
+            lte: state.timelinePosition + searchRange,
+          },
+        },
+        orderBy: [{ timelinePosition: 'asc' }, { orderInEpisode: 'asc' }],
+        take: 5,
+      });
+    }
 
     // Reading progress for spoiler protection
     const readProgress = await this.prisma.readingProgress.findMany({

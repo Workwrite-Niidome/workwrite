@@ -31,6 +31,43 @@ export class CharacterPresenceService {
     }));
   }
 
+  /**
+   * Get characters at any location for a given time (fallback when location has no characters).
+   */
+  async getCharactersAtTime(workId: string, timelinePosition: number) {
+    const schedules = await this.prisma.characterSchedule.findMany({
+      where: {
+        workId,
+        timeStart: { lte: timelinePosition },
+        timeEnd: { gte: timelinePosition },
+      },
+      include: {
+        character: {
+          select: { id: true, name: true, role: true, personality: true, speechStyle: true },
+        },
+      },
+      take: 5,
+    });
+
+    // Deduplicate by character id
+    const seen = new Set<string>();
+    return schedules
+      .filter(s => {
+        if (seen.has(s.character.id)) return false;
+        seen.add(s.character.id);
+        return true;
+      })
+      .map(s => ({
+        id: s.character.id,
+        name: s.character.name,
+        role: s.character.role,
+        activity: s.activity || '',
+        mood: s.mood || '',
+        personality: s.character.personality,
+        speechStyle: s.character.speechStyle,
+      }));
+  }
+
   async isCharacterAt(characterId: string, locationId: string, timelinePosition: number) {
     const count = await this.prisma.characterSchedule.count({
       where: {
