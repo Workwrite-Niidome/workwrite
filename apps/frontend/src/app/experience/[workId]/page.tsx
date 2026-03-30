@@ -11,16 +11,14 @@ import type { SceneBlock, WorldState, ActionSuggestion, PerspectiveMode } from '
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
-const CHARACTER_COLORS: Record<string, string> = {
-  '蒼': '#5a7aa0', '先生': '#9a8a50', 'ミナ': '#b06080',
-  '凛': '#b08060', '梗介': '#7a8a7a', '榊': '#8a7a6a', '詩': '#a07080',
-};
-
+// Generate a muted, warm character color from name (works for any novel)
 function getCharColor(name: string): string {
-  for (const [key, color] of Object.entries(CHARACTER_COLORS)) {
-    if (name.includes(key)) return color;
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
   }
-  return '#8a8a95';
+  const hue = Math.abs(hash) % 360;
+  return `hsl(${hue}, 25%, 55%)`;
 }
 
 function sn(fullName: string): string {

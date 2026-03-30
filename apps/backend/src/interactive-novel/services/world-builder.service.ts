@@ -697,9 +697,4 @@ export class WorldBuilderService {
     return schedules;
   }
 
-  // Keep seedAriaWorld for backward compatibility
-  async seedAriaWorld(workId: string) {
-    // Delegate to buildWorld for new calls
-    return this.buildWorld(workId);
-  }
 }
