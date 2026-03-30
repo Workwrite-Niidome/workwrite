@@ -26,6 +26,7 @@ export class ScoringController {
     @Query('model') model?: 'haiku' | 'sonnet',
   ) {
     const userId = req.user?.id || req.user?.sub;
+    await this.verifyWorkOwnership(workId, userId);
     return this.scoringService.estimateScoringCost(workId, userId, model || 'haiku');
   }
 
@@ -40,6 +41,7 @@ export class ScoringController {
     @Query('model') model?: 'haiku' | 'sonnet',
   ) {
     const userId = req.user?.id || req.user?.sub;
+    await this.verifyWorkOwnership(workId, userId);
     const result = await this.scoringService.scoreWork(workId, userId, model || 'haiku');
     if (!result) return { data: null };
 
@@ -89,6 +91,7 @@ export class ScoringController {
     @Query('historyId') historyId: string,
   ) {
     const userId = req.user?.id || req.user?.sub;
+    await this.verifyWorkOwnership(workId, userId);
     const success = await this.scoringService.adoptScore(workId, historyId, userId);
     return { success };
   }
@@ -138,7 +141,9 @@ export class ScoringController {
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Score a single episode' })
-  scoreEpisode(@Param('id') id: string) {
+  async scoreEpisode(@Param('id') id: string, @CurrentUser('id') userId: string) {
+    const episode = await this.prisma.episode.findUnique({ where: { id }, select: { work: { select: { authorId: true } } } });
+    if (!episode || episode.work.authorId !== userId) throw new ForbiddenException();
     return this.scoringService.scoreEpisode(id);
   }
 }

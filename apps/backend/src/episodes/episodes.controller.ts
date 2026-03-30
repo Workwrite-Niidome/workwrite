@@ -39,11 +39,15 @@ export class EpisodesController {
   @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'List episodes of a work' })
   @ApiQuery({ name: 'published', required: false, type: Boolean })
-  findByWork(
+  async findByWork(
     @Param('workId') workId: string,
+    @CurrentUser('id') userId?: string,
     @Query('published') published?: string,
   ) {
-    const publishedOnly = published === 'true';
+    // Non-authors can only see published episodes
+    const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } });
+    const isAuthor = work && userId && work.authorId === userId;
+    const publishedOnly = isAuthor ? (published === 'true') : true;
     return this.episodesService.findByWork(workId, publishedOnly);
   }
 

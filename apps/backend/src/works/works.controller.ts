@@ -80,14 +80,20 @@ export class WorksController {
   }
 
   @Get(':id/emotion-profile')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get author + reader emotion profile for a work' })
-  getEmotionProfile(@Param('id') workId: string) {
+  async getEmotionProfile(@Param('id') workId: string, @CurrentUser('id') userId?: string) {
+    const work = await this.worksService.findOne(workId);
+    if (work.status !== 'PUBLISHED' && work.authorId !== userId) return { data: null };
     return this.worksService.getEmotionProfile(workId);
   }
 
   @Get(':id/emotion-arc')
+  @UseGuards(OptionalJwtAuthGuard)
   @ApiOperation({ summary: 'Get emotion arc visualization data' })
-  getEmotionArc(@Param('id') workId: string) {
+  async getEmotionArc(@Param('id') workId: string, @CurrentUser('id') userId?: string) {
+    const work = await this.worksService.findOne(workId);
+    if (work.status !== 'PUBLISHED' && work.authorId !== userId) return { data: null };
     return this.worksService.getEmotionArc(workId);
   }
 }
