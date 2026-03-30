@@ -61,8 +61,8 @@ export class WorldBuilderService {
       select: { id: true, title: true, completionStatus: true, genre: true, settingEra: true },
     });
     if (!work) throw new BadRequestException('Work not found');
-    if (work.completionStatus !== 'COMPLETED') {
-      throw new BadRequestException('Interactive Novel is only available for completed works');
+    if (!['COMPLETED', 'ONGOING'].includes(work.completionStatus || '')) {
+      throw new BadRequestException('Interactive Novel is only available for completed or ongoing works');
     }
 
     this.logger.log(`Building world for "${work.title}" (${workId})`);
