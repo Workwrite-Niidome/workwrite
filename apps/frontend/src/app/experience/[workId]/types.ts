@@ -2,7 +2,7 @@ export type PerspectiveMode = 'protagonist' | 'character' | 'omniscient';
 export type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'evening' | 'night' | 'late_night';
 
 export interface ActionSuggestion {
-  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time';
+  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time' | 'read';
   label: string;
   params: Record<string, string | undefined>;
 }
