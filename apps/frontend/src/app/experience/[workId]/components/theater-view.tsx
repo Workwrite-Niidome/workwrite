@@ -6,10 +6,12 @@ import type { SceneBlock } from '../types';
 interface TheaterViewProps {
   blocks: SceneBlock[];
   isStreaming: boolean;
+  onContentEnd?: (reached: boolean) => void;
 }
 
-export function TheaterView({ blocks, isStreaming }: TheaterViewProps) {
+export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
+  const sentinelRef = useRef<HTMLDivElement>(null);
   const [prevCount, setPrevCount] = useState(0);
 
   // Track how many blocks are "new" (for staggered animation)
@@ -27,17 +29,39 @@ export function TheaterView({ blocks, isStreaming }: TheaterViewProps) {
     }
   }, [blocks.length]);
 
+  // IntersectionObserver on the sentinel element
+  useEffect(() => {
+    if (!sentinelRef.current || !onContentEnd) return;
+
+    const observer = new IntersectionObserver(
+      ([entry]) => {
+        onContentEnd(entry.isIntersecting);
+      },
+      { threshold: 0.1 }
+    );
+
+    observer.observe(sentinelRef.current);
+    return () => observer.disconnect();
+  }, [onContentEnd, blocks.length]);
+
+  // Determine where to place the sentinel: roughly 2 blocks before the end
+  const sentinelIndex = Math.max(0, blocks.length - 2);
+
   return (
     <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-16 pb-32">
       <div className="mx-auto max-w-lg">
         {blocks.map((block, idx) =>
           block ? (
-            <BlockRenderer
-              key={block.id}
-              block={block}
-              isNew={idx >= newStartIndex}
-              animDelay={idx >= newStartIndex ? (idx - newStartIndex) * 0.15 : 0}
-            />
+            <div key={block.id}>
+              {idx === sentinelIndex && (
+                <div ref={sentinelRef} className="h-0" aria-hidden="true" />
+              )}
+              <BlockRenderer
+                block={block}
+                isNew={idx >= newStartIndex}
+                animDelay={idx >= newStartIndex ? (idx - newStartIndex) * 0.15 : 0}
+              />
+            </div>
           ) : null
         )}
 

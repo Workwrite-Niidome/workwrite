@@ -8,9 +8,10 @@ interface ActionPaletteProps {
   onAction: (action: ActionSuggestion) => void;
   onFreeInput: (text: string) => void;
   disabled: boolean;
+  visible?: boolean;
 }
 
-export function ActionPalette({ actions, onAction, onFreeInput, disabled }: ActionPaletteProps) {
+export function ActionPalette({ actions, onAction, onFreeInput, disabled, visible = true }: ActionPaletteProps) {
   const [expanded, setExpanded] = useState(false);
   const [input, setInput] = useState('');
 
@@ -30,7 +31,20 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
   };
 
   return (
-    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1a1a25] bg-[#0a0a0f] px-6 py-4 md:px-10">
+    <>
+      {/* Subtle hint when actions are hidden */}
+      {!visible && actions.length > 0 && (
+        <div className="fixed bottom-0 left-0 right-0 z-30 flex justify-center pb-3 pointer-events-none">
+          <div className="w-8 h-px bg-[#2a2a35] transition-opacity duration-700" />
+        </div>
+      )}
+      <div
+        className={`fixed bottom-0 left-0 right-0 z-40 border-t px-6 py-4 md:px-10 transition-all duration-700 ease-out ${
+          visible
+            ? 'border-[#1a1a25] bg-[#0a0a0f] opacity-100 translate-y-0'
+            : 'border-transparent bg-transparent opacity-0 translate-y-4 pointer-events-none'
+        }`}
+      >
       <div className="mx-auto max-w-lg">
         {actions.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">
@@ -77,5 +91,6 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
         )}
       </div>
     </div>
+    </>
   );
 }

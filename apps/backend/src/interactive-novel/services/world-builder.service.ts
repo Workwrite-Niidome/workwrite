@@ -121,13 +121,13 @@ export class WorldBuilderService {
         }
       }
 
-      // Step 4: Generate basic LocationRenderings from descriptions
+      // Step 4: Generate AI-powered LocationRenderings
       let renderCount = 0;
       for (const loc of extractedLocations) {
         const locId = locationMap.get(loc.name);
         if (!locId) continue;
 
-        const renderings = this.generateBasicRenderings(loc);
+        const renderings = await this.generateAiRenderings(loc, episodes);
         for (const r of renderings) {
           await this.prisma.locationRendering.upsert({
             where: { locationId_timeOfDay: { locationId: locId, timeOfDay: r.timeOfDay } },
@@ -301,8 +301,126 @@ export class WorldBuilderService {
   }
 
   /**
+   * Generate AI-powered literary sensory renderings for a location.
+   * Calls Haiku to produce evocative, five-sense descriptions per time of day.
+   * Falls back to template-based renderings on failure.
+   */
+  private async generateAiRenderings(
+    loc: ExtractedLocation,
+    episodes: { id: string; orderIndex: number; content: string | null }[],
+  ): Promise<{ timeOfDay: string; sensoryText: any }[]> {
+    try {
+      // Gather episode text excerpts where this location appears
+      const relevantExcerpts = loc.episodeIndices
+        .map(idx => episodes.find(ep => ep.orderIndex === idx))
+        .filter(Boolean)
+        .map(ep => (ep!.content || '').slice(0, 1000))
+        .slice(0, 3) // Max 3 excerpts to control token usage
+        .join('\n---\n');
+
+      const systemPrompt = [
+        'あなたは文学的な場所描写を生成する作家です。',
+        '指定された場所について、時間帯ごとの五感描写をJSON形式で出力してください。',
+        '',
+        '各フィールドは1-2文の簡潔かつ文学的な描写にしてください。',
+        '- visual: 視覚的な描写（光、色、形、動き）',
+        '- auditory: 聴覚的な描写（音、静寂、響き）',
+        '- olfactory: 嗅覚的な描写（匂い、香り、空気の質感）',
+        '- atmospheric: 場の雰囲気・空気感（感情的トーン、身体感覚）',
+        '',
+        '時間帯による変化を明確に表現すること：',
+        '- morning: 朝の光、目覚め、始まりの気配',
+        '- afternoon: 昼の明るさ、活動、静けさ',
+        '- evening: 夕暮れの色彩、影、一日の終わり',
+        '',
+        '出力形式（JSONのみ、他のテキスト不要）：',
+        '{"morning":{"visual":"...","auditory":"...","olfactory":"...","atmospheric":"..."},',
+        '"afternoon":{"visual":"...","auditory":"...","olfactory":"...","atmospheric":"..."},',
+        '"evening":{"visual":"...","auditory":"...","olfactory":"...","atmospheric":"..."}}',
+      ].join('\n');
+
+      const userContent = [
+        `場所名: ${loc.name}`,
+        `場所の説明: ${loc.description}`,
+        `場所タイプ: ${loc.type === 'exterior' ? '屋外' : loc.type === 'interior' ? '屋内' : '抽象的空間'}`,
+        '',
+        relevantExcerpts
+          ? `以下はこの場所が登場する作品の原文抜粋です。作品のトーンや具体的な描写を参考にしてください：\n\n${relevantExcerpts}`
+          : '',
+      ].join('\n');
+
+      const apiKey = await this.aiSettings.getApiKey();
+      if (!apiKey) {
+        this.logger.warn(`No API key for AI rendering of "${loc.name}", using fallback`);
+        return this.generateBasicRenderings(loc);
+      }
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model: HAIKU,
+          max_tokens: 800,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userContent }],
+        }),
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`AI rendering failed for "${loc.name}": HTTP ${response.status}`);
+        return this.generateBasicRenderings(loc);
+      }
+
+      const data = await response.json();
+      const text = data?.content?.[0]?.text || '';
+
+      // Extract JSON from response (handle possible markdown code fences)
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        this.logger.warn(`AI rendering for "${loc.name}": no JSON found in response`);
+        return this.generateBasicRenderings(loc);
+      }
+
+      const parsed = JSON.parse(jsonMatch[0]);
+
+      const timePeriods = ['morning', 'afternoon', 'evening'];
+      const renderings: { timeOfDay: string; sensoryText: any }[] = [];
+
+      for (const period of timePeriods) {
+        const sensory = parsed[period];
+        if (sensory && typeof sensory === 'object') {
+          renderings.push({
+            timeOfDay: period,
+            sensoryText: {
+              visual: sensory.visual || loc.description,
+              auditory: sensory.auditory || '',
+              olfactory: sensory.olfactory || '',
+              atmospheric: sensory.atmospheric || '',
+            },
+          });
+        }
+      }
+
+      if (renderings.length === 0) {
+        this.logger.warn(`AI rendering for "${loc.name}": parsed JSON had no valid time periods`);
+        return this.generateBasicRenderings(loc);
+      }
+
+      this.logger.log(`AI rendering generated for "${loc.name}": ${renderings.length} time periods`);
+      return renderings;
+
+    } catch (err: any) {
+      this.logger.warn(`AI rendering failed for "${loc.name}": ${err?.message}`);
+      return this.generateBasicRenderings(loc);
+    }
+  }
+
+  /**
    * Generate basic LocationRenderings from description text.
-   * No AI call — just template-based sensory data.
+   * No AI call — just template-based sensory data. Used as fallback.
    */
   private generateBasicRenderings(loc: ExtractedLocation): { timeOfDay: string; sensoryText: any }[] {
     const base = {

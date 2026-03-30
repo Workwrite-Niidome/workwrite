@@ -58,6 +58,7 @@ export default function ExperiencePage() {
     timelinePosition: 0, perspective: 'character', presentCharacters: [], actions: [],
   });
   const [isStreaming, setIsStreaming] = useState(false);
+  const [actionsVisible, setActionsVisible] = useState(false);
   const [phase, setPhase] = useState<'loading' | 'menu' | 'intro' | 'world'>('loading');
   const [work, setWork] = useState<any>(null);
   const abortRef = useRef<AbortController | null>(null);
@@ -172,7 +173,21 @@ export default function ExperiencePage() {
     if (phase === 'world' && blocks.length > 0) saveSession(workId, blocks, worldState);
   }, [blocks, worldState, phase, workId]);
 
-  const add = useCallback((b: SceneBlock[]) => { setBlocks(prev => [...prev, ...b.filter(Boolean)]); }, []);
+  const add = useCallback((b: SceneBlock[]) => {
+    setBlocks(prev => [...prev, ...b.filter(Boolean)]);
+    // Reset actions visibility when new content is added (reader needs to scroll again)
+    setActionsVisible(false);
+  }, []);
+
+  // Determine if actions should show immediately (intro, few blocks, or streaming)
+  const shouldShowActionsImmediately = phase === 'intro' || blocks.length <= 2;
+  const computedActionsVisible = isStreaming ? false : (shouldShowActionsImmediately || actionsVisible);
+
+  const handleContentEnd = useCallback((reached: boolean) => {
+    if (reached && !isStreaming) {
+      setActionsVisible(true);
+    }
+  }, [isStreaming]);
 
   // ===== API helpers =====
   async function apiPost(path: string, body?: any) {
@@ -424,8 +439,8 @@ export default function ExperiencePage() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-[#d8d5d0] flex flex-col" style={{ fontFamily: "'Noto Serif JP', serif" }}>
       <ExperienceHeader state={worldState} onPerspectiveChange={handlePerspectiveChange} />
-      <TheaterView blocks={blocks} isStreaming={isStreaming} />
-      <ActionPalette actions={worldState.actions} onAction={handleAction} onFreeInput={handleFreeInput} disabled={isStreaming} />
+      <TheaterView blocks={blocks} isStreaming={isStreaming} onContentEnd={handleContentEnd} />
+      <ActionPalette actions={worldState.actions} onAction={handleAction} onFreeInput={handleFreeInput} disabled={isStreaming} visible={computedActionsVisible} />
     </div>
   );
 }
