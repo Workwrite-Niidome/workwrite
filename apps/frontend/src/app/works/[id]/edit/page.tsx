@@ -14,6 +14,7 @@ import { Loading } from '@/components/layout/loading';
 import { ScoreCard } from '@/components/scoring/score-card';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { api, type Work, type QualityScoreDetail } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { CharacterRegistryPanel } from '@/components/editor/character-registry-panel';
 import { cn } from '@/lib/utils';
 import { normalizeChapterRecord, buildEmotionBlueprintPayload } from '@/lib/wizard-derive';
@@ -57,6 +58,7 @@ export default function EditWorkPage() {
   const params = useParams();
   const workId = params.id as string;
   const router = useRouter();
+  const { user } = useAuth();
   const [work, setWork] = useState<Work | null>(null);
   const [episodes, setEpisodes] = useState<EpisodeItem[]>([]);
   const [title, setTitle] = useState('');
@@ -90,6 +92,11 @@ export default function EditWorkPage() {
   useEffect(() => {
     api.getWork(workId)
       .then((res) => {
+        // Verify ownership — redirect if not the author
+        if (user && res.data.author?.id !== user.id) {
+          router.push('/dashboard');
+          return;
+        }
         setWork(res.data);
         setTitle(res.data.title);
         setSynopsis(res.data.synopsis || '');

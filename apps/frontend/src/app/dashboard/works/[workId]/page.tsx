@@ -11,6 +11,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ScoreCard } from '@/components/scoring/score-card';
 import { ExportDialog } from '@/components/work-export/export-dialog';
 import { api, type QualityScoreDetail, type Work, type Review } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 
 interface HeatmapEntry {
   episodeId: string;
@@ -30,6 +31,7 @@ export default function WorkAnalyticsPage() {
   const params = useParams();
   const workId = params.workId as string;
   const router = useRouter();
+  const { user } = useAuth();
 
   const [score, setScore] = useState<QualityScoreDetail | null>(null);
   const [heatmap, setHeatmap] = useState<HeatmapEntry[]>([]);
@@ -45,7 +47,10 @@ export default function WorkAnalyticsPage() {
 
   useEffect(() => {
     Promise.all([
-      api.getWork(workId).then((res) => setWorkTitle(res.data?.title || '')).catch(() => {}),
+      api.getWork(workId).then((res) => {
+        if (user && res.data?.author?.id !== user.id) { router.push('/dashboard'); return; }
+        setWorkTitle(res.data?.title || '');
+      }).catch(() => {}),
       api.getScoreAnalysis(workId).catch(() => ({ data: null })),
       api.getWorkHeatmap(workId).catch(() => ({ data: [] })),
       api.getWorkEmotionCloud(workId).catch(() => ({ data: [] })),
