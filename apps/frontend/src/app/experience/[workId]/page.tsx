@@ -62,6 +62,7 @@ export default function ExperiencePage() {
   const [phase, setPhase] = useState<'loading' | 'menu' | 'intro' | 'world'>('loading');
   const [work, setWork] = useState<any>(null);
   const abortRef = useRef<AbortController | null>(null);
+  const processingRef = useRef(false); // Guard against double action execution
 
   // Load work data
   useEffect(() => {
@@ -215,41 +216,43 @@ export default function ExperiencePage() {
   }
 
   function applyScene(scene: any) {
-    const newBlocks: SceneBlock[] = [];
+    // Use functional setState to dedup against LATEST blocks (not stale closure)
+    setBlocks(prev => {
+      const seenTexts = new Set<string>();
+      for (const b of prev) { if (b?.text) seenTexts.add(b.text); }
 
-    // Collect existing text for dedup
-    const seenTexts = new Set<string>();
-    for (const b of blocks) { if (b?.text) seenTexts.add(b.text); }
+      const newBlocks: SceneBlock[] = [];
 
-    // Environment: show as paragraph blocks (split by newlines only)
-    if (scene.environment?.text) {
-      for (const line of scene.environment.text.split('\n')) {
-        const t = line.trim();
-        if (t && !seenTexts.has(t)) {
-          seenTexts.add(t);
-          newBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: t });
+      // Environment
+      if (scene.environment?.text) {
+        for (const line of scene.environment.text.split('\n')) {
+          const t = line.trim();
+          if (t && !seenTexts.has(t)) {
+            seenTexts.add(t);
+            newBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: t });
+          }
         }
       }
-    }
 
-    // Events: show as paragraph blocks (preserve original text structure)
-    if (scene.events) {
-      for (const ev of scene.events) {
-        const text = ev.renderedText?.trim();
-        if (!text) continue;
-        if (seenTexts.has(text)) continue;
-        seenTexts.add(text);
-        newBlocks.push({
-          id: bid(), type: 'event',
-          source: ev.originalPassage ? 'original' : 'generated',
-          text,
-          spoilerProtected: ev.spoilerProtected,
-        });
+      // Events
+      if (scene.events) {
+        for (const ev of scene.events) {
+          const text = ev.renderedText?.trim();
+          if (!text || seenTexts.has(text)) continue;
+          seenTexts.add(text);
+          newBlocks.push({
+            id: bid(), type: 'event',
+            source: ev.originalPassage ? 'original' : 'generated',
+            text,
+            spoilerProtected: ev.spoilerProtected,
+          });
+        }
       }
-    }
 
-    // Add all at once — reader scrolls at their own pace
-    add(newBlocks);
+      if (newBlocks.length === 0) return prev;
+      return [...prev, ...newBlocks];
+    });
+    setActionsVisible(false);
 
     // Update world state
     setWorldState(prev => ({
@@ -271,7 +274,8 @@ export default function ExperiencePage() {
   // ===== Action Handlers =====
 
   const handleAction = useCallback(async (action: ActionSuggestion) => {
-    if (isStreaming) return;
+    if (isStreaming || processingRef.current) return;
+    processingRef.current = true;
     if (action.label) {
       add([{ id: bid(), type: 'action', source: 'reader', text: `（${action.label}）` }]);
     }
@@ -309,6 +313,8 @@ export default function ExperiencePage() {
       }
     } catch (err: any) {
       add([{ id: bid(), type: 'environment', source: 'generated', text: '（接続エラー。もう一度試してください）' }]);
+    } finally {
+      processingRef.current = false;
     }
   }, [isStreaming, phase, workId]);
 
