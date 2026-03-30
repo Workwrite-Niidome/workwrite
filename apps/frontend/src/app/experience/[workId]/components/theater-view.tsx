@@ -1,15 +1,16 @@
 'use client';
 
 import { useRef, useEffect, useState } from 'react';
-import type { SceneBlock } from '../types';
+import type { SceneBlock, ActionSuggestion } from '../types';
 
 interface TheaterViewProps {
   blocks: SceneBlock[];
   isStreaming: boolean;
   onContentEnd?: (reached: boolean) => void;
+  onAwarenessClick?: (action: ActionSuggestion) => void;
 }
 
-export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewProps) {
+export function TheaterView({ blocks, isStreaming, onContentEnd, onAwarenessClick }: TheaterViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
   // Use a Set to track which block IDs have already been rendered (no re-render on update)
@@ -75,6 +76,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
                 block={block}
                 isNew={newBlockIds.has(block.id)}
                 animDelay={newBlockIds.has(block.id) ? [...newBlockIds].indexOf(block.id) * 1.8 : 0}
+                onAwarenessClick={onAwarenessClick}
               />
             </div>
           ) : null
@@ -92,7 +94,9 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
   );
 }
 
-function BlockRenderer({ block, isNew, animDelay }: { block: SceneBlock; isNew: boolean; animDelay: number }) {
+function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: SceneBlock; isNew: boolean; animDelay: number; onAwarenessClick?: (action: ActionSuggestion) => void }) {
+  const [awarenessClicked, setAwarenessClicked] = useState(false);
+
   const animStyle = isNew ? {
     opacity: 0,
     animation: `fadeUp 1.5s ease-out ${animDelay}s forwards`,
@@ -166,6 +170,63 @@ function BlockRenderer({ block, isNew, animDelay }: { block: SceneBlock; isNew: 
           >
             {block.text}
           </div>
+        </div>
+      );
+
+    case 'awareness':
+      return (
+        <div
+          style={{
+            padding: '20px 0 8px',
+            fontSize: '14px',
+            display: 'inline-block',
+            color: awarenessClicked ? '#55555f' : '#4a4a55',
+            cursor: awarenessClicked ? 'default' : 'pointer',
+            pointerEvents: awarenessClicked ? 'none' : 'auto',
+            animation: isNew
+              ? `fadeUp 1.5s ease-out ${animDelay}s forwards, awarenessGlow 3s ease-in-out ${animDelay + 1.5}s 1`
+              : undefined,
+            opacity: isNew ? 0 : 1,
+          }}
+          onMouseEnter={(e) => {
+            if (!awarenessClicked) {
+              e.currentTarget.style.color = '#8a8a95';
+              e.currentTarget.style.borderBottom = '1px solid #3a3a45';
+            }
+          }}
+          onMouseLeave={(e) => {
+            if (!awarenessClicked) {
+              e.currentTarget.style.color = '#4a4a55';
+              e.currentTarget.style.borderBottom = 'none';
+            }
+          }}
+          onClick={() => {
+            if (!awarenessClicked && block.awarenessAction && onAwarenessClick) {
+              setAwarenessClicked(true);
+              onAwarenessClick(block.awarenessAction);
+            }
+          }}
+        >
+          <span style={{ color: '#3a3a45', marginRight: '4px' }}>......</span>
+          {block.text}
+        </div>
+      );
+
+    case 'memory':
+      return (
+        <div
+          style={{
+            color: '#3a3a40',
+            fontStyle: 'italic',
+            filter: 'blur(0.3px)',
+            transform: 'translateY(-1px)',
+            textIndent: '1em',
+            fontSize: '15px',
+            padding: '8px 0',
+            ...animStyle,
+          }}
+        >
+          {block.text}
         </div>
       );
 

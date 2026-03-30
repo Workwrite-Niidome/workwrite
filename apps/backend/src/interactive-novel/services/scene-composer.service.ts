@@ -89,14 +89,33 @@ export class SceneComposerService {
       select: { episodeId: true, completed: true },
     });
 
-    // Render events with original text
+    // Check which events the reader has already witnessed
+    const witnessed = await this.prisma.readerWitnessedEvent.findMany({
+      where: { userId, workId, storyEventId: { in: allEvents.map(e => e.id) } },
+      select: { storyEventId: true },
+    });
+    const witnessedSet = new Set(witnessed.map(w => w.storyEventId));
+
+    // Render events with original text + isMemory flag
     const renderedEvents = await Promise.all(
-      allEvents.map(e => this.perspectiveRenderer.renderEvent(
-        e,
-        state.perspective as PerspectiveMode,
-        readProgress.map(p => ({ episodeId: p.episodeId, completed: !!p.completed })),
-      )),
+      allEvents.map(async e => {
+        const rendered = await this.perspectiveRenderer.renderEvent(
+          e,
+          state.perspective as PerspectiveMode,
+          readProgress.map(p => ({ episodeId: p.episodeId, completed: !!p.completed })),
+        );
+        return { ...rendered, isMemory: witnessedSet.has(e.id) };
+      }),
     );
+
+    // Record newly witnessed events
+    for (const e of allEvents) {
+      if (!witnessedSet.has(e.id)) {
+        await this.prisma.readerWitnessedEvent.create({
+          data: { userId, workId, storyEventId: e.id },
+        }).catch(() => {}); // Ignore duplicates
+      }
+    }
 
     // ===== ENVIRONMENT IS MINIMAL =====
     // Just one line: location name + one sensory detail
@@ -174,8 +193,8 @@ export class SceneComposerService {
       );
       if (aiActions && aiActions.length > 0) {
         // Always append fixed actions
-        aiActions.push({ type: 'observe', label: '周りを見る', params: { target: 'environment' } });
-        aiActions.push({ type: 'time', label: '次の日へ', params: {} });
+        aiActions.push({ type: 'observe', label: '周りの空気を感じる', params: { target: 'environment' } });
+        aiActions.push({ type: 'time', label: this.getTimeLabel(this.getTimeOfDay(state.timelinePosition)), params: {} });
         return aiActions;
       }
     } catch (err) {
@@ -196,7 +215,7 @@ export class SceneComposerService {
     for (const char of characters) {
       actions.push({
         type: 'talk',
-        label: `${this.shortName(char.name)}と話す`,
+        label: `${this.shortName(char.name)}の気配がする`,
         params: { characterId: char.id },
       });
     }
@@ -204,13 +223,13 @@ export class SceneComposerService {
     for (const conn of connections) {
       actions.push({
         type: 'move',
-        label: conn.description || conn.toLocation.name,
+        label: `${conn.toLocation.name}の方から、風が来る`,
         params: { locationId: conn.toLocation.id },
       });
     }
 
-    actions.push({ type: 'observe', label: '周りを見る', params: { target: 'environment' } });
-    actions.push({ type: 'time', label: '次の日へ', params: {} });
+    actions.push({ type: 'observe', label: '周りの空気を感じる', params: { target: 'environment' } });
+    actions.push({ type: 'time', label: this.getTimeLabel(this.getTimeOfDay(state.timelinePosition)), params: {} });
 
     return actions;
   }
@@ -228,16 +247,22 @@ export class SceneComposerService {
     const charNames = characters.map(c => this.shortName(c.name));
     const locationNames = connectedLocations.map(l => l.name);
 
-    const systemPrompt = `あなたは小説のインタラクティブ体験の選択肢を生成するアシスタントです。
-読者が物語の世界を探索しています。現在のシーンの内容に基づいて、自然で魅力的な選択肢を3-4個生成してください。
+    const systemPrompt = `あなたは小説のインタラクティブ体験を設計するアシスタントです。
+読者は物語の世界の中にいます。
+
+読者の「注意が向きうるもの」を3個生成してください。
+これは選択肢ではありません。読者がふと気づくかもしれない、世界の断片です。
 
 ルール:
-- 各選択肢は短く（15文字以内）、読者の行動として自然な日本語で
-- typeは以下から選択: "talk"（キャラと会話）, "move"（場所移動）, "observe"（観察・調査）, "perspective"（視点変更）
-- "talk"の場合、paramsにcharacterIdを含める（後で置換するので"CHAR:キャラ名"の形式で）
+- 命令形（「〜する」「〜を見る」）ではなく、知覚の断片にする
+- 例: 「本棚の影が目に入る」「榊の声が、まだ耳に残っている」「外から風が入ってくる」
+- 12文字以内。体言止めか、知覚動詞（目に入る、聞こえる、感じる）で終わる
+- typeは以下から選択: "talk"（キャラへの注意）, "move"（場所の気配）, "observe"（環境の知覚）
+- "talk"の場合、paramsにcharacterIdを含める（"CHAR:キャラ名"の形式で）
 - "move"の場合、paramsにlocationIdを含める（"LOC:場所名"の形式で）
 - "observe"の場合、paramsにtarget: "environment"を含める
-- シーンの雰囲気や状況に合った選択肢にする
+- 場所移動のヒントは方向感覚で: 「外の空気」「奥の扉」
+- キャラクターへの注意は間接的に: 「榊の手が止まる」「詩の足音」
 - 「周りを見る」「次の日へ」は不要（自動追加される）
 
 JSON配列のみ返してください。`;
@@ -345,5 +370,17 @@ ${truncatedEvents || '(テキストなし)'}`;
     if (dayPhase < 4) return 'evening';
     if (dayPhase < 5) return 'night';
     return 'late_night';
+  }
+
+  private getTimeLabel(timeOfDay: TimeOfDay): string {
+    const labels: Record<TimeOfDay, string> = {
+      dawn: '朝を待つ',
+      morning: '昼まで過ごす',
+      afternoon: '夕方の気配',
+      evening: '夜を迎える',
+      night: '眠りにつく',
+      late_night: '朝を待つ',
+    };
+    return labels[timeOfDay];
   }
 }

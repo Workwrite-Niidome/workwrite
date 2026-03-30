@@ -19,6 +19,7 @@ export interface EventBlock {
   originalPassage: string | null;
   significance: 'key' | 'normal' | 'ambient';
   spoilerProtected: boolean;
+  isMemory?: boolean;
 }
 
 export interface CharacterBlock {

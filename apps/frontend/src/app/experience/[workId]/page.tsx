@@ -159,13 +159,16 @@ export default function ExperiencePage() {
       }));
       setBlocks(introBlocks);
 
-      // Show entry action after animation completes
+      // Show entry awareness block after animation completes
       setTimeout(() => {
         if (cancelled) return;
-        setWorldState(prev => ({
-          ...prev,
-          actions: [{ type: 'move', label: '物語に入る', params: { locationId: 'initial' } }],
-        }));
+        setBlocks(prev => [...prev, {
+          id: bid(),
+          type: 'awareness',
+          source: 'generated',
+          text: '扉の向こうに、朝の光がある。',
+          awarenessAction: { type: 'move', label: '物語に入る', params: { locationId: 'initial' } },
+        }]);
       }, introParas.length * 2000 + 1000);
     }
 
@@ -249,12 +252,31 @@ export default function ExperiencePage() {
         }
       }
 
+      // Convert actions to awareness blocks (inline in the text flow)
+      if (scene.actions) {
+        const filteredActions = (scene.actions as any[])
+          .filter((a: any) => a.label && a.label.trim())
+          .filter((a: any) => a.type !== 'observe');
+        for (const action of filteredActions) {
+          if (!seenTexts.has(action.label)) {
+            seenTexts.add(action.label);
+            newBlocks.push({
+              id: bid(),
+              type: 'awareness',
+              source: 'generated',
+              text: action.label,
+              awarenessAction: { type: action.type, label: action.label, params: action.params || {} },
+            });
+          }
+        }
+      }
+
       if (newBlocks.length === 0) return prev;
       return [...prev, ...newBlocks];
     });
     setActionsVisible(false);
 
-    // Update world state
+    // Update world state (actions kept empty — awareness blocks handle it now)
     setWorldState(prev => ({
       ...prev,
       locationName: scene.meta?.locationName || prev.locationName,
@@ -263,11 +285,7 @@ export default function ExperiencePage() {
       presentCharacters: (scene.characters || []).map((c: any) => ({
         id: c.characterId, name: c.name, activity: c.activity,
       })),
-      actions: (scene.actions || [])
-        .filter((a: any) => a.label && a.label.trim())
-        .map((a: any) => ({
-          type: a.type, label: a.label, params: a.params || {},
-        })),
+      actions: [],
     }));
   }
 
@@ -318,6 +336,39 @@ export default function ExperiencePage() {
     }
   }, [isStreaming, phase, workId]);
 
+  const handleAwarenessClick = useCallback(async (action: ActionSuggestion) => {
+    if (isStreaming || processingRef.current) return;
+    processingRef.current = true;
+
+    try {
+      if (action.type === 'move') {
+        if (phase === 'intro') {
+          const res = await apiPost('/enter', { entryType: 'explore' });
+          add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
+          applyScene(res.data.scene);
+          setPhase('world');
+        } else {
+          const res = await apiPost('/move', { locationId: action.params.locationId });
+          add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
+          applyScene(res.data.scene);
+        }
+      } else if (action.type === 'talk') {
+        await handleTalk(action);
+      } else if (action.type === 'read') {
+        const episodeId = action.params.episodeId;
+        if (episodeId) window.open(`/works/${workId}/episodes/${episodeId}`, '_blank');
+      } else if (action.type === 'time') {
+        const res = await apiPost('/time-advance');
+        add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
+        applyScene(res.data.scene);
+      }
+    } catch {
+      add([{ id: bid(), type: 'environment', source: 'generated', text: '（接続エラー。もう一度試してください）' }]);
+    } finally {
+      processingRef.current = false;
+    }
+  }, [isStreaming, phase, workId]);
+
   async function handleTalk(action: ActionSuggestion) {
     const charId = action.params.characterId;
     const message = action.params.message || 'こんにちは';
@@ -353,14 +404,11 @@ export default function ExperiencePage() {
       add([{ id: bid(), type: 'environment', source: 'generated', text: `（${displayName}は静かにこちらを見ている）` }]);
     } finally {
       setIsStreaming(false);
-      // Refresh actions from backend (correct short names)
+      // Refresh scene from backend — actions become awareness blocks
       try {
         const stateRes = await apiPost('/enter', { entryType: 'explore' });
-        if (stateRes.data?.scene?.actions) {
-          setWorldState(prev => ({
-            ...prev,
-            actions: stateRes.data.scene.actions.map((a: any) => ({ type: a.type, label: a.label, params: a.params || {} })),
-          }));
+        if (stateRes.data?.scene) {
+          applyScene(stateRes.data.scene);
         }
       } catch {}
     }
@@ -434,8 +482,8 @@ export default function ExperiencePage() {
   return (
     <div className="min-h-screen bg-[#0a0a0f] text-[#d8d5d0] flex flex-col" style={{ fontFamily: "'Noto Serif JP', serif" }}>
       <ExperienceHeader state={worldState} onPerspectiveChange={handlePerspectiveChange} />
-      <TheaterView blocks={blocks} isStreaming={isStreaming} onContentEnd={handleContentEnd} />
-      <ActionPalette actions={worldState.actions} onAction={handleAction} onFreeInput={handleFreeInput} disabled={isStreaming} visible={computedActionsVisible} />
+      <TheaterView blocks={blocks} isStreaming={isStreaming} onContentEnd={handleContentEnd} onAwarenessClick={handleAwarenessClick} />
+      <ActionPalette onFreeInput={handleFreeInput} disabled={isStreaming} visible={computedActionsVisible} />
     </div>
   );
 }

@@ -2,19 +2,20 @@ export type PerspectiveMode = 'protagonist' | 'character' | 'omniscient';
 export type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'evening' | 'night' | 'late_night';
 
 export interface ActionSuggestion {
-  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time';
+  type: 'move' | 'observe' | 'talk' | 'perspective' | 'time' | 'read';
   label: string;
   params: Record<string, string | undefined>;
 }
 
 export interface SceneBlock {
   id: string;
-  type: 'environment' | 'event' | 'dialogue' | 'action' | 'break' | 'perspective_label';
+  type: 'environment' | 'event' | 'dialogue' | 'action' | 'break' | 'perspective_label' | 'awareness' | 'memory';
   source: 'original' | 'generated' | 'reader';
   text: string;
   speaker?: string;
   speakerColor?: string;
   spoilerProtected?: boolean;
+  awarenessAction?: ActionSuggestion;
 }
 
 export interface WorldState {
