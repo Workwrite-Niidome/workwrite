@@ -31,6 +31,31 @@ function nextBlockId(): string {
   return `blk-${++blockIdCounter}`;
 }
 
+function saveSession(workId: string, blocks: SceneBlock[], state: WorldState) {
+  try {
+    const data = JSON.stringify({ blocks: blocks.slice(-50), state, savedAt: Date.now() });
+    localStorage.setItem(`experience-${workId}`, data);
+  } catch { /* ignore */ }
+}
+
+function loadSession(workId: string): { blocks: SceneBlock[]; state: WorldState } | null {
+  try {
+    const raw = localStorage.getItem(`experience-${workId}`);
+    if (!raw) return null;
+    const data = JSON.parse(raw);
+    // Expire after 24h
+    if (Date.now() - data.savedAt > 24 * 60 * 60 * 1000) return null;
+    if (!data.blocks?.length || !data.state) return null;
+    // Restore blockIdCounter
+    blockIdCounter = data.blocks.length + 100;
+    return { blocks: data.blocks, state: data.state };
+  } catch { return null; }
+}
+
+function clearSession(workId: string) {
+  try { localStorage.removeItem(`experience-${workId}`); } catch { /* ignore */ }
+}
+
 export default function ExperiencePage() {
   const params = useParams();
   const workId = params.workId as string;
@@ -68,7 +93,16 @@ export default function ExperiencePage() {
         setWork(w);
         setCharacters(Array.isArray(c) ? c : []);
         setEpisodes(Array.isArray(e) ? e.sort((a: any, b: any) => a.orderIndex - b.orderIndex) : []);
-        setPhase('intro');
+
+        // Check for saved session
+        const saved = loadSession(workId);
+        if (saved) {
+          setBlocks(saved.blocks);
+          setWorldState(saved.state);
+          setPhase('world');
+        } else {
+          setPhase('intro');
+        }
       } catch {
         setPhase('intro');
       }
@@ -123,6 +157,13 @@ export default function ExperiencePage() {
   const addBlocks = useCallback((newBlocks: SceneBlock[]) => {
     setBlocks(prev => [...prev, ...newBlocks]);
   }, []);
+
+  // Auto-save session on state changes
+  useEffect(() => {
+    if (phase === 'world' && blocks.length > 0) {
+      saveSession(workId, blocks, worldState);
+    }
+  }, [blocks, worldState, phase, workId]);
 
   // Handle action from palette
   const handleAction = useCallback(async (action: ActionSuggestion) => {
