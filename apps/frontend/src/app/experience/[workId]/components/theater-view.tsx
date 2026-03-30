@@ -13,8 +13,29 @@ interface TheaterViewProps {
 export function TheaterView({ blocks, isStreaming, onContentEnd, onAwarenessClick }: TheaterViewProps) {
   const endRef = useRef<HTMLDivElement>(null);
   const sentinelRef = useRef<HTMLDivElement>(null);
+  const containerRef = useRef<HTMLDivElement>(null);
   // Use a Set to track which block IDs have already been rendered (no re-render on update)
   const renderedIds = useRef(new Set<string>());
+
+  // Tap to skip: clicking the theater area completes all pending animations instantly
+  useEffect(() => {
+    const el = containerRef.current;
+    if (!el) return;
+    const handleClick = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      // Don't skip if clicking awareness, links, or inputs
+      if (target.closest('[data-awareness]') || target.closest('a') || target.closest('input') || target.closest('button')) return;
+      // Find all blocks still animating and force them visible
+      el.querySelectorAll('.block-animating').forEach(block => {
+        (block as HTMLElement).style.animation = 'none';
+        (block as HTMLElement).style.opacity = '1';
+        (block as HTMLElement).style.transform = 'translateY(0)';
+        block.classList.remove('block-animating');
+      });
+    };
+    el.addEventListener('click', handleClick);
+    return () => el.removeEventListener('click', handleClick);
+  }, []);
 
   // Mark blocks as "new" if not yet rendered, then remember them
   const newBlockIds = new Set<string>();
@@ -64,7 +85,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd, onAwarenessClic
   const sentinelIndex = Math.max(0, blocks.length - 2);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-16 pb-32">
+    <div ref={containerRef} className="flex-1 overflow-y-auto px-6 md:px-10 pt-16 pb-32">
       <div className="mx-auto max-w-lg">
         {blocks.map((block, idx) =>
           block ? (
@@ -97,6 +118,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd, onAwarenessClic
 function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: SceneBlock; isNew: boolean; animDelay: number; onAwarenessClick?: (action: ActionSuggestion) => void }) {
   const [awarenessClicked, setAwarenessClicked] = useState(false);
 
+  const animClass = isNew ? 'block-animating' : '';
   const animStyle = isNew ? {
     opacity: 0,
     animation: `fadeUp 1.5s ease-out ${animDelay}s forwards`,
@@ -105,21 +127,21 @@ function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: S
   switch (block.type) {
     case 'break':
       return (
-        <div className="py-8 text-center text-[#3a3a40] text-sm tracking-[0.5em]" style={animStyle}>
+        <div className={`py-8 text-center text-[#3a3a40] text-sm tracking-[0.5em] ${animClass}`} style={animStyle}>
           * * *
         </div>
       );
 
     case 'perspective_label':
       return (
-        <div className="py-6 text-center text-[10px] text-[#55555f] tracking-[0.3em]" style={animStyle}>
+        <div className={`py-6 text-center text-[10px] text-[#55555f] tracking-[0.3em] ${animClass}`} style={animStyle}>
           {block.text}
         </div>
       );
 
     case 'action':
       return (
-        <div className="py-3 text-sm text-[#55555f] font-sans" style={animStyle}>
+        <div className={`py-3 text-sm text-[#55555f] font-sans ${animClass}`} style={animStyle}>
           {block.text}
         </div>
       );
@@ -127,7 +149,7 @@ function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: S
     case 'environment':
       return (
         <div
-          className={`py-3 leading-[2.2] text-[15px] ${
+          className={`py-3 leading-[2.2] text-[15px] ${animClass} ${
             block.source === 'original' ? 'text-[#d8d5d0]' : 'text-[#a8a5a0]'
           }`}
           style={{ textIndent: '1em', ...animStyle }}
@@ -139,7 +161,7 @@ function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: S
     case 'event':
       return (
         <div
-          className={`py-3 leading-[2.2] text-[15px] ${
+          className={`py-3 leading-[2.2] text-[15px] ${animClass} ${
             block.spoilerProtected ? 'text-[#6a6a70] italic' :
             block.source === 'original' ? 'text-[#d8d5d0]' : 'text-[#a8a5a0]'
           }`}
@@ -151,7 +173,7 @@ function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: S
 
     case 'dialogue':
       return (
-        <div className="py-3 leading-[2.2] text-[15px]" style={animStyle}>
+        <div className={`py-3 leading-[2.2] text-[15px] ${animClass}`} style={animStyle}>
           {block.speaker && (
             <div
               className="text-[11px] font-sans tracking-wider mb-1 ml-5"
@@ -176,6 +198,7 @@ function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: S
     case 'awareness':
       return (
         <div
+          data-awareness="true"
           style={{
             padding: '20px 0 8px',
             fontSize: '14px',
@@ -232,7 +255,7 @@ function BlockRenderer({ block, isNew, animDelay, onAwarenessClick }: { block: S
 
     default:
       return (
-        <div className="py-3 leading-[2.2] text-[15px] text-[#d8d5d0]" style={{ textIndent: '1em', ...animStyle }}>
+        <div className={`py-3 leading-[2.2] text-[15px] text-[#d8d5d0] ${animClass}`} style={{ textIndent: '1em', ...animStyle }}>
           {block.text}
         </div>
       );
