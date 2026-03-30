@@ -260,9 +260,11 @@ export default function ExperiencePage() {
       presentCharacters: (scene.characters || []).map((c: any) => ({
         id: c.characterId, name: c.name, activity: c.activity,
       })),
-      actions: (scene.actions || []).map((a: any) => ({
-        type: a.type, label: a.label, params: a.params || {},
-      })),
+      actions: (scene.actions || [])
+        .filter((a: any) => a.label && a.label.trim())
+        .map((a: any) => ({
+          type: a.type, label: a.label, params: a.params || {},
+        })),
     }));
   }
 
@@ -270,7 +272,9 @@ export default function ExperiencePage() {
 
   const handleAction = useCallback(async (action: ActionSuggestion) => {
     if (isStreaming) return;
-    add([{ id: bid(), type: 'action', source: 'reader', text: `（${action.label}）` }]);
+    if (action.label) {
+      add([{ id: bid(), type: 'action', source: 'reader', text: `（${action.label}）` }]);
+    }
 
     try {
       if (action.type === 'move') {

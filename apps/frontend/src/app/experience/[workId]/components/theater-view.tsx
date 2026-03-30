@@ -32,10 +32,11 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
     return () => clearTimeout(timer);
   }, [blocks]);
 
-  // Scroll to new content
+  // Scroll: only for small additions (1-2 blocks). Large batches stay at top.
   const prevCountRef = useRef(0);
   useEffect(() => {
-    if (blocks.length > prevCountRef.current) {
+    const added = blocks.length - prevCountRef.current;
+    if (added > 0 && added <= 2) {
       setTimeout(() => {
         endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
       }, 300);

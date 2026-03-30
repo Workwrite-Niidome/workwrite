@@ -121,7 +121,12 @@ export class EventSplitterService {
         const currentText = currentScene.join('\n');
 
         // Flush scene if it's getting long enough
-        if (currentText.length > 400 || (t.startsWith('「') && currentScene.length > 1)) {
+        // But don't split in the middle of a dialogue sequence
+        const prevIsDialogue = currentScene.length > 0 && currentScene[currentScene.length - 1].startsWith('「');
+        const currentIsDialogue = t.startsWith('「');
+        const inDialogueSequence = prevIsDialogue && currentIsDialogue;
+
+        if (currentText.length > 600 || (!inDialogueSequence && currentText.length > 400 && currentScene.length > 1)) {
           const sceneText = currentScene.slice(0, -1).join('\n');
           if (sceneText.length > 10) {
             const endPos = offset;
