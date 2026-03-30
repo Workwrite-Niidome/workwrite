@@ -73,18 +73,18 @@ export default function InteractiveNovelLab() {
 
   if (loading) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f]">
-        <p className="text-sm text-[#55555f] tracking-widest">LOADING...</p>
+      <div className="flex min-h-screen items-center justify-center">
+        <p className="text-sm text-muted-foreground tracking-widest">LOADING...</p>
       </div>
     );
   }
 
   if (error) {
     return (
-      <div className="flex min-h-screen items-center justify-center bg-[#0a0a0f] px-4">
+      <div className="flex min-h-screen items-center justify-center px-4">
         <div className="text-center">
-          <p className="text-sm text-[#8a8a95] mb-4">{error}</p>
-          <p className="text-xs text-[#55555f]">URL: /lab/interactive-novel</p>
+          <p className="text-sm text-muted-foreground mb-4">{error}</p>
+          <p className="text-xs text-muted-foreground/50">URL: /lab/interactive-novel</p>
         </div>
       </div>
     );
@@ -93,7 +93,7 @@ export default function InteractiveNovelLab() {
   if (!data) return null;
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#e8e6e3]" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+    <div className="min-h-screen bg-background text-foreground">
       {layer === 'landing' && (
         <InteractiveLanding data={data} onSelectLayer={setLayer} />
       )}

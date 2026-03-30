@@ -16,8 +16,8 @@ export function LabAuthGuard({ children }: { children: React.ReactNode }) {
 
   if (isLoading || !isAuthenticated || user?.role !== 'ADMIN') {
     return (
-      <div className="flex items-center justify-center min-h-screen bg-[#0a0a0f]">
-        <p className="text-sm text-[#55555f] tracking-widest">LOADING...</p>
+      <div className="flex items-center justify-center min-h-screen">
+        <p className="text-sm text-muted-foreground tracking-widest">LOADING...</p>
       </div>
     );
   }

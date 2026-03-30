@@ -1,5 +1,7 @@
 'use client';
 
+import { Card } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
 import type { WorkData, Layer } from '../page';
 
 const entries: { layer: Layer; label: string; title: string; desc: string }[] = [
@@ -14,49 +16,46 @@ export function InteractiveLanding({ data, onSelectLayer }: { data: WorkData; on
   const { work, episodes, characters } = data;
 
   return (
-    <div className="min-h-screen flex flex-col items-center justify-center px-5 py-10 relative">
-      {/* Radial gradient background */}
-      <div className="absolute inset-0 pointer-events-none" style={{
-        background: 'radial-gradient(ellipse at 50% 30%, rgba(123,104,238,0.06) 0%, transparent 60%)',
-      }} />
-
-      <h1 className="text-6xl font-light tracking-[0.3em] mb-3 relative z-10" style={{ fontFamily: "'Noto Serif JP', serif" }}>
+    <div className="min-h-screen flex flex-col items-center justify-center px-6 py-12">
+      <h1 className="text-4xl font-serif font-light tracking-widest mb-3">
         {work.title}
       </h1>
-      <div className="text-xs text-[#8a8a95] tracking-widest mb-1.5 relative z-10">
+      <p className="text-xs text-muted-foreground tracking-wider mb-1">
         {work.author?.displayName || work.author?.name}
-      </div>
-      <div className="text-[10px] text-[#55555f] tracking-wider mb-12 relative z-10">
-        {work.genre} / 全{episodes.length}話 / {characters.length}人のキャラクター
+      </p>
+      <div className="flex items-center gap-2 mb-10">
+        <Badge variant="outline" className="text-[11px] font-normal">{work.genre}</Badge>
+        <Badge variant="secondary" className="text-[11px] font-normal">全{episodes.length}話</Badge>
+        <Badge variant="secondary" className="text-[11px] font-normal">{characters.length}人</Badge>
       </div>
 
       {work.synopsis && (
-        <p className="max-w-[640px] text-center text-sm text-[#8a8a95] leading-8 font-light mb-16 relative z-10">
+        <p className="max-w-lg text-center text-sm text-muted-foreground leading-7 font-serif mb-12">
           {work.synopsis}
         </p>
       )}
 
-      <div className="text-[10px] text-[#55555f] tracking-[0.2em] uppercase mb-6 relative z-10">
+      <p className="text-[11px] text-muted-foreground/50 tracking-widest uppercase mb-5">
         この物語への入口を選んでください
-      </div>
+      </p>
 
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4 max-w-[960px] w-full relative z-10">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-3 max-w-4xl w-full">
         {entries.map(e => (
-          <button
+          <Card
             key={e.layer}
+            className="px-4 py-5 text-center cursor-pointer hover:shadow-md hover:border-primary/20 transition-all"
             onClick={() => onSelectLayer(e.layer)}
-            className="bg-[#12121a] border border-[#2a2a35] rounded-lg px-5 py-6 text-center cursor-pointer transition-all hover:border-[#5a4cc0] hover:bg-[#1a1a25] hover:-translate-y-0.5"
           >
-            <div className="text-[10px] text-[#7b68ee] tracking-wider mb-2">{e.label}</div>
-            <div className="text-base font-normal mb-2">{e.title}</div>
-            <div className="text-[11px] text-[#8a8a95] leading-relaxed">{e.desc}</div>
-          </button>
+            <p className="text-[10px] text-primary/60 font-sans font-medium tracking-wider mb-1.5">{e.label}</p>
+            <p className="text-sm font-medium mb-1.5">{e.title}</p>
+            <p className="text-[11px] text-muted-foreground leading-relaxed">{e.desc}</p>
+          </Card>
         ))}
       </div>
 
-      <div className="mt-16 text-[10px] text-[#55555f] tracking-wider relative z-10">
+      <p className="mt-14 text-[10px] text-muted-foreground/40 tracking-widest">
         INTERACTIVE NOVEL PROTOTYPE
-      </div>
+      </p>
     </div>
   );
 }
