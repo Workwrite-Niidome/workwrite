@@ -14,7 +14,7 @@ function isWritingPage(pathname: string): boolean {
 
 /** Paths with their own standalone layout (e.g. landing pages) */
 function isStandalonePage(pathname: string): boolean {
-  return pathname.startsWith('/lp');
+  return pathname.startsWith('/lp') || pathname.startsWith('/experience/');
 }
 
 /** Paths where sidebar is hidden (reader, compose-only views) */

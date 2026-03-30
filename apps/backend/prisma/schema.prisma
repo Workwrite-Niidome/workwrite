@@ -85,6 +85,10 @@ model User {
   // Announcements
   announcements Announcement[] @relation("announcementCreator")
 
+  // Interactive Novel
+  readerWorldStates ReaderWorldState[]
+  journeyLogs       JourneyLog[]
+
   @@index([email])
   @@index([role])
 }
@@ -203,6 +207,16 @@ model Work {
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
 
+  // Interactive Novel
+  enableInteractiveNovel  Boolean @default(false)
+  interactiveNovelStatus  String?
+  worldVersion            Int     @default(0)
+  worldLocations          WorldLocation[]
+  locationConnections     LocationConnection[]
+  interactiveStoryEvents  StoryEvent[]
+  readerWorldStates       ReaderWorldState[]
+  journeyLogs             JourneyLog[]
+
   @@index([authorId])
   @@index([status])
   @@index([genre])
@@ -252,6 +266,7 @@ model Episode {
   aiAnalysis      EpisodeAnalysis?
   posts           Post[]
   reactions       EpisodeReaction[]
+  storyEvents     StoryEvent[]
 
   @@unique([workId, orderIndex])
   @@index([workId])
@@ -944,6 +959,7 @@ model StoryCharacter {
   relationsFrom StoryCharacterRelation[] @relation("FromCharacter")
   relationsTo   StoryCharacterRelation[] @relation("ToCharacter")
   dialogueSamples CharacterDialogueSample[]
+  schedules       CharacterSchedule[]
 
   @@index([workId])
 }
@@ -1028,6 +1044,13 @@ model EpisodeAnalysis {
   foreshadowings  Json?                     // [{ description, type }]
   dialogueSamples Json?                     // [{ character, line, context }]
   newWorldRules   Json?                     // [{ category, name, description }]
+
+  // Interactive Novel enrichment
+  spatialData        Json?
+  sceneBreakdown     Json?
+  characterMovement  Json?
+  interactiveVersion Int?   @default(0)
+
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
@@ -1398,4 +1421,173 @@ model AuthorPayout {
 
   @@index([authorId, createdAt])
   @@index([status])
+}
+
+// ===== Interactive Novel =====
+
+model WorldLocation {
+  id               String   @id @default(cuid())
+  workId           String
+  name             String
+  type             String   // interior | exterior | abstract
+  description      String   @db.Text
+  derivedFrom      Json?
+  generationStatus String   @default("skeleton")
+  createdAt        DateTime @default(now())
+
+  work               Work                       @relation(fields: [workId], references: [id], onDelete: Cascade)
+  connectionsFrom    LocationConnection[]        @relation("FromLocation")
+  connectionsTo      LocationConnection[]        @relation("ToLocation")
+  renderings         LocationRendering[]
+  storyEvents        StoryEvent[]
+  characterSchedules CharacterSchedule[]
+  readerDiscoveries  ReaderDiscoveredLocation[]
+
+  @@index([workId])
+  @@index([workId, type])
+}
+
+model LocationConnection {
+  id             String  @id @default(cuid())
+  workId         String
+  fromLocationId String
+  toLocationId   String
+  description    String?
+  travelTime     String?
+
+  work         Work          @relation(fields: [workId], references: [id], onDelete: Cascade)
+  fromLocation WorldLocation @relation("FromLocation", fields: [fromLocationId], references: [id], onDelete: Cascade)
+  toLocation   WorldLocation @relation("ToLocation", fields: [toLocationId], references: [id], onDelete: Cascade)
+
+  @@index([fromLocationId])
+  @@index([toLocationId])
+}
+
+model LocationRendering {
+  id          String   @id @default(cuid())
+  locationId  String
+  timeOfDay   String   // dawn | morning | afternoon | evening | night | late_night
+  sensoryText Json     // { visual, auditory, olfactory, tactile, atmospheric }
+  createdAt   DateTime @default(now())
+
+  location WorldLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@unique([locationId, timeOfDay])
+}
+
+model StoryEvent {
+  id               String   @id @default(cuid())
+  workId           String
+  episodeId        String
+  orderInEpisode   Int
+  timelinePosition Float    // 0.0~1.0 normalized across entire work
+  locationId       String?
+  characters       Json?    // [{ characterId?, name, role }]
+  emotionalTone    String?
+  significance     String   // key | normal | ambient
+  textStartOffset  Int
+  textEndOffset    Int
+  summary          String?  @db.Text
+  createdAt        DateTime @default(now())
+
+  work              Work                   @relation(fields: [workId], references: [id], onDelete: Cascade)
+  episode           Episode                @relation(fields: [episodeId], references: [id], onDelete: Cascade)
+  location          WorldLocation?         @relation(fields: [locationId], references: [id], onDelete: SetNull)
+  perspectiveCaches PerspectiveCache[]
+  witnessedBy       ReaderWitnessedEvent[]
+
+  @@index([episodeId, orderInEpisode])
+  @@index([workId, timelinePosition])
+  @@index([locationId])
+}
+
+model CharacterSchedule {
+  id             String  @id @default(cuid())
+  characterId    String
+  workId         String
+  timeStart      Float   // 0.0~1.0 (work-level normalized)
+  timeEnd        Float
+  locationId     String?
+  activity       String?
+  withCharacters Json?   // [{ characterId, name }]
+  mood           String?
+  episodeId      String?
+
+  character StoryCharacter @relation(fields: [characterId], references: [id], onDelete: Cascade)
+  location  WorldLocation? @relation(fields: [locationId], references: [id], onDelete: SetNull)
+
+  @@index([characterId, timeStart])
+  @@index([workId])
+  @@index([locationId, timeStart, timeEnd])
+}
+
+model ReaderWorldState {
+  id               String   @id @default(cuid())
+  userId           String
+  workId           String
+  locationId       String?
+  timelinePosition Float    @default(0.0)
+  perspective      String   @default("character")  // protagonist | character | omniscient
+  entryLayer       Int      @default(2)
+  lastEventId      String?
+  updatedAt        DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, workId])
+}
+
+model ReaderWitnessedEvent {
+  userId       String
+  workId       String
+  storyEventId String
+  witnessedAt  DateTime @default(now())
+
+  storyEvent StoryEvent @relation(fields: [storyEventId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workId, storyEventId])
+  @@index([userId, workId])
+}
+
+model ReaderDiscoveredLocation {
+  userId       String
+  workId       String
+  locationId   String
+  discoveredAt DateTime @default(now())
+
+  location WorldLocation @relation(fields: [locationId], references: [id], onDelete: Cascade)
+
+  @@id([userId, workId, locationId])
+}
+
+model JourneyLog {
+  id               String   @id @default(cuid())
+  userId           String
+  workId           String
+  locationId       String?
+  timelinePosition Float?
+  perspective      String?
+  action           String   @db.VarChar(50)  // move | observe | talk | perspective | time
+  detail           Json?
+  createdAt        DateTime @default(now())
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  work Work @relation(fields: [workId], references: [id], onDelete: Cascade)
+
+  @@index([userId, workId, createdAt(sort: Desc)])
+  @@index([workId, createdAt(sort: Desc)])
+  @@index([userId, workId, action])
+}
+
+model PerspectiveCache {
+  id           String   @id @default(cuid())
+  storyEventId String
+  perspective  String   // protagonist | character | omniscient
+  renderedText String   @db.Text
+  createdAt    DateTime @default(now())
+
+  storyEvent StoryEvent @relation(fields: [storyEventId], references: [id], onDelete: Cascade)
+
+  @@unique([storyEventId, perspective])
 }
