@@ -116,6 +116,20 @@ export class InteractiveNovelController {
     return { data: status };
   }
 
+  @Post(':workId/seed')
+  async seedWorld(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    // Admin-only: check user role
+    const user = await this.sceneComposer['prisma'].user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'ADMIN') {
+      return { error: 'Admin only' };
+    }
+    const result = await this.worldBuilder.seedAriaWorld(workId);
+    return { data: result };
+  }
+
   // ===== SSE Endpoints (streaming) =====
 
   @Post(':workId/talk')
