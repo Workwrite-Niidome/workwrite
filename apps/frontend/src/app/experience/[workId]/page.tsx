@@ -196,40 +196,43 @@ export default function ExperiencePage() {
   }
 
   function applyScene(scene: any) {
-    // Split all text into short sentence-level blocks
-    const allBlocks: SceneBlock[] = [];
+    const newBlocks: SceneBlock[] = [];
 
-    // Environment: split into individual sentences
-    if (scene.environment?.text) {
-      const sentences = splitIntoSentences(scene.environment.text);
-      for (const s of sentences) {
-        allBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: s });
-      }
-    }
-
-    // Events: split each event's text into sentences (deduplicated)
-    const seenTexts = new Set(allBlocks.map(b => b.text));
-    // Also check existing blocks to avoid repeating intro text
+    // Collect existing text for dedup
+    const seenTexts = new Set<string>();
     for (const b of blocks) { if (b?.text) seenTexts.add(b.text); }
 
-    if (scene.events) {
-      for (const ev of scene.events) {
-        if (!ev.renderedText?.trim()) continue;
-        const sentences = splitIntoSentences(ev.renderedText);
-        for (const s of sentences) {
-          if (seenTexts.has(s)) continue; // Skip duplicates
-          seenTexts.add(s);
-          allBlocks.push({
-            id: bid(), type: 'event',
-            source: ev.originalPassage ? 'original' : 'generated',
-            text: s,
-            spoilerProtected: ev.spoilerProtected,
-          });
+    // Environment: show as paragraph blocks (split by newlines only)
+    if (scene.environment?.text) {
+      for (const line of scene.environment.text.split('\n')) {
+        const t = line.trim();
+        if (t && !seenTexts.has(t)) {
+          seenTexts.add(t);
+          newBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: t });
         }
       }
     }
 
-    // Update world state immediately (actions become available)
+    // Events: show as paragraph blocks (preserve original text structure)
+    if (scene.events) {
+      for (const ev of scene.events) {
+        const text = ev.renderedText?.trim();
+        if (!text) continue;
+        if (seenTexts.has(text)) continue;
+        seenTexts.add(text);
+        newBlocks.push({
+          id: bid(), type: 'event',
+          source: ev.originalPassage ? 'original' : 'generated',
+          text,
+          spoilerProtected: ev.spoilerProtected,
+        });
+      }
+    }
+
+    // Add all at once — reader scrolls at their own pace
+    add(newBlocks);
+
+    // Update world state
     setWorldState(prev => ({
       ...prev,
       locationName: scene.meta?.locationName || prev.locationName,
@@ -242,32 +245,19 @@ export default function ExperiencePage() {
         type: a.type, label: a.label, params: a.params || {},
       })),
     }));
-
-    // Add blocks one by one with delay (typing effect)
-    let i = 0;
-    const timer = setInterval(() => {
-      if (i < allBlocks.length) {
-        setBlocks(prev => [...prev, allBlocks[i]]);
-        i++;
-      } else {
-        clearInterval(timer);
-      }
-    }, 600); // 600ms between each sentence
   }
 
-  /** Split text into short sentences for gradual reveal */
+  /** Split text into sentences (used for intro only) */
   function splitIntoSentences(text: string): string[] {
     const results: string[] = [];
-    // Split by newlines first
     for (const line of text.split('\n')) {
       const trimmed = line.trim();
       if (!trimmed) continue;
-      // Split long lines by sentence endings (。！？)
-      if (trimmed.length > 80) {
-        const parts = trimmed.split(/(?<=[。！？])\s*/);
-        for (const part of parts) {
-          const p = part.trim();
-          if (p) results.push(p);
+      // Only split very long lines at sentence endings
+      if (trimmed.length > 120) {
+        const parts = trimmed.split(/(?<=[。！？」』])\s*/);
+        for (const p of parts) {
+          if (p.trim()) results.push(p.trim());
         }
       } else {
         results.push(trimmed);
