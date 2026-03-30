@@ -73,7 +73,7 @@ export function TheaterView({ blocks, isStreaming, onContentEnd }: TheaterViewPr
               <BlockRenderer
                 block={block}
                 isNew={newBlockIds.has(block.id)}
-                animDelay={newBlockIds.has(block.id) ? [...newBlockIds].indexOf(block.id) * 1.2 : 0}
+                animDelay={newBlockIds.has(block.id) ? [...newBlockIds].indexOf(block.id) * 1.8 : 0}
               />
             </div>
           ) : null
