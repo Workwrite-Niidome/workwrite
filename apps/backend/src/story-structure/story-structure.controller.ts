@@ -1,6 +1,6 @@
 import {
   Controller, Get, Post, Put, Delete,
-  Param, Body, UseGuards,
+  Param, Body, UseGuards, ForbiddenException,
 } from '@nestjs/common';
 import { ApiTags, ApiOperation, ApiBearerAuth } from '@nestjs/swagger';
 import { StoryStructureService } from './story-structure.service';
@@ -10,19 +10,26 @@ import {
   CreateCharacterDto, UpdateCharacterDto, SetRelationDto,
   UpsertArcDto, CreateSceneDto, UpdateSceneDto,
 } from './dto/story-structure.dto';
+import { PrismaService } from '../common/prisma/prisma.service';
 
 @ApiTags('Story Structure')
 @Controller()
 @UseGuards(JwtAuthGuard)
 @ApiBearerAuth()
 export class StoryStructureController {
-  constructor(private service: StoryStructureService) {}
+  constructor(private service: StoryStructureService, private prisma: PrismaService) {}
+
+  private async verifyWorkOwnership(workId: string, userId: string) {
+    const work = await this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } });
+    if (!work || work.authorId !== userId) throw new ForbiddenException();
+  }
 
   // ─── Characters ────────────────────────────────────
 
   @Get('works/:workId/characters')
   @ApiOperation({ summary: 'Get all characters for a work (author view)' })
-  getCharacters(@Param('workId') workId: string) {
+  async getCharacters(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.service.getCharacters(workId);
   }
 
@@ -97,7 +104,8 @@ export class StoryStructureController {
 
   @Get('works/:workId/story-arc')
   @ApiOperation({ summary: 'Get story arc with acts and scenes' })
-  getStoryArc(@Param('workId') workId: string) {
+  async getStoryArc(@Param('workId') workId: string, @CurrentUser('id') userId: string) {
+    await this.verifyWorkOwnership(workId, userId);
     return this.service.getStoryArc(workId);
   }
 
