@@ -1,17 +1,22 @@
-import { Injectable, Logger } from '@nestjs/common';
+import { Injectable, Logger, BadRequestException } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
+import { EventSplitterService } from './event-splitter.service';
+
+interface ExtractedLocation {
+  name: string;
+  description: string;
+  type: 'interior' | 'exterior' | 'abstract';
+  episodeIndices: number[];
+}
 
 @Injectable()
 export class WorldBuilderService {
   private readonly logger = new Logger(WorldBuilderService.name);
 
-  constructor(private prisma: PrismaService) {}
-
-  async buildWorld(workId: string): Promise<{ locations: number; events: number; schedules: number }> {
-    this.logger.log(`Building world for work ${workId}`);
-    // TODO: Generic pipeline from EpisodeAnalysis
-    return this.getWorldStatus(workId);
-  }
+  constructor(
+    private prisma: PrismaService,
+    private eventSplitter: EventSplitterService,
+  ) {}
 
   async getWorldStatus(workId: string) {
     const [locations, events, schedules] = await Promise.all([
@@ -23,127 +28,389 @@ export class WorldBuilderService {
   }
 
   /**
-   * Seed Aria's world data. Temporary method for bootstrapping.
+   * Build world for any completed work. Fully automatic.
+   * 1. Validate work is COMPLETED
+   * 2. Extract locations from EpisodeAnalysis or episode text
+   * 3. Create LocationConnections from co-occurrence
+   * 4. Generate basic LocationRenderings
+   * 5. Build CharacterSchedules
+   * 6. Split episodes into StoryEvents
    */
-  async seedAriaWorld(workId: string): Promise<{ locations: number; connections: number; renderings: number; schedules: number }> {
-    this.logger.log('Seeding Aria world data...');
-
-    const work = await this.prisma.work.findUnique({ where: { id: workId } });
-    if (!work) throw new Error('Work not found');
-
-    const characters = await this.prisma.storyCharacter.findMany({ where: { workId } });
-    const episodes = await this.prisma.episode.findMany({
-      where: { workId },
-      orderBy: { orderIndex: 'asc' },
-      select: { id: true, orderIndex: true },
+  async buildWorld(workId: string): Promise<{
+    locations: number; connections: number; renderings: number;
+    schedules: number; events: number;
+  }> {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { id: true, title: true, completionStatus: true },
     });
-
-    const charByName = (fragment: string) => characters.find(c => c.name?.includes(fragment));
-
-    // Locations
-    const locations = [
-      { id: 'aria-loc-shiori-do', workId, name: '栞堂', type: 'interior', description: '下北沢の駅から歩いて五分、路地を二本入ったところにある古書店。入口は狭い。看板は木彫りで、文字がかすれている。天井まで届く本棚が所狭しと並んでいて、奥にカフェスペースがある。テーブルが三つ。コーヒーと紅茶だけ出す。', generationStatus: 'complete' },
-      { id: 'aria-loc-shimokitazawa', workId, name: '下北沢の路地', type: 'exterior', description: '古着屋、レコード店、小劇場が並ぶ路地裏。夕焼けが建物の壁を染める。どこかの店からギターの音が聞こえる。', generationStatus: 'complete' },
-      { id: 'aria-loc-apartment', workId, name: '詩のアパート', type: 'interior', description: '駅から徒歩七分の木造二階建ての二階。六畳一間。ベッドとデスクと小さな本棚。デスクの上にはノートパソコン。コーヒーの匂いが漂っている。', generationStatus: 'complete' },
-      { id: 'aria-loc-nameless-street', workId, name: '名前のない街', type: 'abstract', description: '入口はあるけれど、出口は自分で見つけるもの。建物は古くて、路地は入り組んでいて、空はいつも夕焼けと朝焼けの間の色をしている。', generationStatus: 'complete' },
-      { id: 'aria-loc-ao-bookstore', workId, name: '蒼の古書店', type: 'interior', description: '名前のない街の小さな古書店。窓から夕焼けの光が差し込んでいる。棚には街の住人たちに必要な本が並んでいる。', generationStatus: 'complete' },
-      { id: 'aria-loc-library', workId, name: '先生の図書館', type: 'interior', description: '名前のない街で一番大きな建物。天井が高く、本棚が壁を覆い尽くしている。奥にはお茶を飲むための小さなテーブル。いつもお茶の香りがする。', generationStatus: 'complete' },
-    ];
-
-    for (const loc of locations) {
-      await this.prisma.worldLocation.upsert({
-        where: { id: loc.id },
-        create: loc,
-        update: { name: loc.name, description: loc.description, generationStatus: loc.generationStatus },
-      });
+    if (!work) throw new BadRequestException('Work not found');
+    if (work.completionStatus !== 'COMPLETED') {
+      throw new BadRequestException('Interactive Novel is only available for completed works');
     }
 
-    // Connections
-    await this.prisma.locationConnection.deleteMany({ where: { workId } });
-    const connections = [
-      { from: 'aria-loc-shiori-do', to: 'aria-loc-shimokitazawa', desc: '外に出る' },
-      { from: 'aria-loc-shimokitazawa', to: 'aria-loc-shiori-do', desc: '栞堂に入る' },
-      { from: 'aria-loc-shimokitazawa', to: 'aria-loc-apartment', desc: '詩のアパートへ' },
-      { from: 'aria-loc-apartment', to: 'aria-loc-shimokitazawa', desc: '外に出る' },
-      { from: 'aria-loc-nameless-street', to: 'aria-loc-ao-bookstore', desc: '蒼の古書店へ' },
-      { from: 'aria-loc-nameless-street', to: 'aria-loc-library', desc: '先生の図書館へ' },
-      { from: 'aria-loc-ao-bookstore', to: 'aria-loc-nameless-street', desc: '街に出る' },
-      { from: 'aria-loc-ao-bookstore', to: 'aria-loc-library', desc: '図書館へ' },
-      { from: 'aria-loc-library', to: 'aria-loc-nameless-street', desc: '街に出る' },
-      { from: 'aria-loc-library', to: 'aria-loc-ao-bookstore', desc: '蒼の古書店へ' },
-      { from: 'aria-loc-apartment', to: 'aria-loc-nameless-street', desc: 'Ariaを開く' },
-      { from: 'aria-loc-nameless-street', to: 'aria-loc-apartment', desc: '現実に戻る' },
-    ];
-    for (const c of connections) {
-      await this.prisma.locationConnection.create({
-        data: { workId, fromLocationId: c.from, toLocationId: c.to, description: c.desc },
-      });
-    }
+    this.logger.log(`Building world for "${work.title}" (${workId})`);
 
-    // Renderings
-    const renderings = [
-      { locationId: 'aria-loc-shiori-do', timeOfDay: 'afternoon', sensoryText: { visual: '午後の光が磨りガラスを通って柔らかく広がっている。本棚の間に埃が舞う。', auditory: 'ページをめくる音。遠くの電車の音。時計が刻む音。', olfactory: '古い紙とインクと、ほんの少しの埃の匂い。奥からコーヒーの香り。', atmospheric: '静かで、時間がゆっくり流れている。' } },
-      { locationId: 'aria-loc-shiori-do', timeOfDay: 'evening', sensoryText: { visual: '窓の外が暮れていく。店内の照明が暖色に灯る。', auditory: '閉店準備の音。', olfactory: '一日分の本の匂いが染みついている。', atmospheric: '一日の終わりの穏やかさ。' } },
-      { locationId: 'aria-loc-shimokitazawa', timeOfDay: 'afternoon', sensoryText: { visual: '路地裏に光が差している。古着屋のハンガーラックが歩道にはみ出している。', auditory: '自転車のベル。どこかのカフェから流れる音楽。', olfactory: 'コーヒーと焼きたてのパンの匂い。', atmospheric: '活気があるが、どこか穏やか。' } },
-      { locationId: 'aria-loc-shimokitazawa', timeOfDay: 'evening', sensoryText: { visual: '夕焼けが路地を橙色に染めている。古着屋のシャッターが降り始める。', auditory: 'どこかでギターの音。シャッターの金属音。', olfactory: '夕方の空気。少し湿っている。', atmospheric: '一日が終わっていく。' } },
-      { locationId: 'aria-loc-apartment', timeOfDay: 'night', sensoryText: { visual: '六畳一間。デスクの上のノートパソコンの画面が光っている。', auditory: 'キーボードを叩く音。', olfactory: 'コーヒーの匂い。二杯目は少し濃いめ。', atmospheric: '静かだ。世界が遠い。' } },
-      { locationId: 'aria-loc-apartment', timeOfDay: 'morning', sensoryText: { visual: 'カーテンの隙間から光が差している。六畳一間の天井が見える。', auditory: 'ゴミ収集車の唸り、自転車のベル、鳩の羽音。', olfactory: '挽いたコーヒー豆の匂い。苦味と土と、かすかな甘さ。', atmospheric: '朝。世界が続いている。' } },
-      { locationId: 'aria-loc-nameless-street', timeOfDay: 'evening', sensoryText: { visual: '空はいつも夕焼けと朝焼けの間の色をしている。路地は入り組んでいる。', auditory: '風が路地を抜ける音。遠くで誰かが歌っている。', olfactory: '古い石と、花の匂い。', atmospheric: '不思議と居心地がいい。時間が止まっているような。' } },
-      { locationId: 'aria-loc-ao-bookstore', timeOfDay: 'evening', sensoryText: { visual: '窓から夕焼けの光が差し込んでいる。本棚に光の筋が走る。', auditory: 'ページをめくる音。静寂。', olfactory: '古い本の匂い。栞堂と少し似ている。', atmospheric: '穏やかで、静かで、安心する場所。' } },
-      { locationId: 'aria-loc-library', timeOfDay: 'evening', sensoryText: { visual: '天井が高い。本棚が壁を覆い尽くしている。奥の小さなテーブルに湯呑みが見える。', auditory: '静寂。たまにお茶を啜る音。', olfactory: 'お茶の香り。古い紙の匂い。', atmospheric: '全てを知っている人がいる場所。' } },
-    ];
-    for (const r of renderings) {
-      await this.prisma.locationRendering.upsert({
-        where: { locationId_timeOfDay: { locationId: r.locationId, timeOfDay: r.timeOfDay } },
-        create: r,
-        update: { sensoryText: r.sensoryText },
-      });
-    }
-
-    // Character Schedules
-    await this.prisma.characterSchedule.deleteMany({ where: { workId } });
-    const scheduleData: any[] = [];
-    const sakaki = charByName('榊');
-    const uta = charByName('詩');
-    const ao = charByName('蒼');
-    const mina = charByName('ミナ');
-    const sensei = charByName('先生');
-
-    for (let i = 0; i < episodes.length; i++) {
-      const base = i / episodes.length;
-      const span = 1 / episodes.length;
-
-      if (sakaki) {
-        scheduleData.push({ characterId: sakaki.id, workId, timeStart: base, timeEnd: base + span * 0.8, locationId: 'aria-loc-shiori-do', activity: '本を読んでいる', mood: '穏やか', episodeId: episodes[i].id });
-      }
-      if (uta) {
-        scheduleData.push({ characterId: uta.id, workId, timeStart: base + span * 0.2, timeEnd: base + span * 0.6, locationId: 'aria-loc-shiori-do', activity: 'バイト中', mood: i < 5 ? '穏やか' : i < 10 ? '夢中' : i < 15 ? '不安' : '決意', episodeId: episodes[i].id });
-        scheduleData.push({ characterId: uta.id, workId, timeStart: base + span * 0.7, timeEnd: base + span, locationId: 'aria-loc-apartment', activity: '執筆中', mood: i < 5 ? '新しい発見' : i < 15 ? '夢中' : '覚悟', episodeId: episodes[i].id });
-      }
-      if (ao) {
-        scheduleData.push({ characterId: ao.id, workId, timeStart: base, timeEnd: base + span, locationId: 'aria-loc-ao-bookstore', activity: '本を読んでいる', mood: i < 5 ? '穏やか' : i < 10 ? '詩のことを考えている' : '全てを受け入れている', episodeId: episodes[i].id });
-      }
-      if (mina) {
-        scheduleData.push({ characterId: mina.id, workId, timeStart: base, timeEnd: base + span, locationId: 'aria-loc-nameless-street', activity: '街を走り回っている', mood: i < 10 ? '元気' : '泣き虫だけど強い', episodeId: episodes[i].id });
-      }
-      if (sensei) {
-        scheduleData.push({ characterId: sensei.id, workId, timeStart: base, timeEnd: base + span, locationId: 'aria-loc-library', activity: 'お茶を飲んでいる', mood: '飄々としている', episodeId: episodes[i].id });
-      }
-    }
-
-    await this.prisma.characterSchedule.createMany({ data: scheduleData });
-
-    // Enable Interactive Novel
+    // Mark as building
     await this.prisma.work.update({
       where: { id: workId },
-      data: { enableInteractiveNovel: true, interactiveNovelStatus: 'ready' },
+      data: { enableInteractiveNovel: true, interactiveNovelStatus: 'building' },
     });
 
-    return {
-      locations: locations.length,
-      connections: connections.length,
-      renderings: renderings.length,
-      schedules: scheduleData.length,
+    try {
+      // Step 1: Get episodes and analyses
+      const episodes = await this.prisma.episode.findMany({
+        where: { workId, publishedAt: { not: null } },
+        orderBy: { orderIndex: 'asc' },
+        select: { id: true, orderIndex: true, content: true },
+      });
+
+      const analyses = await this.prisma.episodeAnalysis.findMany({
+        where: { workId },
+        include: { episode: { select: { orderIndex: true } } },
+      });
+
+      const characters = await this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: { id: true, name: true, role: true, personality: true },
+      });
+
+      // Step 2: Extract locations
+      const extractedLocations = this.extractLocations(episodes, analyses);
+      this.logger.log(`Extracted ${extractedLocations.length} locations`);
+
+      // Clear existing data
+      await this.prisma.storyEvent.deleteMany({ where: { workId } });
+      await this.prisma.characterSchedule.deleteMany({ where: { workId } });
+      // LocationRenderings are cascade-deleted when WorldLocations are deleted below
+      await this.prisma.locationConnection.deleteMany({ where: { workId } });
+      await this.prisma.worldLocation.deleteMany({ where: { workId } });
+
+      // Create WorldLocations
+      const locationMap = new Map<string, string>(); // name -> id
+      for (const loc of extractedLocations) {
+        const created = await this.prisma.worldLocation.create({
+          data: {
+            workId,
+            name: loc.name,
+            type: loc.type,
+            description: loc.description,
+            generationStatus: 'complete',
+            derivedFrom: loc.episodeIndices.map(i => ({ orderIndex: i })),
+          },
+        });
+        locationMap.set(loc.name, created.id);
+      }
+
+      // Step 3: Create connections (locations that appear in adjacent scenes)
+      const connections = this.inferConnections(extractedLocations);
+      let connCount = 0;
+      for (const conn of connections) {
+        const fromId = locationMap.get(conn.from);
+        const toId = locationMap.get(conn.to);
+        if (fromId && toId) {
+          await this.prisma.locationConnection.create({
+            data: { workId, fromLocationId: fromId, toLocationId: toId, description: conn.to },
+          });
+          connCount++;
+        }
+      }
+
+      // Step 4: Generate basic LocationRenderings from descriptions
+      let renderCount = 0;
+      for (const loc of extractedLocations) {
+        const locId = locationMap.get(loc.name);
+        if (!locId) continue;
+
+        const renderings = this.generateBasicRenderings(loc);
+        for (const r of renderings) {
+          await this.prisma.locationRendering.upsert({
+            where: { locationId_timeOfDay: { locationId: locId, timeOfDay: r.timeOfDay } },
+            create: { locationId: locId, timeOfDay: r.timeOfDay, sensoryText: r.sensoryText },
+            update: { sensoryText: r.sensoryText },
+          });
+          renderCount++;
+        }
+      }
+
+      // Step 5: Build CharacterSchedules
+      let scheduleCount = 0;
+      const schedules = this.buildCharacterSchedules(
+        episodes, analyses, characters, locationMap,
+      );
+      if (schedules.length > 0) {
+        await this.prisma.characterSchedule.createMany({ data: schedules });
+        scheduleCount = schedules.length;
+      }
+
+      // Step 6: Split episodes into StoryEvents
+      const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
+
+      // Mark as ready
+      await this.prisma.work.update({
+        where: { id: workId },
+        data: { interactiveNovelStatus: 'ready', worldVersion: { increment: 1 } },
+      });
+
+      const result = {
+        locations: extractedLocations.length,
+        connections: connCount,
+        renderings: renderCount,
+        schedules: scheduleCount,
+        events: eventCount,
+      };
+      this.logger.log(`World built: ${JSON.stringify(result)}`);
+      return result;
+
+    } catch (err) {
+      await this.prisma.work.update({
+        where: { id: workId },
+        data: { interactiveNovelStatus: 'failed' },
+      });
+      throw err;
+    }
+  }
+
+  /**
+   * Extract locations from episode analyses or episode text.
+   */
+  private extractLocations(
+    episodes: { id: string; orderIndex: number; content: string | null }[],
+    analyses: any[],
+  ): ExtractedLocation[] {
+    const locationCounts = new Map<string, { desc: string; type: string; episodes: Set<number> }>();
+
+    // From EpisodeAnalysis.locations (preferred)
+    for (const analysis of analyses) {
+      const locs = (analysis.locations as any[]) || [];
+      const epIndex = analysis.episode?.orderIndex ?? 0;
+      for (const loc of locs) {
+        if (!loc.name) continue;
+        const normalized = loc.name.trim();
+        const existing = locationCounts.get(normalized);
+        if (existing) {
+          existing.episodes.add(epIndex);
+          if (loc.description && loc.description.length > existing.desc.length) {
+            existing.desc = loc.description;
+          }
+        } else {
+          locationCounts.set(normalized, {
+            desc: loc.description || normalized,
+            type: this.guessLocationType(normalized, loc.description || ''),
+            episodes: new Set([epIndex]),
+          });
+        }
+      }
+    }
+
+    // If no analyses, extract from episode text
+    if (locationCounts.size === 0) {
+      for (const ep of episodes) {
+        if (!ep.content) continue;
+        const detected = this.detectLocationsFromText(ep.content);
+        for (const loc of detected) {
+          const existing = locationCounts.get(loc.name);
+          if (existing) {
+            existing.episodes.add(ep.orderIndex);
+          } else {
+            locationCounts.set(loc.name, {
+              desc: loc.description,
+              type: loc.type,
+              episodes: new Set([ep.orderIndex]),
+            });
+          }
+        }
+      }
+    }
+
+    // Convert to array, sort by frequency (most common locations first)
+    return Array.from(locationCounts.entries())
+      .map(([name, data]) => ({
+        name,
+        description: data.desc,
+        type: data.type as 'interior' | 'exterior' | 'abstract',
+        episodeIndices: Array.from(data.episodes).sort((a, b) => a - b),
+      }))
+      .sort((a, b) => b.episodeIndices.length - a.episodeIndices.length)
+      .slice(0, 20); // Max 20 locations
+  }
+
+  /**
+   * Detect locations from episode text when EpisodeAnalysis is not available.
+   */
+  private detectLocationsFromText(content: string): { name: string; description: string; type: string }[] {
+    const locations: { name: string; description: string; type: string }[] = [];
+
+    // Scene break sections often start with location descriptions
+    const sections = content.split(/\n\s*\*\*\*\s*\n/);
+    for (const section of sections) {
+      const firstLine = section.trim().split('\n')[0]?.replace(/^　+/, '').trim();
+      if (!firstLine || firstLine.startsWith('「')) continue;
+
+      // Look for location indicators
+      if (/の中|に入る|に着く|の前|の扉|の部屋/.test(firstLine) && firstLine.length < 50) {
+        locations.push({
+          name: firstLine.replace(/[。、].*$/, '').slice(0, 20),
+          description: firstLine,
+          type: /外|路地|通り|公園|空|街/.test(firstLine) ? 'exterior' : 'interior',
+        });
+      }
+    }
+
+    return locations;
+  }
+
+  private guessLocationType(name: string, desc: string): string {
+    const text = name + desc;
+    if (/外|路地|通り|公園|街|広場|森|海|山|川|空|庭/.test(text)) return 'exterior';
+    if (/夢|記憶|心|精神|意識|仮想|システム|データ/.test(text)) return 'abstract';
+    return 'interior';
+  }
+
+  /**
+   * Infer location connections from co-occurrence in episodes.
+   * If two locations appear in the same episode, they're likely connected.
+   */
+  private inferConnections(locations: ExtractedLocation[]): { from: string; to: string }[] {
+    const connections: { from: string; to: string }[] = [];
+    const seen = new Set<string>();
+
+    for (let i = 0; i < locations.length; i++) {
+      for (let j = i + 1; j < locations.length; j++) {
+        // Check if they share any episodes
+        const shared = locations[i].episodeIndices.some(e => locations[j].episodeIndices.includes(e));
+        if (shared) {
+          const key1 = `${locations[i].name}->${locations[j].name}`;
+          const key2 = `${locations[j].name}->${locations[i].name}`;
+          if (!seen.has(key1)) {
+            connections.push({ from: locations[i].name, to: locations[j].name });
+            connections.push({ from: locations[j].name, to: locations[i].name });
+            seen.add(key1);
+            seen.add(key2);
+          }
+        }
+      }
+    }
+
+    return connections;
+  }
+
+  /**
+   * Generate basic LocationRenderings from description text.
+   * No AI call — just template-based sensory data.
+   */
+  private generateBasicRenderings(loc: ExtractedLocation): { timeOfDay: string; sensoryText: any }[] {
+    const base = {
+      visual: loc.description,
+      auditory: '',
+      olfactory: '',
+      atmospheric: loc.type === 'exterior' ? '開放的な空気。' : '静かな空間。',
     };
+
+    // Generate for 2 time periods
+    return [
+      {
+        timeOfDay: 'afternoon',
+        sensoryText: { ...base, visual: `${loc.description}`, atmospheric: '穏やかな午後。' },
+      },
+      {
+        timeOfDay: 'evening',
+        sensoryText: { ...base, visual: `${loc.description} 光が暮れていく。`, atmospheric: '夕暮れの空気。' },
+      },
+    ];
+  }
+
+  /**
+   * Build CharacterSchedules from EpisodeAnalysis.characters.
+   */
+  private buildCharacterSchedules(
+    episodes: { id: string; orderIndex: number; content: string | null }[],
+    analyses: any[],
+    characters: { id: string; name: string }[],
+    locationMap: Map<string, string>,
+  ): any[] {
+    const schedules: any[] = [];
+    const workId = episodes[0] ? (analyses[0]?.workId || '') : '';
+    if (!workId) return schedules;
+
+    // Build analysis map by episode
+    const analysisByEp = new Map<string, any>();
+    for (const a of analyses) analysisByEp.set(a.episodeId, a);
+
+    // For each episode, check which characters appear and where
+    for (const ep of episodes) {
+      const analysis = analysisByEp.get(ep.id);
+      const basePos = ep.orderIndex / episodes.length;
+      const span = 1 / episodes.length;
+
+      if (analysis?.characters) {
+        const epChars = analysis.characters as any[];
+        for (const epChar of epChars) {
+          if (!epChar.name) continue;
+
+          // Match to StoryCharacter
+          const matched = characters.find(c => {
+            const shortName = c.name.split('（')[0].split('(')[0].trim().split(/\s/)[0];
+            return shortName === epChar.name || c.name.includes(epChar.name) || epChar.name.includes(shortName);
+          });
+          if (!matched) continue;
+
+          // Determine location from analysis locations
+          let locationId: string | null = null;
+          if (analysis.locations) {
+            const locs = analysis.locations as any[];
+            if (locs.length > 0) {
+              // Use first location that we have in our map
+              for (const loc of locs) {
+                const id = locationMap.get(loc.name);
+                if (id) { locationId = id; break; }
+              }
+            }
+          }
+
+          // If no location from analysis, use first location
+          if (!locationId && locationMap.size > 0) {
+            locationId = locationMap.values().next().value ?? null;
+          }
+
+          schedules.push({
+            characterId: matched.id,
+            workId,
+            timeStart: basePos,
+            timeEnd: basePos + span,
+            locationId,
+            activity: epChar.action || '',
+            mood: '',
+            episodeId: ep.id,
+          });
+        }
+      } else if (ep.content) {
+        // Fallback: detect characters from episode text
+        for (const char of characters) {
+          const shortName = char.name.split('（')[0].split('(')[0].trim().split(/\s/)[0];
+          if (shortName.length >= 1 && ep.content.includes(shortName)) {
+            const locationId = locationMap.size > 0 ? (locationMap.values().next().value ?? null) : null;
+            schedules.push({
+              characterId: char.id,
+              workId,
+              timeStart: basePos,
+              timeEnd: basePos + span,
+              locationId,
+              activity: '',
+              mood: '',
+              episodeId: ep.id,
+            });
+          }
+        }
+      }
+    }
+
+    return schedules;
+  }
+
+  // Keep seedAriaWorld for backward compatibility
+  async seedAriaWorld(workId: string) {
+    // Delegate to buildWorld for new calls
+    return this.buildWorld(workId);
   }
 }

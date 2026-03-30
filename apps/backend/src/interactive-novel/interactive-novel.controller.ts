@@ -118,19 +118,18 @@ export class InteractiveNovelController {
     return { data: status };
   }
 
-  @Post(':workId/seed')
-  async seedWorld(
+  @Post(':workId/build')
+  async buildWorld(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
   ) {
-    // Admin-only: check user role
+    // Admin-only
     const user = await this.sceneComposer['prisma'].user.findUnique({ where: { id: userId }, select: { role: true } });
     if (user?.role !== 'ADMIN') {
       return { error: 'Admin only' };
     }
-    const worldResult = await this.worldBuilder.seedAriaWorld(workId);
-    const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
-    return { data: { ...worldResult, events: eventCount } };
+    const result = await this.worldBuilder.buildWorld(workId);
+    return { data: result };
   }
 
   @Post(':workId/observe')
