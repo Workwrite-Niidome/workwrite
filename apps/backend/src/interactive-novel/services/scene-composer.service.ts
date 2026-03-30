@@ -156,10 +156,15 @@ export class SceneComposerService {
         environmentText = location.description;
       }
 
-      // Add character presence as brief lines
+      // Add character presence as brief lines (truncate activity to first action)
       if (characters.length > 0) {
         const charLines = characters
-          .map(c => `${this.shortName(c.name)}が${c.activity || 'いる'}。`)
+          .map(c => {
+            const brief = c.activity
+              ? c.activity.split(/[→。、]/)[0].slice(0, 20)
+              : 'いる';
+            return `${this.shortName(c.name)}が${brief}。`;
+          })
           .join(' ');
         environmentText += '\n' + charLines;
       }
@@ -378,7 +383,22 @@ ${truncatedEvents || '(テキストなし)'}`;
           params.target = 'environment';
         }
 
-        actions.push({ type, label: raw.label, params });
+        // Ensure label is never empty — use fallback if AI didn't provide one
+        let label = raw.label;
+        if (!label) {
+          if (type === 'talk') {
+            const char = characters.find(c => c.id === params.characterId);
+            label = char ? `${this.shortName(char.name)}の気配がする` : '誰かの気配がする';
+          } else if (type === 'move') {
+            const loc = connectedLocations.find(l => l.id === params.locationId);
+            label = loc ? `${loc.name}の方から、風が来る` : 'どこかへ向かう気配';
+          } else if (type === 'observe') {
+            label = 'ふと、何かに気づく';
+          } else {
+            label = '......';
+          }
+        }
+        actions.push({ type, label, params });
       }
 
       return actions.length > 0 ? actions : null;
