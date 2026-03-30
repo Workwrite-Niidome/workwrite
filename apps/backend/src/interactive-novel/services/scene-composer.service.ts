@@ -126,12 +126,12 @@ export class SceneComposerService {
       // Map dawn→morning, night→evening, late_night→evening for rendering lookup
       if (state.locationId) {
         const renderingTimeMap: Record<string, string[]> = {
-          dawn: ['dawn', 'morning'],
-          morning: ['morning'],
-          afternoon: ['afternoon'],
-          evening: ['evening'],
-          night: ['night', 'evening'],
-          late_night: ['late_night', 'evening'],
+          dawn: ['dawn', 'morning', 'afternoon'],
+          morning: ['morning', 'afternoon'],
+          afternoon: ['afternoon', 'morning'],
+          evening: ['evening', 'afternoon'],
+          night: ['night', 'evening', 'afternoon'],
+          late_night: ['late_night', 'evening', 'afternoon'],
         };
         const candidates = renderingTimeMap[timeOfDay] || [timeOfDay];
         let rendering = null;
