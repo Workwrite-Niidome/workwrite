@@ -140,7 +140,8 @@ export default function ExperiencePage() {
       if (introLines.length === 0) {
         introLines = [`${work?.title || '物語'}の世界が広がっている。`];
       }
-      introLines = introLines.slice(0, 5);
+      // Deduplicate and limit
+      introLines = [...new Set(introLines)].slice(0, 5);
 
       if (cancelled) return;
 
@@ -206,12 +207,18 @@ export default function ExperiencePage() {
       }
     }
 
-    // Events: split each event's text into sentences
+    // Events: split each event's text into sentences (deduplicated)
+    const seenTexts = new Set(allBlocks.map(b => b.text));
+    // Also check existing blocks to avoid repeating intro text
+    for (const b of blocks) { if (b?.text) seenTexts.add(b.text); }
+
     if (scene.events) {
       for (const ev of scene.events) {
         if (!ev.renderedText?.trim()) continue;
         const sentences = splitIntoSentences(ev.renderedText);
         for (const s of sentences) {
+          if (seenTexts.has(s)) continue; // Skip duplicates
+          seenTexts.add(s);
           allBlocks.push({
             id: bid(), type: 'event',
             source: ev.originalPassage ? 'original' : 'generated',
