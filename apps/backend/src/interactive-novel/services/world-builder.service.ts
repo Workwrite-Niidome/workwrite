@@ -216,15 +216,20 @@ export class WorldBuilderService {
       const epIndex = analysis.episode?.orderIndex ?? 0;
       for (const loc of locs) {
         if (!loc.name) continue;
-        const normalized = loc.name.trim();
-        const existing = locationCounts.get(normalized);
+        // Normalize: strip parenthetical suffixes to merge duplicates
+        // e.g. "詩のアパート（六畳一間）" → "詩のアパート"
+        const normalized = loc.name.trim().replace(/[（(].+[）)]$/, '').trim();
+        // Also check if this is a substring match of an existing key
+        const existingKey = this.findSimilarLocationKey(locationCounts, normalized);
+        const key = existingKey || normalized;
+        const existing = locationCounts.get(key);
         if (existing) {
           existing.episodes.add(epIndex);
           if (loc.description && loc.description.length > existing.desc.length) {
             existing.desc = loc.description;
           }
         } else {
-          locationCounts.set(normalized, {
+          locationCounts.set(key, {
             desc: loc.description || normalized,
             type: this.guessLocationType(normalized, loc.description || ''),
             episodes: new Set([epIndex]),
@@ -288,6 +293,24 @@ export class WorldBuilderService {
     }
 
     return locations;
+  }
+
+  /**
+   * Find an existing location key that is similar to the given name.
+   * Handles cases like "栞堂" vs "古書店『栞堂』" or "栞堂（古書店）".
+   */
+  private findSimilarLocationKey(
+    locationCounts: Map<string, any>,
+    normalized: string,
+  ): string | null {
+    for (const key of locationCounts.keys()) {
+      // One contains the other (e.g., "栞堂" ⊂ "古書店『栞堂』")
+      if (key.includes(normalized) || normalized.includes(key)) {
+        // Keep the shorter (more canonical) name
+        return key.length <= normalized.length ? key : key;
+      }
+    }
+    return null;
   }
 
   private guessLocationType(name: string, desc: string): string {

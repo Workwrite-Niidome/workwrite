@@ -122,11 +122,25 @@ export class SceneComposerService {
     // Just one line: location name + one sensory detail
     let environmentText = '';
     if (location) {
-      // Try to get one sensory line from LocationRendering
+      // Try to get sensory lines from LocationRendering
+      // Map dawn→morning, night→evening, late_night→evening for rendering lookup
       if (state.locationId) {
-        const rendering = await this.prisma.locationRendering.findUnique({
-          where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay } },
-        });
+        const renderingTimeMap: Record<string, string[]> = {
+          dawn: ['dawn', 'morning'],
+          morning: ['morning'],
+          afternoon: ['afternoon'],
+          evening: ['evening'],
+          night: ['night', 'evening'],
+          late_night: ['late_night', 'evening'],
+        };
+        const candidates = renderingTimeMap[timeOfDay] || [timeOfDay];
+        let rendering = null;
+        for (const candidate of candidates) {
+          rendering = await this.prisma.locationRendering.findUnique({
+            where: { locationId_timeOfDay: { locationId: state.locationId, timeOfDay: candidate } },
+          });
+          if (rendering) break;
+        }
         if (rendering) {
           const sensory = rendering.sensoryText as Record<string, string>;
           // Expand all available sensory fields
