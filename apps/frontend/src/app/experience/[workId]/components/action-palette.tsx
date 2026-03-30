@@ -30,7 +30,7 @@ export function ActionPalette({ actions, onAction, onFreeInput, disabled }: Acti
   };
 
   return (
-    <div className="border-t border-[#1a1a25] bg-[#0a0a0f] px-6 py-4 md:px-10">
+    <div className="fixed bottom-0 left-0 right-0 z-40 border-t border-[#1a1a25] bg-[#0a0a0f] px-6 py-4 md:px-10">
       <div className="mx-auto max-w-lg">
         {actions.length > 0 && (
           <div className="flex flex-wrap gap-2 mb-3">

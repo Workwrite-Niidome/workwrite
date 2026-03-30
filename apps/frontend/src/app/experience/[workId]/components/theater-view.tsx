@@ -16,7 +16,7 @@ export function TheaterView({ blocks, isStreaming }: TheaterViewProps) {
   }, [blocks.length]);
 
   return (
-    <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-16 pb-4">
+    <div className="flex-1 overflow-y-auto px-6 md:px-10 pt-16 pb-32">
       <div className="mx-auto max-w-lg">
         {blocks.map((block) =>
           block ? <BlockRenderer key={block.id} block={block} /> : null
