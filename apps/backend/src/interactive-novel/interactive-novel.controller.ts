@@ -7,6 +7,7 @@ import { SceneComposerService } from './services/scene-composer.service';
 import { ReaderStateService } from './services/reader-state.service';
 import { WorldConversationService } from './services/world-conversation.service';
 import { WorldBuilderService } from './services/world-builder.service';
+import { EventSplitterService } from './services/event-splitter.service';
 import { EnterDto } from './dto/enter.dto';
 import { MoveDto } from './dto/move.dto';
 import { TalkDto } from './dto/talk.dto';
@@ -21,6 +22,7 @@ export class InteractiveNovelController {
     private readerState: ReaderStateService,
     private worldConversation: WorldConversationService,
     private worldBuilder: WorldBuilderService,
+    private eventSplitter: EventSplitterService,
   ) {}
 
   // ===== REST Endpoints (fast, no SSE) =====
@@ -126,8 +128,9 @@ export class InteractiveNovelController {
     if (user?.role !== 'ADMIN') {
       return { error: 'Admin only' };
     }
-    const result = await this.worldBuilder.seedAriaWorld(workId);
-    return { data: result };
+    const worldResult = await this.worldBuilder.seedAriaWorld(workId);
+    const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
+    return { data: { ...worldResult, events: eventCount } };
   }
 
   @Post(':workId/observe')

@@ -40,16 +40,22 @@ export class SceneComposerService {
       ? await this.characterPresence.getCharactersAt(workId, state.locationId, state.timelinePosition)
       : [];
 
-    // Events at this location/time (only if StoryEvents exist)
+    // Events at this location/time
+    // Search within current episode's range (1/totalEpisodes)
+    const episodeCount = await this.prisma.episode.count({ where: { workId } });
+    const searchRange = episodeCount > 0 ? 1 / episodeCount / 2 : 0.05;
     const events = state.locationId
       ? await this.prisma.storyEvent.findMany({
           where: {
             workId,
             locationId: state.locationId,
-            timelinePosition: { gte: state.timelinePosition - 0.02, lte: state.timelinePosition + 0.02 },
+            timelinePosition: {
+              gte: state.timelinePosition - searchRange,
+              lte: state.timelinePosition + searchRange,
+            },
           },
           orderBy: { orderInEpisode: 'asc' },
-          take: 5,
+          take: 3, // Max 3 events per scene to avoid overwhelming
         })
       : [];
 
