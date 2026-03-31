@@ -803,7 +803,7 @@ export class WorldBuilderService {
     let blueprint: any = null;
     try {
       const controller = new AbortController();
-      const timeout = setTimeout(() => controller.abort(), 180_000);
+      const timeout = setTimeout(() => controller.abort(), 300_000);
 
       const response = await fetch('https://api.anthropic.com/v1/messages', {
         method: 'POST',
@@ -814,7 +814,7 @@ export class WorldBuilderService {
         },
         body: JSON.stringify({
           model: 'claude-sonnet-4-6',
-          max_tokens: 4000,
+          max_tokens: 8000,
           messages: [{ role: 'user', content: blueprintPrompt }],
         }),
         signal: controller.signal,
@@ -831,7 +831,25 @@ export class WorldBuilderService {
       const text = data?.content?.[0]?.text || '';
       const jsonMatch = text.match(/\{[\s\S]*\}/);
       if (jsonMatch) {
-        blueprint = JSON.parse(jsonMatch[0]);
+        try {
+          blueprint = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Repair truncated JSON
+          let repaired = jsonMatch[0];
+          let braces = 0, brackets = 0;
+          for (const ch of repaired) {
+            if (ch === '{') braces++;
+            else if (ch === '}') braces--;
+            else if (ch === '[') brackets++;
+            else if (ch === ']') brackets--;
+          }
+          repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*[^,}\]]*$/, '');
+          repaired = repaired.replace(/,\s*$/, '');
+          for (let i = 0; i < brackets; i++) repaired += ']';
+          for (let i = 0; i < braces; i++) repaired += '}';
+          blueprint = JSON.parse(repaired);
+          this.logger.log('Stage 1: repaired truncated blueprint JSON');
+        }
         this.logger.log(`Stage 1 complete: blueprint generated`);
         onProgress?.(`Stage 1 完了: 設計図生成`);
       }
