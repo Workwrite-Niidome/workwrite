@@ -837,7 +837,7 @@ export class WorldBuilderService {
           },
           body: JSON.stringify({
             model: 'claude-sonnet-4-6',
-            max_tokens: 4000,
+            max_tokens: 6000,
             system: systemPrompt,
             messages: [{ role: 'user', content: batchPrompt }],
           }),
@@ -860,7 +860,34 @@ export class WorldBuilderService {
           continue;
         }
 
-        const batchScript = JSON.parse(jsonMatch[0]);
+        let batchScript: any;
+        try {
+          batchScript = JSON.parse(jsonMatch[0]);
+        } catch {
+          // Try to repair truncated JSON by closing open brackets
+          let repaired = jsonMatch[0];
+          // Count unclosed brackets
+          let braces = 0, brackets = 0;
+          for (const ch of repaired) {
+            if (ch === '{') braces++;
+            else if (ch === '}') braces--;
+            else if (ch === '[') brackets++;
+            else if (ch === ']') brackets--;
+          }
+          // Trim to last complete property
+          repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*[^,}\]]*$/, '');
+          repaired = repaired.replace(/,\s*$/, '');
+          for (let i = 0; i < brackets; i++) repaired += ']';
+          for (let i = 0; i < braces; i++) repaired += '}';
+          try {
+            batchScript = JSON.parse(repaired);
+            this.logger.log(`Batch ${batchStart}: repaired truncated JSON`);
+          } catch {
+            this.logger.warn(`Batch ${batchStart}: JSON repair failed`);
+            onProgress?.(`Batch ${Math.floor(batchStart / batchSize) + 1}: JSON repair failed`);
+            continue;
+          }
+        }
 
         // Extract intro from first batch
         if (isFirstBatch && batchScript.intro) {
