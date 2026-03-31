@@ -139,6 +139,21 @@ export class InteractiveNovelController {
     return { data: status };
   }
 
+  @Post(':workId/experience-script')
+  async setExperienceScript(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+    @Body() body: { script: any },
+  ) {
+    const user = await this.sceneComposer['prisma'].user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'ADMIN') return { error: 'Admin only' };
+    await this.sceneComposer['prisma'].work.update({
+      where: { id: workId },
+      data: { experienceScript: body.script },
+    });
+    return { data: { success: true, scenes: Object.keys(body.script?.scenes || {}).length } };
+  }
+
   @Post(':workId/build')
   async buildWorld(
     @CurrentUser('id') userId: string,
