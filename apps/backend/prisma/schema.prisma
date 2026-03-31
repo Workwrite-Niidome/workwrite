@@ -211,6 +211,7 @@ model Work {
   enableInteractiveNovel  Boolean @default(false)
   interactiveNovelStatus  String?
   worldVersion            Int     @default(0)
+  experienceScript        Json?
   worldLocations          WorldLocation[]
   locationConnections     LocationConnection[]
   interactiveStoryEvents  StoryEvent[]

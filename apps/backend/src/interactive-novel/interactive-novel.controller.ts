@@ -120,6 +120,17 @@ export class InteractiveNovelController {
     return { data: { logs } };
   }
 
+  @Get(':workId/experience')
+  async getExperience(
+    @Param('workId') workId: string,
+  ) {
+    const work = await this.sceneComposer['prisma'].work.findUnique({
+      where: { id: workId },
+      select: { experienceScript: true, title: true },
+    });
+    return { data: { script: work?.experienceScript, title: work?.title } };
+  }
+
   @Get(':workId/build-status')
   async getBuildStatus(
     @Param('workId') workId: string,

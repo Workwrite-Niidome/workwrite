@@ -176,6 +176,9 @@ export class WorldBuilderService {
       // Step 7: Split episodes into StoryEvents
       const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
 
+      // Step 8: Generate experience script with Sonnet
+      await this.generateExperienceScript(workId, episodes, characters, workContext);
+
       // Mark as ready
       await this.prisma.work.update({
         where: { id: workId },
@@ -720,4 +723,120 @@ export class WorldBuilderService {
     return schedules;
   }
 
+  /**
+   * Generate an experience script using Sonnet.
+   * Core principle: "結果は変わらないが過程が変わる"
+   */
+  private async generateExperienceScript(
+    workId: string,
+    episodes: { id: string; orderIndex: number; content: string | null }[],
+    characters: { id: string; name: string; role: string | null; personality: string | null }[],
+    workContext?: { genre?: string; settingEra?: string },
+  ): Promise<void> {
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) {
+      this.logger.warn('No API key for experience script generation');
+      return;
+    }
+
+    const sourceEpisodes = episodes.filter(e => e.content).slice(0, 3);
+    if (sourceEpisodes.length === 0) return;
+
+    const episodeTexts = sourceEpisodes
+      .map((e, i) => `=== 第${i + 1}話 ===\n${e.content!.slice(0, 8000)}`)
+      .join('\n\n');
+
+    const charList = characters.map(c => {
+      const short = c.name.split('（')[0].split('(')[0].trim().split(/[\s　]/)[0];
+      let hash = 0;
+      for (let i = 0; i < c.name.length; i++) hash = c.name.charCodeAt(i) + ((hash << 5) - hash);
+      const hue = Math.abs(hash) % 360;
+      return `- ${c.name}: ${c.role || ''}。呼び名「${short}」。色: hsl(${hue}, 25%, 55%)`;
+    }).join('\n');
+
+    const systemPrompt = [
+      'あなたは小説のインタラクティブ体験を設計する編集者です。',
+      '小説の本文を受け取り、読者が「物語の世界に入る」体験スクリプトをJSON形式で出力してください。',
+      '',
+      '## 核心原則',
+      '「結果は変わらないが、過程が変わる」',
+      '- 分岐は結末を変えない。読者がどの感情を経由して辿り着くかが変わる',
+      '- 全ルートが同じ結末に合流する',
+      '',
+      '## ブロックタイプ',
+      '- original: 小説本文からそのまま引用。改変しない',
+      '- dialogue: 「」の台詞。speaker（呼び名）とspeakerColor（hex）を付与',
+      '- environment: AIが書く五感描写（1-2文）。これだけが創作',
+      '- memory: 以前見たテキストの残響（イタリック表示）',
+      '- scene-break: "* * *"',
+      '',
+      '## 気づき（awareness）',
+      '読者の内面に浮かぶ詩的な感覚。命令形ではない',
+      '良: 「榊さんがこちらを見ている。」「コーヒーの匂いが残っている。」',
+      '悪: 「榊と話す」「移動する」',
+      '',
+      '## 構造ルール',
+      '- 選択は4-6箇所のみ（物語の転換点だけ）',
+      '- それ以外は "continues": "next_scene_id" で自動遷移',
+      '- 分岐先で結末が異なる場合、各結末を別シーンにする',
+      '',
+      '## 出力（JSONのみ、他のテキスト不要）',
+      '{"intro":{"blocks":[{"type":"original","text":"..."}],"awareness":{"text":"...","target":"id"}},"scenes":{"id":{"header":"場所|時間|視点","blocks":[...],"awareness":[{"text":"...","target":"id"}]},"id2":{"blocks":[...],"continues":"id3"}}}',
+    ].join('\n');
+
+    const userPrompt = [
+      workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
+      workContext?.settingEra ? `世界観: ${workContext.settingEra}` : '',
+      '',
+      'キャラクター:',
+      charList || '（キャラクター情報なし）',
+      '',
+      episodeTexts,
+    ].filter(Boolean).join('\n');
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-20250514',
+          max_tokens: 8000,
+          system: systemPrompt,
+          messages: [{ role: 'user', content: userPrompt }],
+        }),
+      });
+
+      if (!response.ok) {
+        this.logger.warn(`Experience script failed: HTTP ${response.status}`);
+        return;
+      }
+
+      const data = await response.json();
+      const text = data?.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (!jsonMatch) {
+        this.logger.warn('Experience script: no JSON in response');
+        return;
+      }
+
+      const script = JSON.parse(jsonMatch[0]);
+      if (!script.intro || !script.scenes) {
+        this.logger.warn('Experience script: invalid structure');
+        return;
+      }
+
+      await this.prisma.work.update({
+        where: { id: workId },
+        data: { experienceScript: script },
+      });
+
+      this.logger.log(`Experience script: ${Object.keys(script.scenes).length} scenes`);
+    } catch (err: any) {
+      this.logger.warn(`Experience script failed: ${err?.message}`);
+    }
+  }
 }

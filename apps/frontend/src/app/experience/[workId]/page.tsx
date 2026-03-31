@@ -1,532 +1,378 @@
 'use client';
 
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import { api } from '@/lib/api';
-import { consumeSSEStream } from '@/lib/use-ai-stream';
-import { TheaterView } from './components/theater-view';
-import { ActionPalette } from './components/action-palette';
-import { ExperienceHeader } from './components/experience-header';
-import type { SceneBlock, WorldState, ActionSuggestion, PerspectiveMode } from './types';
+import type { ExperienceScript, ScriptBlock, ScriptAwareness, ScriptScene } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
-// Generate a muted, warm character color from name (works for any novel)
-function getCharColor(name: string): string {
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  const hue = Math.abs(hash) % 360;
-  return `hsl(${hue}, 25%, 55%)`;
+const DELAYS: Record<string, number> = {
+  original: 2200,
+  environment: 2000,
+  dialogue: 1800,
+  memory: 2200,
+  'scene-break': 1200,
+  'reader-action': 300,
+};
+
+const INTRO_DELAYS = [2000, 2500, 2500, 2800, 2500];
+
+interface DisplayBlock {
+  id: string;
+  block: ScriptBlock;
+  visible: boolean;
 }
 
-function sn(fullName: string): string {
-  let name = fullName.split('（')[0].split('(')[0].trim();
-  if (name.includes(' ')) name = name.split(' ')[0];
-  if (name.includes('　')) name = name.split('　')[0];
-  return name;
-}
-
-let blockId = 0;
-function bid(): string { return `b-${++blockId}`; }
-
-function splitDialogue(text: string): { text: string; isDialogue: boolean; speaker?: string }[] {
-  const segments: { text: string; isDialogue: boolean; speaker?: string }[] = [];
-  const regex = /([^「]*)(「[^」]*」)/g;
-  let lastIndex = 0;
-  let match: RegExpExecArray | null;
-  let lastSpeaker: string | undefined;
-
-  while ((match = regex.exec(text)) !== null) {
-    const prose = match[1].trim();
-    if (prose) {
-      segments.push({ text: prose, isDialogue: false });
-      // Speaker inference: "XXは" "XXが" pattern
-      const sm = prose.match(/([\u3040-\u9fff]{1,8})[はがの]/);
-      if (sm) lastSpeaker = sm[1];
-    }
-    segments.push({ text: match[2], isDialogue: true, speaker: lastSpeaker });
-    lastIndex = regex.lastIndex;
-  }
-  const remaining = text.slice(lastIndex).trim();
-  if (remaining) segments.push({ text: remaining, isDialogue: false });
-  if (segments.length === 0) segments.push({ text, isDialogue: false });
-  return segments;
-}
-
-// Session persistence
-function saveSession(workId: string, blocks: SceneBlock[], state: WorldState) {
-  try { localStorage.setItem(`exp-${workId}`, JSON.stringify({ blocks: blocks.slice(-50), state, t: Date.now() })); } catch {}
-}
-function clearSession(workId: string) {
-  try { localStorage.removeItem(`exp-${workId}`); } catch {}
-}
-
-function loadSession(workId: string): { blocks: SceneBlock[]; state: WorldState } | null {
-  try {
-    const d = JSON.parse(localStorage.getItem(`exp-${workId}`) || 'null');
-    if (!d || Date.now() - d.t > 86400000 || !d.blocks?.length) return null;
-    blockId = d.blocks.length + 100;
-    return { blocks: d.blocks, state: d.state };
-  } catch { return null; }
+interface DisplayAwareness {
+  id: string;
+  awareness: ScriptAwareness;
+  visible: boolean;
+  clicked: boolean;
 }
 
 export default function ExperiencePage() {
-  const { workId } = useParams() as { workId: string };
-  const [blocks, setBlocks] = useState<SceneBlock[]>([]);
-  const [worldState, setWorldState] = useState<WorldState>({
-    locationId: null, locationName: '', timeOfDay: 'afternoon',
-    timelinePosition: 0, perspective: 'character', presentCharacters: [], actions: [],
-  });
-  const [isStreaming, setIsStreaming] = useState(false);
-  const [actionsVisible, setActionsVisible] = useState(false);
-  const [phase, setPhase] = useState<'loading' | 'menu' | 'intro' | 'world'>('loading');
-  const [work, setWork] = useState<any>(null);
-  const abortRef = useRef<AbortController | null>(null);
-  const processingRef = useRef(false); // Guard against double action execution
+  const { workId } = useParams<{ workId: string }>();
+  const [script, setScript] = useState<ExperienceScript | null>(null);
+  const [title, setTitle] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState('');
+  const [blocks, setBlocks] = useState<DisplayBlock[]>([]);
+  const [awarenessItems, setAwarenessItems] = useState<DisplayAwareness[]>([]);
+  const [headerText, setHeaderText] = useState('');
+  const [headerVisible, setHeaderVisible] = useState(false);
 
-  // Load work data
+  const pendingResolveRef = useRef<(() => void) | null>(null);
+  const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const blockIdRef = useRef(0);
+  const theaterRef = useRef<HTMLDivElement>(null);
+
+  // Fetch experience script
   useEffect(() => {
-    async function load() {
-      try {
-        const res = await api.getWork(workId).catch(() => null);
-        const w = (res as any)?.data ?? res;
-        setWork(w);
-
-        // Check saved session
-        const saved = loadSession(workId);
-        if (saved) {
-          setPhase('menu'); // Show menu: resume or restart
+    if (!workId) return;
+    fetch(`${API_BASE}/interactive-novel/${workId}/experience`)
+      .then(r => r.json())
+      .then(data => {
+        const d = data?.data || data;
+        if (d?.script) {
+          setScript(d.script as ExperienceScript);
+          setTitle(d.title || '');
         } else {
-          setPhase('intro');
+          setError('体験はまだ準備されていません');
         }
-      } catch {
-        setPhase('intro');
-      }
-    }
-    load();
+        setLoading(false);
+      })
+      .catch(() => {
+        setError('体験の読み込みに失敗しました');
+        setLoading(false);
+      });
   }, [workId]);
 
-  // Intro sequence: build world if needed, then atmospheric intro from first episode
+  // Tap to skip
   useEffect(() => {
-    if (phase !== 'intro') return;
-    let cancelled = false;
-
-    async function buildIntro() {
-      // Check if world is built, if not trigger build
-      try {
-        const status = await apiGet('/build-status');
-        if (status.data?.locations === 0) {
-          // Auto-build the world (may take a few seconds)
-          setBlocks([{ id: bid(), type: 'environment', source: 'generated', text: '世界を構築しています...' }]);
-          try {
-            await apiPost('/build');
-          } catch {
-            // Build might fail (not completed, etc.) — continue anyway
-          }
-          if (cancelled) return;
-          setBlocks([]);
-        }
-      } catch {}
-
-      if (cancelled) return;
-
-      // Get AI-curated intro text from build-status (generated during buildWorld)
-      let introParas: string[] = [];
-      try {
-        const status = await apiGet('/build-status');
-        if (status.data?.introText && Array.isArray(status.data.introText)) {
-          introParas = status.data.introText;
-        }
-      } catch {}
-
-      // Fallback: fetch first episode opening
-      if (introParas.length === 0) {
-        try {
-          const workRes = await api.getEpisodes(workId);
-          const eps = ((workRes as any)?.data ?? workRes ?? []) as any[];
-          const sorted = eps.sort((a: any, b: any) => a.orderIndex - b.orderIndex);
-          if (sorted.length > 0) {
-            const firstEp = sorted[0];
-            let content = firstEp.content;
-            if (!content || content.length < 50) {
-              const epRes = await api.getEpisode(firstEp.id);
-              content = (epRes as any)?.data?.content ?? (epRes as any)?.content ?? '';
-            }
-            if (content) {
-              const paras = content.split(/\n{2,}/);
-              for (const para of paras) {
-                const t = para.trim();
-                if (!t) continue;
-                if (t === '***' || t === '---') break;
-                introParas.push(t);
-                if (introParas.length >= 3) break;
-              }
-            }
-          }
-        } catch {}
+    const handler = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (target.closest('[data-awareness]') || target.closest('a')) return;
+      if (pendingResolveRef.current) {
+        if (pendingTimerRef.current) clearTimeout(pendingTimerRef.current);
+        const fn = pendingResolveRef.current;
+        pendingResolveRef.current = null;
+        pendingTimerRef.current = null;
+        fn();
       }
-
-      // Last resort fallback
-      if (introParas.length === 0) {
-        introParas = [`${work?.title || '物語'}の世界が広がっている。`];
-      }
-
-      if (cancelled) return;
-
-      // Add all intro blocks at once — TheaterView's staggered fadeUp handles smooth reveal
-      const introBlocks: SceneBlock[] = introParas.map(text => ({
-        id: bid(), type: 'environment' as const, source: 'original' as const, text,
-      }));
-      setBlocks(introBlocks);
-
-      // Show entry awareness block after animation completes
-      setTimeout(() => {
-        if (cancelled) return;
-        setBlocks(prev => [...prev, {
-          id: bid(),
-          type: 'awareness',
-          source: 'generated',
-          text: '扉の向こうに、朝の光がある。',
-          awarenessAction: { type: 'move', label: '物語に入る', params: { locationId: 'initial' } },
-        }]);
-      }, introParas.length * 2000 + 1000);
-    }
-
-    buildIntro();
-    return () => { cancelled = true; };
-  }, [phase, work]);
-
-  // Auto-save
-  useEffect(() => {
-    if (phase === 'world' && blocks.length > 0) saveSession(workId, blocks, worldState);
-  }, [blocks, worldState, phase, workId]);
-
-  const add = useCallback((b: SceneBlock[]) => {
-    setBlocks(prev => [...prev, ...b.filter(Boolean)]);
-    // Reset actions visibility when new content is added (reader needs to scroll again)
-    setActionsVisible(false);
+    };
+    document.addEventListener('click', handler);
+    return () => document.removeEventListener('click', handler);
   }, []);
 
-  // Determine if actions should show immediately (intro, few blocks, or streaming)
-  const shouldShowActionsImmediately = phase === 'intro' || blocks.length <= 2;
-  const computedActionsVisible = isStreaming ? false : (shouldShowActionsImmediately || actionsVisible);
-
-  const handleContentEnd = useCallback((reached: boolean) => {
-    if (reached && !isStreaming) {
-      setActionsVisible(true);
-    }
-  }, [isStreaming]);
-
-  // ===== API helpers =====
-  async function apiPost(path: string, body?: any) {
-    const token = api.getToken();
-    const res = await fetch(`${API_BASE}/interactive-novel/${workId}${path}`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-      body: body ? JSON.stringify(body) : undefined,
+  const wait = useCallback((ms: number): Promise<void> => {
+    return new Promise(resolve => {
+      pendingResolveRef.current = resolve;
+      pendingTimerRef.current = setTimeout(() => {
+        pendingResolveRef.current = null;
+        pendingTimerRef.current = null;
+        resolve();
+      }, ms);
     });
-    if (!res.ok) throw new Error(`API error ${res.status}`);
-    return res.json();
-  }
+  }, []);
 
-  async function apiGet(path: string) {
-    const token = api.getToken();
-    const res = await fetch(`${API_BASE}/interactive-novel/${workId}${path}`, {
-      headers: { ...(token ? { Authorization: `Bearer ${token}` } : {}) },
-    });
-    if (!res.ok) throw new Error(`API error ${res.status}`);
-    return res.json();
-  }
-
-  function applyScene(scene: any) {
-    // Use functional setState to dedup against LATEST blocks (not stale closure)
-    setBlocks(prev => {
-      const seenTexts = new Set<string>();
-      for (const b of prev) { if (b?.text) seenTexts.add(b.text); }
-
-      const newBlocks: SceneBlock[] = [];
-
-      // Environment
-      if (scene.environment?.text) {
-        for (const line of scene.environment.text.split('\n')) {
-          const t = line.trim();
-          if (t && !seenTexts.has(t)) {
-            seenTexts.add(t);
-            newBlocks.push({ id: bid(), type: 'environment', source: scene.environment.source || 'generated', text: t });
-          }
-        }
-      }
-
-      // Events — split dialogue from prose
-      if (scene.events) {
-        for (const ev of scene.events) {
-          const text = ev.renderedText?.trim();
-          if (!text || seenTexts.has(text)) continue;
-
-          const segments = splitDialogue(text);
-          for (const seg of segments) {
-            if (seenTexts.has(seg.text)) continue;
-            seenTexts.add(seg.text);
-            if (seg.isDialogue) {
-              newBlocks.push({
-                id: bid(), type: 'dialogue', source: 'original',
-                text: seg.text,
-                speaker: seg.speaker,
-                speakerColor: seg.speaker ? getCharColor(seg.speaker) : undefined,
-              });
-            } else {
-              newBlocks.push({
-                id: bid(), type: ev.isMemory ? 'memory' : 'event',
-                source: ev.originalPassage ? 'original' : 'generated',
-                text: seg.text,
-                spoilerProtected: ev.spoilerProtected,
-              });
-            }
-          }
-        }
-      }
-
-      // Convert actions to awareness blocks (inline in the text flow)
-      if (scene.actions) {
-        const filteredActions = (scene.actions as any[])
-          .filter((a: any) => a.label && a.label.trim());
-        for (const action of filteredActions) {
-          if (!seenTexts.has(action.label)) {
-            seenTexts.add(action.label);
-            newBlocks.push({
-              id: bid(),
-              type: 'awareness',
-              source: 'generated',
-              text: action.label,
-              awarenessAction: { type: action.type, label: action.label, params: action.params || {} },
-            });
-          }
-        }
-      }
-
-      if (newBlocks.length === 0) return prev;
-      return [...prev, ...newBlocks];
-    });
-    setActionsVisible(false);
-
-    // Update world state (actions kept empty — awareness blocks handle it now)
-    setWorldState(prev => ({
-      ...prev,
-      locationName: scene.meta?.locationName || prev.locationName,
-      timeOfDay: scene.meta?.timeOfDay || prev.timeOfDay,
-      perspective: scene.meta?.perspective || prev.perspective,
-      presentCharacters: (scene.characters || []).map((c: any) => ({
-        id: c.characterId, name: c.name, activity: c.activity,
-      })),
-      actions: [],
-    }));
-  }
-
-  // ===== Action Handlers =====
-
-  const handleAction = useCallback(async (action: ActionSuggestion) => {
-    if (isStreaming || processingRef.current) return;
-    processingRef.current = true;
-    if (action.label) {
-      add([{ id: bid(), type: 'action', source: 'reader', text: `（${action.label}）` }]);
-    }
-
-    try {
-      if (action.type === 'move') {
-        if (phase === 'intro') {
-          // First entry: call enter endpoint
-          const res = await apiPost('/enter', { entryType: 'explore' });
-          add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
-          applyScene(res.data.scene);
-          setPhase('world');
-        } else {
-          const res = await apiPost('/move', { locationId: action.params.locationId });
-          add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
-          applyScene(res.data.scene);
-        }
-      } else if (action.type === 'talk') {
-        await handleTalk(action);
-      } else if (action.type === 'observe') {
-        const res = await apiPost('/observe');
-        if (res.data?.text) {
-          add([{ id: bid(), type: 'environment', source: 'generated', text: res.data.text }]);
-        }
-      } else if (action.type === 'time') {
-        const res = await apiPost('/time-advance');
-        add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
-        applyScene(res.data.scene);
-      } else if (action.type === 'perspective') {
-        const mode = action.params.mode as PerspectiveMode;
-        const labels: Record<string, string> = { protagonist: '主人公', character: 'あなた', omniscient: '俯瞰' };
-        add([{ id: bid(), type: 'perspective_label', source: 'generated', text: `───── 視点: ${labels[mode] || mode} ─────` }]);
-        const res = await apiPost('/perspective', { mode });
-        applyScene(res.data.scene);
-      }
-    } catch (err: any) {
-      add([{ id: bid(), type: 'environment', source: 'generated', text: '（接続エラー。もう一度試してください）' }]);
-    } finally {
-      processingRef.current = false;
-    }
-  }, [isStreaming, phase, workId]);
-
-  const handleAwarenessClick = useCallback(async (action: ActionSuggestion) => {
-    if (isStreaming || processingRef.current) return;
-    processingRef.current = true;
-
-    try {
-      if (action.type === 'move') {
-        if (phase === 'intro') {
-          const res = await apiPost('/enter', { entryType: 'explore' });
-          add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
-          applyScene(res.data.scene);
-          setPhase('world');
-        } else {
-          const res = await apiPost('/move', { locationId: action.params.locationId });
-          add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
-          applyScene(res.data.scene);
-        }
-      } else if (action.type === 'talk') {
-        await handleTalk(action);
-      } else if (action.type === 'read') {
-        const episodeId = action.params.episodeId;
-        if (episodeId) window.open(`/works/${workId}/episodes/${episodeId}`, '_blank');
-      } else if (action.type === 'stay') {
-        // Stay = observe the environment more deeply (no server state change)
-        try {
-          const res = await apiPost('/observe');
-          if (res.data?.text) {
-            add([{ id: bid(), type: 'environment', source: 'generated', text: res.data.text }]);
-          }
-        } catch {}
-      } else if (action.type === 'time') {
-        const res = await apiPost('/time-advance');
-        add([{ id: bid(), type: 'break', source: 'generated', text: '' }]);
-        applyScene(res.data.scene);
-      }
-    } catch {
-      add([{ id: bid(), type: 'environment', source: 'generated', text: '（接続エラー。もう一度試してください）' }]);
-    } finally {
-      processingRef.current = false;
-    }
-  }, [isStreaming, phase, workId]);
-
-  async function handleTalk(action: ActionSuggestion) {
-    const charId = action.params.characterId;
-    const message = action.params.message || 'こんにちは';
-    const charName = worldState.presentCharacters.find(c => c.id === charId);
-    const displayName = charName ? sn(charName.name) : '???';
-
-    setIsStreaming(true);
-    const dialogueId = bid();
-    add([{ id: dialogueId, type: 'dialogue', source: 'generated', text: '', speaker: displayName, speakerColor: getCharColor(displayName) }]);
-
-    const controller = new AbortController();
-    abortRef.current = controller;
-
-    try {
-      const response = await api.fetchSSE(
-        `/ai/character-talk/${workId}/chat`,
-        { message, mode: 'character', characterId: charId, useSonnet: false },
-        controller.signal,
-      );
-
-      await consumeSSEStream(response, (parsed) => {
-        if (parsed.text) {
-          setBlocks(prev => {
-            const updated = [...prev];
-            const idx = updated.findIndex(b => b?.id === dialogueId);
-            if (idx >= 0) updated[idx] = { ...updated[idx], text: updated[idx].text + parsed.text };
-            return updated;
-          });
-        }
+  const addBlock = useCallback(async (block: ScriptBlock, delay: number) => {
+    const id = `b-${++blockIdRef.current}`;
+    await wait(delay);
+    setBlocks(prev => [...prev, { id, block, visible: false }]);
+    // Trigger fade-in
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setBlocks(prev => prev.map(b => b.id === id ? { ...b, visible: true } : b));
       });
-    } catch (err: any) {
-      if (err.name === 'AbortError') return;
-      add([{ id: bid(), type: 'environment', source: 'generated', text: `（${displayName}は静かにこちらを見ている）` }]);
-    } finally {
-      setIsStreaming(false);
-      // Refresh scene from backend — actions become awareness blocks
-      try {
-        const stateRes = await apiPost('/enter', { entryType: 'explore' });
-        if (stateRes.data?.scene) {
-          applyScene(stateRes.data.scene);
-        }
-      } catch {}
+    });
+  }, [wait]);
+
+  const addAwareness = useCallback(async (awareness: ScriptAwareness, delay: number) => {
+    const id = `a-${++blockIdRef.current}`;
+    await wait(delay);
+    setAwarenessItems(prev => [...prev, { id, awareness, visible: false, clicked: false }]);
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setAwarenessItems(prev => prev.map(a => a.id === id ? { ...a, visible: true } : a));
+      });
+    });
+  }, [wait]);
+
+  const showHeader = useCallback((text: string) => {
+    setHeaderText(text);
+    setHeaderVisible(true);
+    setTimeout(() => setHeaderVisible(false), 5000);
+  }, []);
+
+  const playScene = useCallback(async (sceneId: string) => {
+    if (!script) return;
+    const scene = script.scenes[sceneId];
+    if (!scene) return;
+
+    if (scene.header) showHeader(scene.header);
+
+    for (const block of scene.blocks) {
+      await addBlock(block, DELAYS[block.type] || 1800);
     }
-  }
 
-  const handleFreeInput = useCallback(async (text: string) => {
-    if (isStreaming) return;
-    add([{ id: bid(), type: 'action', source: 'reader', text: `（${text}）` }]);
-
-    // Check character names first
-    for (const char of worldState.presentCharacters) {
-      if (text.includes(sn(char.name))) {
-        await handleTalk({ type: 'talk', label: '', params: { characterId: char.id, message: text } });
-        return;
+    if (scene.continues) {
+      await wait(2000);
+      await playScene(scene.continues);
+    } else if (scene.awareness && scene.awareness.length > 0) {
+      for (let i = 0; i < scene.awareness.length; i++) {
+        await addAwareness(scene.awareness[i], i === 0 ? 3000 : 1000);
       }
     }
+  }, [script, addBlock, addAwareness, showHeader, wait]);
 
-    // Default to observe
-    try {
-      const res = await apiPost('/observe');
-      if (res.data?.text) add([{ id: bid(), type: 'environment', source: 'generated', text: res.data.text }]);
-    } catch {}
-  }, [isStreaming, worldState, workId]);
+  const handleAwarenessClick = useCallback((id: string, awareness: ScriptAwareness) => {
+    setAwarenessItems(prev =>
+      prev.map(a => a.id === id ? { ...a, clicked: true } : a)
+    );
+    playScene(awareness.target);
+  }, [playScene]);
 
-  const handlePerspectiveChange = useCallback((mode: PerspectiveMode) => {
-    handleAction({ type: 'perspective', label: '', params: { mode } });
-  }, [handleAction]);
+  // Start experience
+  useEffect(() => {
+    if (!script) return;
 
-  if (phase === 'loading') {
+    const run = async () => {
+      // Play intro
+      for (let i = 0; i < script.intro.blocks.length; i++) {
+        await addBlock(script.intro.blocks[i], INTRO_DELAYS[i] || 2000);
+      }
+      // Show intro awareness
+      await addAwareness(script.intro.awareness, 3500);
+    };
+
+    run();
+  }, [script, addBlock, addAwareness]);
+
+  if (loading) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] flex items-center justify-center">
-        <div className="text-[#55555f] text-sm tracking-widest animate-pulse">...</div>
+      <div style={{
+        background: '#0a0a0f', minHeight: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+      }}>
+        <div style={{
+          width: 3, height: 3, borderRadius: '50%', background: '#2a2a35',
+          animation: 'breathe 4s ease-in-out infinite',
+        }} />
       </div>
     );
   }
 
-  if (phase === 'menu') {
+  if (error) {
     return (
-      <div className="min-h-screen bg-[#0a0a0f] text-[#d8d5d0] flex flex-col items-center justify-center px-6" style={{ fontFamily: "'Noto Serif JP', serif" }}>
-        <h1 className="text-2xl font-light tracking-widest mb-2">{work?.title || 'Interactive Novel'}</h1>
-        <p className="text-xs text-[#55555f] mb-12">{work?.author?.displayName || work?.author?.name || ''}</p>
-        <div className="flex flex-col gap-3 w-full max-w-xs">
-          <button
-            onClick={() => {
-              const saved = loadSession(workId);
-              if (saved) { setBlocks(saved.blocks); setWorldState(saved.state); }
-              setPhase('world');
-            }}
-            className="px-6 py-3 border border-[#2a2a35] rounded-lg text-sm text-[#d8d5d0] hover:border-[#4a4a55] transition-all cursor-pointer"
-          >
-            続きから
-          </button>
-          <button
-            onClick={async () => {
-              clearSession(workId);
-              // Reset DB state too
-              try { await apiPost('/reset'); } catch {}
-              setBlocks([]);
-              setWorldState({ locationId: null, locationName: '', timeOfDay: 'afternoon', timelinePosition: 0, perspective: 'character', presentCharacters: [], actions: [] });
-              setPhase('intro');
-            }}
-            className="px-6 py-3 border border-[#2a2a35] rounded-lg text-sm text-[#8a8a95] hover:border-[#4a4a55] transition-all cursor-pointer"
-          >
-            最初から
-          </button>
-        </div>
+      <div style={{
+        background: '#0a0a0f', minHeight: '100vh', display: 'flex',
+        alignItems: 'center', justifyContent: 'center',
+        color: '#55555f', fontFamily: 'sans-serif', fontSize: 14,
+      }}>
+        {error}
       </div>
     );
   }
 
   return (
-    <div className="min-h-screen bg-[#0a0a0f] text-[#d8d5d0] flex flex-col" style={{ fontFamily: "'Noto Serif JP', serif" }}>
-      <ExperienceHeader state={worldState} onPerspectiveChange={handlePerspectiveChange} />
-      <TheaterView blocks={blocks} isStreaming={isStreaming} onContentEnd={handleContentEnd} onAwarenessClick={handleAwarenessClick} />
-      <ActionPalette onFreeInput={handleFreeInput} disabled={isStreaming} visible={computedActionsVisible} />
+    <>
+      <style>{`
+        @import url('https://fonts.googleapis.com/css2?family=Noto+Serif+JP:wght@300;400&display=swap');
+        @keyframes breathe { 0%, 100% { opacity: 0.2; } 50% { opacity: 0.6; } }
+        @keyframes awarenessGlow { 0% { color: #4a4a55; } 50% { color: #6a6a75; } 100% { color: #4a4a55; } }
+      `}</style>
+
+      {/* Header */}
+      <div style={{
+        position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
+        textAlign: 'center', padding: 16, fontSize: 11, color: '#55555f',
+        letterSpacing: '0.15em',
+        background: 'linear-gradient(to bottom, #0a0a0f 60%, transparent)',
+        opacity: headerVisible ? 1 : 0,
+        transition: 'opacity 0.8s',
+        pointerEvents: 'none',
+        fontFamily: 'sans-serif',
+      }}>
+        {headerText}
+      </div>
+
+      {/* Theater */}
+      <div ref={theaterRef} style={{
+        maxWidth: 640, margin: '0 auto', padding: '80px 24px 160px',
+        minHeight: '100vh',
+      }}>
+        {blocks.map(({ id, block, visible }) => (
+          <BlockRenderer key={id} block={block} visible={visible} />
+        ))}
+        {awarenessItems.map(({ id, awareness, visible, clicked }) => (
+          <AwarenessRenderer
+            key={id}
+            awareness={awareness}
+            visible={visible}
+            clicked={clicked}
+            onClick={() => !clicked && handleAwarenessClick(id, awareness)}
+          />
+        ))}
+      </div>
+
+      {/* Breathing dot */}
+      <div style={{
+        position: 'fixed', bottom: 12, left: '50%', transform: 'translateX(-50%)',
+        width: 3, height: 3, borderRadius: '50%', background: '#2a2a35',
+        animation: 'breathe 4s ease-in-out infinite',
+      }} />
+    </>
+  );
+}
+
+function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolean }) {
+  const base: React.CSSProperties = {
+    opacity: visible ? 1 : 0,
+    transform: visible ? 'translateY(0)' : 'translateY(16px)',
+    transition: 'opacity 1.5s ease-out, transform 1.5s ease-out',
+    fontFamily: "'Noto Serif JP', serif",
+    fontWeight: 300,
+    marginBottom: 0,
+  };
+
+  if (block.type === 'scene-break') {
+    return (
+      <div style={{
+        ...base,
+        textAlign: 'center', color: '#3a3a40', fontSize: 14,
+        letterSpacing: '0.5em', padding: '40px 0',
+      }}>
+        * * *
+      </div>
+    );
+  }
+
+  if (block.type === 'reader-action') {
+    return <div style={{ ...base, padding: '16px 0' }} />;
+  }
+
+  if (block.type === 'dialogue') {
+    return (
+      <div style={{ ...base, padding: '12px 0 12px 20px', fontSize: 15, lineHeight: 2.2, color: '#d8d5d0' }}>
+        {block.speaker && (
+          <div style={{
+            fontFamily: 'sans-serif', fontSize: 11, letterSpacing: '0.1em',
+            marginBottom: 4, color: block.speakerColor || '#8a8a95',
+          }}>
+            {block.speaker}
+          </div>
+        )}
+        <div style={{
+          ...(block.speaker ? {
+            borderLeft: `2px solid ${(block.speakerColor || '#8a7a6a')}33`,
+            paddingLeft: 16,
+          } : {}),
+        }}>
+          {block.text}
+        </div>
+      </div>
+    );
+  }
+
+  if (block.type === 'memory') {
+    return (
+      <div style={{
+        ...base, color: '#3a3a40', fontSize: 15, lineHeight: 2.2,
+        textIndent: '1em', padding: '8px 0',
+        fontStyle: 'italic', filter: 'blur(0.3px)',
+      }}>
+        {block.text}
+      </div>
+    );
+  }
+
+  if (block.type === 'environment') {
+    return (
+      <div style={{
+        ...base, color: '#a8a5a0', fontSize: 15, lineHeight: 2.2,
+        textIndent: '1em', padding: '12px 0',
+      }}>
+        {block.text}
+      </div>
+    );
+  }
+
+  // original (default)
+  return (
+    <div style={{
+      ...base, color: '#d8d5d0', fontSize: 15, lineHeight: 2.2,
+      textIndent: '1em', padding: '12px 0',
+    }}>
+      {block.text}
+    </div>
+  );
+}
+
+function AwarenessRenderer({
+  awareness, visible, clicked, onClick,
+}: {
+  awareness: ScriptAwareness;
+  visible: boolean;
+  clicked: boolean;
+  onClick: () => void;
+}) {
+  return (
+    <div
+      data-awareness="true"
+      onClick={onClick}
+      style={{
+        opacity: visible ? 1 : 0,
+        transform: visible ? 'translateY(0)' : 'translateY(16px)',
+        transition: 'opacity 1.5s ease-out, transform 1.5s ease-out, color 0.6s ease',
+        color: clicked ? '#55555f' : '#4a4a55',
+        fontSize: 14,
+        lineHeight: 2,
+        padding: '20px 0 8px',
+        cursor: clicked ? 'default' : 'pointer',
+        userSelect: 'none',
+        borderBottom: '1px solid transparent',
+        display: 'inline-block',
+        fontFamily: "'Noto Serif JP', serif",
+        fontWeight: 300,
+        pointerEvents: clicked ? 'none' : 'auto',
+        animation: visible && !clicked ? 'awarenessGlow 3s ease-in-out 1.5s 1' : 'none',
+        width: '100%',
+      }}
+      onMouseEnter={e => {
+        if (!clicked) {
+          (e.target as HTMLElement).style.color = '#8a8a95';
+          (e.target as HTMLElement).style.borderBottomColor = '#3a3a45';
+        }
+      }}
+      onMouseLeave={e => {
+        if (!clicked) {
+          (e.target as HTMLElement).style.color = '#4a4a55';
+          (e.target as HTMLElement).style.borderBottomColor = 'transparent';
+        }
+      }}
+    >
+      <span style={{ letterSpacing: '0.3em', marginRight: '0.5em' }}>......</span>
+      {awareness.text}
     </div>
   );
 }

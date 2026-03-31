@@ -1,3 +1,33 @@
+export interface ScriptBlock {
+  type: 'original' | 'environment' | 'dialogue' | 'memory' | 'scene-break' | 'reader-action';
+  text: string;
+  speaker?: string;
+  speakerColor?: string;
+}
+
+export interface ScriptAwareness {
+  text: string;
+  target: string;
+  type?: 'talk';
+  characterId?: string;
+}
+
+export interface ScriptScene {
+  header?: string;
+  blocks: ScriptBlock[];
+  awareness?: ScriptAwareness[];
+  continues?: string;
+}
+
+export interface ExperienceScript {
+  intro: {
+    blocks: ScriptBlock[];
+    awareness: ScriptAwareness;
+  };
+  scenes: Record<string, ScriptScene>;
+}
+
+// Legacy types (kept for backward compatibility with old components)
 export type PerspectiveMode = 'protagonist' | 'character' | 'omniscient';
 export type TimeOfDay = 'dawn' | 'morning' | 'afternoon' | 'evening' | 'night' | 'late_night';
 
