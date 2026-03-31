@@ -3,6 +3,7 @@ import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { Response } from 'express';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
+import { Public } from '../auth/decorators/public.decorator';
 import { SceneComposerService } from './services/scene-composer.service';
 import { ReaderStateService } from './services/reader-state.service';
 import { WorldConversationService } from './services/world-conversation.service';
@@ -120,8 +121,8 @@ export class InteractiveNovelController {
     return { data: { logs } };
   }
 
+  @Public()
   @Get(':workId/experience')
-  @UseGuards()
   async getExperience(
     @Param('workId') workId: string,
   ) {
