@@ -340,6 +340,49 @@ export function fixIntroTarget(
 }
 
 /**
+ * Split blocks that contain multiple paragraphs (separated by \n\n) into individual blocks.
+ * Only applies to original, environment, and memory blocks. Dialogue and scene-break are untouched.
+ */
+export function splitMultiParagraphBlocks(scenes: Record<string, any>): number {
+  const splittableTypes = new Set(['original', 'environment', 'memory']);
+  let splitCount = 0;
+
+  for (const scene of Object.values(scenes) as any[]) {
+    if (!scene.blocks) continue;
+
+    const newBlocks: any[] = [];
+    for (const block of scene.blocks) {
+      if (!splittableTypes.has(block.type) || !block.text?.includes('\n')) {
+        newBlocks.push(block);
+        continue;
+      }
+
+      // Split on double newlines (paragraph breaks)
+      const paragraphs = block.text
+        .split(/\n{1,}/)
+        .map((p: string) => p.replace(/^[\s\u3000]+/, '').trim())
+        .filter((p: string) => p.length > 0);
+
+      if (paragraphs.length <= 1) {
+        // No real split needed, just clean up the text
+        block.text = paragraphs[0] || block.text.trim();
+        newBlocks.push(block);
+        continue;
+      }
+
+      for (const para of paragraphs) {
+        newBlocks.push({ ...block, text: para });
+      }
+      splitCount++;
+    }
+
+    scene.blocks = newBlocks;
+  }
+
+  return splitCount;
+}
+
+/**
  * Run all post-processing steps on an experience script.
  */
 export function postProcessExperienceScript(
@@ -355,6 +398,7 @@ export function postProcessExperienceScript(
   const fixedRefs = fixBrokenReferences(scenes, first);
   const fixedDeadEnds = fixDeadEnds(scenes, epScenes, first);
   const normalizedSpeakers = normalizeSpeakers(scenes, characters);
+  splitMultiParagraphBlocks(scenes);
   fixIntroTarget(introData, scenes, first);
 
   return { fixedConnections, fixedRefs, fixedDeadEnds, normalizedSpeakers };

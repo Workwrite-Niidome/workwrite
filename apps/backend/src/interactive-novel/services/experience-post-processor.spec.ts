@@ -6,6 +6,7 @@ import {
   fixDeadEnds,
   normalizeSpeakers,
   fixIntroTarget,
+  splitMultiParagraphBlocks,
   postProcessExperienceScript,
 } from './experience-post-processor';
 
@@ -383,6 +384,96 @@ describe('fixIntroTarget', () => {
 
   it('should handle null introData', () => {
     expect(() => fixIntroTarget(null, {}, {})).not.toThrow();
+  });
+});
+
+describe('splitMultiParagraphBlocks', () => {
+  it('should split blocks containing newlines into separate blocks', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'original', text: '最初の段落。\n\n　二番目の段落。' },
+      ]},
+    };
+
+    const split = splitMultiParagraphBlocks(scenes);
+    expect(split).toBeGreaterThan(0);
+    expect(scenes['ep1_a'].blocks.length).toBe(2);
+    expect(scenes['ep1_a'].blocks[0].text).toBe('最初の段落。');
+    expect(scenes['ep1_a'].blocks[1].text).toBe('二番目の段落。');
+  });
+
+  it('should not split dialogue blocks', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'dialogue', speaker: '蒼', text: '「こんにちは。\nお元気ですか」' },
+      ]},
+    };
+
+    const split = splitMultiParagraphBlocks(scenes);
+    expect(split).toBe(0);
+    expect(scenes['ep1_a'].blocks.length).toBe(1);
+  });
+
+  it('should not split scene-break blocks', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'scene-break', text: '* * *' },
+      ]},
+    };
+
+    const split = splitMultiParagraphBlocks(scenes);
+    expect(split).toBe(0);
+  });
+
+  it('should handle triple newlines and trim whitespace', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'original', text: '段落A。\n\n\n　段落B。\n\n段落C。' },
+      ]},
+    };
+
+    const split = splitMultiParagraphBlocks(scenes);
+    expect(scenes['ep1_a'].blocks.length).toBe(3);
+    expect(scenes['ep1_a'].blocks[0].text).toBe('段落A。');
+    expect(scenes['ep1_a'].blocks[1].text).toBe('段落B。');
+    expect(scenes['ep1_a'].blocks[2].text).toBe('段落C。');
+  });
+
+  it('should filter out empty paragraphs after split', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'original', text: '\n\n段落A。\n\n\n\n' },
+      ]},
+    };
+
+    const split = splitMultiParagraphBlocks(scenes);
+    expect(scenes['ep1_a'].blocks.length).toBe(1);
+    expect(scenes['ep1_a'].blocks[0].text).toBe('段落A。');
+  });
+
+  it('should preserve block type for each split piece', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'environment', text: '雨が降る。\n\n風が吹く。' },
+      ]},
+    };
+
+    splitMultiParagraphBlocks(scenes);
+    expect(scenes['ep1_a'].blocks[0].type).toBe('environment');
+    expect(scenes['ep1_a'].blocks[1].type).toBe('environment');
+  });
+
+  it('should not modify blocks without newlines', () => {
+    const scenes: Record<string, any> = {
+      ep1_a: { blocks: [
+        { type: 'original', text: '改行なしのテキスト。' },
+        { type: 'dialogue', speaker: '蒼', text: '「台詞」' },
+      ]},
+    };
+
+    const split = splitMultiParagraphBlocks(scenes);
+    expect(split).toBe(0);
+    expect(scenes['ep1_a'].blocks.length).toBe(2);
   });
 });
 
