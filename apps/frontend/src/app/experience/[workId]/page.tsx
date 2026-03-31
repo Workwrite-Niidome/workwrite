@@ -2,7 +2,7 @@
 
 import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'next/navigation';
-import type { ExperienceScript, ScriptBlock, ScriptAwareness, ScriptScene } from './types';
+import type { ExperienceScript, ScriptBlock, ScriptAwareness } from './types';
 
 const API_BASE = process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1';
 
@@ -17,36 +17,26 @@ const DELAYS: Record<string, number> = {
 
 const INTRO_DELAYS = [2000, 2500, 2500, 2800, 2500];
 
-interface DisplayBlock {
-  id: string;
-  block: ScriptBlock;
-  visible: boolean;
-}
-
-interface DisplayAwareness {
-  id: string;
-  awareness: ScriptAwareness;
-  visible: boolean;
-  clicked: boolean;
-}
+// Unified timeline item: either a block or an awareness
+type TimelineItem =
+  | { kind: 'block'; id: string; block: ScriptBlock; visible: boolean }
+  | { kind: 'awareness'; id: string; awareness: ScriptAwareness; visible: boolean; clicked: boolean };
 
 export default function ExperiencePage() {
   const { workId } = useParams<{ workId: string }>();
   const [script, setScript] = useState<ExperienceScript | null>(null);
-  const [title, setTitle] = useState('');
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
-  const [blocks, setBlocks] = useState<DisplayBlock[]>([]);
-  const [awarenessItems, setAwarenessItems] = useState<DisplayAwareness[]>([]);
+  const [timeline, setTimeline] = useState<TimelineItem[]>([]);
   const [headerText, setHeaderText] = useState('');
   const [headerVisible, setHeaderVisible] = useState(false);
 
   const pendingResolveRef = useRef<(() => void) | null>(null);
   const pendingTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const blockIdRef = useRef(0);
-  const theaterRef = useRef<HTMLDivElement>(null);
+  // Track where to insert next items (after which item id)
+  const insertAfterRef = useRef<string | null>(null);
 
-  // Fetch experience script
   useEffect(() => {
     if (!workId) return;
     fetch(`${API_BASE}/interactive-novel/${workId}/experience`)
@@ -55,7 +45,6 @@ export default function ExperiencePage() {
         const d = data?.data || data;
         if (d?.script) {
           setScript(d.script as ExperienceScript);
-          setTitle(d.title || '');
         } else {
           setError('体験はまだ準備されていません');
         }
@@ -95,28 +84,41 @@ export default function ExperiencePage() {
     });
   }, []);
 
+  // Insert an item into the timeline, after insertAfterRef or at the end
+  const insertItem = useCallback((item: TimelineItem) => {
+    setTimeline(prev => {
+      const insertAfter = insertAfterRef.current;
+      if (!insertAfter) return [...prev, item];
+      const idx = prev.findIndex(i => i.id === insertAfter);
+      if (idx === -1) return [...prev, item];
+      const next = [...prev];
+      next.splice(idx + 1, 0, item);
+      return next;
+    });
+    insertAfterRef.current = item.id;
+  }, []);
+
+  const makeVisible = useCallback((id: string) => {
+    requestAnimationFrame(() => {
+      requestAnimationFrame(() => {
+        setTimeline(prev => prev.map(i => i.id === id ? { ...i, visible: true } : i));
+      });
+    });
+  }, []);
+
   const addBlock = useCallback(async (block: ScriptBlock, delay: number) => {
     const id = `b-${++blockIdRef.current}`;
     await wait(delay);
-    setBlocks(prev => [...prev, { id, block, visible: false }]);
-    // Trigger fade-in
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setBlocks(prev => prev.map(b => b.id === id ? { ...b, visible: true } : b));
-      });
-    });
-  }, [wait]);
+    insertItem({ kind: 'block', id, block, visible: false });
+    makeVisible(id);
+  }, [wait, insertItem, makeVisible]);
 
   const addAwareness = useCallback(async (awareness: ScriptAwareness, delay: number) => {
     const id = `a-${++blockIdRef.current}`;
     await wait(delay);
-    setAwarenessItems(prev => [...prev, { id, awareness, visible: false, clicked: false }]);
-    requestAnimationFrame(() => {
-      requestAnimationFrame(() => {
-        setAwarenessItems(prev => prev.map(a => a.id === id ? { ...a, visible: true } : a));
-      });
-    });
-  }, [wait]);
+    insertItem({ kind: 'awareness', id, awareness, visible: false, clicked: false });
+    makeVisible(id);
+  }, [wait, insertItem, makeVisible]);
 
   const showHeader = useCallback((text: string) => {
     setHeaderText(text);
@@ -146,25 +148,26 @@ export default function ExperiencePage() {
   }, [script, addBlock, addAwareness, showHeader, wait]);
 
   const handleAwarenessClick = useCallback((id: string, awareness: ScriptAwareness) => {
-    setAwarenessItems(prev =>
-      prev.map(a => a.id === id ? { ...a, clicked: true } : a)
-    );
+    // Mark as clicked
+    setTimeline(prev => prev.map(i =>
+      i.id === id && i.kind === 'awareness' ? { ...i, clicked: true } : i
+    ));
+    // Set insertion point to right after this awareness
+    insertAfterRef.current = id;
     playScene(awareness.target);
   }, [playScene]);
 
   // Start experience
   useEffect(() => {
     if (!script) return;
+    insertAfterRef.current = null;
 
     const run = async () => {
-      // Play intro
       for (let i = 0; i < script.intro.blocks.length; i++) {
         await addBlock(script.intro.blocks[i], INTRO_DELAYS[i] || 2000);
       }
-      // Show intro awareness
       await addAwareness(script.intro.awareness, 3500);
     };
-
     run();
   }, [script, addBlock, addAwareness]);
 
@@ -202,7 +205,6 @@ export default function ExperiencePage() {
         @keyframes awarenessGlow { 0% { color: #4a4a55; } 50% { color: #6a6a75; } 100% { color: #4a4a55; } }
       `}</style>
 
-      {/* Header */}
       <div style={{
         position: 'fixed', top: 0, left: 0, right: 0, zIndex: 50,
         textAlign: 'center', padding: 16, fontSize: 11, color: '#55555f',
@@ -216,26 +218,26 @@ export default function ExperiencePage() {
         {headerText}
       </div>
 
-      {/* Theater */}
-      <div ref={theaterRef} style={{
+      <div style={{
         maxWidth: 640, margin: '0 auto', padding: '80px 24px 160px',
         minHeight: '100vh',
       }}>
-        {blocks.map(({ id, block, visible }) => (
-          <BlockRenderer key={id} block={block} visible={visible} />
-        ))}
-        {awarenessItems.map(({ id, awareness, visible, clicked }) => (
-          <AwarenessRenderer
-            key={id}
-            awareness={awareness}
-            visible={visible}
-            clicked={clicked}
-            onClick={() => !clicked && handleAwarenessClick(id, awareness)}
-          />
-        ))}
+        {timeline.map(item => {
+          if (item.kind === 'block') {
+            return <BlockRenderer key={item.id} block={item.block} visible={item.visible} />;
+          }
+          return (
+            <AwarenessRenderer
+              key={item.id}
+              awareness={item.awareness}
+              visible={item.visible}
+              clicked={item.clicked}
+              onClick={() => !item.clicked && handleAwarenessClick(item.id, item.awareness)}
+            />
+          );
+        })}
       </div>
 
-      {/* Breathing dot */}
       <div style={{
         position: 'fixed', bottom: 12, left: '50%', transform: 'translateX(-50%)',
         width: 3, height: 3, borderRadius: '50%', background: '#2a2a35',
@@ -252,14 +254,12 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
     transition: 'opacity 1.5s ease-out, transform 1.5s ease-out',
     fontFamily: "'Noto Serif JP', serif",
     fontWeight: 300,
-    marginBottom: 0,
   };
 
   if (block.type === 'scene-break') {
     return (
       <div style={{
-        ...base,
-        textAlign: 'center', color: '#3a3a40', fontSize: 14,
+        ...base, textAlign: 'center', color: '#3a3a40', fontSize: 14,
         letterSpacing: '0.5em', padding: '40px 0',
       }}>
         * * *
@@ -317,7 +317,6 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
     );
   }
 
-  // original (default)
   return (
     <div style={{
       ...base, color: '#d8d5d0', fontSize: 15, lineHeight: 2.2,
