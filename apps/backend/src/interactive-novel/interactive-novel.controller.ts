@@ -121,6 +121,7 @@ export class InteractiveNovelController {
   }
 
   @Get(':workId/experience')
+  @UseGuards()
   async getExperience(
     @Param('workId') workId: string,
   ) {
