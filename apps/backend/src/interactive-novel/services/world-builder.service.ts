@@ -1068,6 +1068,10 @@ export class WorldBuilderService {
       };
     }
 
+    // ===== POST-PROCESSING =====
+    onProgress?.('後処理: 接続修復・品質改善中...');
+    this.postProcessScript(allScenes, introData, sourceEpisodes.length, characters, onProgress);
+
     const finalScript = { intro: introData, scenes: allScenes };
     await this.prisma.work.update({
       where: { id: workId },
@@ -1077,5 +1081,254 @@ export class WorldBuilderService {
     const totalScenes = Object.keys(allScenes).length;
     this.logger.log(`Experience script complete: ${totalScenes} scenes`);
     return totalScenes;
+  }
+
+  /**
+   * Post-process the generated experience script to fix structural issues.
+   * P0: Inter-episode connections (broken continues/awareness targets)
+   * P1: Dead end resolution, speaker name normalization
+   * P2: Scene-break insertion at episode transitions
+   */
+  private postProcessScript(
+    scenes: Record<string, any>,
+    introData: any,
+    totalEpisodes: number,
+    characters: { id: string; name: string; role: string | null; personality: string | null }[],
+    onProgress?: (msg: string) => void,
+  ): void {
+    // Build episode -> scene mapping
+    const epScenes: Record<number, string[]> = {};
+    for (const sid of Object.keys(scenes)) {
+      const m = sid.match(/^ep(\d+)_/);
+      if (m) {
+        const ep = parseInt(m[1]);
+        if (!epScenes[ep]) epScenes[ep] = [];
+        epScenes[ep].push(sid);
+      }
+    }
+
+    // Find first scene of each episode (by traversing continues chain from any scene)
+    const epFirstScene: Record<number, string> = {};
+    const epLastScene: Record<number, string> = {};
+    for (const ep of Object.keys(epScenes).map(Number).sort((a, b) => a - b)) {
+      const sids = epScenes[ep];
+      if (!sids || sids.length === 0) continue;
+
+      // Find scenes that are NOT targets of any continues within same episode
+      const continuedTo = new Set<string>();
+      for (const sid of sids) {
+        const cont = scenes[sid]?.continues;
+        if (cont && cont.startsWith(`ep${ep}_`)) continuedTo.add(cont);
+      }
+      const roots = sids.filter(s => !continuedTo.has(s));
+      epFirstScene[ep] = roots[0] || sids[0];
+
+      // Find last scene: follow continues chain from first
+      let current = epFirstScene[ep];
+      const visited = new Set<string>();
+      while (current && !visited.has(current)) {
+        visited.add(current);
+        const next = scenes[current]?.continues;
+        if (next && next.startsWith(`ep${ep}_`) && scenes[next]) {
+          current = next;
+        } else {
+          break;
+        }
+      }
+      epLastScene[ep] = current;
+    }
+
+    // --- P0: Fix inter-episode connections ---
+    let fixedConnections = 0;
+    for (let ep = 1; ep < totalEpisodes; ep++) {
+      const nextEp = ep + 1;
+      const lastSid = epLastScene[ep];
+      const nextFirstSid = epFirstScene[nextEp];
+      if (!lastSid || !nextFirstSid) continue;
+
+      const lastScene = scenes[lastSid];
+      if (!lastScene) continue;
+
+      // Check if already connected to next episode
+      const hasValidContinues = lastScene.continues && scenes[lastScene.continues];
+      const hasValidAwareness = Array.isArray(lastScene.awareness) &&
+        lastScene.awareness.some((a: any) => a.target && scenes[a.target]);
+
+      if (!hasValidContinues && !hasValidAwareness) {
+        // Add scene-break + connection to next episode
+        lastScene.continues = `ep${ep}_to_ep${nextEp}`;
+        scenes[`ep${ep}_to_ep${nextEp}`] = {
+          blocks: [{ type: 'scene-break', text: '* * *' }],
+          continues: nextFirstSid,
+        };
+        fixedConnections++;
+      } else if (hasValidContinues && !lastScene.continues?.startsWith(`ep${nextEp}_`)) {
+        // continues points to something valid but within same ep or broken cross-ep
+        // Check if the chain eventually reaches next ep
+        let reachesNext = false;
+        let cur = lastScene.continues;
+        const seen = new Set<string>();
+        while (cur && !seen.has(cur) && scenes[cur]) {
+          seen.add(cur);
+          if (cur.startsWith(`ep${nextEp}_`)) { reachesNext = true; break; }
+          cur = scenes[cur]?.continues;
+        }
+        if (!reachesNext) {
+          // Find the actual dead end of the chain and connect it
+          cur = lastScene.continues;
+          const chainSeen = new Set<string>();
+          while (cur && !chainSeen.has(cur) && scenes[cur]) {
+            chainSeen.add(cur);
+            const next = scenes[cur]?.continues;
+            if (next && scenes[next]) { cur = next; } else { break; }
+          }
+          if (cur && scenes[cur]) {
+            scenes[cur].continues = `ep${ep}_to_ep${nextEp}`;
+            scenes[`ep${ep}_to_ep${nextEp}`] = {
+              blocks: [{ type: 'scene-break', text: '* * *' }],
+              continues: nextFirstSid,
+            };
+            fixedConnections++;
+          }
+        }
+      }
+    }
+    this.logger.log(`Post-process: fixed ${fixedConnections} inter-episode connections`);
+    onProgress?.(`接続修復: ${fixedConnections}箇所`);
+
+    // --- P0: Fix broken continues/awareness references ---
+    let fixedRefs = 0;
+    for (const [sid, scene] of Object.entries(scenes)) {
+      // Fix broken continues
+      if (scene.continues && !scenes[scene.continues]) {
+        const m = sid.match(/^ep(\d+)_/);
+        if (m) {
+          const ep = parseInt(m[1]);
+          // Try to find the intended target in same or next episode
+          const targetName = scene.continues.replace(/^ep\d+_/, '');
+          const candidates = Object.keys(scenes).filter(s =>
+            (s.startsWith(`ep${ep}_`) || s.startsWith(`ep${ep + 1}_`)) &&
+            s.includes(targetName)
+          );
+          if (candidates.length > 0) {
+            scene.continues = candidates[0];
+            fixedRefs++;
+          } else {
+            // Point to next episode's first scene
+            const nextFirst = epFirstScene[ep + 1];
+            if (nextFirst) {
+              scene.continues = nextFirst;
+              fixedRefs++;
+            } else {
+              scene.continues = null;
+            }
+          }
+        }
+      }
+
+      // Fix broken awareness targets
+      if (Array.isArray(scene.awareness)) {
+        for (const aw of scene.awareness) {
+          if (aw.target && !scenes[aw.target]) {
+            const m = sid.match(/^ep(\d+)_/);
+            if (m) {
+              const ep = parseInt(m[1]);
+              const targetName = aw.target.replace(/^ep\d+_/, '');
+              const candidates = Object.keys(scenes).filter(s =>
+                (s.startsWith(`ep${ep}_`) || s.startsWith(`ep${ep + 1}_`)) &&
+                s.includes(targetName)
+              );
+              if (candidates.length > 0) {
+                aw.target = candidates[0];
+                fixedRefs++;
+              } else {
+                // Remove broken awareness
+                aw._broken = true;
+              }
+            }
+          }
+        }
+        scene.awareness = scene.awareness.filter((a: any) => !a._broken);
+      }
+    }
+    this.logger.log(`Post-process: fixed ${fixedRefs} broken references`);
+    onProgress?.(`参照修復: ${fixedRefs}箇所`);
+
+    // --- P1: Fix dead ends (no continues, no awareness, not final episode) ---
+    let fixedDeadEnds = 0;
+    const maxEp = Math.max(...Object.keys(epScenes).map(Number));
+    for (const [sid, scene] of Object.entries(scenes)) {
+      const m = sid.match(/^ep(\d+)_/);
+      if (!m) continue;
+      const ep = parseInt(m[1]);
+      if (ep >= maxEp) continue; // Last episode dead ends are OK
+
+      const hasContinues = scene.continues && scenes[scene.continues];
+      const hasAwareness = Array.isArray(scene.awareness) && scene.awareness.length > 0;
+      if (!hasContinues && !hasAwareness) {
+        // Connect to next episode via scene-break
+        const nextFirst = epFirstScene[ep + 1];
+        if (nextFirst) {
+          const bridgeId = `${sid}_bridge`;
+          scene.continues = bridgeId;
+          scenes[bridgeId] = {
+            blocks: [{ type: 'scene-break', text: '* * *' }],
+            continues: nextFirst,
+          };
+          fixedDeadEnds++;
+        }
+      }
+    }
+    this.logger.log(`Post-process: fixed ${fixedDeadEnds} dead ends`);
+    onProgress?.(`行き止まり修復: ${fixedDeadEnds}箇所`);
+
+    // --- P1: Normalize speaker names ---
+    const speakerMap: Record<string, { canonical: string; color: string }> = {};
+    for (const c of characters) {
+      const short = c.name.split('（')[0].split('(')[0].trim().split(/[\s　]/)[0];
+      let hash = 0;
+      for (let i = 0; i < c.name.length; i++) hash = c.name.charCodeAt(i) + ((hash << 5) - hash);
+      const hue = Math.abs(hash) % 360;
+      const color = `hsl(${hue}, 25%, 55%)`;
+      // Map both short and full name to canonical short name
+      speakerMap[short] = { canonical: short, color };
+      speakerMap[c.name] = { canonical: short, color };
+      // Also map without spaces
+      const noSpace = c.name.replace(/[\s　]/g, '');
+      if (noSpace !== c.name) speakerMap[noSpace] = { canonical: short, color };
+    }
+
+    let normalizedSpeakers = 0;
+    for (const scene of Object.values(scenes) as any[]) {
+      for (const block of (scene.blocks || [])) {
+        if (block.type === 'dialogue' && block.speaker) {
+          const mapped = speakerMap[block.speaker];
+          if (mapped) {
+            if (block.speaker !== mapped.canonical) {
+              block.speaker = mapped.canonical;
+              normalizedSpeakers++;
+            }
+            block.speakerColor = mapped.color;
+          }
+        }
+      }
+    }
+    this.logger.log(`Post-process: normalized ${normalizedSpeakers} speaker names`);
+    onProgress?.(`話者名統一: ${normalizedSpeakers}箇所`);
+
+    // --- P2: Fix intro awareness target if broken ---
+    if (introData) {
+      const fixAwarenessTarget = (aw: any) => {
+        if (aw?.target && !scenes[aw.target]) {
+          const first = epFirstScene[1];
+          if (first) aw.target = first;
+        }
+      };
+      if (Array.isArray(introData.awareness)) {
+        introData.awareness.forEach(fixAwarenessTarget);
+      } else if (introData.awareness) {
+        fixAwarenessTarget(introData.awareness);
+      }
+    }
   }
 }
