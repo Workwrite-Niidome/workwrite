@@ -9,6 +9,7 @@ import { ReaderStateService } from './services/reader-state.service';
 import { WorldConversationService } from './services/world-conversation.service';
 import { WorldBuilderService } from './services/world-builder.service';
 import { EventSplitterService } from './services/event-splitter.service';
+import { postProcessExperienceScript } from './services/experience-post-processor';
 import { EnterDto } from './dto/enter.dto';
 import { MoveDto } from './dto/move.dto';
 import { TalkDto } from './dto/talk.dto';
@@ -154,6 +155,40 @@ export class InteractiveNovelController {
       data: { experienceScript: body.script },
     });
     return { data: { success: true, scenes: Object.keys(body.script?.scenes || {}).length } };
+  }
+
+  @Post(':workId/reprocess-experience')
+  async reprocessExperience(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    const user = await this.sceneComposer['prisma'].user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'ADMIN') return { error: 'Admin only' };
+
+    const work = await this.sceneComposer['prisma'].work.findUnique({
+      where: { id: workId },
+      select: { experienceScript: true },
+    });
+    if (!work?.experienceScript) return { error: 'No experience script' };
+
+    const characters = await this.sceneComposer['prisma'].storyCharacter.findMany({
+      where: { workId },
+      select: { id: true, name: true, role: true, personality: true },
+    });
+
+    const script = work.experienceScript as any;
+    const episodes = await this.sceneComposer['prisma'].episode.count({
+      where: { workId, publishedAt: { not: null } },
+    });
+
+    const result = postProcessExperienceScript(script.scenes, script.intro, episodes, characters);
+
+    await this.sceneComposer['prisma'].work.update({
+      where: { id: workId },
+      data: { experienceScript: script },
+    });
+
+    return { data: { ...result, totalScenes: Object.keys(script.scenes).length } };
   }
 
   @Post(':workId/generate-experience')
