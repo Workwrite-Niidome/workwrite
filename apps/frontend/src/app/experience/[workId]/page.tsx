@@ -98,13 +98,25 @@ export default function ExperiencePage() {
     insertAfterRef.current = item.id;
   }, []);
 
+  const scrollToCenter = useCallback((id: string) => {
+    requestAnimationFrame(() => {
+      const el = document.getElementById(id);
+      if (el) {
+        const rect = el.getBoundingClientRect();
+        const targetY = window.scrollY + rect.top - window.innerHeight * 0.4;
+        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
+      }
+    });
+  }, []);
+
   const makeVisible = useCallback((id: string) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setTimeline(prev => prev.map(i => i.id === id ? { ...i, visible: true } : i));
+        scrollToCenter(id);
       });
     });
-  }, []);
+  }, [scrollToCenter]);
 
   const addBlock = useCallback(async (block: ScriptBlock, delay: number) => {
     const id = `b-${++blockIdRef.current}`;
@@ -224,11 +236,12 @@ export default function ExperiencePage() {
       }}>
         {timeline.map(item => {
           if (item.kind === 'block') {
-            return <BlockRenderer key={item.id} block={item.block} visible={item.visible} />;
+            return <BlockRenderer key={item.id} id={item.id} block={item.block} visible={item.visible} />;
           }
           return (
             <AwarenessRenderer
               key={item.id}
+              id={item.id}
               awareness={item.awareness}
               visible={item.visible}
               clicked={item.clicked}
@@ -247,7 +260,7 @@ export default function ExperiencePage() {
   );
 }
 
-function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolean }) {
+function BlockRenderer({ id, block, visible }: { id: string; block: ScriptBlock; visible: boolean }) {
   const base: React.CSSProperties = {
     opacity: visible ? 1 : 0,
     transform: visible ? 'translateY(0)' : 'translateY(16px)',
@@ -258,7 +271,7 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
 
   if (block.type === 'scene-break') {
     return (
-      <div style={{
+      <div id={id} style={{
         ...base, textAlign: 'center', color: '#3a3a40', fontSize: 14,
         letterSpacing: '0.5em', padding: '40px 0',
       }}>
@@ -268,12 +281,12 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
   }
 
   if (block.type === 'reader-action') {
-    return <div style={{ ...base, padding: '16px 0' }} />;
+    return <div id={id} style={{ ...base, padding: '16px 0' }} />;
   }
 
   if (block.type === 'dialogue') {
     return (
-      <div style={{ ...base, padding: '12px 0 12px 20px', fontSize: 15, lineHeight: 2.2, color: '#d8d5d0' }}>
+      <div id={id} style={{ ...base, padding: '12px 0 12px 20px', fontSize: 15, lineHeight: 2.2, color: '#d8d5d0' }}>
         {block.speaker && (
           <div style={{
             fontFamily: 'sans-serif', fontSize: 11, letterSpacing: '0.1em',
@@ -296,7 +309,7 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
 
   if (block.type === 'memory') {
     return (
-      <div style={{
+      <div id={id} style={{
         ...base, color: '#3a3a40', fontSize: 15, lineHeight: 2.2,
         textIndent: '1em', padding: '8px 0',
         fontStyle: 'italic', filter: 'blur(0.3px)',
@@ -308,7 +321,7 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
 
   if (block.type === 'environment') {
     return (
-      <div style={{
+      <div id={id} style={{
         ...base, color: '#a8a5a0', fontSize: 15, lineHeight: 2.2,
         textIndent: '1em', padding: '12px 0',
       }}>
@@ -318,7 +331,7 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
   }
 
   return (
-    <div style={{
+    <div id={id} style={{
       ...base, color: '#d8d5d0', fontSize: 15, lineHeight: 2.2,
       textIndent: '1em', padding: '12px 0',
     }}>
@@ -328,8 +341,9 @@ function BlockRenderer({ block, visible }: { block: ScriptBlock; visible: boolea
 }
 
 function AwarenessRenderer({
-  awareness, visible, clicked, onClick,
+  id, awareness, visible, clicked, onClick,
 }: {
+  id: string;
   awareness: ScriptAwareness;
   visible: boolean;
   clicked: boolean;
@@ -337,6 +351,7 @@ function AwarenessRenderer({
 }) {
   return (
     <div
+      id={id}
       data-awareness="true"
       onClick={onClick}
       style={{
