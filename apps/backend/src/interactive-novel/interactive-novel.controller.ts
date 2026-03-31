@@ -156,6 +156,41 @@ export class InteractiveNovelController {
     return { data: { success: true, scenes: Object.keys(body.script?.scenes || {}).length } };
   }
 
+  @Post(':workId/generate-experience')
+  async generateExperience(
+    @CurrentUser('id') userId: string,
+    @Param('workId') workId: string,
+  ) {
+    const user = await this.sceneComposer['prisma'].user.findUnique({ where: { id: userId }, select: { role: true } });
+    if (user?.role !== 'ADMIN') return { error: 'Admin only' };
+
+    // Minimal test: get first episode and try Sonnet
+    const episodes = await this.sceneComposer['prisma'].episode.findMany({
+      where: { workId, publishedAt: { not: null } },
+      orderBy: { orderIndex: 'asc' },
+      select: { id: true, orderIndex: true, content: true },
+      take: 1,
+    });
+    if (!episodes.length || !episodes[0].content) return { data: { error: 'No episodes' } };
+
+    const characters = await this.sceneComposer['prisma'].storyCharacter.findMany({
+      where: { workId },
+      select: { id: true, name: true, role: true, personality: true },
+    });
+
+    try {
+      await this.worldBuilder['generateExperienceScript'](workId, episodes, characters, {});
+      const work = await this.sceneComposer['prisma'].work.findUnique({
+        where: { id: workId },
+        select: { experienceScript: true },
+      });
+      const script = work?.experienceScript as any;
+      return { data: { scenes: script ? Object.keys(script.scenes || {}).length : 0, success: !!script } };
+    } catch (err: any) {
+      return { data: { error: err?.message } };
+    }
+  }
+
   @Post(':workId/build')
   async buildWorld(
     @CurrentUser('id') userId: string,
