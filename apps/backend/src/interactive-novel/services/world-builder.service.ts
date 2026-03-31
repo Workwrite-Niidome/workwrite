@@ -176,8 +176,8 @@ export class WorldBuilderService {
       // Step 7: Split episodes into StoryEvents
       const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
 
-      // Step 8: Generate experience script with Sonnet
-      const scriptScenes = await this.generateExperienceScript(workId, episodes, characters, workContext);
+      // Step 8: Experience script is generated separately via POST /generate-experience
+      // (too slow for buildWorld — Sonnet batches take 5-10 min)
 
       // Mark as ready
       await this.prisma.work.update({
@@ -191,7 +191,7 @@ export class WorldBuilderService {
         renderings: renderCount,
         schedules: scheduleCount,
         events: eventCount,
-        experienceScenes: scriptScenes,
+        experienceScenes: 0,
       };
       this.logger.log(`World built: ${JSON.stringify(result)}`);
       return result;

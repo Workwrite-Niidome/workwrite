@@ -160,35 +160,53 @@ export class InteractiveNovelController {
   async generateExperience(
     @CurrentUser('id') userId: string,
     @Param('workId') workId: string,
+    @Res() res: Response,
   ) {
     const user = await this.sceneComposer['prisma'].user.findUnique({ where: { id: userId }, select: { role: true } });
-    if (user?.role !== 'ADMIN') return { error: 'Admin only' };
+    if (user?.role !== 'ADMIN') {
+      res.json({ error: 'Admin only' });
+      return;
+    }
 
-    // Minimal test: get first episode and try Sonnet
+    // SSE for progress updates during long generation
+    res.setHeader('Content-Type', 'text/event-stream');
+    res.setHeader('Cache-Control', 'no-cache');
+    res.setHeader('Connection', 'keep-alive');
+    res.setHeader('X-Accel-Buffering', 'no');
+    res.flushHeaders();
+
+    const send = (msg: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ message: msg })}\n\n`); };
+
     const episodes = await this.sceneComposer['prisma'].episode.findMany({
       where: { workId, publishedAt: { not: null } },
       orderBy: { orderIndex: 'asc' },
       select: { id: true, orderIndex: true, content: true },
-      take: 1,
     });
-    if (!episodes.length || !episodes[0].content) return { data: { error: 'No episodes' } };
 
     const characters = await this.sceneComposer['prisma'].storyCharacter.findMany({
       where: { workId },
       select: { id: true, name: true, role: true, personality: true },
     });
 
+    const work = await this.sceneComposer['prisma'].work.findUnique({
+      where: { id: workId },
+      select: { genre: true, settingEra: true },
+    });
+
+    send(`Starting: ${episodes.length} episodes, ${characters.length} characters`);
+
     try {
-      await this.worldBuilder['generateExperienceScript'](workId, episodes, characters, {});
-      const work = await this.sceneComposer['prisma'].work.findUnique({
-        where: { id: workId },
-        select: { experienceScript: true },
-      });
-      const script = work?.experienceScript as any;
-      return { data: { scenes: script ? Object.keys(script.scenes || {}).length : 0, success: !!script } };
+      const scenes = await this.worldBuilder['generateExperienceScript'](
+        workId, episodes, characters,
+        { genre: work?.genre || undefined, settingEra: work?.settingEra || undefined },
+      );
+      send(`Complete: ${scenes} scenes generated`);
     } catch (err: any) {
-      return { data: { error: err?.message } };
+      send(`Error: ${err?.message}`);
     }
+
+    res.write('data: [DONE]\n\n');
+    res.end();
   }
 
   @Post(':workId/build')
