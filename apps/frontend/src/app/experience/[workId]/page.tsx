@@ -98,25 +98,13 @@ export default function ExperiencePage() {
     insertAfterRef.current = item.id;
   }, []);
 
-  const scrollToCenter = useCallback((id: string) => {
-    requestAnimationFrame(() => {
-      const el = document.getElementById(id);
-      if (el) {
-        const rect = el.getBoundingClientRect();
-        const targetY = window.scrollY + rect.top - window.innerHeight * 0.4;
-        window.scrollTo({ top: Math.max(0, targetY), behavior: 'smooth' });
-      }
-    });
-  }, []);
-
   const makeVisible = useCallback((id: string) => {
     requestAnimationFrame(() => {
       requestAnimationFrame(() => {
         setTimeline(prev => prev.map(i => i.id === id ? { ...i, visible: true } : i));
-        scrollToCenter(id);
       });
     });
-  }, [scrollToCenter]);
+  }, []);
 
   const addBlock = useCallback(async (block: ScriptBlock, delay: number) => {
     const id = `b-${++blockIdRef.current}`;
