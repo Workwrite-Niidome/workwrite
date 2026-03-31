@@ -177,7 +177,7 @@ export class WorldBuilderService {
       const eventCount = await this.eventSplitter.splitAllEpisodes(workId);
 
       // Step 8: Generate experience script with Sonnet
-      await this.generateExperienceScript(workId, episodes, characters, workContext);
+      const scriptScenes = await this.generateExperienceScript(workId, episodes, characters, workContext);
 
       // Mark as ready
       await this.prisma.work.update({
@@ -191,6 +191,7 @@ export class WorldBuilderService {
         renderings: renderCount,
         schedules: scheduleCount,
         events: eventCount,
+        experienceScenes: scriptScenes,
       };
       this.logger.log(`World built: ${JSON.stringify(result)}`);
       return result;
@@ -735,11 +736,11 @@ export class WorldBuilderService {
     episodes: { id: string; orderIndex: number; content: string | null }[],
     characters: { id: string; name: string; role: string | null; personality: string | null }[],
     workContext?: { genre?: string; settingEra?: string },
-  ): Promise<void> {
+  ): Promise<number> {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) {
       this.logger.warn('No API key for experience script generation');
-      return;
+      return 0;
     }
 
     const sourceEpisodes = episodes.filter(e => e.content && e.content.length > 100);
@@ -834,7 +835,7 @@ export class WorldBuilderService {
             'anthropic-version': ANTHROPIC_VERSION,
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-20250514',
+            model: 'claude-sonnet-4-6',
             max_tokens: 8000,
             system: systemPrompt,
             messages: [{ role: 'user', content: batchPrompt }],
@@ -845,7 +846,8 @@ export class WorldBuilderService {
         clearTimeout(timeout);
 
         if (!response.ok) {
-          this.logger.warn(`Experience script batch ${batchStart} failed: HTTP ${response.status}`);
+          const errBody = await response.text().catch(() => '');
+          this.logger.warn(`Experience script batch ${batchStart} failed: HTTP ${response.status} ${errBody.slice(0, 200)}`);
           continue;
         }
 
@@ -886,7 +888,7 @@ export class WorldBuilderService {
     // Assemble final script
     if (!introData && Object.keys(allScenes).length === 0) {
       this.logger.warn('Experience script: no batches produced output');
-      return;
+      return 0;
     }
 
     // If no intro was generated, create a minimal one from first scene
@@ -905,6 +907,8 @@ export class WorldBuilderService {
       data: { experienceScript: finalScript },
     });
 
-    this.logger.log(`Experience script complete: ${Object.keys(allScenes).length} scenes total`);
+    const totalScenes = Object.keys(allScenes).length;
+    this.logger.log(`Experience script complete: ${totalScenes} scenes total`);
+    return totalScenes;
   }
 }
