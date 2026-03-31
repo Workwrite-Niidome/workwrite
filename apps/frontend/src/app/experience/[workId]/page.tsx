@@ -166,7 +166,13 @@ export default function ExperiencePage() {
       for (let i = 0; i < script.intro.blocks.length; i++) {
         await addBlock(script.intro.blocks[i], INTRO_DELAYS[i] || 2000);
       }
-      await addAwareness(script.intro.awareness, 3500);
+      // Handle both object and array forms of intro awareness
+      const introAwareness = Array.isArray(script.intro.awareness)
+        ? script.intro.awareness
+        : [script.intro.awareness];
+      for (let i = 0; i < introAwareness.length; i++) {
+        await addAwareness(introAwareness[i], i === 0 ? 3500 : 1000);
+      }
     };
     run();
   }, [script, addBlock, addAwareness]);

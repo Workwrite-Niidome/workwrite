@@ -22,7 +22,7 @@ export interface ScriptScene {
 export interface ExperienceScript {
   intro: {
     blocks: ScriptBlock[];
-    awareness: ScriptAwareness;
+    awareness: ScriptAwareness | ScriptAwareness[];
   };
   scenes: Record<string, ScriptScene>;
 }
