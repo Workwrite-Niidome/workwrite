@@ -731,11 +731,12 @@ export class WorldBuilderService {
    * Layer 1: Perspective shifts / side stories
    * Core principle: "結果は変わらないが過程が変わる"
    */
-  private async generateExperienceScript(
+  async generateExperienceScript(
     workId: string,
     episodes: { id: string; orderIndex: number; content: string | null }[],
     characters: { id: string; name: string; role: string | null; personality: string | null }[],
     workContext?: { genre?: string; settingEra?: string },
+    onProgress?: (msg: string) => void,
   ): Promise<number> {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) {
@@ -877,10 +878,13 @@ export class WorldBuilderService {
           }
         }
 
-        this.logger.log(`Experience script batch ${batchStart}: ${Object.keys(batchScript.scenes || {}).length} scenes`);
+        const batchSceneCount = Object.keys(batchScript.scenes || {}).length;
+        this.logger.log(`Experience script batch ${batchStart}: ${batchSceneCount} scenes`);
+        onProgress?.(`Batch ${Math.floor(batchStart / batchSize) + 1}: ${batchSceneCount} scenes (total: ${Object.keys(allScenes).length})`);
 
       } catch (err: any) {
         this.logger.warn(`Experience script batch ${batchStart} failed: ${err?.message}`);
+        onProgress?.(`Batch ${Math.floor(batchStart / batchSize) + 1} failed: ${err?.message}`);
         continue;
       }
     }

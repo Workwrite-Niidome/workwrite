@@ -176,6 +176,7 @@ export class InteractiveNovelController {
     res.flushHeaders();
 
     const send = (msg: string) => { if (!res.destroyed) res.write(`data: ${JSON.stringify({ message: msg })}\n\n`); };
+    const keepAlive = setInterval(() => { if (!res.destroyed) res.write(`: ping\n\n`); }, 15_000);
 
     const episodes = await this.sceneComposer['prisma'].episode.findMany({
       where: { workId, publishedAt: { not: null } },
@@ -196,15 +197,17 @@ export class InteractiveNovelController {
     send(`Starting: ${episodes.length} episodes, ${characters.length} characters`);
 
     try {
-      const scenes = await this.worldBuilder['generateExperienceScript'](
+      const scenes = await this.worldBuilder.generateExperienceScript(
         workId, episodes, characters,
         { genre: work?.genre || undefined, settingEra: work?.settingEra || undefined },
+        send,
       );
       send(`Complete: ${scenes} scenes generated`);
     } catch (err: any) {
       send(`Error: ${err?.message}`);
     }
 
+    clearInterval(keepAlive);
     res.write('data: [DONE]\n\n');
     res.end();
   }
