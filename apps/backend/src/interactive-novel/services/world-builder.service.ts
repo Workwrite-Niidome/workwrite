@@ -861,15 +861,35 @@ export class WorldBuilderService {
       '設計図に従い、小説本文から正確な引用を抜き出してJSONを組み立ててください。',
       '',
       '## ブロックタイプ',
-      '- original: 本文からそのまま引用。一字一句変えない。最も重要',
-      '- dialogue: 「」の台詞。speaker（呼び名）とspeakerColor を付与',
-      '- environment: 五感描写（1-2文）。これだけ創作可',
-      '- memory: 前の話のテキストの残響（italic表示）',
-      '- scene-break: "* * *"',
+      '- original: {type:"original", text:"..."} 本文からそのまま引用。一字一句変えない。最も重要。1ブロック=1-3文',
+      '- dialogue: {type:"dialogue", text:"「...」", speaker:"名前", speakerColor:"hsl(H,25%,55%)"} セリフ',
+      '- environment: {type:"environment", text:"..."} 五感描写（1-2文）。これだけ創作可',
+      '- memory: {type:"memory", text:"..."} 前の話のテキストの残響（italic表示）',
+      '- scene-break: {type:"scene-break", text:"* * *"}',
+      '',
+      '## シーンID命名規則（厳守）',
+      'IDは必ず ep{話数}_{場面の英語名} 形式にすること。',
+      '例: ep1_coffee_shop, ep1_meeting_aoi, ep3_night_call, ep15_system_error',
+      '絶対に scene1, scene_1, scene_a のような汎用名を使わないこと。',
+      '',
+      '## シーン数の目安',
+      '1話あたり3-6シーンが適切。場面転換ごとに新シーンを作る。',
+      '1シーン内にoriginalブロックは3-8個（十分な引用量を確保）。',
+      '',
+      '## awareness（気づき）',
+      'シーン内で読者が選択できるポイント。各シーンに0-2個。',
+      '形式: "awareness":[{"text":"詩的な短文","type":"感情経路の種類","target":"遷移先シーンID"}]',
+      'type: "emotional"(感情を深める) / "perspective"(別キャラの視点) / "memory"(過去との接続)',
+      'awareness.target は次のシーンIDか、perspectiveの場合は ep{N}_perspective_{キャラ名} 形式のシーンID',
+      '',
+      '## perspective（視点分岐シーン）',
+      '設計図にperspectiveが指定されている場合、通常シーンとは別に視点分岐シーンも生成すること。',
+      'ID例: ep3_perspective_aoi（蒼の視点で同じ瞬間を見る）',
+      '視点分岐シーンのblocksは、そのキャラの内面描写を中心に構成（原文引用+environment）。',
       '',
       '## 出力: JSONのみ（他のテキスト不要）',
-      '{"scenes":{"scene_id":{"header":"場所|時間|視点","blocks":[...],"continues":"next_id"}}}',
-      'introが必要な場合: {"intro":{"blocks":[...],"awareness":{"text":"...","target":"id"}},"scenes":{...}}',
+      '{"scenes":{"ep1_opening":{"header":"場所|時間|視点","blocks":[...],"awareness":[...],"continues":"ep1_next_scene"}}}',
+      'introが必要な場合: {"intro":{"blocks":[...],"awareness":{"text":"...","target":"ep1_first_scene"}},"scenes":{...}}',
     ].join('\n');
 
     const allScenes: Record<string, any> = {};
@@ -885,20 +905,34 @@ export class WorldBuilderService {
       const isFirst = i === 0;
       const isLast = i === sourceEpisodes.length - 1;
 
+      const blueprintStr = typeof epBlueprint === 'string' ? epBlueprint : JSON.stringify(epBlueprint, null, 2);
+
       const stage2Prompt = [
-        `第${epNum}話の体験スクリプトを生成してください。`,
+        `第${epNum}話（全${sourceEpisodes.length}話中）の体験スクリプトを生成してください。`,
         '',
-        isFirst ? 'これは最初の話です。introセクション（冒頭4-5行 + awareness1つ）も生成してください。' : '',
+        isFirst ? 'これは最初の話です。introセクション（冒頭の情景描写4-5行 + awareness1つで最初のシーンへ導く）も生成してください。' : '',
         isLast ? 'これは最後の話です。体験の締めくくり。最後のシーンのawarenessは空配列に。' : '',
         '',
-        `設計図:`,
-        typeof epBlueprint === 'string' ? epBlueprint : JSON.stringify(epBlueprint, null, 0),
+        `## この話の設計図`,
+        blueprintStr,
+        '',
+        `## シーンID規則（厳守）`,
+        `全てのシーンIDは ep${epNum}_ で始めること。例: ep${epNum}_opening, ep${epNum}_dialogue_park`,
+        `視点分岐シーンは ep${epNum}_perspective_{キャラ名} 形式。`,
+        `continues先のシーンIDも ep${epNum}_ か ep${epNum + 1}_ で始めること。`,
+        '',
+        `## 品質チェックリスト`,
+        `- シーン数: ${typeof epBlueprint === 'object' && epBlueprint?.scenes ? epBlueprint.scenes : '3-6'}個`,
+        `- 各シーンにoriginalブロック3個以上（本文の重要な文をそのまま引用）`,
+        `- dialogueブロックにはspeakerとspeakerColorを必ず付与`,
+        typeof epBlueprint === 'object' && epBlueprint?.perspective ? `- 視点分岐シーン（${epBlueprint.perspective}）を必ず生成` : '',
+        typeof epBlueprint === 'object' && epBlueprint?.awareness ? `- awarenessテキスト: 「${epBlueprint.awareness}」を活用` : '',
         '',
         'キャラクター:',
         charList,
         '',
         `=== 第${epNum}話 本文 ===`,
-        ep.content!.slice(0, 7000),
+        ep.content!.slice(0, 8000),
       ].filter(Boolean).join('\n');
 
       try {
@@ -914,7 +948,7 @@ export class WorldBuilderService {
           },
           body: JSON.stringify({
             model: HAIKU,
-            max_tokens: 3000,
+            max_tokens: 6000,
             system: stage2System,
             messages: [{ role: 'user', content: stage2Prompt }],
           }),
@@ -962,15 +996,57 @@ export class WorldBuilderService {
           }
         }
 
-        if (isFirst && epScript.intro) introData = epScript.intro;
+        // Post-process: ensure all scene IDs are prefixed with ep{N}_
+        if (epScript.scenes) {
+          const renamedScenes: Record<string, any> = {};
+          const renameMap: Record<string, string> = {};
+
+          for (const [sid, scene] of Object.entries(epScript.scenes)) {
+            let newId = sid;
+            if (!sid.startsWith(`ep${epNum}_`)) {
+              // Strip generic prefixes and add proper prefix
+              newId = `ep${epNum}_${sid.replace(/^(scene_?|ep\d+_?)/, '')}`;
+            }
+            renameMap[sid] = newId;
+            renamedScenes[newId] = scene;
+          }
+
+          // Fix continues/target references within scenes
+          for (const scene of Object.values(renamedScenes) as any[]) {
+            if (scene.continues && renameMap[scene.continues]) {
+              scene.continues = renameMap[scene.continues];
+            }
+            if (Array.isArray(scene.awareness)) {
+              for (const aw of scene.awareness) {
+                if (aw.target && renameMap[aw.target]) {
+                  aw.target = renameMap[aw.target];
+                }
+              }
+            }
+          }
+
+          epScript.scenes = renamedScenes;
+        }
+
+        if (isFirst && epScript.intro) {
+          introData = epScript.intro;
+          // Fix intro awareness target
+          if (introData.awareness?.target) {
+            const firstSceneId = Object.keys(epScript.scenes || {})[0];
+            if (firstSceneId && !Object.keys(epScript.scenes || {}).includes(introData.awareness.target)) {
+              introData.awareness.target = firstSceneId;
+            }
+          }
+        }
         if (epScript.scenes) {
           for (const [sid, scene] of Object.entries(epScript.scenes)) {
             allScenes[sid] = scene;
           }
         }
 
-        onProgress?.(`第${epNum}話: ${Object.keys(epScript.scenes || {}).length}シーン`);
-        this.logger.log(`Stage 2 ep${epNum}: ${Object.keys(epScript.scenes || {}).length} scenes`);
+        const sceneCount = Object.keys(epScript.scenes || {}).length;
+        onProgress?.(`第${epNum}話: ${sceneCount}シーン`);
+        this.logger.log(`Stage 2 ep${epNum}: ${sceneCount} scenes`);
 
       } catch (err: any) {
         this.logger.warn(`Stage 2 ep${epNum} failed: ${err?.message}`);
