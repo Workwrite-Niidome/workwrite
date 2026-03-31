@@ -724,7 +724,10 @@ export class WorldBuilderService {
   }
 
   /**
-   * Generate an experience script using Sonnet.
+   * Generate experience script for the entire work using Sonnet.
+   * Processes episodes in batches, then merges into a single script.
+   * Layer 0: Original text experience
+   * Layer 1: Perspective shifts / side stories
    * Core principle: "結果は変わらないが過程が変わる"
    */
   private async generateExperienceScript(
@@ -739,12 +742,8 @@ export class WorldBuilderService {
       return;
     }
 
-    const sourceEpisodes = episodes.filter(e => e.content).slice(0, 3);
+    const sourceEpisodes = episodes.filter(e => e.content && e.content.length > 100);
     if (sourceEpisodes.length === 0) return;
-
-    const episodeTexts = sourceEpisodes
-      .map((e, i) => `=== 第${i + 1}話 ===\n${e.content!.slice(0, 8000)}`)
-      .join('\n\n');
 
     const charList = characters.map(c => {
       const short = c.name.split('（')[0].split('(')[0].trim().split(/[\s　]/)[0];
@@ -763,10 +762,17 @@ export class WorldBuilderService {
       '- 分岐は結末を変えない。読者がどの感情を経由して辿り着くかが変わる',
       '- 全ルートが同じ結末に合流する',
       '',
+      '## レイヤー構造',
+      'Layer 0（本編）: 主人公視点で物語が進む。原文のみ',
+      'Layer 1（視点分岐）: 要所で他キャラの視点に寄り道できる',
+      '- 視点分岐は "perspective": "キャラ名" を持つシーン',
+      '- 寄り道後は本編に "continues" で戻る',
+      '- 同じ瞬間を別の目で見ることで、物語の意味が変わる',
+      '',
       '## ブロックタイプ',
-      '- original: 小説本文からそのまま引用。改変しない',
+      '- original: 小説本文からそのまま引用。一字一句変えない',
       '- dialogue: 「」の台詞。speaker（呼び名）とspeakerColor（hex）を付与',
-      '- environment: AIが書く五感描写（1-2文）。これだけが創作',
+      '- environment: AIが書く五感描写（1-2文）。これだけが創作テキスト',
       '- memory: 以前見たテキストの残響（イタリック表示）',
       '- scene-break: "* * *"',
       '',
@@ -776,67 +782,129 @@ export class WorldBuilderService {
       '悪: 「榊と話す」「移動する」',
       '',
       '## 構造ルール',
-      '- 選択は4-6箇所のみ（物語の転換点だけ）',
+      '- 選択は各バッチで3-5箇所のみ（物語の転換点だけ）',
       '- それ以外は "continues": "next_scene_id" で自動遷移',
-      '- 分岐先で結末が異なる場合、各結末を別シーンにする',
+      '- 各エピソードの重要な瞬間（2-4個）を選び、それ以外は省略してよい',
+      '- シーンIDはエピソード番号をプレフィックスに: ep1_, ep2_ など',
+      '- 視点分岐シーンには "perspective": "キャラ呼び名" を付与',
       '',
       '## 出力（JSONのみ、他のテキスト不要）',
-      '{"intro":{"blocks":[{"type":"original","text":"..."}],"awareness":{"text":"...","target":"id"}},"scenes":{"id":{"header":"場所|時間|視点","blocks":[...],"awareness":[{"text":"...","target":"id"}]},"id2":{"blocks":[...],"continues":"id3"}}}',
+      '{"scenes":{"ep1_scene1":{"header":"場所|時間|視点","blocks":[{"type":"original","text":"原文"}],"continues":"ep1_scene2"},"ep1_perspective_sakaki":{"header":"栞堂|夕方|榊","perspective":"榊","blocks":[...],"continues":"ep1_back"}}}',
     ].join('\n');
 
-    const userPrompt = [
-      workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
-      workContext?.settingEra ? `世界観: ${workContext.settingEra}` : '',
-      '',
-      'キャラクター:',
-      charList || '（キャラクター情報なし）',
-      '',
-      episodeTexts,
-    ].filter(Boolean).join('\n');
+    // Process in batches of 3-4 episodes
+    const batchSize = 3;
+    const allScenes: Record<string, any> = {};
+    let introData: any = null;
+    let lastSceneId: string | null = null;
 
-    try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': ANTHROPIC_VERSION,
-        },
-        body: JSON.stringify({
-          model: 'claude-sonnet-4-20250514',
-          max_tokens: 8000,
-          system: systemPrompt,
-          messages: [{ role: 'user', content: userPrompt }],
-        }),
-      });
+    for (let batchStart = 0; batchStart < sourceEpisodes.length; batchStart += batchSize) {
+      const batch = sourceEpisodes.slice(batchStart, batchStart + batchSize);
+      const isFirstBatch = batchStart === 0;
+      const isLastBatch = batchStart + batchSize >= sourceEpisodes.length;
 
-      if (!response.ok) {
-        this.logger.warn(`Experience script failed: HTTP ${response.status}`);
-        return;
+      const episodeTexts = batch
+        .map(e => `=== 第${e.orderIndex + 1}話 ===\n${e.content!.slice(0, 6000)}`)
+        .join('\n\n');
+
+      const batchPrompt = [
+        workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
+        workContext?.settingEra ? `世界観: ${workContext.settingEra}` : '',
+        '',
+        'キャラクター:',
+        charList || '（キャラクター情報なし）',
+        '',
+        isFirstBatch
+          ? '最初のバッチです。introセクション（冒頭4-5行+awareness1つ）も生成してください。'
+          : `続きのバッチです。前のバッチの最後のシーンID: "${lastSceneId}"。最初のシーンをこのIDから "continues" で繋げてください。`,
+        isLastBatch ? 'これが最後のバッチです。体験の締めくくりを設計してください。最後のシーンのawarenessは空配列にしてください。' : '',
+        '',
+        episodeTexts,
+      ].filter(Boolean).join('\n');
+
+      try {
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 120_000);
+
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': ANTHROPIC_VERSION,
+          },
+          body: JSON.stringify({
+            model: 'claude-sonnet-4-20250514',
+            max_tokens: 8000,
+            system: systemPrompt,
+            messages: [{ role: 'user', content: batchPrompt }],
+          }),
+          signal: controller.signal,
+        });
+
+        clearTimeout(timeout);
+
+        if (!response.ok) {
+          this.logger.warn(`Experience script batch ${batchStart} failed: HTTP ${response.status}`);
+          continue;
+        }
+
+        const data = await response.json();
+        const text = data?.content?.[0]?.text || '';
+        const jsonMatch = text.match(/\{[\s\S]*\}/);
+        if (!jsonMatch) {
+          this.logger.warn(`Experience script batch ${batchStart}: no JSON in response`);
+          continue;
+        }
+
+        const batchScript = JSON.parse(jsonMatch[0]);
+
+        // Extract intro from first batch
+        if (isFirstBatch && batchScript.intro) {
+          introData = batchScript.intro;
+        }
+
+        // Merge scenes
+        if (batchScript.scenes) {
+          const sceneIds = Object.keys(batchScript.scenes);
+          for (const sid of sceneIds) {
+            allScenes[sid] = batchScript.scenes[sid];
+          }
+          if (sceneIds.length > 0) {
+            lastSceneId = sceneIds[sceneIds.length - 1];
+          }
+        }
+
+        this.logger.log(`Experience script batch ${batchStart}: ${Object.keys(batchScript.scenes || {}).length} scenes`);
+
+      } catch (err: any) {
+        this.logger.warn(`Experience script batch ${batchStart} failed: ${err?.message}`);
+        continue;
       }
-
-      const data = await response.json();
-      const text = data?.content?.[0]?.text || '';
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (!jsonMatch) {
-        this.logger.warn('Experience script: no JSON in response');
-        return;
-      }
-
-      const script = JSON.parse(jsonMatch[0]);
-      if (!script.intro || !script.scenes) {
-        this.logger.warn('Experience script: invalid structure');
-        return;
-      }
-
-      await this.prisma.work.update({
-        where: { id: workId },
-        data: { experienceScript: script },
-      });
-
-      this.logger.log(`Experience script: ${Object.keys(script.scenes).length} scenes`);
-    } catch (err: any) {
-      this.logger.warn(`Experience script failed: ${err?.message}`);
     }
+
+    // Assemble final script
+    if (!introData && Object.keys(allScenes).length === 0) {
+      this.logger.warn('Experience script: no batches produced output');
+      return;
+    }
+
+    // If no intro was generated, create a minimal one from first scene
+    if (!introData) {
+      const firstSceneId = Object.keys(allScenes)[0];
+      introData = {
+        blocks: [{ type: 'original', text: '......' }],
+        awareness: { text: '物語の中へ。', target: firstSceneId },
+      };
+    }
+
+    const finalScript = { intro: introData, scenes: allScenes };
+
+    await this.prisma.work.update({
+      where: { id: workId },
+      data: { experienceScript: finalScript },
+    });
+
+    this.logger.log(`Experience script complete: ${Object.keys(allScenes).length} scenes total`);
   }
 }
