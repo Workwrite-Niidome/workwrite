@@ -744,7 +744,7 @@ export class WorldBuilderService {
     }
 
     const sourceEpisodes = episodes.filter(e => e.content && e.content.length > 100);
-    if (sourceEpisodes.length === 0) return;
+    if (sourceEpisodes.length === 0) return 0;
 
     const charList = characters.map(c => {
       const short = c.name.split('（')[0].split('(')[0].trim().split(/[\s　]/)[0];
