@@ -725,10 +725,9 @@ export class WorldBuilderService {
   }
 
   /**
-   * Generate experience script for the entire work using Sonnet.
-   * Processes episodes in batches, then merges into a single script.
-   * Layer 0: Original text experience
-   * Layer 1: Perspective shifts / side stories
+   * Two-stage experience script generation.
+   * Stage 1 (Sonnet): Read all episode summaries → design blueprint (scene structure, branches, perspective shifts)
+   * Stage 2 (Haiku): For each episode, extract verbatim quotes and format JSON per blueprint
    * Core principle: "結果は変わらないが過程が変わる"
    */
   async generateExperienceScript(
@@ -752,81 +751,150 @@ export class WorldBuilderService {
       let hash = 0;
       for (let i = 0; i < c.name.length; i++) hash = c.name.charCodeAt(i) + ((hash << 5) - hash);
       const hue = Math.abs(hash) % 360;
-      return `- ${c.name}: ${c.role || ''}。呼び名「${short}」。色: hsl(${hue}, 25%, 55%)`;
+      return `${short}(${c.name}): ${c.role || ''}。色: hsl(${hue}, 25%, 55%)`;
     }).join('\n');
 
-    const systemPrompt = [
+    // ===== STAGE 1: Sonnet designs the blueprint =====
+    onProgress?.('Stage 1: Sonnetが全体設計中...');
+
+    const episodeSummaries = sourceEpisodes.map(e => {
+      const content = e.content!;
+      const first = content.slice(0, 150).replace(/\n/g, ' ').trim();
+      const last = content.slice(-100).replace(/\n/g, ' ').trim();
+      const dlgCount = (content.match(/「[^」]+」/g) || []).length;
+      return `第${e.orderIndex + 1}話 (${content.length}字, セリフ${dlgCount}): ${first}... / ...${last}`;
+    }).join('\n');
+
+    const blueprintPrompt = [
       'あなたは小説のインタラクティブ体験を設計する編集者です。',
-      '小説の本文を受け取り、読者が「物語の世界に入る」体験スクリプトをJSON形式で出力してください。',
+      '',
+      '以下の小説の全エピソード要約を読み、体験スクリプトの「設計図」をJSON形式で出力してください。',
       '',
       '## 核心原則',
       '「結果は変わらないが、過程が変わる」',
-      '- 分岐は結末を変えない。読者がどの感情を経由して辿り着くかが変わる',
-      '- 全ルートが同じ結末に合流する',
+      '分岐は結末を変えない。読者がどの感情経路を通るかが変わる。',
+      '同じ瞬間を別キャラの目で見ると、物語の意味が変わる（視点分岐）。',
       '',
-      '## レイヤー構造',
-      'Layer 0（本編）: 主人公視点で物語が進む。原文のみ',
-      'Layer 1（視点分岐）: 要所で他キャラの視点に寄り道できる',
-      '- 視点分岐は "perspective": "キャラ名" を持つシーン',
-      '- 寄り道後は本編に "continues" で戻る',
-      '- 同じ瞬間を別の目で見ることで、物語の意味が変わる',
+      '## 設計図の内容（各エピソードについて）',
+      '- scene_ids: このエピソードのシーンID一覧（ep1_morning, ep1_shiori等）',
+      '- key_moments: 引用すべき重要場面の説明（「冒頭のコーヒー描写」等）',
+      '- awareness_points: 選択肢を置く箇所とテキスト（詩的な気づき）',
+      '- perspective_shifts: 視点分岐する箇所（どのキャラの目で、何を見るか）',
+      '- connections: 前後エピソードとの接続（continuesで繋ぐシーンID）',
+      '- memory_callbacks: 前の話のテキストを記憶ブロックとして呼び戻す箇所',
+      '',
+      '## ルール',
+      '- 全体で選択は15-25箇所（多すぎない）',
+      '- 視点分岐は全体で5-10箇所',
+      '- 最初と最後のエピソードは最も丁寧に（intro + ending）',
+      '- introは冒頭4-5行の原文 + 気づき1つ',
+      '',
+      'キャラクター:',
+      charList,
+      '',
+      workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
+      '',
+      '=== エピソード要約 ===',
+      episodeSummaries,
+      '',
+      'JSON形式で設計図を出力してください。',
+    ].filter(Boolean).join('\n');
+
+    let blueprint: any = null;
+    try {
+      const controller = new AbortController();
+      const timeout = setTimeout(() => controller.abort(), 180_000);
+
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': ANTHROPIC_VERSION,
+        },
+        body: JSON.stringify({
+          model: 'claude-sonnet-4-6',
+          max_tokens: 4000,
+          messages: [{ role: 'user', content: blueprintPrompt }],
+        }),
+        signal: controller.signal,
+      });
+      clearTimeout(timeout);
+
+      if (!response.ok) {
+        const err = await response.text().catch(() => '');
+        this.logger.warn(`Stage 1 failed: HTTP ${response.status} ${err.slice(0, 200)}`);
+        return 0;
+      }
+
+      const data = await response.json();
+      const text = data?.content?.[0]?.text || '';
+      const jsonMatch = text.match(/\{[\s\S]*\}/);
+      if (jsonMatch) {
+        blueprint = JSON.parse(jsonMatch[0]);
+        this.logger.log(`Stage 1 complete: blueprint generated`);
+        onProgress?.(`Stage 1 完了: 設計図生成`);
+      }
+    } catch (err: any) {
+      this.logger.warn(`Stage 1 failed: ${err?.message}`);
+      onProgress?.(`Stage 1 失敗: ${err?.message}`);
+      return 0;
+    }
+
+    if (!blueprint) return 0;
+
+    // ===== STAGE 2: Haiku extracts quotes and formats JSON per episode =====
+    onProgress?.('Stage 2: Haikuが各話のスクリプトを生成中...');
+
+    const stage2System = [
+      'あなたは小説の原文から体験スクリプトのJSONを生成するアシスタントです。',
+      '',
+      '設計図に従い、小説本文から正確な引用を抜き出してJSONを組み立ててください。',
       '',
       '## ブロックタイプ',
-      '- original: 小説本文からそのまま引用。一字一句変えない',
-      '- dialogue: 「」の台詞。speaker（呼び名）とspeakerColor（hex）を付与',
-      '- environment: AIが書く五感描写（1-2文）。これだけが創作テキスト',
-      '- memory: 以前見たテキストの残響（イタリック表示）',
+      '- original: 本文からそのまま引用。一字一句変えない。最も重要',
+      '- dialogue: 「」の台詞。speaker（呼び名）とspeakerColor を付与',
+      '- environment: 五感描写（1-2文）。これだけ創作可',
+      '- memory: 前の話のテキストの残響（italic表示）',
       '- scene-break: "* * *"',
       '',
-      '## 気づき（awareness）',
-      '読者の内面に浮かぶ詩的な感覚。命令形ではない',
-      '良: 「榊さんがこちらを見ている。」「コーヒーの匂いが残っている。」',
-      '悪: 「榊と話す」「移動する」',
-      '',
-      '## 構造ルール',
-      '- 選択は各バッチで3-5箇所のみ（物語の転換点だけ）',
-      '- それ以外は "continues": "next_scene_id" で自動遷移',
-      '- 各エピソードの重要な瞬間（2-4個）を選び、それ以外は省略してよい',
-      '- シーンIDはエピソード番号をプレフィックスに: ep1_, ep2_ など',
-      '- 視点分岐シーンには "perspective": "キャラ呼び名" を付与',
-      '',
-      '## 出力（JSONのみ、他のテキスト不要）',
-      '{"scenes":{"ep1_scene1":{"header":"場所|時間|視点","blocks":[{"type":"original","text":"原文"}],"continues":"ep1_scene2"},"ep1_perspective_sakaki":{"header":"栞堂|夕方|榊","perspective":"榊","blocks":[...],"continues":"ep1_back"}}}',
+      '## 出力: JSONのみ（他のテキスト不要）',
+      '{"scenes":{"scene_id":{"header":"場所|時間|視点","blocks":[...],"continues":"next_id"}}}',
+      'introが必要な場合: {"intro":{"blocks":[...],"awareness":{"text":"...","target":"id"}},"scenes":{...}}',
     ].join('\n');
 
-    // Process in batches of 3-4 episodes
-    const batchSize = 3;
     const allScenes: Record<string, any> = {};
     let introData: any = null;
-    let lastSceneId: string | null = null;
 
-    for (let batchStart = 0; batchStart < sourceEpisodes.length; batchStart += batchSize) {
-      const batch = sourceEpisodes.slice(batchStart, batchStart + batchSize);
-      const isFirstBatch = batchStart === 0;
-      const isLastBatch = batchStart + batchSize >= sourceEpisodes.length;
+    for (let i = 0; i < sourceEpisodes.length; i++) {
+      const ep = sourceEpisodes[i];
+      const epNum = ep.orderIndex + 1;
+      const epBlueprint = blueprint[`ep${epNum}`] || blueprint[`episode_${epNum}`]
+        || blueprint.episodes?.[i] || blueprint.episodes?.[`ep${epNum}`]
+        || JSON.stringify(blueprint).slice(0, 500); // fallback: pass some context
 
-      const episodeTexts = batch
-        .map(e => `=== 第${e.orderIndex + 1}話 ===\n${e.content!.slice(0, 6000)}`)
-        .join('\n\n');
+      const isFirst = i === 0;
+      const isLast = i === sourceEpisodes.length - 1;
 
-      const batchPrompt = [
-        workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
-        workContext?.settingEra ? `世界観: ${workContext.settingEra}` : '',
+      const stage2Prompt = [
+        `第${epNum}話の体験スクリプトを生成してください。`,
+        '',
+        isFirst ? 'これは最初の話です。introセクション（冒頭4-5行 + awareness1つ）も生成してください。' : '',
+        isLast ? 'これは最後の話です。体験の締めくくり。最後のシーンのawarenessは空配列に。' : '',
+        '',
+        `設計図:`,
+        typeof epBlueprint === 'string' ? epBlueprint : JSON.stringify(epBlueprint, null, 0),
         '',
         'キャラクター:',
-        charList || '（キャラクター情報なし）',
+        charList,
         '',
-        isFirstBatch
-          ? '最初のバッチです。introセクション（冒頭4-5行+awareness1つ）も生成してください。'
-          : `続きのバッチです。前のバッチの最後のシーンID: "${lastSceneId}"。最初のシーンをこのIDから "continues" で繋げてください。`,
-        isLastBatch ? 'これが最後のバッチです。体験の締めくくりを設計してください。最後のシーンのawarenessは空配列にしてください。' : '',
-        '',
-        episodeTexts,
+        `=== 第${epNum}話 本文 ===`,
+        ep.content!.slice(0, 7000),
       ].filter(Boolean).join('\n');
 
       try {
         const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 300_000);
+        const timeout = setTimeout(() => controller.abort(), 120_000);
 
         const response = await fetch('https://api.anthropic.com/v1/messages', {
           method: 'POST',
@@ -836,19 +904,18 @@ export class WorldBuilderService {
             'anthropic-version': ANTHROPIC_VERSION,
           },
           body: JSON.stringify({
-            model: 'claude-sonnet-4-6',
-            max_tokens: 6000,
-            system: systemPrompt,
-            messages: [{ role: 'user', content: batchPrompt }],
+            model: HAIKU,
+            max_tokens: 3000,
+            system: stage2System,
+            messages: [{ role: 'user', content: stage2Prompt }],
           }),
           signal: controller.signal,
         });
-
         clearTimeout(timeout);
 
         if (!response.ok) {
-          const errBody = await response.text().catch(() => '');
-          this.logger.warn(`Experience script batch ${batchStart} failed: HTTP ${response.status} ${errBody.slice(0, 200)}`);
+          this.logger.warn(`Stage 2 ep${epNum} failed: HTTP ${response.status}`);
+          onProgress?.(`第${epNum}話: HTTP ${response.status}`);
           continue;
         }
 
@@ -856,17 +923,16 @@ export class WorldBuilderService {
         const text = data?.content?.[0]?.text || '';
         const jsonMatch = text.match(/\{[\s\S]*\}/);
         if (!jsonMatch) {
-          this.logger.warn(`Experience script batch ${batchStart}: no JSON in response`);
+          this.logger.warn(`Stage 2 ep${epNum}: no JSON`);
           continue;
         }
 
-        let batchScript: any;
+        let epScript: any;
         try {
-          batchScript = JSON.parse(jsonMatch[0]);
+          epScript = JSON.parse(jsonMatch[0]);
         } catch {
-          // Try to repair truncated JSON by closing open brackets
+          // Repair truncated JSON
           let repaired = jsonMatch[0];
-          // Count unclosed brackets
           let braces = 0, brackets = 0;
           for (const ch of repaired) {
             if (ch === '{') braces++;
@@ -874,55 +940,41 @@ export class WorldBuilderService {
             else if (ch === '[') brackets++;
             else if (ch === ']') brackets--;
           }
-          // Trim to last complete property
           repaired = repaired.replace(/,\s*"[^"]*"?\s*:?\s*[^,}\]]*$/, '');
           repaired = repaired.replace(/,\s*$/, '');
-          for (let i = 0; i < brackets; i++) repaired += ']';
-          for (let i = 0; i < braces; i++) repaired += '}';
+          for (let j = 0; j < brackets; j++) repaired += ']';
+          for (let j = 0; j < braces; j++) repaired += '}';
           try {
-            batchScript = JSON.parse(repaired);
-            this.logger.log(`Batch ${batchStart}: repaired truncated JSON`);
+            epScript = JSON.parse(repaired);
           } catch {
-            this.logger.warn(`Batch ${batchStart}: JSON repair failed`);
-            onProgress?.(`Batch ${Math.floor(batchStart / batchSize) + 1}: JSON repair failed`);
+            this.logger.warn(`Stage 2 ep${epNum}: JSON repair failed`);
+            onProgress?.(`第${epNum}話: JSON修復失敗`);
             continue;
           }
         }
 
-        // Extract intro from first batch
-        if (isFirstBatch && batchScript.intro) {
-          introData = batchScript.intro;
-        }
-
-        // Merge scenes
-        if (batchScript.scenes) {
-          const sceneIds = Object.keys(batchScript.scenes);
-          for (const sid of sceneIds) {
-            allScenes[sid] = batchScript.scenes[sid];
-          }
-          if (sceneIds.length > 0) {
-            lastSceneId = sceneIds[sceneIds.length - 1];
+        if (isFirst && epScript.intro) introData = epScript.intro;
+        if (epScript.scenes) {
+          for (const [sid, scene] of Object.entries(epScript.scenes)) {
+            allScenes[sid] = scene;
           }
         }
 
-        const batchSceneCount = Object.keys(batchScript.scenes || {}).length;
-        this.logger.log(`Experience script batch ${batchStart}: ${batchSceneCount} scenes`);
-        onProgress?.(`Batch ${Math.floor(batchStart / batchSize) + 1}: ${batchSceneCount} scenes (total: ${Object.keys(allScenes).length})`);
+        onProgress?.(`第${epNum}話: ${Object.keys(epScript.scenes || {}).length}シーン`);
+        this.logger.log(`Stage 2 ep${epNum}: ${Object.keys(epScript.scenes || {}).length} scenes`);
 
       } catch (err: any) {
-        this.logger.warn(`Experience script batch ${batchStart} failed: ${err?.message}`);
-        onProgress?.(`Batch ${Math.floor(batchStart / batchSize) + 1} failed: ${err?.message}`);
+        this.logger.warn(`Stage 2 ep${epNum} failed: ${err?.message}`);
+        onProgress?.(`第${epNum}話 失敗: ${err?.message}`);
         continue;
       }
     }
 
-    // Assemble final script
     if (!introData && Object.keys(allScenes).length === 0) {
-      this.logger.warn('Experience script: no batches produced output');
+      this.logger.warn('Experience script: no output from any stage');
       return 0;
     }
 
-    // If no intro was generated, create a minimal one from first scene
     if (!introData) {
       const firstSceneId = Object.keys(allScenes)[0];
       introData = {
@@ -932,14 +984,13 @@ export class WorldBuilderService {
     }
 
     const finalScript = { intro: introData, scenes: allScenes };
-
     await this.prisma.work.update({
       where: { id: workId },
       data: { experienceScript: finalScript },
     });
 
     const totalScenes = Object.keys(allScenes).length;
-    this.logger.log(`Experience script complete: ${totalScenes} scenes total`);
+    this.logger.log(`Experience script complete: ${totalScenes} scenes`);
     return totalScenes;
   }
 }
