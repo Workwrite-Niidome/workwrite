@@ -1283,32 +1283,70 @@ export class WorldBuilderService {
     onProgress?.(`行き止まり修復: ${fixedDeadEnds}箇所`);
 
     // --- P1: Normalize speaker names ---
-    const speakerMap: Record<string, { canonical: string; color: string }> = {};
+    // Build character info with canonical names and colors
+    const charInfo: { short: string; full: string; color: string }[] = [];
     for (const c of characters) {
       const short = c.name.split('（')[0].split('(')[0].trim().split(/[\s　]/)[0];
       let hash = 0;
       for (let i = 0; i < c.name.length; i++) hash = c.name.charCodeAt(i) + ((hash << 5) - hash);
       const hue = Math.abs(hash) % 360;
-      const color = `hsl(${hue}, 25%, 55%)`;
-      // Map both short and full name to canonical short name
-      speakerMap[short] = { canonical: short, color };
-      speakerMap[c.name] = { canonical: short, color };
-      // Also map without spaces
-      const noSpace = c.name.replace(/[\s　]/g, '');
-      if (noSpace !== c.name) speakerMap[noSpace] = { canonical: short, color };
+      charInfo.push({ short, full: c.name, color: `hsl(${hue}, 25%, 55%)` });
     }
+
+    // Exact match map
+    const speakerMap: Record<string, { canonical: string; color: string }> = {};
+    for (const ci of charInfo) {
+      speakerMap[ci.short] = { canonical: ci.short, color: ci.color };
+      speakerMap[ci.full] = { canonical: ci.short, color: ci.color };
+      const noSpace = ci.full.replace(/[\s　]/g, '');
+      if (noSpace !== ci.full) speakerMap[noSpace] = { canonical: ci.short, color: ci.color };
+    }
+
+    // Fuzzy match: find best character for an unknown speaker name
+    const fuzzyMatch = (speaker: string): { canonical: string; color: string } | null => {
+      // Strip surrogate characters and control chars
+      const cleaned = speaker.replace(/[\uD800-\uDFFF\uFFFD]/g, '');
+      if (speakerMap[cleaned]) return speakerMap[cleaned];
+
+      // Check if speaker contains or is contained by any character name
+      for (const ci of charInfo) {
+        if (ci.short.length >= 2 && (cleaned.includes(ci.short) || ci.short.includes(cleaned))) {
+          return { canonical: ci.short, color: ci.color };
+        }
+        if (ci.full.includes(cleaned) || cleaned.includes(ci.full)) {
+          return { canonical: ci.short, color: ci.color };
+        }
+      }
+
+      // Check overlap: at least 2 characters in common
+      for (const ci of charInfo) {
+        const chars = new Set(ci.short);
+        const overlap = [...cleaned].filter(ch => chars.has(ch)).length;
+        if (overlap >= 2 && overlap >= ci.short.length * 0.5) {
+          return { canonical: ci.short, color: ci.color };
+        }
+      }
+
+      return null;
+    };
 
     let normalizedSpeakers = 0;
     for (const scene of Object.values(scenes) as any[]) {
       for (const block of (scene.blocks || [])) {
         if (block.type === 'dialogue' && block.speaker) {
-          const mapped = speakerMap[block.speaker];
+          // Try exact match first, then fuzzy
+          let mapped: { canonical: string; color: string } | null = speakerMap[block.speaker] || null;
+          if (!mapped) mapped = fuzzyMatch(block.speaker);
+
           if (mapped) {
             if (block.speaker !== mapped.canonical) {
               block.speaker = mapped.canonical;
               normalizedSpeakers++;
             }
             block.speakerColor = mapped.color;
+          } else {
+            // Unknown speaker: ensure consistent color at least
+            block.speakerColor = block.speakerColor || 'hsl(0, 0%, 55%)';
           }
         }
       }
