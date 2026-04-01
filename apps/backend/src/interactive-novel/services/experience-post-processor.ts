@@ -252,7 +252,10 @@ export function normalizeSpeakers(
 ): number {
   const charInfo: { short: string; full: string; color: string }[] = [];
   for (const c of characters) {
-    const short = c.name.split('（')[0].split('(')[0].trim().split(/[\s　]/)[0];
+    // Use given name (last part before parenthetical) for Japanese names, not family name
+    const beforeParen = c.name.split('（')[0].split('(')[0].trim();
+    const nameParts = beforeParen.split(/[\s　]/);
+    const short = nameParts.length > 1 ? nameParts[nameParts.length - 1] : nameParts[0];
     let hash = 0;
     for (let i = 0; i < c.name.length; i++) hash = c.name.charCodeAt(i) + ((hash << 5) - hash);
     const hue = Math.abs(hash) % 360;
