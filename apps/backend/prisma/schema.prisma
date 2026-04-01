@@ -1592,3 +1592,119 @@ model PerspectiveCache {
 
   @@unique([storyEventId, perspective])
 }
+
+// ============================================================
+// World Fragments — 一つの小説が、一つの世界になる
+// ============================================================
+
+// 作品の「正典」— キャラクター・世界観・タイムライン・関係値の集約
+model WorldCanon {
+  id               String   @id @default(cuid())
+  workId           String   @unique
+  canonVersion     Int      @default(1)
+  upToEpisode      Int      // この話数まで分析済み
+  characterProfiles Json    // StoryCharacter + 分析からの人格・口調・動機
+  worldRules        Json    // WorldSetting + 物理法則・魔法体系・社会構造
+  timeline          Json    // StoryEvent のタイムライン集約
+  relationships     Json    // キャラクター間の関係値マップ
+  establishedFacts  Json    // 確定した事実（変更不可）
+  ambiguities       Json    // 原作が意図的に曖昧にしている領域
+  narrativeStyle    Json?   // 文体・語り口・POVパターン
+  createdAt        DateTime @default(now())
+  updatedAt        DateTime @updatedAt
+
+  @@index([workId])
+}
+
+// ifの種類
+enum WishType {
+  PERSPECTIVE  // 既存シーンを別キャラの視点で
+  SIDE_STORY   // 本編の裏で起きていたこと
+  MOMENT       // 本編に描かれなかった一瞬
+  WHAT_IF      // もし〜だったら（結果は変わらない範囲）
+}
+
+// Fragment生成の状態
+enum FragmentStatus {
+  PENDING       // wishを受け付けた
+  CHECKING      // 制約チェック中
+  REJECTED      // 原作と矛盾するため却下
+  GENERATING    // 生成中
+  EVALUATING    // 自己評価中
+  PUBLISHED     // 公開済み
+  FAILED        // 生成失敗
+}
+
+// 読者が願ったif — 世界の断片
+model WorldFragment {
+  id                String          @id @default(cuid())
+  workId            String
+  requesterId       String          // userId
+
+  // 願い
+  wish              String          @db.Text  // 自然言語の願い
+  wishType          WishType
+  scope             Json            // { upToEpisode: N }
+
+  // アンカー（どの場面に紐づくか）
+  anchorEpisodeId   String?
+  anchorEventId     String?
+  characters        Json?           // 関与するキャラクター [{ id, name }]
+  timelinePosition  Float?          // 0.0〜1.0
+
+  // 生成結果
+  content           String?         @db.Text  // 生成されたテキスト
+  contentMeta       Json?           // { wordCount, estimatedReadTime, ... }
+  generationLog     Json?           // モデル, トークン数, コスト, プロンプト要約
+  rejectionReason   String?         // REJECTED時の理由
+
+  // 状態
+  status            FragmentStatus  @default(PENDING)
+  qualityScore      Json?           // { characterConsistency, worldCoherence, literaryQuality, overall }
+  creditCost        Int             @default(0)
+
+  // エンゲージメント
+  viewCount         Int             @default(0)
+  applauseCount     Int             @default(0)
+  bookmarkCount     Int             @default(0)
+
+  createdAt         DateTime        @default(now())
+  publishedAt       DateTime?
+
+  // Relations (自己完結 — 既存モデルに触れない)
+  applause          WorldFragmentApplause[]
+  bookmarks         WorldFragmentBookmark[]
+
+  @@index([workId, status])
+  @@index([workId, wishType])
+  @@index([requesterId])
+  @@index([workId, applauseCount(sort: Desc)])
+  @@index([workId, createdAt(sort: Desc)])
+}
+
+// Fragmentへの拍手
+model WorldFragmentApplause {
+  id          String   @id @default(cuid())
+  userId      String
+  fragmentId  String
+  createdAt   DateTime @default(now())
+
+  fragment WorldFragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fragmentId])
+  @@index([fragmentId])
+}
+
+// Fragmentのブックマーク
+model WorldFragmentBookmark {
+  id          String   @id @default(cuid())
+  userId      String
+  fragmentId  String
+  createdAt   DateTime @default(now())
+
+  fragment WorldFragment @relation(fields: [fragmentId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, fragmentId])
+  @@index([fragmentId])
+  @@index([userId])
+}
