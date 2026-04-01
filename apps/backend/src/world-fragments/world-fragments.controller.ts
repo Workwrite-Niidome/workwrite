@@ -78,6 +78,46 @@ export class WorldFragmentsController {
     return canon;
   }
 
+  /** 手作りCanonを直接投入（Admin用） */
+  @Post(':workId/canon/import')
+  async importCanon(
+    @Param('workId') workId: string,
+    @Body() body: any,
+  ) {
+    const existing = await this.prisma.worldCanon.findUnique({ where: { workId } });
+
+    if (existing) {
+      return this.prisma.worldCanon.update({
+        where: { workId },
+        data: {
+          canonVersion: existing.canonVersion + 1,
+          upToEpisode: body.upToEpisode ?? existing.upToEpisode,
+          characterProfiles: body.characterProfiles,
+          worldRules: body.worldRules,
+          timeline: body.timeline,
+          relationships: body.relationships,
+          establishedFacts: body.establishedFacts,
+          ambiguities: body.ambiguities,
+          narrativeStyle: body.narrativeStyle ?? null,
+        },
+      });
+    }
+
+    return this.prisma.worldCanon.create({
+      data: {
+        workId,
+        upToEpisode: body.upToEpisode ?? 1,
+        characterProfiles: body.characterProfiles,
+        worldRules: body.worldRules,
+        timeline: body.timeline,
+        relationships: body.relationships,
+        establishedFacts: body.establishedFacts,
+        ambiguities: body.ambiguities,
+        narrativeStyle: body.narrativeStyle ?? null,
+      },
+    });
+  }
+
   /** WorldCanonを取得 */
   @Get(':workId/canon')
   async getCanon(@Param('workId') workId: string) {
