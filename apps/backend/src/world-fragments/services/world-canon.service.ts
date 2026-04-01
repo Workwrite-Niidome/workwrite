@@ -150,14 +150,33 @@ export class WorldCanonService {
     const text = result.content?.[0]?.text;
     if (!text) throw new ServiceUnavailableException('Empty response from AI');
 
-    // JSONブロックを抽出
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
-    if (!jsonMatch) {
-      this.logger.error(`Failed to parse canon JSON from response`);
+    // JSONブロックを抽出（複数のパターンに対応）
+    let canonJson: string | null = null;
+
+    // Pattern 1: ```json ... ```
+    const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
+    if (jsonFenced) {
+      canonJson = jsonFenced[1];
+    }
+
+    // Pattern 2: ``` ... ``` (言語指定なし)
+    if (!canonJson) {
+      const fenced = text.match(/```\s*\n?([\s\S]*?)\n?\s*```/);
+      if (fenced) canonJson = fenced[1];
+    }
+
+    // Pattern 3: JSONが直接返された場合
+    if (!canonJson) {
+      const directJson = text.match(/\{[\s\S]*\}/);
+      if (directJson) canonJson = directJson[0];
+    }
+
+    if (!canonJson) {
+      this.logger.error(`Failed to parse canon JSON from response. Response text: ${text.slice(0, 500)}`);
       throw new ServiceUnavailableException('Failed to parse WorldCanon');
     }
 
-    const canon = JSON.parse(jsonMatch[1]);
+    const canon = JSON.parse(canonJson);
 
     return {
       characterProfiles: canon.characterProfiles,

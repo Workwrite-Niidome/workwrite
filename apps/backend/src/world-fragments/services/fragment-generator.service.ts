@@ -259,15 +259,14 @@ ${JSON.stringify(canon.relationships, null, 2)}
 
     const result = await response.json() as any;
     const text = result.content?.[0]?.text || '';
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+    const parsed = this.extractJson(text);
 
-    if (!jsonMatch) {
-      // パースできない場合は安全側に倒して許可
+    if (!parsed) {
       this.logger.warn('Could not parse constraint check result, allowing by default');
       return { allowed: true, guidelines: 'Parse failed — apply standard constraints' };
     }
 
-    return JSON.parse(jsonMatch[1]);
+    return parsed;
   }
 
   /**
@@ -425,12 +424,35 @@ ${JSON.stringify(
 
     const result = await response.json() as any;
     const text = result.content?.[0]?.text || '';
-    const jsonMatch = text.match(/```json\n([\s\S]*?)\n```/);
+    const parsed = this.extractJson(text);
 
-    if (!jsonMatch) {
+    if (!parsed) {
       return { characterConsistency: 0, worldCoherence: 0, literaryQuality: 0, wishFulfillment: 0, overall: 0, notes: 'Parse failed' };
     }
 
-    return JSON.parse(jsonMatch[1]);
+    return parsed;
+  }
+
+  /** AIレスポンスからJSONを抽出（複数パターン対応） */
+  private extractJson(text: string): any | null {
+    // Pattern 1: ```json ... ```
+    const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
+    if (jsonFenced) {
+      try { return JSON.parse(jsonFenced[1]); } catch {}
+    }
+
+    // Pattern 2: ``` ... ```
+    const fenced = text.match(/```\s*\n?([\s\S]*?)\n?\s*```/);
+    if (fenced) {
+      try { return JSON.parse(fenced[1]); } catch {}
+    }
+
+    // Pattern 3: 直接JSON
+    const directJson = text.match(/\{[\s\S]*\}/);
+    if (directJson) {
+      try { return JSON.parse(directJson[0]); } catch {}
+    }
+
+    return null;
   }
 }
