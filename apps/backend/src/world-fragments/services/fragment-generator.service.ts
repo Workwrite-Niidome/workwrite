@@ -326,6 +326,13 @@ ${guidelines ? `## 制約チェッカーからのガイドライン\n${guideline
 7. 読者が原作の世界にいるような没入感を最優先する
 8. 説明的にならず、シーンとして描写する
 
+## 厳禁事項
+- タイトル・見出し・Markdownヘッダー（#）をつけない。冒頭から本文を始める
+- Canonに記載されていない身体的特徴や外見描写を創作しない。既存の描写のみ使う
+- Canonに記載されていない場所・建物を創作しない。既存の場所のみ使う
+- キャラクターの認識・知識を原作の該当時点を超えて進めない。scopeの範囲内で描く
+- キャラクターが感情の核心を安易に認めない。各キャラのconstraintsに従い、その人物らしい表現を使う
+
 本文のみを出力してください。メタ情報や説明は不要です。`;
 
     const response = await fetch('https://api.anthropic.com/v1/messages', {
@@ -352,7 +359,20 @@ ${guidelines ? `## 制約チェッカーからのガイドライン\n${guideline
     const text = result.content?.[0]?.text;
     if (!text) throw new ServiceUnavailableException('Empty response from AI');
 
-    return text.trim();
+    return this.postProcessContent(text);
+  }
+
+  /** 生成テキストの後処理 */
+  private postProcessContent(text: string): string {
+    let cleaned = text.trim();
+
+    // Markdownヘッダーを除去（冒頭の # 行）
+    cleaned = cleaned.replace(/^#{1,3}\s+.+\n+/, '');
+
+    // コードブロックで囲まれていた場合に除去
+    cleaned = cleaned.replace(/^```\w*\n/, '').replace(/\n```$/, '');
+
+    return cleaned.trim();
   }
 
   /**
