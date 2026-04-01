@@ -135,7 +135,7 @@ export class WorldCanonService {
       },
       body: JSON.stringify({
         model: SONNET,
-        max_tokens: 8192,
+        max_tokens: 16384,
         messages: [{ role: 'user', content: prompt }],
       }),
     });
@@ -172,11 +172,19 @@ export class WorldCanonService {
     }
 
     if (!canonJson) {
-      this.logger.error(`Failed to parse canon JSON from response. Response text: ${text.slice(0, 500)}`);
+      this.logger.error(`Failed to extract JSON from response. Response text: ${text.slice(0, 500)}`);
       throw new ServiceUnavailableException('Failed to parse WorldCanon');
     }
 
-    const canon = JSON.parse(canonJson);
+    let canon: any;
+    try {
+      canon = JSON.parse(canonJson);
+    } catch (e) {
+      // トークン切れで途中で切れたJSONの場合、stop_reasonを確認
+      const stopReason = result.stop_reason;
+      this.logger.error(`JSON parse failed (stop_reason: ${stopReason}). JSON length: ${canonJson.length}. Last 200 chars: ${canonJson.slice(-200)}`);
+      throw new ServiceUnavailableException(`Failed to parse WorldCanon JSON (stop_reason: ${stopReason})`);
+    }
 
     return {
       characterProfiles: canon.characterProfiles,
