@@ -83,9 +83,29 @@ export interface FragmentListResponse {
   };
 }
 
+export interface CanonWork {
+  id: string;
+  title: string;
+  synopsis: string | null;
+  coverUrl: string | null;
+  genre: string | null;
+  completionStatus: string;
+  author: { id: string; name: string; displayName: string | null };
+  canon: {
+    canonVersion: number;
+    upToEpisode: number;
+    updatedAt: string;
+  };
+  fragmentCount: number;
+}
+
 // ===== API Methods =====
 
 export const worldFragmentsApi = {
+  /** Canon構築済み作品の一覧 */
+  listCanonWorks: (): Promise<{ works: CanonWork[] }> =>
+    fetchWithAuth('/world-fragments/works'),
+
   /** WorldCanonを取得 */
   getCanon: (workId: string): Promise<WorldCanon> =>
     fetchWithAuth(`/world-fragments/${workId}/canon`),

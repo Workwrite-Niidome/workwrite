@@ -19,6 +19,53 @@ export class WorldFragmentsController {
     private prisma: PrismaService,
   ) {}
 
+  // ===== Canon構築済み作品一覧 =====
+
+  /** WorldCanonが構築されている作品の一覧 */
+  @Get('works')
+  async listCanonWorks() {
+    const canons = await this.prisma.worldCanon.findMany({
+      orderBy: { updatedAt: 'desc' },
+    });
+
+    if (canons.length === 0) return { works: [] };
+
+    const workIds = canons.map((c) => c.workId);
+    const works = await this.prisma.work.findMany({
+      where: { id: { in: workIds } },
+      select: {
+        id: true,
+        title: true,
+        synopsis: true,
+        coverUrl: true,
+        genre: true,
+        completionStatus: true,
+        author: { select: { id: true, name: true, displayName: true } },
+      },
+    });
+
+    const fragmentCounts = await this.prisma.worldFragment.groupBy({
+      by: ['workId'],
+      where: { workId: { in: workIds }, status: 'PUBLISHED' },
+      _count: true,
+    });
+
+    const countMap = new Map(fragmentCounts.map((fc) => [fc.workId, fc._count]));
+    const canonMap = new Map(canons.map((c) => [c.workId, c]));
+
+    return {
+      works: works.map((w) => ({
+        ...w,
+        canon: {
+          canonVersion: canonMap.get(w.id)?.canonVersion,
+          upToEpisode: canonMap.get(w.id)?.upToEpisode,
+          updatedAt: canonMap.get(w.id)?.updatedAt,
+        },
+        fragmentCount: countMap.get(w.id) ?? 0,
+      })),
+    };
+  }
+
   // ===== WorldCanon =====
 
   /** WorldCanonを構築・更新する（作者 or Admin用） */
