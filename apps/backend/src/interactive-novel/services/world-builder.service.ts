@@ -3,6 +3,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { EventSplitterService } from './event-splitter.service';
 import { postProcessExperienceScript } from './experience-post-processor';
+import { buildStage1Prompt, buildStage2SystemPrompt, buildStage2EpisodePrompt } from './experience-prompts';
 
 const HAIKU = 'claude-haiku-4-5-20251001';
 const ANTHROPIC_VERSION = '2023-06-01';
@@ -766,31 +767,11 @@ export class WorldBuilderService {
       return `第${e.orderIndex + 1}話 (${content.length}字, セリフ${dlgCount}): ${first}... / ...${last}`;
     }).join('\n');
 
-    const blueprintPrompt = [
-      'あなたは小説のインタラクティブ体験を設計する編集者です。',
-      '',
-      '以下の小説の全エピソード要約を読み、体験スクリプトの「設計図」をJSON形式で出力してください。',
-      '',
-      '## 核心原則',
-      '「結果は変わらないが、過程が変わる」',
-      '分岐は結末を変えない。読者がどの感情経路を通るかが変わる。',
-      '同じ瞬間を別キャラの目で見ると、物語の意味が変わる（視点分岐）。',
-      '',
-      '## 出力形式（コンパクトに。JSONのみ）',
-      '各話を1オブジェクトで。キーは "ep1"〜"ep21"。',
-      '{"ep1":{"scenes":2,"key":"コーヒー,栞堂,蒼との出会い","awareness":"扉の向こうに朝の光がある","perspective":"榊:人間離れ発言の真意","memory":null,"next":"ep2"},...}',
-      '- scenes: シーン数(2-5)',
-      '- key: 引用すべき場面(カンマ区切り)',
-      '- awareness: 選択肢テキスト(詩的に。無い話はnull)',
-      '- perspective: 視点分岐(キャラ名:内容。無ければnull)',
-      '- memory: 前話から呼び戻すテキスト(無ければnull)',
-      '- next: 次の話のキー',
-      '',
-      'キャラクター: ' + charList.replace(/\n/g, ' / '),
-      workContext?.genre ? `ジャンル: ${workContext.genre}` : '',
-      '',
+    const blueprintPrompt = buildStage1Prompt(
       episodeSummaries,
-    ].filter(Boolean).join('\n');
+      charList.replace(/\n/g, ' / '),
+      workContext?.genre,
+    );
 
     let blueprint: any = null;
     try {
@@ -856,85 +837,26 @@ export class WorldBuilderService {
     // ===== STAGE 2: Haiku extracts quotes and formats JSON per episode =====
     onProgress?.('Stage 2: Haikuが各話のスクリプトを生成中...');
 
-    const stage2System = [
-      'あなたは小説の原文から体験スクリプトのJSONを生成するアシスタントです。',
-      '',
-      '設計図に従い、小説本文から正確な引用を抜き出してJSONを組み立ててください。',
-      '',
-      '## ブロックタイプ',
-      '- original: {type:"original", text:"..."} 本文からそのまま引用。一字一句変えない。最も重要。1ブロック=1-3文',
-      '- dialogue: {type:"dialogue", text:"「...」", speaker:"名前", speakerColor:"hsl(H,25%,55%)"} セリフ',
-      '- environment: {type:"environment", text:"..."} 五感描写（1-2文）。これだけ創作可',
-      '- memory: {type:"memory", text:"..."} 前の話のテキストの残響（italic表示）',
-      '- scene-break: {type:"scene-break", text:"* * *"}',
-      '',
-      '## シーンID命名規則（厳守）',
-      'IDは必ず ep{話数}_{場面の英語名} 形式にすること。',
-      '例: ep1_coffee_shop, ep1_meeting_aoi, ep3_night_call, ep15_system_error',
-      '絶対に scene1, scene_1, scene_a のような汎用名を使わないこと。',
-      '',
-      '## シーン数の目安',
-      '1話あたり3-6シーンが適切。場面転換ごとに新シーンを作る。',
-      '1シーン内にoriginalブロックは3-8個（十分な引用量を確保）。',
-      '',
-      '## awareness（気づき）',
-      'シーン内で読者が選択できるポイント。各シーンに0-2個。',
-      '形式: "awareness":[{"text":"詩的な短文","type":"感情経路の種類","target":"遷移先シーンID"}]',
-      'type: "emotional"(感情を深める) / "perspective"(別キャラの視点) / "memory"(過去との接続)',
-      'awareness.target は次のシーンIDか、perspectiveの場合は ep{N}_perspective_{キャラ名} 形式のシーンID',
-      '',
-      '## perspective（視点分岐シーン）',
-      '設計図にperspectiveが指定されている場合、通常シーンとは別に視点分岐シーンも生成すること。',
-      'ID例: ep3_perspective_aoi（蒼の視点で同じ瞬間を見る）',
-      '視点分岐シーンのblocksは、そのキャラの内面描写を中心に構成（原文引用+environment）。',
-      '',
-      '## 出力: JSONのみ（他のテキスト不要）',
-      '{"scenes":{"ep1_opening":{"header":"場所|時間|視点","blocks":[...],"awareness":[...],"continues":"ep1_next_scene"}}}',
-      'introが必要な場合: {"intro":{"blocks":[...],"awareness":{"text":"...","target":"ep1_first_scene"}},"scenes":{...}}',
-    ].join('\n');
+    const stage2System = buildStage2SystemPrompt();
 
     const allScenes: Record<string, any> = {};
     let introData: any = null;
+    let prevMemoryHint: string | undefined;
 
     for (let i = 0; i < sourceEpisodes.length; i++) {
       const ep = sourceEpisodes[i];
       const epNum = ep.orderIndex + 1;
       const epBlueprint = blueprint[`ep${epNum}`] || blueprint[`episode_${epNum}`]
         || blueprint.episodes?.[i] || blueprint.episodes?.[`ep${epNum}`]
-        || JSON.stringify(blueprint).slice(0, 500); // fallback: pass some context
+        || JSON.stringify(blueprint).slice(0, 500);
 
       const isFirst = i === 0;
       const isLast = i === sourceEpisodes.length - 1;
 
-      const blueprintStr = typeof epBlueprint === 'string' ? epBlueprint : JSON.stringify(epBlueprint, null, 2);
-
-      const stage2Prompt = [
-        `第${epNum}話（全${sourceEpisodes.length}話中）の体験スクリプトを生成してください。`,
-        '',
-        isFirst ? 'これは最初の話です。introセクション（冒頭の情景描写4-5行 + awareness1つで最初のシーンへ導く）も生成してください。' : '',
-        isLast ? 'これは最後の話です。体験の締めくくり。最後のシーンのawarenessは空配列に。' : '',
-        '',
-        `## この話の設計図`,
-        blueprintStr,
-        '',
-        `## シーンID規則（厳守）`,
-        `全てのシーンIDは ep${epNum}_ で始めること。例: ep${epNum}_opening, ep${epNum}_dialogue_park`,
-        `視点分岐シーンは ep${epNum}_perspective_{キャラ名} 形式。`,
-        `continues先のシーンIDも ep${epNum}_ か ep${epNum + 1}_ で始めること。`,
-        '',
-        `## 品質チェックリスト`,
-        `- シーン数: ${typeof epBlueprint === 'object' && epBlueprint?.scenes ? epBlueprint.scenes : '3-6'}個`,
-        `- 各シーンにoriginalブロック3個以上（本文の重要な文をそのまま引用）`,
-        `- dialogueブロックにはspeakerとspeakerColorを必ず付与`,
-        typeof epBlueprint === 'object' && epBlueprint?.perspective ? `- 視点分岐シーン（${epBlueprint.perspective}）を必ず生成` : '',
-        typeof epBlueprint === 'object' && epBlueprint?.awareness ? `- awarenessテキスト: 「${epBlueprint.awareness}」を活用` : '',
-        '',
-        'キャラクター:',
-        charList,
-        '',
-        `=== 第${epNum}話 本文 ===`,
-        ep.content!.slice(0, 8000),
-      ].filter(Boolean).join('\n');
+      const stage2Prompt = buildStage2EpisodePrompt(
+        epNum, sourceEpisodes.length, epBlueprint, charList,
+        ep.content!, isFirst, isLast, prevMemoryHint,
+      );
 
       try {
         const controller = new AbortController();
@@ -1048,6 +970,13 @@ export class WorldBuilderService {
         const sceneCount = Object.keys(epScript.scenes || {}).length;
         onProgress?.(`第${epNum}話: ${sceneCount}シーン`);
         this.logger.log(`Stage 2 ep${epNum}: ${sceneCount} scenes`);
+
+        // Extract memory hint for next episode (last meaningful text from this episode)
+        const epBlocks = Object.values(epScript.scenes || {}).flatMap((s: any) => s.blocks || []);
+        const lastOriginal = [...epBlocks].reverse().find((b: any) => b.type === 'original');
+        if (lastOriginal) {
+          prevMemoryHint = (lastOriginal as any).text?.slice(0, 100);
+        }
 
       } catch (err: any) {
         this.logger.warn(`Stage 2 ep${epNum} failed: ${err?.message}`);
