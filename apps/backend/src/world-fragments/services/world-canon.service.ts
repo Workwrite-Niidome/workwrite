@@ -126,23 +126,32 @@ export class WorldCanonService {
   ) {
     const prompt = this.buildCanonPrompt(context);
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: SONNET,
-        max_tokens: 16384,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    this.logger.log(`Building canon for work. Prompt length: ${prompt.length} chars`);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: SONNET,
+          max_tokens: 16384,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: AbortSignal.timeout(120_000), // 2分タイムアウト
+      });
+    } catch (fetchError: any) {
+      this.logger.error(`Fetch to Anthropic failed: ${fetchError.message}`);
+      throw new ServiceUnavailableException(`AI API connection failed: ${fetchError.message}`);
+    }
 
     if (!response.ok) {
       const error = await response.text();
-      this.logger.error(`Canon generation failed: ${error}`);
+      this.logger.error(`Canon generation failed (${response.status}): ${error}`);
       throw new ServiceUnavailableException('Failed to generate WorldCanon');
     }
 
