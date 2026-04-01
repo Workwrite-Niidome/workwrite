@@ -16,11 +16,11 @@ import {
 
 // ===== Constants =====
 
-const WISH_TYPES: { value: WishType; label: string; description: string; icon: string; cost: number }[] = [
-  { value: 'PERSPECTIVE', label: '別の視点', description: '既存シーンを別のキャラクターの目から', icon: '\u{1F441}', cost: 15 },
-  { value: 'SIDE_STORY', label: '裏側の物語', description: '本編の裏で起きていたこと', icon: '\u{1F30C}', cost: 20 },
-  { value: 'MOMENT', label: '描かれなかった一瞬', description: '本編から零れ落ちた一瞬', icon: '\u{2728}', cost: 10 },
-  { value: 'WHAT_IF', label: 'もしも', description: 'もし違う選択をしていたら', icon: '\u{1F500}', cost: 25 },
+const WISH_TYPES: { value: WishType; label: string; description: string; cost: number }[] = [
+  { value: 'PERSPECTIVE', label: '別の視点', description: '既存シーンを別のキャラクターの目から', cost: 15 },
+  { value: 'SIDE_STORY', label: '裏側の物語', description: '本編の裏で起きていたこと', cost: 20 },
+  { value: 'MOMENT', label: '描かれなかった一瞬', description: '本編から零れ落ちた一瞬', cost: 10 },
+  { value: 'WHAT_IF', label: 'もしも', description: 'もし違う選択をしていたら', cost: 25 },
 ];
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {
@@ -192,7 +192,6 @@ export default function WorldFragmentsPage() {
                     }`}
                   >
                     <div className="flex items-center gap-2">
-                      <span className="text-lg" role="img">{wt.icon}</span>
                       <span className="text-sm font-medium">{wt.label}</span>
                       <span className="ml-auto text-xs text-muted-foreground">{wt.cost}cr</span>
                     </div>
