@@ -5,8 +5,8 @@ import { CreditService } from '../../billing/credit.service';
 import { WorldCanonService } from './world-canon.service';
 import { WishTypeDto } from '../dto/create-wish.dto';
 
-const OPUS = 'claude-opus-4-20250514';
-const SONNET = 'claude-sonnet-4-5-20250514';
+const OPUS = 'claude-opus-4-6';
+const SONNET = 'claude-sonnet-4-6';
 
 // wishTypeごとのクレジットコスト
 const CREDIT_COSTS: Record<WishTypeDto, number> = {

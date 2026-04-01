@@ -2,7 +2,7 @@ import { Injectable, Logger, NotFoundException, ServiceUnavailableException } fr
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 
-const SONNET = 'claude-sonnet-4-5-20250514';
+const SONNET = 'claude-sonnet-4-6';
 
 @Injectable()
 export class WorldCanonService {
