@@ -49,10 +49,15 @@ async function bootstrap() {
   });
 
   // Serve uploaded files (avatars, etc.)
+  // Override helmet's CSP and CORP for static assets so frontend can load images
   const uploadsRoot = process.env.RAILWAY_VOLUME_MOUNT_PATH
     ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'uploads')
     : join(process.cwd(), 'uploads');
-  app.use('/uploads', express.static(uploadsRoot));
+  app.use('/uploads', (_req: any, res: any, next: any) => {
+    res.setHeader('Cross-Origin-Resource-Policy', 'cross-origin');
+    res.removeHeader('Content-Security-Policy');
+    next();
+  }, express.static(uploadsRoot));
 
   // Global prefix
   app.setGlobalPrefix('api/v1');
