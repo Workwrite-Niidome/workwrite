@@ -323,6 +323,22 @@ export class WorldFragmentsController {
     return { bookmarked: true };
   }
 
+  /** 自分が生成したFragmentを削除 */
+  @Delete('fragment/:fragmentId')
+  async deleteFragment(
+    @CurrentUser('id') userId: string,
+    @Param('fragmentId') fragmentId: string,
+  ) {
+    const fragment = await this.prisma.worldFragment.findUnique({
+      where: { id: fragmentId },
+    });
+    if (!fragment) throw new Error('Fragment not found');
+    if (fragment.requesterId !== userId) throw new Error('Not your fragment');
+
+    await this.prisma.worldFragment.delete({ where: { id: fragmentId } });
+    return { deleted: true };
+  }
+
   /** 自分が生成したFragmentの一覧 */
   @Get('my-fragments')
   async myFragments(

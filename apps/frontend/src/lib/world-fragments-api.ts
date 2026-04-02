@@ -161,6 +161,10 @@ export const worldFragmentsApi = {
   getFragment: (fragmentId: string): Promise<WorldFragment> =>
     fetchWithAuth(`/world-fragments/fragment/${fragmentId}`),
 
+  /** Fragment削除（自分が生成したもののみ） */
+  deleteFragment: (fragmentId: string): Promise<{ deleted: boolean }> =>
+    fetchWithAuth(`/world-fragments/fragment/${fragmentId}`, { method: 'DELETE' }),
+
   /** 拍手トグル */
   toggleApplause: (fragmentId: string): Promise<{ applauded: boolean }> =>
     fetchWithAuth(`/world-fragments/fragment/${fragmentId}/applause`, { method: 'POST' }),
