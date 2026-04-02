@@ -1,7 +1,8 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import Link from 'next/link';
+import Cropper, { type Area } from 'react-easy-crop';
 import { useAuth } from '@/lib/auth-context';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -10,7 +11,28 @@ import { Card, CardHeader, CardTitle, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { api, type BillingStatus } from '@/lib/api';
 import { Loading } from '@/components/layout/loading';
-import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight, Crown, RefreshCw, Sparkles, CreditCard, Camera, Loader2 } from 'lucide-react';
+import { Settings, BookOpen, Bookmark, Bell, BarChart3, Feather, ChevronRight, Crown, RefreshCw, Sparkles, CreditCard, Camera, Loader2, Trash2, X } from 'lucide-react';
+
+async function getCroppedBlob(src: string, crop: Area): Promise<Blob> {
+  const image = new Image();
+  image.crossOrigin = 'anonymous';
+  await new Promise<void>((resolve, reject) => {
+    image.onload = () => resolve();
+    image.onerror = reject;
+    image.src = src;
+  });
+  const canvas = document.createElement('canvas');
+  canvas.width = crop.width;
+  canvas.height = crop.height;
+  const ctx = canvas.getContext('2d')!;
+  ctx.drawImage(image, crop.x, crop.y, crop.width, crop.height, 0, 0, crop.width, crop.height);
+  return new Promise((resolve, reject) => {
+    canvas.toBlob((blob) => {
+      if (blob) resolve(blob);
+      else reject(new Error('Canvas toBlob failed'));
+    }, 'image/jpeg', 0.92);
+  });
+}
 
 type AiProfile = {
   personalityType?: string;
@@ -28,6 +50,11 @@ export default function ProfilePage() {
   const [bio, setBio] = useState('');
   const [avatarUrl, setAvatarUrl] = useState<string | null>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
+  const [showDeleteConfirm, setShowDeleteConfirm] = useState(false);
+  const [cropSrc, setCropSrc] = useState<string | null>(null);
+  const [crop, setCrop] = useState({ x: 0, y: 0 });
+  const [zoom, setZoom] = useState(1);
+  const [croppedArea, setCroppedArea] = useState<Area | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [saving, setSaving] = useState(false);
   const [message, setMessage] = useState('');
@@ -73,16 +100,32 @@ export default function ProfilePage() {
       .catch(() => {});
   }, [user]);
 
-  async function handleAvatarUpload(e: React.ChangeEvent<HTMLInputElement>) {
+  function handleFileSelect(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0];
     if (!file) return;
     if (file.size > 2 * 1024 * 1024) {
       setMessage('画像サイズは2MB以下にしてください');
+      if (fileInputRef.current) fileInputRef.current.value = '';
       return;
     }
+    const url = URL.createObjectURL(file);
+    setCropSrc(url);
+    setCrop({ x: 0, y: 0 });
+    setZoom(1);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  }
+
+  const onCropComplete = useCallback((_: Area, croppedPixels: Area) => {
+    setCroppedArea(croppedPixels);
+  }, []);
+
+  async function handleCropConfirm() {
+    if (!cropSrc || !croppedArea) return;
     setAvatarUploading(true);
     setMessage('');
     try {
+      const blob = await getCroppedBlob(cropSrc, croppedArea);
+      const file = new File([blob], 'avatar.jpg', { type: 'image/jpeg' });
       const res = await api.uploadAvatar(file);
       const newUrl = res?.data?.avatarUrl || res?.avatarUrl;
       if (newUrl) setAvatarUrl(newUrl);
@@ -91,7 +134,28 @@ export default function ProfilePage() {
       setMessage(err.message || 'アイコンの更新に失敗しました');
     } finally {
       setAvatarUploading(false);
-      if (fileInputRef.current) fileInputRef.current.value = '';
+      URL.revokeObjectURL(cropSrc);
+      setCropSrc(null);
+    }
+  }
+
+  function handleCropCancel() {
+    if (cropSrc) URL.revokeObjectURL(cropSrc);
+    setCropSrc(null);
+  }
+
+  async function handleDeleteAvatar() {
+    setShowDeleteConfirm(false);
+    setAvatarUploading(true);
+    setMessage('');
+    try {
+      await api.deleteAvatar();
+      setAvatarUrl(null);
+      setMessage('アイコンを削除しました');
+    } catch (err: any) {
+      setMessage(err.message || 'アイコンの削除に失敗しました');
+    } finally {
+      setAvatarUploading(false);
     }
   }
 
@@ -162,21 +226,103 @@ export default function ProfilePage() {
           type="file"
           accept="image/jpeg,image/png,image/gif,image/webp"
           className="hidden"
-          onChange={handleAvatarUpload}
+          onChange={handleFileSelect}
         />
       </div>
       <div>
         <p className="text-sm font-medium">{user?.displayName || user?.name}</p>
-        <button
-          type="button"
-          onClick={() => fileInputRef.current?.click()}
-          disabled={avatarUploading}
-          className="text-xs text-primary hover:underline"
-        >
-          {avatarUploading ? 'アップロード中...' : 'アイコンを変更'}
-        </button>
+        <div className="flex items-center gap-2">
+          <button
+            type="button"
+            onClick={() => fileInputRef.current?.click()}
+            disabled={avatarUploading}
+            className="text-xs text-primary hover:underline"
+          >
+            {avatarUploading ? 'アップロード中...' : 'アイコンを変更'}
+          </button>
+          {avatarUrl && (
+            <>
+              <span className="text-muted-foreground text-xs">|</span>
+              <button
+                type="button"
+                onClick={() => setShowDeleteConfirm(true)}
+                disabled={avatarUploading}
+                className="text-xs text-destructive hover:underline"
+              >
+                削除
+              </button>
+            </>
+          )}
+        </div>
         <p className="text-[10px] text-muted-foreground mt-0.5">JPEG, PNG, GIF, WebP / 2MB以下</p>
       </div>
+
+      {/* Delete confirmation */}
+      {showDeleteConfirm && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50" onClick={() => setShowDeleteConfirm(false)}>
+          <div className="bg-background border border-border rounded-lg p-6 max-w-sm mx-4 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <p className="text-sm font-medium">アイコンを削除しますか？</p>
+            <p className="text-xs text-muted-foreground">デフォルトのアイコンに戻ります。</p>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={() => setShowDeleteConfirm(false)}>
+                キャンセル
+              </Button>
+              <Button variant="destructive" size="sm" onClick={handleDeleteAvatar}>
+                <Trash2 className="h-3 w-3 mr-1" />
+                削除する
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Crop modal */}
+      {cropSrc && (
+        <div className="fixed inset-0 z-50 flex flex-col bg-black/80">
+          <div className="flex items-center justify-between px-4 py-3 bg-background border-b border-border">
+            <p className="text-sm font-medium">トリミング</p>
+            <button type="button" onClick={handleCropCancel} className="text-muted-foreground hover:text-foreground">
+              <X className="h-5 w-5" />
+            </button>
+          </div>
+          <div className="relative flex-1">
+            <Cropper
+              image={cropSrc}
+              crop={crop}
+              zoom={zoom}
+              aspect={1}
+              cropShape="round"
+              showGrid={false}
+              onCropChange={setCrop}
+              onZoomChange={setZoom}
+              onCropComplete={onCropComplete}
+            />
+          </div>
+          <div className="px-4 py-3 bg-background border-t border-border space-y-3">
+            <div className="flex items-center gap-3">
+              <span className="text-xs text-muted-foreground w-8">拡大</span>
+              <input
+                type="range"
+                min={1}
+                max={3}
+                step={0.1}
+                value={zoom}
+                onChange={(e) => setZoom(Number(e.target.value))}
+                className="flex-1"
+              />
+            </div>
+            <div className="flex gap-2 justify-end">
+              <Button variant="outline" size="sm" onClick={handleCropCancel}>
+                キャンセル
+              </Button>
+              <Button size="sm" onClick={handleCropConfirm} disabled={avatarUploading}>
+                {avatarUploading ? <Loader2 className="h-3 w-3 mr-1 animate-spin" /> : null}
+                設定する
+              </Button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
   );
 

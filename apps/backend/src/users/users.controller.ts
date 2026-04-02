@@ -88,6 +88,14 @@ export class UsersController {
     return this.usersService.updateAvatar(userId, avatarUrl);
   }
 
+  @Delete('me/avatar')
+  @UseGuards(JwtAuthGuard)
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Delete avatar' })
+  deleteAvatar(@CurrentUser('id') userId: string) {
+    return this.usersService.updateAvatar(userId, null);
+  }
+
   @Delete('me')
   @UseGuards(JwtAuthGuard)
   @ApiBearerAuth()

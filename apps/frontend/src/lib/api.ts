@@ -215,6 +215,12 @@ class ApiClient {
     return res.json();
   }
 
+  async deleteAvatar() {
+    return this.request<{ data: UserProfile }>('/users/me/avatar', {
+      method: 'DELETE',
+    });
+  }
+
   // Onboarding
   async submitOnboarding(answers: OnboardingAnswer[]) {
     return this.request<{ data: { emotionVector: Record<string, number> } }>(
