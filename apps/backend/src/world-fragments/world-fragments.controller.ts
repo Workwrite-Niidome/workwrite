@@ -1,4 +1,4 @@
-import { Controller, Post, Get, Param, Body, Query, UseGuards, Delete } from '@nestjs/common';
+import { Controller, Post, Get, Patch, Param, Body, Query, UseGuards, Delete, BadRequestException, ForbiddenException, NotFoundException } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { RolesGuard } from '../auth/guards/roles.guard';
@@ -34,7 +34,7 @@ export class WorldFragmentsController {
 
     const workIds = canons.map((c) => c.workId);
     const works = await this.prisma.work.findMany({
-      where: { id: { in: workIds } },
+      where: { id: { in: workIds }, enableWorldFragments: true },
       select: {
         id: true,
         title: true,
@@ -132,6 +132,56 @@ export class WorldFragmentsController {
     });
   }
 
+  /** WorldCanonを部分更新（作者またはAdmin） */
+  @Patch(':workId/canon')
+  async patchCanon(
+    @CurrentUser() user: { id: string; role: string },
+    @Param('workId') workId: string,
+    @Body() body: any,
+  ) {
+    // Auth check: must be work author or ADMIN
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { authorId: true },
+    });
+    if (!work) throw new NotFoundException('Work not found');
+    if (work.authorId !== user.id && user.role !== 'ADMIN') {
+      throw new ForbiddenException('Only the author or an admin can edit the canon');
+    }
+
+    const existing = await this.prisma.worldCanon.findUnique({ where: { workId } });
+    if (!existing) throw new NotFoundException('Canon not found for this work');
+
+    const updatableFields = [
+      'characterProfiles',
+      'worldRules',
+      'establishedFacts',
+      'ambiguities',
+      'worldLayers',
+      'layerInteractions',
+      'layerAmbiguities',
+      'narrativeStyle',
+    ] as const;
+
+    const data: Record<string, any> = {};
+    for (const field of updatableFields) {
+      if (body[field] !== undefined) {
+        data[field] = body[field];
+      }
+    }
+
+    if (Object.keys(data).length === 0) {
+      return existing;
+    }
+
+    data.canonVersion = existing.canonVersion + 1;
+
+    return this.prisma.worldCanon.update({
+      where: { workId },
+      data,
+    });
+  }
+
   /** WorldCanonを取得 */
   @Get(':workId/canon')
   async getCanon(@Param('workId') workId: string) {
@@ -168,6 +218,15 @@ export class WorldFragmentsController {
     @Param('workId') workId: string,
     @Body() body: CreateWishDto,
   ) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { enableWorldFragments: true },
+    });
+    if (!work) throw new NotFoundException('Work not found');
+    if (!work.enableWorldFragments) {
+      throw new BadRequestException('World Fragments is not enabled for this work');
+    }
+
     return this.fragmentGenerator.initiateFragment(
       userId,
       workId,

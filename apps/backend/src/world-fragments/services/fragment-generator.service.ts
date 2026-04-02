@@ -22,6 +22,11 @@ const RATE_LIMIT_PER_HOUR = 5;
 @Injectable()
 export class FragmentGeneratorService {
   private readonly logger = new Logger(FragmentGeneratorService.name);
+  private lastTokenUsage: {
+    constraintCheck?: { input_tokens: number; output_tokens: number };
+    generation?: { input_tokens: number; output_tokens: number };
+    evaluation?: { input_tokens: number; output_tokens: number };
+  } = {};
 
   constructor(
     private prisma: PrismaService,
@@ -108,6 +113,7 @@ export class FragmentGeneratorService {
    * エラー時はステータスをFAILEDに設定する
    */
   async processFragment(fragmentId: string) {
+    this.lastTokenUsage = {};
     const fragment = await this.prisma.worldFragment.findUnique({
       where: { id: fragmentId },
     });
@@ -237,6 +243,7 @@ export class FragmentGeneratorService {
             constraintModel: SONNET,
             evaluationModel: SONNET,
             timestamp: new Date().toISOString(),
+            tokenUsage: this.lastTokenUsage,
           },
         },
       });
@@ -338,6 +345,13 @@ ${JSON.stringify(canon.layerAmbiguities ?? [], null, 2)}` : ''}
     }
 
     const result = await response.json() as any;
+    if (result.usage) {
+      this.lastTokenUsage.constraintCheck = {
+        input_tokens: result.usage.input_tokens,
+        output_tokens: result.usage.output_tokens,
+      };
+      this.logger.log(`Constraint check tokens: in=${result.usage.input_tokens}, out=${result.usage.output_tokens}`);
+    }
     const text = result.content?.[0]?.text || '';
     const parsed = this.extractJson(text);
 
@@ -460,6 +474,13 @@ ${guidelines ? `## 制約チェッカーからのガイドライン\n${guideline
     }
 
     const result = await response.json() as any;
+    if (result.usage) {
+      this.lastTokenUsage.generation = {
+        input_tokens: result.usage.input_tokens,
+        output_tokens: result.usage.output_tokens,
+      };
+      this.logger.log(`Generation tokens: in=${result.usage.input_tokens}, out=${result.usage.output_tokens}`);
+    }
     const text = result.content?.[0]?.text;
     if (!text) throw new ServiceUnavailableException('Empty response from AI');
 
@@ -547,6 +568,13 @@ ${JSON.stringify(
     }
 
     const result = await response.json() as any;
+    if (result.usage) {
+      this.lastTokenUsage.evaluation = {
+        input_tokens: result.usage.input_tokens,
+        output_tokens: result.usage.output_tokens,
+      };
+      this.logger.log(`Evaluation tokens: in=${result.usage.input_tokens}, out=${result.usage.output_tokens}`);
+    }
     const text = result.content?.[0]?.text || '';
 
     this.logger.debug(`evaluateFragment raw response (first 500 chars): ${text.slice(0, 500)}`);

@@ -71,6 +71,10 @@ export interface WorldCanon {
   establishedFacts: string[];
   ambiguities: string[];
   narrativeStyle: any;
+  worldLayers?: any;
+  layerInteractions?: any;
+  layerAmbiguities?: any;
+  wishSeeds?: any;
   createdAt: string;
   updatedAt: string;
 }
@@ -126,6 +130,17 @@ export const worldFragmentsApi = {
     fetchWithAuth(`/world-fragments/${workId}/canon/build`, {
       method: 'POST',
       body: JSON.stringify({ upToEpisode }),
+    }),
+
+  /** WorldCanonを部分更新（作者またはAdmin） */
+  patchCanon: (workId: string, data: Partial<Pick<WorldCanon, 'characterProfiles' | 'worldRules' | 'establishedFacts' | 'ambiguities' | 'narrativeStyle'>> & {
+    worldLayers?: any;
+    layerInteractions?: any;
+    layerAmbiguities?: any;
+  }): Promise<WorldCanon> =>
+    fetchWithAuth(`/world-fragments/${workId}/canon`, {
+      method: 'PATCH',
+      body: JSON.stringify(data),
     }),
 
   /** wishを送信してFragment生成 */

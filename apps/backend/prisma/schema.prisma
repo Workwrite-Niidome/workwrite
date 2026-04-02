@@ -207,6 +207,9 @@ model Work {
   totalViews     Int @default(0)
   totalReads     Int @default(0) // completed reads
 
+  // World Fragments
+  enableWorldFragments    Boolean @default(false)
+
   // Interactive Novel
   enableInteractiveNovel  Boolean @default(false)
   interactiveNovelStatus  String?
