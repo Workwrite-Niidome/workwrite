@@ -31,10 +31,10 @@ export class FragmentGeneratorService {
   ) {}
 
   /**
-   * wishからFragmentを生成する全パイプライン
-   * wish → 制約チェック → 生成 → 自己評価 → 保存
+   * wishを受け付けてPENDINGのFragmentを即座に返す。
+   * 実際の生成処理(processFragment)は非同期で実行される。
    */
-  async generateFragment(
+  async initiateFragment(
     userId: string,
     workId: string,
     wish: string,
@@ -92,7 +92,51 @@ export class FragmentGeneratorService {
       },
     });
 
+    // 非同期で生成処理を開始（awaitしない）
+    setImmediate(() => {
+      this.processFragment(fragment.id).catch((err) => {
+        this.logger.error(`Async processFragment failed for ${fragment.id}: ${err}`);
+      });
+    });
+
+    return fragment;
+  }
+
+  /**
+   * Fragment生成の全パイプライン（非同期実行）
+   * 制約チェック → クレジット消費 → 生成 → 自己評価 → 保存
+   * エラー時はステータスをFAILEDに設定する
+   */
+  async processFragment(fragmentId: string) {
+    const fragment = await this.prisma.worldFragment.findUnique({
+      where: { id: fragmentId },
+    });
+    if (!fragment) {
+      this.logger.error(`processFragment: fragment ${fragmentId} not found`);
+      return;
+    }
+
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) {
+      await this.prisma.worldFragment.update({
+        where: { id: fragmentId },
+        data: { status: 'FAILED' },
+      });
+      this.logger.error(`processFragment: AI API key is not configured`);
+      return;
+    }
+
+    const userId = fragment.requesterId;
+    const workId = fragment.workId;
+    const wish = fragment.wish;
+    const wishType = fragment.wishType as WishTypeDto;
+    const scope = fragment.scope as { upToEpisode: number };
+    const cost = fragment.creditCost;
+
     try {
+      // WorldCanonを取得
+      const canon = await this.canonService.getCanon(workId);
+
       // Phase 1: 制約チェック分のクレジットを先に消費（返金しない）
       await this.creditService.consumeCredits(
         userId,
@@ -103,7 +147,7 @@ export class FragmentGeneratorService {
 
       // 制約チェック（Sonnet — 高速）
       await this.prisma.worldFragment.update({
-        where: { id: fragment.id },
+        where: { id: fragmentId },
         data: { status: 'CHECKING' },
       });
 
@@ -111,19 +155,18 @@ export class FragmentGeneratorService {
 
       if (!constraintResult.allowed) {
         await this.prisma.worldFragment.update({
-          where: { id: fragment.id },
+          where: { id: fragmentId },
           data: {
             status: 'REJECTED',
             rejectionReason: constraintResult.reason,
             creditCost: CONSTRAINT_CHECK_COST,
           },
         });
-
-        return this.prisma.worldFragment.findUnique({ where: { id: fragment.id } });
+        return;
       }
 
       // Phase 2: 残りのクレジットを消費（生成分）
-      const { transactionId } = await this.creditService.consumeCredits(
+      await this.creditService.consumeCredits(
         userId,
         cost - CONSTRAINT_CHECK_COST,
         'world_fragment',
@@ -132,7 +175,7 @@ export class FragmentGeneratorService {
 
       // Phase 2: Fragment生成（Opus — 高品質）
       await this.prisma.worldFragment.update({
-        where: { id: fragment.id },
+        where: { id: fragmentId },
         data: { status: 'GENERATING' },
       });
 
@@ -143,9 +186,9 @@ export class FragmentGeneratorService {
 
       // アンカーエピソードのコンテキストを取得
       let anchorContext = '';
-      if (options.anchorEpisodeId) {
+      if (fragment.anchorEpisodeId) {
         const episode = await this.prisma.episode.findUnique({
-          where: { id: options.anchorEpisodeId },
+          where: { id: fragment.anchorEpisodeId },
           select: { title: true, content: true, orderIndex: true },
         });
         if (episode) {
@@ -165,7 +208,7 @@ export class FragmentGeneratorService {
 
       // Phase 3: 自己評価（Sonnet）
       await this.prisma.worldFragment.update({
-        where: { id: fragment.id },
+        where: { id: fragmentId },
         data: { status: 'EVALUATING' },
       });
 
@@ -181,8 +224,8 @@ export class FragmentGeneratorService {
       const wordCount = generatedContent.length;
       const estimatedReadTime = Math.ceil(wordCount / 500); // 500文字/分
 
-      return this.prisma.worldFragment.update({
-        where: { id: fragment.id },
+      await this.prisma.worldFragment.update({
+        where: { id: fragmentId },
         data: {
           content: generatedContent,
           contentMeta: { wordCount, estimatedReadTime },
@@ -197,15 +240,17 @@ export class FragmentGeneratorService {
           },
         },
       });
+
+      this.logger.log(`Fragment ${fragmentId} published successfully`);
     } catch (error) {
-      this.logger.error(`Fragment generation failed: ${error}`);
+      this.logger.error(`Fragment generation failed for ${fragmentId}: ${error}`);
 
       await this.prisma.worldFragment.update({
-        where: { id: fragment.id },
+        where: { id: fragmentId },
         data: { status: 'FAILED' },
+      }).catch((e) => {
+        this.logger.error(`Failed to update fragment ${fragmentId} to FAILED: ${e}`);
       });
-
-      throw error;
     }
   }
 

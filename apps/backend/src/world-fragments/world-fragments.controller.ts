@@ -168,7 +168,7 @@ export class WorldFragmentsController {
     @Param('workId') workId: string,
     @Body() body: CreateWishDto,
   ) {
-    return this.fragmentGenerator.generateFragment(
+    return this.fragmentGenerator.initiateFragment(
       userId,
       workId,
       body.wish,
@@ -239,6 +239,24 @@ export class WorldFragmentsController {
         total,
       },
     };
+  }
+
+  /** Fragmentステータスをポーリング用に取得（軽量） */
+  @Get('fragment/:fragmentId/status')
+  async getFragmentStatus(
+    @Param('fragmentId') fragmentId: string,
+  ) {
+    const fragment = await this.prisma.worldFragment.findUnique({
+      where: { id: fragmentId },
+      select: {
+        id: true,
+        status: true,
+        rejectionReason: true,
+        publishedAt: true,
+      },
+    });
+    if (!fragment) throw new Error('Fragment not found');
+    return fragment;
   }
 
   /** Fragment詳細を取得 */

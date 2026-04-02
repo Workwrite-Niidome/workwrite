@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { useParams } from 'next/navigation';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,16 @@ export default function WorldFragmentsPage() {
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [filterType, setFilterType] = useState<WishType | ''>('');
 
+  // Pending fragment (async generation tracking)
+  const [pendingFragment, setPendingFragment] = useState<{
+    id: string;
+    wish: string;
+    wishType: WishType;
+    status: string;
+    rejectionReason?: string | null;
+  } | null>(null);
+  const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
+
   // Wish seeds
   const [wishSeeds, setWishSeeds] = useState<WishSeed[]>([]);
   const [seedsLoading, setSeedsLoading] = useState(false);
@@ -90,6 +100,46 @@ export default function WorldFragmentsPage() {
 
   useEffect(() => { loadData(); }, [loadData]);
 
+  // Polling for pending fragment status
+  useEffect(() => {
+    if (!pendingFragment) return;
+
+    const terminalStatuses = ['PUBLISHED', 'REJECTED', 'FAILED'];
+    if (terminalStatuses.includes(pendingFragment.status)) return;
+
+    pollingRef.current = setInterval(async () => {
+      try {
+        const statusData = await worldFragmentsApi.getFragmentStatus(pendingFragment.id);
+        setPendingFragment((prev) =>
+          prev ? { ...prev, status: statusData.status, rejectionReason: statusData.rejectionReason } : null,
+        );
+
+        if (statusData.status === 'PUBLISHED') {
+          // Fetch the full fragment and show it
+          const fullFragment = await worldFragmentsApi.getFragment(statusData.id);
+          setSelectedFragment(fullFragment);
+          setPendingFragment(null);
+          await loadData();
+        } else if (statusData.status === 'REJECTED') {
+          setRejection(statusData.rejectionReason || '願いは叶えられませんでした。');
+          setPendingFragment(null);
+        } else if (statusData.status === 'FAILED') {
+          setError('断片の生成に失敗しました。時間をおいて再度お試しください。');
+          setPendingFragment(null);
+        }
+      } catch {
+        // Polling failure is not critical; will retry on next interval
+      }
+    }, 4000);
+
+    return () => {
+      if (pollingRef.current) {
+        clearInterval(pollingRef.current);
+        pollingRef.current = null;
+      }
+    };
+  }, [pendingFragment, loadData]);
+
   // Reload wish seeds
   const handleReloadSeeds = async () => {
     setSeedsLoading(true);
@@ -106,7 +156,7 @@ export default function WorldFragmentsPage() {
     setWishType(seed.wishType);
   };
 
-  // Generate fragment
+  // Generate fragment (async: returns PENDING immediately)
   const handleGenerateFragment = async () => {
     if (!wish.trim() || !canon) return;
 
@@ -122,13 +172,15 @@ export default function WorldFragmentsPage() {
         canon.upToEpisode,
       );
 
-      if (fragment.status === 'REJECTED') {
-        setRejection(fragment.rejectionReason || '願いは叶えられませんでした。');
-      } else {
-        setWish('');
-        setSelectedFragment(fragment);
-        await loadData();
-      }
+      // The endpoint now returns a PENDING fragment immediately.
+      // Start tracking it for polling.
+      setPendingFragment({
+        id: fragment.id,
+        wish: fragment.wish,
+        wishType: fragment.wishType,
+        status: fragment.status,
+      });
+      setWish('');
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -215,6 +267,70 @@ export default function WorldFragmentsPage() {
             <p className="font-serif mb-1">願いは叶えられませんでした</p>
             <p className="text-xs text-amber-700 dark:text-amber-400">{rejection}</p>
           </div>
+        )}
+
+        {/* Pending Fragment Progress Card */}
+        {pendingFragment && (
+          <Card className="border-primary/20 bg-card/50 backdrop-blur-sm">
+            <CardContent className="p-4 space-y-3">
+              <div className="flex items-center justify-between">
+                <p className="text-sm italic text-muted-foreground">
+                  &ldquo;{pendingFragment.wish}&rdquo;
+                </p>
+                <Badge variant="outline" className="font-normal text-xs">
+                  {WISH_TYPES.find((wt) => wt.value === pendingFragment.wishType)?.label}
+                </Badge>
+              </div>
+              <div className="space-y-2">
+                <div className="flex items-center gap-3">
+                  {(() => {
+                    const steps = ['PENDING', 'CHECKING', 'GENERATING', 'EVALUATING'];
+                    const stepLabels: Record<string, string> = {
+                      PENDING: '受付中',
+                      CHECKING: '検証中',
+                      GENERATING: '生成中',
+                      EVALUATING: '評価中',
+                    };
+                    const currentIndex = steps.indexOf(pendingFragment.status);
+                    return steps.map((step, i) => {
+                      const isActive = i === currentIndex;
+                      const isDone = i < currentIndex;
+                      return (
+                        <div key={step} className="flex items-center gap-1.5">
+                          <div
+                            className={`w-2 h-2 rounded-full transition-all ${
+                              isActive
+                                ? 'bg-primary animate-pulse'
+                                : isDone
+                                  ? 'bg-primary/60'
+                                  : 'bg-muted-foreground/20'
+                            }`}
+                          />
+                          <span
+                            className={`text-xs transition-colors ${
+                              isActive
+                                ? 'text-primary font-medium'
+                                : isDone
+                                  ? 'text-muted-foreground'
+                                  : 'text-muted-foreground/40'
+                            }`}
+                          >
+                            {stepLabels[step]}
+                          </span>
+                          {i < steps.length - 1 && (
+                            <span className="text-muted-foreground/20 mx-0.5">/</span>
+                          )}
+                        </div>
+                      );
+                    });
+                  })()}
+                </div>
+                <p className="text-xs text-muted-foreground">
+                  断片を紡いでいます。このまま他の断片を閲覧できます。
+                </p>
+              </div>
+            </CardContent>
+          </Card>
         )}
 
         {/* Wish Input */}

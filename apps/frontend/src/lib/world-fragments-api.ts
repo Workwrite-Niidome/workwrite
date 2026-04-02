@@ -158,6 +158,15 @@ export const worldFragmentsApi = {
     return fetchWithAuth(`/world-fragments/${workId}/fragments${qs ? `?${qs}` : ''}`);
   },
 
+  /** Fragmentステータス（ポーリング用、軽量） */
+  getFragmentStatus: (fragmentId: string): Promise<{
+    id: string;
+    status: string;
+    rejectionReason: string | null;
+    publishedAt: string | null;
+  }> =>
+    fetchWithAuth(`/world-fragments/fragment/${fragmentId}/status`),
+
   /** Fragment詳細 */
   getFragment: (fragmentId: string): Promise<WorldFragment> =>
     fetchWithAuth(`/world-fragments/fragment/${fragmentId}`),
