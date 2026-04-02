@@ -1610,6 +1610,9 @@ model WorldCanon {
   establishedFacts  Json    // 確定した事実（変更不可）
   ambiguities       Json    // 原作が意図的に曖昧にしている領域
   narrativeStyle    Json?   // 文体・語り口・POVパターン
+  worldLayers       Json?   // 世界の層構造 [{id, name, description, locations, characters, rules, certainty}]
+  layerInteractions Json?   // 層間の相互作用ルール [{from, to, method, constraints}]
+  layerAmbiguities  Json?   // 層に関する意図的な曖昧さ [string]
   wishSeeds         Json?   // 事前生成された「願いの種」プール [{wish, wishType, label}]
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt

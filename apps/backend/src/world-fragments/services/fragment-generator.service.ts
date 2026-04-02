@@ -244,6 +244,15 @@ ${JSON.stringify(canon.timeline, null, 2)}
 ### 関係性
 ${JSON.stringify(canon.relationships, null, 2)}
 
+${canon.worldLayers ? `### 世界の層構造
+${JSON.stringify(canon.worldLayers, null, 2)}
+
+### 層間の相互作用
+${JSON.stringify(canon.layerInteractions ?? [], null, 2)}
+
+### 層に関する曖昧さ
+${JSON.stringify(canon.layerAmbiguities ?? [], null, 2)}` : ''}
+
 ## 読者の願い
 - 種類: ${wishType}
 - 内容: ${wish}
@@ -253,6 +262,8 @@ ${JSON.stringify(canon.relationships, null, 2)}
 - キャラクターの人格・信念・constraints は壊せない
 - 世界の物理法則・社会構造は壊せない
 - WHAT_IF でも、最終的な結果は原作と同じになる必要がある
+- 層構造がある場合、Fragmentは原則として単一の層内で完結させる。層をまたぐ場合は原作で描かれた越境方法のみ使用可能
+- layerAmbiguitiesに記載された曖昧さを解決する内容を生成してはならない。曖昧なものは曖昧なまま保つ
 
 ## 回答形式（JSON）
 \`\`\`json
@@ -336,6 +347,15 @@ ${JSON.stringify(canon.relationships, null, 2)}
 
 ### 文体
 ${JSON.stringify(canon.narrativeStyle, null, 2)}
+
+${canon.worldLayers ? `### 世界の層構造
+${JSON.stringify(canon.worldLayers, null, 2)}
+
+### 層間の相互作用
+${JSON.stringify(canon.layerInteractions ?? [], null, 2)}
+
+### 層に関する曖昧さ（これらを解決してはならない）
+${JSON.stringify(canon.layerAmbiguities ?? [], null, 2)}` : ''}
 ${anchorContext}
 
 ${guidelines ? `## 制約チェッカーからのガイドライン\n${guidelines}` : ''}

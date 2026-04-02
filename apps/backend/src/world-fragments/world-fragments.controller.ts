@@ -99,6 +99,9 @@ export class WorldFragmentsController {
           establishedFacts: body.establishedFacts,
           ambiguities: body.ambiguities,
           narrativeStyle: body.narrativeStyle ?? null,
+          ...(body.worldLayers !== undefined ? { worldLayers: body.worldLayers } : {}),
+          ...(body.layerInteractions !== undefined ? { layerInteractions: body.layerInteractions } : {}),
+          ...(body.layerAmbiguities !== undefined ? { layerAmbiguities: body.layerAmbiguities } : {}),
           ...(body.wishSeeds !== undefined ? { wishSeeds: body.wishSeeds } : {}),
         },
       });
@@ -115,6 +118,9 @@ export class WorldFragmentsController {
         establishedFacts: body.establishedFacts,
         ambiguities: body.ambiguities,
         narrativeStyle: body.narrativeStyle ?? null,
+        ...(body.worldLayers !== undefined ? { worldLayers: body.worldLayers } : {}),
+        ...(body.layerInteractions !== undefined ? { layerInteractions: body.layerInteractions } : {}),
+        ...(body.layerAmbiguities !== undefined ? { layerAmbiguities: body.layerAmbiguities } : {}),
         ...(body.wishSeeds !== undefined ? { wishSeeds: body.wishSeeds } : {}),
       },
     });
