@@ -6,7 +6,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Bookmark } from 'lucide-react';
+import { Bookmark, Heart } from 'lucide-react';
+import { useAuth } from '@/lib/auth-context';
 import {
   worldFragmentsApi,
   type WorldFragment,
@@ -40,6 +41,7 @@ const STATUS_LABELS: Record<string, { label: string; color: string }> = {
 export default function WorldFragmentsPage() {
   const params = useParams();
   const workId = params.workId as string;
+  const { user } = useAuth();
 
   const [canon, setCanon] = useState<WorldCanon | null>(null);
   const [fragments, setFragments] = useState<WorldFragment[]>([]);
@@ -48,6 +50,7 @@ export default function WorldFragmentsPage() {
   const [loading, setLoading] = useState(true);
   const [generating, setGenerating] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  const [rejection, setRejection] = useState<string | null>(null);
 
   // Wish form
   const [wish, setWish] = useState('');
@@ -110,6 +113,7 @@ export default function WorldFragmentsPage() {
     try {
       setGenerating(true);
       setError(null);
+      setRejection(null);
 
       const fragment = await worldFragmentsApi.createWish(
         workId,
@@ -119,7 +123,7 @@ export default function WorldFragmentsPage() {
       );
 
       if (fragment.status === 'REJECTED') {
-        setError(`願いは叶えられませんでした: ${fragment.rejectionReason}`);
+        setRejection(fragment.rejectionReason || '願いは叶えられませんでした。');
       } else {
         setWish('');
         setSelectedFragment(fragment);
@@ -205,6 +209,14 @@ export default function WorldFragmentsPage() {
           </div>
         )}
 
+        {/* Rejection (softer display) */}
+        {rejection && (
+          <div className="rounded-lg border border-amber-300/40 bg-amber-50/50 dark:bg-amber-900/10 p-4 text-sm text-amber-800 dark:text-amber-300">
+            <p className="font-serif mb-1">願いは叶えられませんでした</p>
+            <p className="text-xs text-amber-700 dark:text-amber-400">{rejection}</p>
+          </div>
+        )}
+
         {/* Wish Input */}
         {canon ? (
           <Card className="border-dashed border-primary/20 bg-card/50 backdrop-blur-sm">
@@ -234,18 +246,18 @@ export default function WorldFragmentsPage() {
               </div>
 
               {/* Wish Seeds */}
-              {wishSeeds.length > 0 && (
-                <div className="space-y-2">
-                  <div className="flex items-center justify-between">
-                    <p className="text-xs text-muted-foreground">この作品の願いの種</p>
-                    <button
-                      onClick={handleReloadSeeds}
-                      disabled={seedsLoading}
-                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
-                    >
-                      {seedsLoading ? '...' : '別の種を見る'}
-                    </button>
-                  </div>
+              <div className="space-y-2">
+                <div className="flex items-center justify-between">
+                  <p className="text-xs text-muted-foreground">この作品の願いの種</p>
+                  <button
+                    onClick={handleReloadSeeds}
+                    disabled={seedsLoading}
+                    className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                  >
+                    {seedsLoading ? '...' : '別の種を見る'}
+                  </button>
+                </div>
+                {wishSeeds.length > 0 ? (
                   <div className="flex flex-wrap gap-2">
                     {wishSeeds.map((seed, i) => (
                       <button
@@ -257,8 +269,12 @@ export default function WorldFragmentsPage() {
                       </button>
                     ))}
                   </div>
-                </div>
-              )}
+                ) : (
+                  <p className="text-xs text-muted-foreground/60 italic py-2">
+                    願いの種はまだ用意されていません。自由に願いを書いてください。
+                  </p>
+                )}
+              </div>
 
               {/* Wish Text */}
               <textarea
@@ -337,6 +353,7 @@ export default function WorldFragmentsPage() {
                     onClick={() => handleApplause(selectedFragment.id)}
                     className={selectedFragment.hasApplauded ? 'text-primary' : ''}
                   >
+                    <Heart className={`w-4 h-4 mr-1 ${selectedFragment.hasApplauded ? 'fill-current' : ''}`} />
                     {selectedFragment.applauseCount}
                   </Button>
                   <Button
@@ -347,18 +364,20 @@ export default function WorldFragmentsPage() {
                   >
                     <Bookmark className={`w-4 h-4 ${selectedFragment.hasBookmarked ? 'fill-current' : ''}`} />
                   </Button>
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    onClick={() => {
-                      if (confirm('この断片を削除しますか？')) {
-                        handleDeleteFragment(selectedFragment.id);
-                      }
-                    }}
-                    className="text-muted-foreground hover:text-destructive"
-                  >
-                    削除
-                  </Button>
+                  {user && selectedFragment.requesterId === user.id && (
+                    <Button
+                      variant="ghost"
+                      size="sm"
+                      onClick={() => {
+                        if (confirm('この断片を削除しますか？')) {
+                          handleDeleteFragment(selectedFragment.id);
+                        }
+                      }}
+                      className="text-muted-foreground hover:text-destructive"
+                    >
+                      削除
+                    </Button>
+                  )}
                 </div>
               </div>
 
@@ -538,8 +557,11 @@ function FragmentCard({
               e.stopPropagation();
               onApplause();
             }}
-            className="text-xs text-muted-foreground hover:text-primary transition-colors"
+            className={`flex items-center gap-1 text-xs transition-colors ${
+              fragment.hasApplauded ? 'text-primary' : 'text-muted-foreground hover:text-primary'
+            }`}
           >
+            <Heart className={`w-3.5 h-3.5 ${fragment.hasApplauded ? 'fill-current' : ''}`} />
             {fragment.applauseCount > 0 && fragment.applauseCount}
           </button>
         </div>

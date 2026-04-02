@@ -33,6 +33,7 @@ export type WishType = 'PERSPECTIVE' | 'SIDE_STORY' | 'MOMENT' | 'WHAT_IF';
 export interface WorldFragment {
   id: string;
   workId: string;
+  requesterId: string;
   wish: string;
   wishType: WishType;
   scope: { upToEpisode: number };

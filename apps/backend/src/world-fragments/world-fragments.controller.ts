@@ -1,6 +1,8 @@
 import { Controller, Post, Get, Param, Body, Query, UseGuards, Delete } from '@nestjs/common';
 import { ApiTags, ApiBearerAuth } from '@nestjs/swagger';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
+import { RolesGuard } from '../auth/guards/roles.guard';
+import { Roles } from '../auth/decorators/roles.decorator';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 import { WorldCanonService } from './services/world-canon.service';
 import { FragmentGeneratorService } from './services/fragment-generator.service';
@@ -68,8 +70,10 @@ export class WorldFragmentsController {
 
   // ===== WorldCanon =====
 
-  /** WorldCanonを構築・更新する（作者 or Admin用） */
+  /** WorldCanonを構築・更新する（Admin用） */
   @Post(':workId/canon/build')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   async buildCanon(
     @Param('workId') workId: string,
     @Body() body: BuildCanonDto,
@@ -80,6 +84,8 @@ export class WorldFragmentsController {
 
   /** 手作りCanonを直接投入（Admin用） */
   @Post(':workId/canon/import')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   async importCanon(
     @Param('workId') workId: string,
     @Body() body: any,
@@ -146,6 +152,8 @@ export class WorldFragmentsController {
 
   /** 願いの種プールを生成（Admin用） */
   @Post(':workId/wish-seeds/generate')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
   async generateWishSeeds(@Param('workId') workId: string) {
     const seeds = await this.canonService.generateWishSeeds(workId);
     return { seeds, count: seeds.length };
@@ -206,6 +214,7 @@ export class WorldFragmentsController {
         skip,
         select: {
           id: true,
+          requesterId: true,
           wish: true,
           wishType: true,
           scope: true,

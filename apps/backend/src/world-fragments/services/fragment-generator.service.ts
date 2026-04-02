@@ -379,19 +379,34 @@ ${guidelines ? `## 制約チェッカーからのガイドライン\n${guideline
 
 本文のみを出力してください。メタ情報や説明は不要です。`;
 
-    const response = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'x-api-key': apiKey,
-        'anthropic-version': '2023-06-01',
-      },
-      body: JSON.stringify({
-        model: OPUS,
-        max_tokens: 4096,
-        messages: [{ role: 'user', content: prompt }],
-      }),
-    });
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), 120_000);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: OPUS,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: controller.signal,
+      });
+    } catch (e: any) {
+      if (e.name === 'AbortError') {
+        this.logger.error('Fragment generation timed out after 120s');
+        throw new ServiceUnavailableException('Fragment generation timed out');
+      }
+      throw e;
+    } finally {
+      clearTimeout(timeout);
+    }
 
     if (!response.ok) {
       const error = await response.text();
@@ -488,13 +503,33 @@ ${JSON.stringify(
 
     const result = await response.json() as any;
     const text = result.content?.[0]?.text || '';
+
+    this.logger.debug(`evaluateFragment raw response (first 500 chars): ${text.slice(0, 500)}`);
+
     const parsed = this.extractJson(text);
 
     if (!parsed) {
+      this.logger.warn(`evaluateFragment JSON parse failed. Full response: ${text}`);
       return { characterConsistency: 0, worldCoherence: 0, literaryQuality: 0, wishFulfillment: 0, overall: 0, notes: 'Parse failed' };
     }
 
     return parsed;
+  }
+
+  /** JSONテキストをクリーンアップしてからパースを試みる */
+  private cleanAndParseJson(raw: string): any | null {
+    let cleaned = raw.trim();
+    // 末尾カンマを除去（配列・オブジェクトの最後の要素の後ろ）
+    cleaned = cleaned.replace(/,\s*([\]}])/g, '$1');
+    // 単行コメントを除去
+    cleaned = cleaned.replace(/\/\/[^\n]*/g, '');
+    // 複数行コメントを除去
+    cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, '');
+    try {
+      return JSON.parse(cleaned);
+    } catch {
+      return null;
+    }
   }
 
   /** AIレスポンスからJSONを抽出（複数パターン対応） */
@@ -502,19 +537,22 @@ ${JSON.stringify(
     // Pattern 1: ```json ... ```
     const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
     if (jsonFenced) {
-      try { return JSON.parse(jsonFenced[1]); } catch {}
+      const result = this.cleanAndParseJson(jsonFenced[1]);
+      if (result) return result;
     }
 
     // Pattern 2: ``` ... ```
     const fenced = text.match(/```\s*\n?([\s\S]*?)\n?\s*```/);
     if (fenced) {
-      try { return JSON.parse(fenced[1]); } catch {}
+      const result = this.cleanAndParseJson(fenced[1]);
+      if (result) return result;
     }
 
     // Pattern 3: 直接JSON
     const directJson = text.match(/\{[\s\S]*\}/);
     if (directJson) {
-      try { return JSON.parse(directJson[0]); } catch {}
+      const result = this.cleanAndParseJson(directJson[0]);
+      if (result) return result;
     }
 
     return null;
