@@ -6,6 +6,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Bookmark } from 'lucide-react';
 import {
   worldFragmentsApi,
   type WorldFragment,
@@ -344,7 +345,7 @@ export default function WorldFragmentsPage() {
                     onClick={() => handleBookmark(selectedFragment.id)}
                     className={selectedFragment.hasBookmarked ? 'text-primary' : ''}
                   >
-                    {selectedFragment.hasBookmarked ? 'Saved' : 'Save'}
+                    <Bookmark className={`w-4 h-4 ${selectedFragment.hasBookmarked ? 'fill-current' : ''}`} />
                   </Button>
                   <Button
                     variant="ghost"
