@@ -144,13 +144,16 @@ export class WorldCanonService {
 
 ## 作品の正典
 ### キャラクター
-${JSON.stringify((canon.characterProfiles as any[]).map((c: any) => ({ name: c.name, role: c.role, constraints: c.constraints })), null, 2)}
+${JSON.stringify((canon.characterProfiles as any[]).map((c: any) => ({ name: c.name, role: c.role, personality: c.personality, motivation: c.motivation, secrets: c.secrets })), null, 2)}
 
 ### タイムライン（主要イベント）
 ${JSON.stringify((canon.timeline as any[]).filter((t: any) => t.significance === 'key').map((t: any) => ({ event: t.event, characters: t.characters })), null, 2)}
 
 ### 関係性
 ${JSON.stringify(canon.relationships, null, 2)}
+
+### 確定事実（これらに矛盾する種を生成しないこと）
+${JSON.stringify(canon.establishedFacts, null, 2)}
 
 ### 曖昧な領域
 ${JSON.stringify(canon.ambiguities, null, 2)}
@@ -170,6 +173,7 @@ ${JSON.stringify(canon.ambiguities, null, 2)}
 - 同じシーン・同じ切り口を2回以上扱わない
 - タイムラインの前半・中盤・後半から均等に選ぶ
 - ネタバレを含まない表現にする（読了者向けだが、直接的すぎる表現は避ける）
+- 確定事実と矛盾する種を絶対に生成しない（キャラクターの役割・関係性を正確に反映する）
 ${existingSeeds.length > 0 ? `\n## 既存の種（これらと重複しない新しい種を生成すること）\n${existingSeeds.map((s: any) => `- ${s.wish}`).join('\n')}` : ''}
 
 ## 出力形式（JSON）
