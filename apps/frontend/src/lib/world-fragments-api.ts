@@ -99,6 +99,12 @@ export interface CanonWork {
   fragmentCount: number;
 }
 
+export interface WishSeed {
+  wish: string;
+  wishType: WishType;
+  label: string;
+}
+
 // ===== API Methods =====
 
 export const worldFragmentsApi = {
@@ -109,6 +115,10 @@ export const worldFragmentsApi = {
   /** WorldCanonを取得 */
   getCanon: (workId: string): Promise<WorldCanon> =>
     fetchWithAuth(`/world-fragments/${workId}/canon`),
+
+  /** 願いの種を取得（ランダム） */
+  getWishSeeds: (workId: string, count = 5): Promise<{ seeds: WishSeed[] }> =>
+    fetchWithAuth(`/world-fragments/${workId}/wish-seeds?count=${count}`),
 
   /** WorldCanonを構築 */
   buildCanon: (workId: string, upToEpisode?: number): Promise<WorldCanon> =>

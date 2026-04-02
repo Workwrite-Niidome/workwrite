@@ -42,10 +42,17 @@ export class WorldCanonService {
       await Promise.all([
         this.prisma.storyCharacter.findMany({
           where: { workId },
-          include: {
-            relationsFrom: true,
-            relationsTo: true,
-            dialogueSamples: { take: 5 },
+          select: {
+            id: true,
+            name: true,
+            role: true,
+            personality: true,
+            speechStyle: true,
+            firstPerson: true,
+            motivation: true,
+            background: true,
+            arc: true,
+            currentState: true,
           },
         }),
         this.prisma.worldSetting.findMany({
@@ -53,6 +60,7 @@ export class WorldCanonService {
         }),
         this.prisma.episodeAnalysis.findMany({
           where: { workId },
+          select: { summary: true, endState: true, narrativePOV: true, emotionalArc: true, characters: true, newWorldRules: true },
           orderBy: { episode: { orderIndex: 'asc' } },
         }),
         this.prisma.storyEvent.findMany({
@@ -110,6 +118,122 @@ export class WorldCanonService {
     });
     if (!canon) throw new NotFoundException('WorldCanon not found. Build it first.');
     return canon;
+  }
+
+  /** 願いの種をランダムに取得（プールから） */
+  async getWishSeeds(workId: string, count = 5) {
+    const canon = await this.getCanon(workId);
+    const seeds = (canon.wishSeeds as any[]) || [];
+    if (seeds.length === 0) return [];
+
+    // シャッフルしてcount個返す
+    const shuffled = [...seeds].sort(() => Math.random() - 0.5);
+    return shuffled.slice(0, count);
+  }
+
+  /** 願いの種プールを生成してCanonに保存 */
+  async generateWishSeeds(workId: string) {
+    const canon = await this.getCanon(workId);
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    const existingSeeds = (canon.wishSeeds as any[]) || [];
+
+    const prompt = `あなたは小説の読者体験の設計者です。
+以下の作品の正典（Canon）から、読者が「見たい」と思うであろう世界の断片を50個提案してください。
+
+## 作品の正典
+### キャラクター
+${JSON.stringify((canon.characterProfiles as any[]).map((c: any) => ({ name: c.name, role: c.role, constraints: c.constraints })), null, 2)}
+
+### タイムライン（主要イベント）
+${JSON.stringify((canon.timeline as any[]).filter((t: any) => t.significance === 'key').map((t: any) => ({ event: t.event, characters: t.characters })), null, 2)}
+
+### 関係性
+${JSON.stringify(canon.relationships, null, 2)}
+
+### 曖昧な領域
+${JSON.stringify(canon.ambiguities, null, 2)}
+
+## 種類（wishType）
+- PERSPECTIVE: 既存シーンを別のキャラクターの視点で
+- SIDE_STORY: 本編の裏で起きていたこと
+- MOMENT: 本編に描かれなかった一瞬
+- WHAT_IF: もし違う選択をしていたら（結果は変わらない範囲）
+
+## ルール
+- 読者が思わずタップしたくなる、具体的で魅力的な一文にする
+- 長すぎない（15〜30文字程度）
+- キャラクター名を含める
+- 4種類をバランスよく混ぜる（各wishTypeに最低10個）
+- 全てのメインキャラクターを最低3回は扱う
+- 同じシーン・同じ切り口を2回以上扱わない
+- タイムラインの前半・中盤・後半から均等に選ぶ
+- ネタバレを含まない表現にする（読了者向けだが、直接的すぎる表現は避ける）
+${existingSeeds.length > 0 ? `\n## 既存の種（これらと重複しない新しい種を生成すること）\n${existingSeeds.map((s: any) => `- ${s.wish}`).join('\n')}` : ''}
+
+## 出力形式（JSON）
+\`\`\`json
+[
+  { "wish": "願いの一文", "wishType": "PERSPECTIVE", "label": "別の視点" },
+  ...
+]
+\`\`\``;
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: SONNET,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (fetchError: any) {
+      this.logger.error(`Wish seeds generation fetch failed: ${fetchError.message}`);
+      throw new ServiceUnavailableException('Failed to generate wish seeds');
+    }
+
+    if (!response.ok) {
+      throw new ServiceUnavailableException('Failed to generate wish seeds');
+    }
+
+    const result = await response.json() as any;
+    const text = result.content?.[0]?.text || '';
+
+    // JSONを抽出
+    let seeds: any[] = [];
+    const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
+    if (jsonFenced) {
+      try { seeds = JSON.parse(jsonFenced[1]); } catch {}
+    }
+    if (seeds.length === 0) {
+      const directJson = text.match(/\[[\s\S]*\]/);
+      if (directJson) {
+        try { seeds = JSON.parse(directJson[0]); } catch {}
+      }
+    }
+
+    if (seeds.length === 0) {
+      throw new ServiceUnavailableException('Failed to parse wish seeds');
+    }
+
+    // 既存の種に追加（補充モード）
+    const allSeeds = [...existingSeeds, ...seeds];
+    await this.prisma.worldCanon.update({
+      where: { workId },
+      data: { wishSeeds: allSeeds },
+    });
+
+    this.logger.log(`Generated ${seeds.length} wish seeds (total: ${allSeeds.length}) for work ${workId}`);
+    return seeds;
   }
 
   private async generateCanonWithAI(

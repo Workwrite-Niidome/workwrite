@@ -11,6 +11,7 @@ import {
   type WorldFragment,
   type WorldCanon,
   type WishType,
+  type WishSeed,
   type FragmentListResponse,
 } from '@/lib/world-fragments-api';
 
@@ -53,23 +54,29 @@ export default function WorldFragmentsPage() {
   const [sortBy, setSortBy] = useState<'latest' | 'popular'>('latest');
   const [filterType, setFilterType] = useState<WishType | ''>('');
 
+  // Wish seeds
+  const [wishSeeds, setWishSeeds] = useState<WishSeed[]>([]);
+  const [seedsLoading, setSeedsLoading] = useState(false);
+
   // Load canon & fragments
   const loadData = useCallback(async () => {
     try {
       setLoading(true);
       setError(null);
 
-      const [canonData, fragmentsData] = await Promise.all([
+      const [canonData, fragmentsData, seedsData] = await Promise.all([
         worldFragmentsApi.getCanon(workId).catch(() => null),
         worldFragmentsApi.listFragments(workId, {
           sort: sortBy,
           wishType: filterType || undefined,
         }),
+        worldFragmentsApi.getWishSeeds(workId).catch(() => ({ seeds: [] })),
       ]);
 
       setCanon(canonData);
       setFragments(fragmentsData.fragments);
       setPagination(fragmentsData.pagination);
+      if (seedsData.seeds.length > 0) setWishSeeds(seedsData.seeds);
     } catch (e: any) {
       setError(e.message);
     } finally {
@@ -78,6 +85,22 @@ export default function WorldFragmentsPage() {
   }, [workId, sortBy, filterType]);
 
   useEffect(() => { loadData(); }, [loadData]);
+
+  // Reload wish seeds
+  const handleReloadSeeds = async () => {
+    setSeedsLoading(true);
+    try {
+      const data = await worldFragmentsApi.getWishSeeds(workId);
+      setWishSeeds(data.seeds);
+    } catch {}
+    setSeedsLoading(false);
+  };
+
+  // Select a wish seed
+  const handleSelectSeed = (seed: WishSeed) => {
+    setWish(seed.wish);
+    setWishType(seed.wishType);
+  };
 
   // Generate fragment
   const handleGenerateFragment = async () => {
@@ -200,11 +223,38 @@ export default function WorldFragmentsPage() {
                 ))}
               </div>
 
+              {/* Wish Seeds */}
+              {wishSeeds.length > 0 && (
+                <div className="space-y-2">
+                  <div className="flex items-center justify-between">
+                    <p className="text-xs text-muted-foreground">この作品の願いの種</p>
+                    <button
+                      onClick={handleReloadSeeds}
+                      disabled={seedsLoading}
+                      className="text-xs text-muted-foreground hover:text-foreground transition-colors"
+                    >
+                      {seedsLoading ? '...' : '別の種を見る'}
+                    </button>
+                  </div>
+                  <div className="flex flex-wrap gap-2">
+                    {wishSeeds.map((seed, i) => (
+                      <button
+                        key={i}
+                        onClick={() => handleSelectSeed(seed)}
+                        className="rounded-full border border-border px-3 py-1.5 text-xs hover:border-primary/30 hover:bg-secondary/50 transition-all text-left"
+                      >
+                        {seed.wish}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               {/* Wish Text */}
               <textarea
                 value={wish}
                 onChange={(e) => setWish(e.target.value)}
-                placeholder="例: 「あの夜、彼女は何を考えていたのだろう」「もし二人が出会わなかったら」"
+                placeholder="願いの種を選ぶか、自由に願いを書いてください"
                 className="w-full rounded-lg border border-border bg-background px-4 py-3 text-sm placeholder:text-muted-foreground/50 focus:border-primary/50 focus:outline-none resize-none"
                 rows={3}
               />

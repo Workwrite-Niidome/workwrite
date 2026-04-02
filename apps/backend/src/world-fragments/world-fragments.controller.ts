@@ -124,6 +124,25 @@ export class WorldFragmentsController {
     return this.canonService.getCanon(workId);
   }
 
+  // ===== Wish Seeds =====
+
+  /** 願いの種をランダムに取得 */
+  @Get(':workId/wish-seeds')
+  async getWishSeeds(
+    @Param('workId') workId: string,
+    @Query('count') count?: string,
+  ) {
+    const n = parseInt(count || '5', 10);
+    return { seeds: await this.canonService.getWishSeeds(workId, n) };
+  }
+
+  /** 願いの種プールを生成（Admin用） */
+  @Post(':workId/wish-seeds/generate')
+  async generateWishSeeds(@Param('workId') workId: string) {
+    const seeds = await this.canonService.generateWishSeeds(workId);
+    return { seeds, count: seeds.length };
+  }
+
   // ===== Fragments =====
 
   /** wishからFragmentを生成 */
