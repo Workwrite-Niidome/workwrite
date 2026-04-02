@@ -152,6 +152,10 @@ export class EpisodesController {
     );
     // Notify bookshelf users about new episode
     this.notifyBookshelfUsers(episode.workId, episode).catch(() => {});
+    // Auto-update WorldCanon upToEpisode if World Fragments is enabled
+    this.autoUpdateCanonEpisodeCount(episode.workId).catch((e) =>
+      this.logger.warn(`Canon auto-update failed for work ${episode.workId}: ${e}`),
+    );
     return result;
   }
 
@@ -339,5 +343,26 @@ export class EpisodesController {
       workId: work?.id || episode.workId,
       episodeId: episode.id,
     });
+  }
+
+  /** Auto-update WorldCanon upToEpisode when a new episode is published (fire-and-forget) */
+  private async autoUpdateCanonEpisodeCount(workId: string) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { enableWorldFragments: true },
+    });
+    if (!work?.enableWorldFragments) return;
+
+    const publishedCount = await this.prisma.episode.count({
+      where: { workId, publishedAt: { not: null } },
+    });
+
+    // Update the canon's upToEpisode to match the published episode count
+    await this.prisma.worldCanon.updateMany({
+      where: { workId, upToEpisode: { lt: publishedCount } },
+      data: { upToEpisode: publishedCount },
+    });
+
+    this.logger.log(`WorldCanon for work ${workId} updated to upToEpisode=${publishedCount}`);
   }
 }

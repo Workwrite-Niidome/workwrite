@@ -326,6 +326,11 @@ ${JSON.stringify(canon.layerAmbiguities ?? [], null, 2)}` : ''}
 }
 \`\`\``;
 
+    this.logger.log(`checkConstraints prompt length: ${prompt.length} chars`);
+    if (prompt.length > 50000) {
+      this.logger.warn(`checkConstraints prompt exceeds 50,000 chars (${prompt.length}). Consider reducing Canon size.`);
+    }
+
     const response = await fetch('https://api.anthropic.com/v1/messages', {
       method: 'POST',
       headers: {
@@ -437,6 +442,11 @@ ${guidelines ? `## 制約チェッカーからのガイドライン\n${guideline
 - キャラクターが感情の核心を安易に認めない。各キャラのconstraintsに従い、その人物らしい表現を使う
 
 本文のみを出力してください。メタ情報や説明は不要です。`;
+
+    this.logger.log(`generateContent prompt length: ${prompt.length} chars`);
+    if (prompt.length > 50000) {
+      this.logger.warn(`generateContent prompt exceeds 50,000 chars (${prompt.length}). Consider reducing Canon size.`);
+    }
 
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), 120_000);

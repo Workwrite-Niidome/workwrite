@@ -45,9 +45,34 @@ export class ScheduledPublishService implements OnModuleInit, OnModuleDestroy {
         });
 
         this.logger.log(`Published scheduled episode: ${ep.id} (${ep.title})`);
+
+        // Auto-update WorldCanon upToEpisode if World Fragments is enabled
+        this.autoUpdateCanonEpisodeCount(ep.workId).catch((e2) =>
+          this.logger.warn(`Canon auto-update failed for work ${ep.workId}: ${e2}`),
+        );
       }
     } catch (e) {
       this.logger.error('Scheduled publish error', e);
     }
+  }
+
+  /** Auto-update WorldCanon upToEpisode when a new episode is published */
+  private async autoUpdateCanonEpisodeCount(workId: string) {
+    const work = await this.prisma.work.findUnique({
+      where: { id: workId },
+      select: { enableWorldFragments: true },
+    });
+    if (!work?.enableWorldFragments) return;
+
+    const publishedCount = await this.prisma.episode.count({
+      where: { workId, publishedAt: { not: null } },
+    });
+
+    await this.prisma.worldCanon.updateMany({
+      where: { workId, upToEpisode: { lt: publishedCount } },
+      data: { upToEpisode: publishedCount },
+    });
+
+    this.logger.log(`WorldCanon for work ${workId} updated to upToEpisode=${publishedCount}`);
   }
 }

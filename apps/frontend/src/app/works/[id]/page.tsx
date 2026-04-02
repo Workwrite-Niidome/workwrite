@@ -527,6 +527,18 @@ export default function WorkDetailPage() {
           )}
         </div>
 
+        {/* Admin-only: World Fragments link */}
+        {user?.role === 'ADMIN' && (
+          <div className="flex justify-end">
+            <Link
+              href={`/world-fragments/${workId}`}
+              className="text-xs text-muted-foreground hover:text-foreground transition-colors underline underline-offset-2"
+            >
+              世界の断片を見る
+            </Link>
+          </div>
+        )}
+
         {/* Author-only export */}
         {user?.id === work.author.id && (
           <div className="flex justify-end">
