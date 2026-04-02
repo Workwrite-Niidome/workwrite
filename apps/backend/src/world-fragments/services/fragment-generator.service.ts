@@ -249,6 +249,22 @@ export class FragmentGeneratorService {
       });
 
       this.logger.log(`Fragment ${fragmentId} published successfully`);
+
+      // Phase 6.1: Auto-replenishment of consumed wish seeds
+      this.replenishSeedsIfNeeded(workId, wish).catch((err) => {
+        this.logger.error(`Seed replenishment check failed for work ${workId}: ${err}`);
+      });
+
+      // Phase 6.2: Author revenue share from Fragment generation
+      // TODO: Implement WorldFragmentRevenue model and service.
+      // Approach:
+      //   1. Add a WorldFragmentRevenue model in schema.prisma (mirroring CharacterTalkRevenue)
+      //   2. Create a WorldFragmentRevenueService (mirroring CharacterTalkRevenueService)
+      //   3. Here, after PUBLISHED, capture purchasedDeducted from BOTH consumeCredits calls
+      //      (constraint check + generation) and call revenueService.recordRevenue()
+      //   4. Revenue calculation: purchasedDeducted * 9.8 * 0.4 yen (40% of purchased credits)
+      //   5. The work's authorId can be fetched via: this.prisma.work.findUnique({ where: { id: workId }, select: { authorId: true } })
+      // Skipped for now because it requires a new Prisma model + migration.
     } catch (error) {
       this.logger.error(`Fragment generation failed for ${fragmentId}: ${error}`);
 
@@ -597,6 +613,54 @@ ${JSON.stringify(
     }
 
     return parsed;
+  }
+
+  /**
+   * Phase 6.1: Check if a wish matches any seed in the Canon's wishSeeds pool.
+   * If seeds with usedCount >= 3 exceed 30% of the pool, trigger replenishment (fire-and-forget).
+   */
+  private async replenishSeedsIfNeeded(workId: string, wish: string): Promise<void> {
+    const canon = await this.prisma.worldCanon.findUnique({
+      where: { workId },
+      select: { wishSeeds: true },
+    });
+    if (!canon || !canon.wishSeeds) return;
+
+    const seeds = canon.wishSeeds as any[];
+    if (seeds.length === 0) return;
+
+    // Find matching seed by normalized text comparison
+    const normalizedWish = wish.trim().toLowerCase();
+    let matched = false;
+    for (const seed of seeds) {
+      if (seed.wish && seed.wish.trim().toLowerCase() === normalizedWish) {
+        seed.usedCount = (seed.usedCount || 0) + 1;
+        matched = true;
+        break;
+      }
+    }
+
+    if (!matched) return;
+
+    // Persist the updated usedCount
+    await this.prisma.worldCanon.update({
+      where: { workId },
+      data: { wishSeeds: seeds },
+    });
+
+    // Check if replenishment is needed: seeds with usedCount >= 3 exceed 30% of pool
+    const exhaustedCount = seeds.filter((s: any) => (s.usedCount || 0) >= 3).length;
+    const threshold = Math.ceil(seeds.length * 0.3);
+
+    if (exhaustedCount > threshold) {
+      this.logger.log(
+        `Seed replenishment triggered for work ${workId}: ${exhaustedCount}/${seeds.length} seeds exhausted (threshold: ${threshold})`,
+      );
+      // Fire-and-forget replenishment
+      this.canonService.generateWishSeeds(workId).catch((err) => {
+        this.logger.error(`Seed replenishment failed for work ${workId}: ${err}`);
+      });
+    }
   }
 
   /** JSONテキストをクリーンアップしてからパースを試みる */
