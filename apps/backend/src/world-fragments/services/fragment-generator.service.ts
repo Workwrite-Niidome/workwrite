@@ -190,17 +190,10 @@ export class FragmentGeneratorService {
         select: { title: true, genre: true, settingEra: true },
       });
 
-      // アンカーエピソードのコンテキストを取得
-      let anchorContext = '';
-      if (fragment.anchorEpisodeId) {
-        const episode = await this.prisma.episode.findUnique({
-          where: { id: fragment.anchorEpisodeId },
-          select: { title: true, content: true, orderIndex: true },
-        });
-        if (episode) {
-          anchorContext = `\n## アンカーエピソード（第${episode.orderIndex}話「${episode.title}」）\n${episode.content?.slice(0, 3000) || ''}`;
-        }
-      }
+      // 原作テキスト参照: wishの内容から関連エピソードを自動特定・取得
+      const anchorContext = await this.resolveAnchorContext(
+        apiKey, workId, wish, wishType, canon, fragment.anchorEpisodeId, scope.upToEpisode,
+      );
 
       const generatedContent = await this.generateContent(
         apiKey,
@@ -703,5 +696,132 @@ ${JSON.stringify(
     }
 
     return null;
+  }
+
+  /**
+   * wishの内容から関連するエピソードを特定し、原作テキストを取得する
+   * Canonのタイムラインとキャラクター情報を使って、関連エピソードを推定
+   */
+  private async resolveAnchorContext(
+    apiKey: string,
+    workId: string,
+    wish: string,
+    wishType: WishTypeDto,
+    canon: any,
+    explicitAnchorEpisodeId: string | null,
+    upToEpisode: number,
+  ): Promise<string> {
+    // 明示的なアンカーがあればそれを使う
+    if (explicitAnchorEpisodeId) {
+      const episode = await this.prisma.episode.findUnique({
+        where: { id: explicitAnchorEpisodeId },
+        select: { title: true, content: true, orderIndex: true },
+      });
+      if (episode) {
+        return `\n## 原作テキスト（第${episode.orderIndex}話「${episode.title}」）\n${episode.content || ''}`;
+      }
+    }
+
+    // wishから関連エピソードを特定する
+    // Step 1: エピソード一覧を取得（タイトルとorderIndexのみ）
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId, publishedAt: { not: null }, orderIndex: { lte: upToEpisode } },
+      select: { id: true, title: true, orderIndex: true },
+      orderBy: { orderIndex: 'asc' },
+    });
+
+    if (episodes.length === 0) return '';
+
+    // Step 2: Canonのタイムラインとエピソード一覧からAIに関連エピソードを特定させる
+    const identifyPrompt = `以下の小説の「願い」に最も関連するエピソードを特定してください。
+
+## 願い
+${wish}
+
+## 願いの種類
+${wishType}
+
+## エピソード一覧
+${episodes.map((e) => `- 第${e.orderIndex}話「${e.title}」`).join('\n')}
+
+## タイムライン（主要イベント）
+${JSON.stringify((canon.timeline as any[]).map((t: any) => ({ position: t.position, event: t.event, characters: t.characters })), null, 2)}
+
+## キャラクター
+${(canon.characterProfiles as any[]).map((c: any) => `- ${c.name}（${c.role}）`).join('\n')}
+
+最も関連するエピソードの番号を最大3つ、関連度の高い順にJSON配列で返してください。
+理由は不要です。番号のみ。
+
+\`\`\`json
+[0, 5, 6]
+\`\`\``;
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: SONNET,
+          max_tokens: 256,
+          messages: [{ role: 'user', content: identifyPrompt }],
+        }),
+        signal: AbortSignal.timeout(30_000),
+      });
+
+      if (!response.ok) {
+        this.logger.warn('Episode identification failed, proceeding without anchor context');
+        return '';
+      }
+
+      const result = await response.json() as any;
+      const text = result.content?.[0]?.text || '';
+
+      // エピソード番号の配列を抽出
+      let episodeIndices: number[] = [];
+      const parsed = this.extractJson(text);
+      if (Array.isArray(parsed)) {
+        episodeIndices = parsed.filter((n: any) => typeof n === 'number');
+      }
+
+      if (episodeIndices.length === 0) {
+        this.logger.warn('Could not identify relevant episodes from wish');
+        return '';
+      }
+
+      // Step 3: 特定されたエピソードの本文を取得
+      const relevantEpisodes = await this.prisma.episode.findMany({
+        where: {
+          workId,
+          orderIndex: { in: episodeIndices },
+          publishedAt: { not: null },
+        },
+        select: { title: true, content: true, orderIndex: true },
+        orderBy: { orderIndex: 'asc' },
+      });
+
+      if (relevantEpisodes.length === 0) return '';
+
+      // 各エピソードの本文を含める（長すぎる場合は切り詰め）
+      const maxCharsPerEpisode = Math.floor(12000 / relevantEpisodes.length);
+      const contextParts = relevantEpisodes.map((ep) => {
+        const content = ep.content || '';
+        const truncated = content.length > maxCharsPerEpisode
+          ? content.slice(0, maxCharsPerEpisode) + '\n\n[...以下省略...]'
+          : content;
+        return `### 第${ep.orderIndex}話「${ep.title}」\n${truncated}`;
+      });
+
+      this.logger.log(`Resolved ${relevantEpisodes.length} anchor episodes for wish: ${wish.slice(0, 50)}`);
+
+      return `\n## 原作テキスト（関連エピソード）\n以下は原作の実際のテキストです。台詞、描写、固有名詞は必ずこの原文に従ってください。\n\n${contextParts.join('\n\n')}`;
+    } catch (e: any) {
+      this.logger.warn(`Anchor context resolution failed: ${e.message}`);
+      return '';
+    }
   }
 }
