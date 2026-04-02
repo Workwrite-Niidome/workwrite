@@ -1,4 +1,4 @@
-import { Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException } from '@nestjs/common';
+import { Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException, HttpException, HttpStatus } from '@nestjs/common';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { CreditService } from '../../billing/credit.service';
@@ -15,6 +15,9 @@ const CREDIT_COSTS: Record<WishTypeDto, number> = {
   [WishTypeDto.MOMENT]: 10,
   [WishTypeDto.WHAT_IF]: 25,
 };
+
+const CONSTRAINT_CHECK_COST = 1; // 制約チェック分（リジェクトでも返金しない）
+const RATE_LIMIT_PER_HOUR = 5;
 
 @Injectable()
 export class FragmentGeneratorService {
@@ -46,6 +49,21 @@ export class FragmentGeneratorService {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
+    // レートリミット: 1時間あたりの願い回数チェック
+    const oneHourAgo = new Date(Date.now() - 60 * 60 * 1000);
+    const recentCount = await this.prisma.worldFragment.count({
+      where: {
+        requesterId: userId,
+        createdAt: { gte: oneHourAgo },
+      },
+    });
+    if (recentCount >= RATE_LIMIT_PER_HOUR) {
+      throw new HttpException(
+        '願いの回数が上限に達しました。しばらく時間をおいてからお試しください。',
+        HttpStatus.TOO_MANY_REQUESTS,
+      );
+    }
+
     // WorldCanonの存在確認
     const canon = await this.canonService.getCanon(workId);
 
@@ -75,15 +93,15 @@ export class FragmentGeneratorService {
     });
 
     try {
-      // クレジット消費（two-phase commit）
-      const { transactionId } = await this.creditService.consumeCredits(
+      // Phase 1: 制約チェック分のクレジットを先に消費（返金しない）
+      await this.creditService.consumeCredits(
         userId,
-        cost,
-        'world_fragment',
-        OPUS,
+        CONSTRAINT_CHECK_COST,
+        'world_fragment_check',
+        SONNET,
       );
 
-      // Phase 1: 制約チェック（Sonnet — 高速）
+      // 制約チェック（Sonnet — 高速）
       await this.prisma.worldFragment.update({
         where: { id: fragment.id },
         data: { status: 'CHECKING' },
@@ -97,14 +115,20 @@ export class FragmentGeneratorService {
           data: {
             status: 'REJECTED',
             rejectionReason: constraintResult.reason,
+            creditCost: CONSTRAINT_CHECK_COST,
           },
         });
 
-        // リジェクト時はクレジット返金
-        await this.creditService.refundTransaction(transactionId);
-
         return this.prisma.worldFragment.findUnique({ where: { id: fragment.id } });
       }
+
+      // Phase 2: 残りのクレジットを消費（生成分）
+      const { transactionId } = await this.creditService.consumeCredits(
+        userId,
+        cost - CONSTRAINT_CHECK_COST,
+        'world_fragment',
+        OPUS,
+      );
 
       // Phase 2: Fragment生成（Opus — 高品質）
       await this.prisma.worldFragment.update({
