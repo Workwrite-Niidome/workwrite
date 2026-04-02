@@ -49,7 +49,10 @@ async function bootstrap() {
   });
 
   // Serve uploaded files (avatars, etc.)
-  app.use('/uploads', express.static(join(process.cwd(), 'uploads')));
+  const uploadsRoot = process.env.RAILWAY_VOLUME_MOUNT_PATH
+    ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'uploads')
+    : join(process.cwd(), 'uploads');
+  app.use('/uploads', express.static(uploadsRoot));
 
   // Global prefix
   app.setGlobalPrefix('api/v1');

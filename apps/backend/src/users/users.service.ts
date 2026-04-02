@@ -77,9 +77,12 @@ export class UsersService {
   }
 
   async updateProfile(userId: string, dto: UpdateProfileDto) {
+    // Exclude avatarUrl from profile update to prevent accidental clearance
+    // Avatar updates should go through the dedicated uploadAvatar endpoint
+    const { avatarUrl, ...profileData } = dto;
     return this.prisma.user.update({
       where: { id: userId },
-      data: dto,
+      data: profileData,
       select: {
         id: true,
         email: true,

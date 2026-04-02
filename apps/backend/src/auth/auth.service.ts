@@ -156,6 +156,14 @@ export class AuthService {
     });
 
     if (oauthAccount) {
+      // If user has no avatar but OAuth profile does, update it
+      if (!oauthAccount.user.avatarUrl && profile.avatarUrl) {
+        await this.prisma.user.update({
+          where: { id: oauthAccount.user.id },
+          data: { avatarUrl: profile.avatarUrl },
+        });
+        oauthAccount.user.avatarUrl = profile.avatarUrl;
+      }
       return this.generateTokens(oauthAccount.user);
     }
 
@@ -192,6 +200,22 @@ export class AuthService {
       });
       await this.prisma.pointAccount.create({
         data: { userId: user.id },
+      });
+    }
+
+    // If existing user has no avatar, set it from OAuth profile
+    if (user && !user.avatarUrl && profile.avatarUrl) {
+      user = await this.prisma.user.update({
+        where: { id: user.id },
+        data: { avatarUrl: profile.avatarUrl },
+        select: {
+          id: true,
+          email: true,
+          name: true,
+          displayName: true,
+          role: true,
+          avatarUrl: true,
+        },
       });
     }
 

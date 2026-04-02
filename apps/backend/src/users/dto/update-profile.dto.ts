@@ -22,6 +22,6 @@ export class UpdateProfileDto {
 
   @ApiPropertyOptional()
   @IsOptional()
-  @IsUrl({ require_tld: true, protocols: ['https'] }, { message: 'avatarUrl must be a valid HTTPS URL' })
+  @IsUrl({}, { message: 'avatarUrl must be a valid URL' })
   avatarUrl?: string;
 }

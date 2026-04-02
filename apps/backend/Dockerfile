@@ -41,6 +41,10 @@ COPY --from=base /app/apps/backend/package.json ./apps/backend/package.json
 
 WORKDIR /app/apps/backend
 
+# Avatar migration: copy backup + restore script (remove after migration)
+COPY scripts/avatar-restore.mjs /app/scripts/avatar-restore.mjs
+COPY avatar-backup/ /app/avatar-backup/
+
 EXPOSE 3001
 
-CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma && node prisma/ensure-schema.js && (npx prisma db seed || true) && node dist/main"]
+CMD ["sh", "-c", "npx prisma db push --schema=prisma/schema.prisma && node prisma/ensure-schema.js && (npx prisma db seed || true) && ([ -f /app/avatar-backup/manifest.json ] && node /app/scripts/avatar-restore.mjs || true) && node dist/main"]

@@ -11,7 +11,10 @@ import { ChangePasswordDto } from './dto/change-password.dto';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { CurrentUser } from '../auth/decorators/current-user.decorator';
 
-const AVATAR_DIR = join(process.cwd(), 'uploads', 'avatars');
+const UPLOADS_ROOT = process.env.RAILWAY_VOLUME_MOUNT_PATH
+  ? join(process.env.RAILWAY_VOLUME_MOUNT_PATH, 'uploads')
+  : join(process.cwd(), 'uploads');
+const AVATAR_DIR = join(UPLOADS_ROOT, 'avatars');
 if (!existsSync(AVATAR_DIR)) mkdirSync(AVATAR_DIR, { recursive: true });
 
 @ApiTags('Users')
