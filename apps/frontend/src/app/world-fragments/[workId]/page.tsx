@@ -147,6 +147,15 @@ export default function WorldFragmentsPage() {
     } catch {}
   };
 
+  // Delete fragment
+  const handleDeleteFragment = async (fragmentId: string) => {
+    try {
+      await worldFragmentsApi.deleteFragment(fragmentId);
+      setSelectedFragment(null);
+      await loadData();
+    } catch {}
+  };
+
   // View fragment detail
   const handleViewFragment = async (fragmentId: string) => {
     try {
@@ -336,6 +345,18 @@ export default function WorldFragmentsPage() {
                     className={selectedFragment.hasBookmarked ? 'text-primary' : ''}
                   >
                     {selectedFragment.hasBookmarked ? 'Saved' : 'Save'}
+                  </Button>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      if (confirm('この断片を削除しますか？')) {
+                        handleDeleteFragment(selectedFragment.id);
+                      }
+                    }}
+                    className="text-muted-foreground hover:text-destructive"
+                  >
+                    削除
                   </Button>
                 </div>
               </div>
