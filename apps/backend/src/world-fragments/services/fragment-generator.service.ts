@@ -234,7 +234,7 @@ ${JSON.stringify(canon.relationships, null, 2)}
 \`\`\`json
 {
   "allowed": true/false,
-  "reason": "却下理由（allowedがfalseの場合）",
+  "reason": "却下理由（allowedがfalseの場合。読者向けのやさしい日本語で書く。「正典」「Canon」「WHAT_IF」「constraints」などの内部用語は使わない。原作の世界観を壊さないための理由を、物語の言葉で伝える）",
   "guidelines": "生成時に守るべきガイドライン（allowedがtrueの場合）"
 }
 \`\`\``;
