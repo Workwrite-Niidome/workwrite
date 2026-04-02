@@ -99,6 +99,7 @@ export class WorldFragmentsController {
           establishedFacts: body.establishedFacts,
           ambiguities: body.ambiguities,
           narrativeStyle: body.narrativeStyle ?? null,
+          ...(body.wishSeeds !== undefined ? { wishSeeds: body.wishSeeds } : {}),
         },
       });
     }
@@ -114,6 +115,7 @@ export class WorldFragmentsController {
         establishedFacts: body.establishedFacts,
         ambiguities: body.ambiguities,
         narrativeStyle: body.narrativeStyle ?? null,
+        ...(body.wishSeeds !== undefined ? { wishSeeds: body.wishSeeds } : {}),
       },
     });
   }
