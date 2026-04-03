@@ -13,6 +13,7 @@ import { WorksService } from '../works/works.service';
 import { CharacterExtractionService } from '../character-talk/character-extraction.service';
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OriginalityService } from '../originality/originality.service';
+import { WorldCanonService } from '../world-fragments/services/world-canon.service';
 import { PostType, Episode } from '@prisma/client';
 
 interface EpisodeWithWork extends Episode {
@@ -33,6 +34,7 @@ export class EpisodesController {
     private characterExtraction: CharacterExtractionService,
     private prisma: PrismaService,
     private originalityService: OriginalityService,
+    private worldCanonService: WorldCanonService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -155,6 +157,10 @@ export class EpisodesController {
     // Auto-update WorldCanon upToEpisode if World Fragments is enabled
     this.autoUpdateCanonEpisodeCount(episode.workId).catch((e) =>
       this.logger.warn(`Canon auto-update failed for work ${episode.workId}: ${e}`),
+    );
+    // Fire-and-forget: run Step 1 fragment analysis for the published episode
+    this.worldCanonService.runStep1ForEpisode(episode.workId, id).catch((e) =>
+      this.logger.warn(`Fragment analysis (Step 1) failed for episode ${id}: ${e}`),
     );
     return result;
   }

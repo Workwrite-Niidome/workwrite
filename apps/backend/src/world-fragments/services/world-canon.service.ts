@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, ServiceUnavailableException } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 
@@ -16,8 +17,9 @@ export class WorldCanonService {
   /**
    * 作品のWorldCanonを構築・更新する
    * 既存のEpisodeAnalysis, StoryCharacter, WorldSetting, StoryEventから集約
+   * steps パラメータで特定のステップだけ実行可能 (1=per-episode analysis, 2=aggregation, 3=synthesis)
    */
-  async buildCanon(workId: string, upToEpisode?: number) {
+  async buildCanon(workId: string, upToEpisode?: number, steps?: number[]) {
     const work = await this.prisma.work.findUnique({
       where: { id: workId },
       select: {
@@ -92,8 +94,9 @@ export class WorldCanonService {
       where: { workId },
     });
 
+    let canon;
     if (existing) {
-      return this.prisma.worldCanon.update({
+      canon = await this.prisma.worldCanon.update({
         where: { workId },
         data: {
           canonVersion: existing.canonVersion + 1,
@@ -101,15 +104,32 @@ export class WorldCanonService {
           ...canonData,
         },
       });
+    } else {
+      canon = await this.prisma.worldCanon.create({
+        data: {
+          workId,
+          upToEpisode: targetEpisode,
+          ...canonData,
+        },
+      });
     }
 
-    return this.prisma.worldCanon.create({
-      data: {
-        workId,
-        upToEpisode: targetEpisode,
-        ...canonData,
-      },
-    });
+    // Run 3-step enrichment pipeline after base Canon build
+    const runSteps = steps ?? [1, 2, 3];
+
+    if (runSteps.includes(1)) {
+      await this.runStep1(workId);
+    }
+
+    if (runSteps.includes(2) || runSteps.includes(3)) {
+      const timelines = await this.runStep2(workId);
+
+      if (runSteps.includes(3)) {
+        canon = await this.runStep3(workId, timelines);
+      }
+    }
+
+    return canon;
   }
 
   async getCanon(workId: string) {
@@ -120,93 +140,168 @@ export class WorldCanonService {
     return canon;
   }
 
+  // ===== Step 1: Per-episode analysis =====
+
   /**
-   * Canonのキャラクタープロファイルをエピソード本文から深化させる
-   * 読了者視点で、各キャラクターの真の知識・隠していること・真の動機を分析
+   * Step 1: 全公開エピソードのfragmentAnalysisを生成（キャッシュ済みはスキップ）
    */
-  async enrichCharacterProfiles(workId: string) {
-    const canon = await this.getCanon(workId);
+  async runStep1(workId: string): Promise<{ analyzed: number; cached: number; total: number }> {
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    // 全エピソード本文を取得
+    // Get all published episodes
     const episodes = await this.prisma.episode.findMany({
       where: { workId, publishedAt: { not: null } },
-      select: { orderIndex: true, title: true, content: true },
+      select: { id: true, title: true, content: true, orderIndex: true },
       orderBy: { orderIndex: 'asc' },
     });
 
     if (episodes.length === 0) {
-      throw new NotFoundException('No published episodes found');
+      return { analyzed: 0, cached: 0, total: 0 };
     }
 
-    // エピソード本文を結合（各エピソードを区切り付きで）
-    const episodeTexts = episodes.map((ep) => {
-      const content = ep.content || '';
-      // 長いエピソードは5000文字に切り詰め
-      const truncated = content.length > 5000
-        ? content.slice(0, 5000) + '\n[...省略...]'
-        : content;
-      return `=== 第${ep.orderIndex}話「${ep.title}」===\n${truncated}`;
-    }).join('\n\n');
+    // Get existing analyses with fragmentAnalysis
+    const existingAnalyses = await this.prisma.episodeAnalysis.findMany({
+      where: {
+        workId,
+        fragmentAnalysis: { not: Prisma.DbNull },
+      },
+      select: { episodeId: true },
+    });
+    const cachedSet = new Set(existingAnalyses.map((a) => a.episodeId));
 
-    const currentProfiles = canon.characterProfiles as any[];
+    // Get character names from Canon (if available) or StoryCharacter table
+    const canon = await this.prisma.worldCanon.findUnique({ where: { workId } });
+    let characterNames: string[] = [];
+    if (canon && canon.characterProfiles) {
+      characterNames = (canon.characterProfiles as any[]).map((c: any) => c.name);
+    } else {
+      const chars = await this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: { name: true },
+      });
+      characterNames = chars.map((c) => c.name);
+    }
 
-    const prompt = `あなたは小説を読了した読者として、各キャラクターの「真の姿」を分析する専門家です。
+    let analyzed = 0;
+    const total = episodes.length;
+    const cached = cachedSet.size;
 
-以下の小説の全エピソードを読んだ上で、各キャラクターの深層プロファイルを構築してください。
-これはWorld Fragments（読了者向けの二次的な物語断片）を生成するためのものです。
-読了者は物語の全てを知っています。ネタバレを恐れる必要はありません。
+    // Sequential processing to avoid rate limits
+    for (const ep of episodes) {
+      if (cachedSet.has(ep.id)) continue;
 
-## 現在のキャラクタープロファイル（表面的な設定）
-${JSON.stringify(currentProfiles.map((c: any) => ({
-  name: c.name,
-  role: c.role,
-  personality: c.personality,
-  speechStyle: c.speechStyle,
-  motivation: c.motivation,
-  secrets: c.secrets,
-  constraints: c.constraints,
-})), null, 2)}
+      this.logger.log(`Step 1: analyzing episode ${analyzed + cached + 1}/${total} (${ep.title})`);
+
+      await this.analyzeEpisodeForFragments(
+        ep.id,
+        ep.content || '',
+        ep.title || '',
+        ep.orderIndex,
+        characterNames,
+      );
+      analyzed++;
+    }
+
+    this.logger.log(`Step 1 complete: ${analyzed} analyzed, ${cached} cached, ${total} total`);
+    return { analyzed, cached, total };
+  }
+
+  /**
+   * Step 1 for a single episode (called from publish hook)
+   */
+  async runStep1ForEpisode(workId: string, episodeId: string): Promise<void> {
+    // Only run if WorldCanon exists for this work
+    const canon = await this.prisma.worldCanon.findUnique({ where: { workId } });
+    if (!canon) return;
+
+    const episode = await this.prisma.episode.findUnique({
+      where: { id: episodeId },
+      select: { id: true, title: true, content: true, orderIndex: true },
+    });
+    if (!episode) return;
+
+    // Check if already analyzed
+    const existing = await this.prisma.episodeAnalysis.findFirst({
+      where: { episodeId, fragmentAnalysis: { not: Prisma.DbNull } },
+    });
+    if (existing) return;
+
+    const characterNames = (canon.characterProfiles as any[]).map((c: any) => c.name);
+
+    this.logger.log(`Step 1 (single): analyzing episode ${episode.orderIndex} "${episode.title}" for work ${workId}`);
+
+    await this.analyzeEpisodeForFragments(
+      episode.id,
+      episode.content || '',
+      episode.title || '',
+      episode.orderIndex,
+      characterNames,
+    );
+  }
+
+  /**
+   * 単一エピソードをWorld Fragments用に分析し、fragmentAnalysisをEpisodeAnalysisに保存
+   */
+  async analyzeEpisodeForFragments(
+    episodeId: string,
+    content: string,
+    title: string,
+    orderIndex: number,
+    characterNames: string[],
+  ): Promise<void> {
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    const prompt = `あなたは小説のエピソードを分析する専門家です。World Fragments（読了者向けの二次的な物語断片）生成のために、このエピソードの詳細な分析を行ってください。
+
+## エピソード情報
+- 第${orderIndex}話「${title}」
+
+## 既知のキャラクター名
+${characterNames.map((n) => `- ${n}`).join('\n')}
 
 ## エピソード本文
-${episodeTexts}
+${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : content}
 
-## 指示
-各キャラクターについて、物語全体を通読した上で以下を分析してください。
-特に「初回読了時には気づかないが、読み返すと見えてくること」を重視してください。
+## 分析指示
+以下のJSON形式で分析結果を返してください。
 
 \`\`\`json
-[
-  {
-    "name": "キャラクター名",
-    "trueNature": "物語全体を通じて明らかになるこのキャラクターの真の姿。表面的な設定ではなく、読了後に見える本質",
-    "knowledge": {
-      "knows": ["このキャラクターが知っていること（他のキャラクターが知らないことを含む）"],
-      "doesNotKnow": ["このキャラクターが知らないこと・気づいていないこと"],
-      "hidesFromOthers": ["知っているが意図的に隠していること、言わないこと"],
-      "sensesButCannotArticulate": ["言語化できないが感じていること"]
-    },
-    "keyMoments": [
-      {
-        "episode": "第N話",
-        "moment": "このキャラクターを理解する上で最も重要な瞬間の描写",
-        "significance": "なぜこの瞬間が重要か（読了者視点）"
-      }
-    ],
-    "voiceNotes": "このキャラクターの視点でFragmentを書くとき、絶対に守るべき内面の真実。例: 蒼は「わからない」のではなく「知っていて言わない」",
-    "updatedConstraints": "現在のconstraintsを読了者視点で補強・修正したもの"
-  }
-]
+{
+  "characters": [
+    {
+      "name": "キャラクター名",
+      "dialogueQuotes": ["このエピソードでの重要な台詞（原文のまま）"],
+      "learns": ["このエピソードで新たに知ったこと・気づいたこと"],
+      "reveals": ["このエピソードで他者に明かしたこと"],
+      "hides": ["このエピソードで隠したこと・言わなかったこと"],
+      "emotionalState": "このエピソード時点での感情状態",
+      "definingMoments": ["このキャラクターを理解する上で重要な瞬間"]
+    }
+  ],
+  "events": [
+    {
+      "description": "イベントの概要",
+      "characters": ["関与キャラクター"],
+      "significance": "key/normal/ambient"
+    }
+  ],
+  "worldBuilding": [
+    {
+      "category": "カテゴリ（地理/社会/技術/文化等）",
+      "detail": "明かされた世界設定の詳細"
+    }
+  ],
+  "narrativeNotes": "語りの特徴、視点、伏線、雰囲気に関するメモ"
+}
 \`\`\`
 
 重要:
-- 各キャラクターの「知っていること」は物語のテキストに基づく。推測ではなく、テキストから読み取れる根拠を持つこと
-- 「やっと会えたね」のような台詞の真意を分析すること
-- キャラクターが他のキャラクターについて何を知っていて何を知らないかの非対称性を明確にすること
-- 物語が意図的に曖昧にしていることは、曖昧なまま記述すること（断定しない）`;
-
-    this.logger.log(`Enriching character profiles. Episode text length: ${episodeTexts.length} chars`);
+- キャラクター名は既知のリストと一致させること（表記揺れに注意）
+- dialogueQuotesは原文そのままを引用すること
+- 登場しないキャラクターは含めないこと
+- hides は「意図的に隠している」ものだけ。単に話題に出なかっただけのものは含めない`;
 
     let response: Response;
     try {
@@ -219,71 +314,265 @@ ${episodeTexts}
         },
         body: JSON.stringify({
           model: SONNET,
-          max_tokens: 16384,
+          max_tokens: 8192,
           messages: [{ role: 'user', content: prompt }],
         }),
-        signal: AbortSignal.timeout(180_000), // 3分タイムアウト
+        signal: AbortSignal.timeout(60_000),
       });
     } catch (fetchError: any) {
-      this.logger.error(`Enrich fetch failed: ${fetchError.message}`);
+      this.logger.error(`Step 1 fetch failed for episode ${episodeId}: ${fetchError.message}`);
       throw new ServiceUnavailableException(`AI API connection failed: ${fetchError.message}`);
     }
 
     if (!response.ok) {
       const error = await response.text();
-      this.logger.error(`Enrich failed (${response.status}): ${error}`);
-      throw new ServiceUnavailableException('Failed to enrich character profiles');
+      this.logger.error(`Step 1 failed for episode ${episodeId} (${response.status}): ${error}`);
+      throw new ServiceUnavailableException('Failed to analyze episode for fragments');
     }
 
     const result = await response.json() as any;
     const text = result.content?.[0]?.text;
     if (!text) throw new ServiceUnavailableException('Empty response from AI');
 
-    // JSONを抽出
-    let enrichedProfiles: any[] = [];
-    const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
-    if (jsonFenced) {
-      try { enrichedProfiles = JSON.parse(jsonFenced[1]); } catch {}
+    const parsed = this.extractJson(text);
+    if (!parsed) {
+      this.logger.error(`Step 1: failed to parse JSON for episode ${episodeId}. Response: ${text.slice(0, 500)}`);
+      throw new ServiceUnavailableException('Failed to parse episode fragment analysis');
     }
-    if (enrichedProfiles.length === 0) {
-      const directJson = text.match(/\[[\s\S]*\]/);
-      if (directJson) {
-        try { enrichedProfiles = JSON.parse(directJson[0]); } catch {}
+
+    // Save to EpisodeAnalysis.fragmentAnalysis (upsert in case analysis row exists)
+    const existingAnalysis = await this.prisma.episodeAnalysis.findFirst({
+      where: { episodeId },
+    });
+
+    if (existingAnalysis) {
+      await this.prisma.episodeAnalysis.update({
+        where: { id: existingAnalysis.id },
+        data: { fragmentAnalysis: parsed },
+      });
+    } else {
+      // If no EpisodeAnalysis exists yet, we need workId
+      const episode = await this.prisma.episode.findUnique({
+        where: { id: episodeId },
+        select: { workId: true },
+      });
+      if (episode) {
+        await this.prisma.episodeAnalysis.create({
+          data: {
+            episodeId,
+            workId: episode.workId,
+            summary: '',
+            fragmentAnalysis: parsed,
+          },
+        });
+      }
+    }
+  }
+
+  // ===== Step 2: Aggregation (no AI) =====
+
+  /**
+   * Step 2: 全エピソードのfragmentAnalysisからキャラクタータイムラインを集約
+   */
+  async runStep2(workId: string): Promise<Map<string, any>> {
+    const analyses = await this.prisma.episodeAnalysis.findMany({
+      where: {
+        workId,
+        fragmentAnalysis: { not: Prisma.DbNull },
+      },
+      include: {
+        episode: { select: { orderIndex: true, title: true } },
+      },
+      orderBy: { episode: { orderIndex: 'asc' } },
+    });
+
+    const timelines = new Map<string, any>();
+
+    for (const analysis of analyses) {
+      const fa = analysis.fragmentAnalysis as any;
+      if (!fa || !fa.characters) continue;
+
+      const episodeInfo = {
+        orderIndex: analysis.episode.orderIndex,
+        title: analysis.episode.title,
+      };
+
+      for (const charData of fa.characters) {
+        const name = charData.name;
+        if (!timelines.has(name)) {
+          timelines.set(name, {
+            name,
+            episodes: [],
+          });
+        }
+
+        timelines.get(name).episodes.push({
+          ...episodeInfo,
+          dialogueQuotes: charData.dialogueQuotes || [],
+          learns: charData.learns || [],
+          reveals: charData.reveals || [],
+          hides: charData.hides || [],
+          emotionalState: charData.emotionalState || '',
+          definingMoments: charData.definingMoments || [],
+        });
       }
     }
 
-    if (enrichedProfiles.length === 0) {
-      this.logger.error(`Failed to parse enriched profiles. Response: ${text.slice(0, 500)}`);
-      throw new ServiceUnavailableException('Failed to parse enriched character profiles');
+    this.logger.log(`Step 2 complete: ${timelines.size} character timelines built from ${analyses.length} episodes`);
+    return timelines;
+  }
+
+  // ===== Step 3: Per-character synthesis =====
+
+  /**
+   * Step 3: 各キャラクターのタイムラインから深層プロファイルを合成
+   */
+  async runStep3(workId: string, timelines: Map<string, any>) {
+    const canon = await this.getCanon(workId);
+    const profiles = canon.characterProfiles as any[];
+
+    const enrichedProfiles = [...profiles];
+
+    for (let i = 0; i < enrichedProfiles.length; i++) {
+      const profile = enrichedProfiles[i];
+      const timeline = timelines.get(profile.name);
+      if (!timeline || timeline.episodes.length === 0) continue;
+
+      this.logger.log(`Step 3: synthesizing character ${i + 1}/${enrichedProfiles.length} (${profile.name})`);
+
+      const enrichment = await this.synthesizeCharacterProfile(profile, timeline);
+      if (enrichment) {
+        enrichedProfiles[i] = {
+          ...profile,
+          trueNature: enrichment.trueNature,
+          knowledge: enrichment.knowledge,
+          keyMoments: enrichment.keyMoments,
+          voiceNotes: enrichment.voiceNotes,
+          constraints: enrichment.updatedConstraints || profile.constraints,
+        };
+      }
     }
 
-    // 既存のcharacterProfilesに深層情報をマージ
-    const mergedProfiles = currentProfiles.map((profile: any) => {
-      const enriched = enrichedProfiles.find(
-        (e: any) => e.name === profile.name || profile.name.includes(e.name),
-      );
-      if (!enriched) return profile;
-
-      return {
-        ...profile,
-        trueNature: enriched.trueNature,
-        knowledge: enriched.knowledge,
-        keyMoments: enriched.keyMoments,
-        voiceNotes: enriched.voiceNotes,
-        constraints: enriched.updatedConstraints || profile.constraints,
-      };
-    });
-
-    // Canonを更新
+    // Update Canon with enriched profiles
     const updated = await this.prisma.worldCanon.update({
       where: { workId },
       data: {
-        characterProfiles: mergedProfiles,
+        characterProfiles: enrichedProfiles,
         canonVersion: canon.canonVersion + 1,
       },
     });
 
-    this.logger.log(`Enriched ${enrichedProfiles.length} character profiles for work ${workId} (Canon v${updated.canonVersion})`);
+    this.logger.log(`Step 3 complete: enriched ${enrichedProfiles.length} character profiles (Canon v${updated.canonVersion})`);
+    return updated;
+  }
+
+  /**
+   * 単一キャラクターの基本プロファイル+タイムラインから深層プロファイルを合成
+   */
+  async synthesizeCharacterProfile(
+    basicProfile: any,
+    timeline: any,
+  ): Promise<any | null> {
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    const prompt = `あなたは小説を読了した読者として、キャラクターの「真の姿」を分析する専門家です。
+以下のキャラクターの基本プロファイルと、全エピソードを通じたタイムラインデータから、深層プロファイルを構築してください。
+
+## 基本プロファイル
+${JSON.stringify({
+  name: basicProfile.name,
+  role: basicProfile.role,
+  personality: basicProfile.personality,
+  speechStyle: basicProfile.speechStyle,
+  motivation: basicProfile.motivation,
+  secrets: basicProfile.secrets,
+  constraints: basicProfile.constraints,
+}, null, 2)}
+
+## エピソードごとのタイムライン
+${JSON.stringify(timeline.episodes, null, 2)}
+
+## 指示
+このキャラクターについて、物語全体を通読した上で以下を分析してください。
+特に「初回読了時には気づかないが、読み返すと見えてくること」を重視してください。
+
+\`\`\`json
+{
+  "trueNature": "物語全体を通じて明らかになるこのキャラクターの真の姿。表面的な設定ではなく、読了後に見える本質",
+  "knowledge": {
+    "knows": ["このキャラクターが知っていること（他のキャラクターが知らないことを含む）"],
+    "doesNotKnow": ["このキャラクターが知らないこと・気づいていないこと"],
+    "hidesFromOthers": ["知っているが意図的に隠していること、言わないこと"],
+    "sensesButCannotArticulate": ["言語化できないが感じていること"]
+  },
+  "keyMoments": [
+    {
+      "episode": "第N話",
+      "moment": "このキャラクターを理解する上で最も重要な瞬間の描写",
+      "significance": "なぜこの瞬間が重要か（読了者視点）"
+    }
+  ],
+  "voiceNotes": "このキャラクターの視点でFragmentを書くとき、絶対に守るべき内面の真実",
+  "updatedConstraints": "現在のconstraintsを読了者視点で補強・修正したもの"
+}
+\`\`\`
+
+重要:
+- 各情報は物語のテキストに基づく。推測ではなく、テキストから読み取れる根拠を持つこと
+- dialogueQuotesの台詞の真意を分析すること
+- 物語が意図的に曖昧にしていることは、曖昧なまま記述すること（断定しない）`;
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: SONNET,
+          max_tokens: 4096,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: AbortSignal.timeout(60_000),
+      });
+    } catch (fetchError: any) {
+      this.logger.error(`Step 3 synthesis failed for ${basicProfile.name}: ${fetchError.message}`);
+      return null;
+    }
+
+    if (!response.ok) {
+      const error = await response.text();
+      this.logger.error(`Step 3 synthesis failed for ${basicProfile.name} (${response.status}): ${error}`);
+      return null;
+    }
+
+    const result = await response.json() as any;
+    const text = result.content?.[0]?.text;
+    if (!text) return null;
+
+    const parsed = this.extractJson(text);
+    if (!parsed) {
+      this.logger.error(`Step 3: failed to parse JSON for ${basicProfile.name}. Response: ${text.slice(0, 500)}`);
+      return null;
+    }
+
+    return parsed;
+  }
+
+  /**
+   * Canonのキャラクタープロファイルをエピソード本文から深化させる
+   * 3-step pipeline に委譲
+   */
+  async enrichCharacterProfiles(workId: string) {
+    const step1Result = await this.runStep1(workId);
+    this.logger.log(`enrichCharacterProfiles Step 1: ${JSON.stringify(step1Result)}`);
+
+    const timelines = await this.runStep2(workId);
+    const updated = await this.runStep3(workId, timelines);
     return updated;
   }
 
@@ -502,6 +791,34 @@ ${existingSeeds.length > 0 ? `\n## 既存の種（これらと重複しない新
       layerInteractions: canon.layerInteractions ?? null,
       layerAmbiguities: canon.layerAmbiguities ?? null,
     };
+  }
+
+  /** AIレスポンスからJSONを抽出（複数パターン対応） */
+  private extractJson(text: string): any | null {
+    // Pattern 1: ```json ... ```
+    const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
+    if (jsonFenced) {
+      try { return JSON.parse(jsonFenced[1]); } catch {}
+    }
+
+    // Pattern 2: ``` ... ```
+    const fenced = text.match(/```\s*\n?([\s\S]*?)\n?\s*```/);
+    if (fenced) {
+      try { return JSON.parse(fenced[1]); } catch {}
+    }
+
+    // Pattern 3: 直接JSON
+    const directObj = text.match(/\{[\s\S]*\}/);
+    if (directObj) {
+      try { return JSON.parse(directObj[0]); } catch {}
+    }
+
+    const directArr = text.match(/\[[\s\S]*\]/);
+    if (directArr) {
+      try { return JSON.parse(directArr[0]); } catch {}
+    }
+
+    return null;
   }
 
   private buildCanonPrompt(context: {

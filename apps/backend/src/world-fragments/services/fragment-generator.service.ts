@@ -1,4 +1,5 @@
 import { Injectable, Logger, NotFoundException, BadRequestException, ServiceUnavailableException, HttpException, HttpStatus } from '@nestjs/common';
+import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { CreditService } from '../../billing/credit.service';
@@ -190,9 +191,9 @@ export class FragmentGeneratorService {
         select: { title: true, genre: true, settingEra: true },
       });
 
-      // 原作テキスト参照: wishの内容から関連エピソードを自動特定・取得
+      // 原作テキスト参照: wishの内容から関連エピソードを自動特定・取得（DB-only）
       const anchorContext = await this.resolveAnchorContext(
-        apiKey, workId, wish, wishType, canon, fragment.anchorEpisodeId, scope.upToEpisode,
+        workId, wish, wishType, canon, fragment.anchorEpisodeId, scope.upToEpisode,
       );
 
       const generatedContent = await this.generateContent(
@@ -708,10 +709,9 @@ ${JSON.stringify(
 
   /**
    * wishの内容から関連するエピソードを特定し、原作テキストを取得する
-   * Canonのタイムラインとキャラクター情報を使って、関連エピソードを推定
+   * DB-only: fragmentAnalysisのキャラクター情報からマッチング（API呼び出しなし）
    */
   private async resolveAnchorContext(
-    apiKey: string,
     workId: string,
     wish: string,
     wishType: WishTypeDto,
@@ -730,91 +730,83 @@ ${JSON.stringify(
       }
     }
 
-    // wishから関連エピソードを特定する
-    // Step 1: エピソード一覧を取得（タイトルとorderIndexのみ）
-    const episodes = await this.prisma.episode.findMany({
-      where: { workId, publishedAt: { not: null }, orderIndex: { lte: upToEpisode } },
-      select: { id: true, title: true, orderIndex: true },
-      orderBy: { orderIndex: 'asc' },
-    });
-
-    if (episodes.length === 0) return '';
-
-    // Step 2: Canonのタイムラインとエピソード一覧からAIに関連エピソードを特定させる
-    const identifyPrompt = `以下の小説の「願い」に最も関連するエピソードを特定してください。
-
-## 願い
-${wish}
-
-## 願いの種類
-${wishType}
-
-## エピソード一覧
-${episodes.map((e) => `- 第${e.orderIndex}話「${e.title}」`).join('\n')}
-
-## タイムライン（主要イベント）
-${JSON.stringify((canon.timeline as any[]).map((t: any) => ({ position: t.position, event: t.event, characters: t.characters })), null, 2)}
-
-## キャラクター
-${(canon.characterProfiles as any[]).map((c: any) => `- ${c.name}（${c.role}）`).join('\n')}
-
-最も関連するエピソードの番号を最大3つ、関連度の高い順にJSON配列で返してください。
-理由は不要です。番号のみ。
-
-\`\`\`json
-[0, 5, 6]
-\`\`\``;
-
     try {
-      const response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: SONNET,
-          max_tokens: 256,
-          messages: [{ role: 'user', content: identifyPrompt }],
-        }),
-        signal: AbortSignal.timeout(30_000),
-      });
-
-      if (!response.ok) {
-        this.logger.warn('Episode identification failed, proceeding without anchor context');
-        return '';
-      }
-
-      const result = await response.json() as any;
-      const text = result.content?.[0]?.text || '';
-
-      // エピソード番号の配列を抽出
-      let episodeIndices: number[] = [];
-      const parsed = this.extractJson(text);
-      if (Array.isArray(parsed)) {
-        episodeIndices = parsed.filter((n: any) => typeof n === 'number');
-      }
-
-      if (episodeIndices.length === 0) {
-        this.logger.warn('Could not identify relevant episodes from wish');
-        return '';
-      }
-
-      // Step 3: 特定されたエピソードの本文を取得
-      const relevantEpisodes = await this.prisma.episode.findMany({
+      // Get all EpisodeAnalysis with fragmentAnalysis for this work
+      const analyses = await this.prisma.episodeAnalysis.findMany({
         where: {
           workId,
-          orderIndex: { in: episodeIndices },
-          publishedAt: { not: null },
+          fragmentAnalysis: { not: Prisma.DbNull },
         },
+        include: {
+          episode: { select: { orderIndex: true, title: true } },
+        },
+        orderBy: { episode: { orderIndex: 'asc' } },
+      });
+
+      if (analyses.length === 0) return '';
+
+      // Extract character names from the wish text by matching against Canon characterProfiles
+      const characterProfiles = (canon.characterProfiles as any[]) || [];
+      const matchedCharNames: string[] = [];
+      for (const profile of characterProfiles) {
+        if (wish.includes(profile.name)) {
+          matchedCharNames.push(profile.name);
+        }
+      }
+
+      // Filter episodes where fragmentAnalysis.characters contains matching character names
+      type ScoredAnalysis = { analysis: typeof analyses[number]; score: number };
+      const scored: ScoredAnalysis[] = [];
+
+      for (const analysis of analyses) {
+        // Only include episodes within scope
+        if (analysis.episode.orderIndex > upToEpisode) continue;
+
+        const fa = analysis.fragmentAnalysis as any;
+        if (!fa || !fa.characters) continue;
+
+        const faCharNames = (fa.characters as any[]).map((c: any) => c.name);
+
+        // Score: number of matching characters found in this episode
+        let score = 0;
+        for (const name of matchedCharNames) {
+          if (faCharNames.includes(name)) {
+            score++;
+          }
+        }
+
+        // If no character match found but we have analyses, give a base score of 0
+        // so we can still fall back to picking some episodes
+        if (score > 0 || matchedCharNames.length === 0) {
+          scored.push({ analysis, score: score > 0 ? score : 0 });
+        }
+      }
+
+      // If no matches at all, take the last 3 episodes as fallback
+      let selectedAnalyses: typeof analyses;
+      if (scored.length === 0) {
+        selectedAnalyses = analyses
+          .filter((a) => a.episode.orderIndex <= upToEpisode)
+          .slice(-3);
+      } else {
+        // Sort by score descending, take top 3
+        scored.sort((a, b) => b.score - a.score);
+        selectedAnalyses = scored.slice(0, 3).map((s) => s.analysis);
+      }
+
+      if (selectedAnalyses.length === 0) return '';
+
+      // Fetch actual episode content for the selected episodes
+      const episodeIds = selectedAnalyses.map((a) => a.episodeId);
+      const relevantEpisodes = await this.prisma.episode.findMany({
+        where: { id: { in: episodeIds } },
         select: { title: true, content: true, orderIndex: true },
         orderBy: { orderIndex: 'asc' },
       });
 
       if (relevantEpisodes.length === 0) return '';
 
-      // 各エピソードの本文を含める（長すぎる場合は切り詰め）
+      // Format with truncation
       const maxCharsPerEpisode = Math.floor(12000 / relevantEpisodes.length);
       const contextParts = relevantEpisodes.map((ep) => {
         const content = ep.content || '';
@@ -824,7 +816,7 @@ ${(canon.characterProfiles as any[]).map((c: any) => `- ${c.name}（${c.role}）
         return `### 第${ep.orderIndex}話「${ep.title}」\n${truncated}`;
       });
 
-      this.logger.log(`Resolved ${relevantEpisodes.length} anchor episodes for wish: ${wish.slice(0, 50)}`);
+      this.logger.log(`Resolved ${relevantEpisodes.length} anchor episodes (DB-only) for wish: ${wish.slice(0, 50)}`);
 
       return `\n## 原作テキスト（関連エピソード）\n以下は原作の実際のテキストです。台詞、描写、固有名詞は必ずこの原文に従ってください。\n\n${contextParts.join('\n\n')}`;
     } catch (e: any) {

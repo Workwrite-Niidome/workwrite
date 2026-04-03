@@ -126,10 +126,10 @@ export const worldFragmentsApi = {
     fetchWithAuth(`/world-fragments/${workId}/wish-seeds?count=${count}`),
 
   /** WorldCanonを構築 */
-  buildCanon: (workId: string, upToEpisode?: number): Promise<WorldCanon> =>
+  buildCanon: (workId: string, upToEpisode?: number, steps?: number[]): Promise<WorldCanon> =>
     fetchWithAuth(`/world-fragments/${workId}/canon/build`, {
       method: 'POST',
-      body: JSON.stringify({ upToEpisode }),
+      body: JSON.stringify({ upToEpisode, steps }),
     }),
 
   /** WorldCanonを部分更新（作者またはAdmin） */

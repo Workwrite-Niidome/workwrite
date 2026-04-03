@@ -8,9 +8,10 @@ import { PostsModule } from '../posts/posts.module';
 import { ScoringModule } from '../scoring/scoring.module';
 import { WorksModule } from '../works/works.module';
 import { CharacterTalkModule } from '../character-talk/character-talk.module';
+import { WorldFragmentsModule } from '../world-fragments/world-fragments.module';
 
 @Module({
-  imports: [CreationWizardModule, AiAssistModule, PostsModule, ScoringModule, WorksModule, CharacterTalkModule],
+  imports: [CreationWizardModule, AiAssistModule, PostsModule, ScoringModule, WorksModule, CharacterTalkModule, WorldFragmentsModule],
   controllers: [EpisodesController],
   providers: [EpisodesService, ScheduledPublishService],
   exports: [EpisodesService],

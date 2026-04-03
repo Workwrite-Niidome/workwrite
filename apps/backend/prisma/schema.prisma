@@ -1054,6 +1054,7 @@ model EpisodeAnalysis {
   sceneBreakdown     Json?
   characterMovement  Json?
   interactiveVersion Int?   @default(0)
+  fragmentAnalysis   Json?
 
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt

@@ -1,12 +1,16 @@
 import { Injectable, Logger, OnModuleInit, OnModuleDestroy } from '@nestjs/common';
 import { PrismaService } from '../common/prisma/prisma.service';
+import { WorldCanonService } from '../world-fragments/services/world-canon.service';
 
 @Injectable()
 export class ScheduledPublishService implements OnModuleInit, OnModuleDestroy {
   private readonly logger = new Logger(ScheduledPublishService.name);
   private intervalId: ReturnType<typeof setInterval> | null = null;
 
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private worldCanonService: WorldCanonService,
+  ) {}
 
   onModuleInit() {
     this.intervalId = setInterval(() => this.processScheduled(), 60_000);
@@ -49,6 +53,10 @@ export class ScheduledPublishService implements OnModuleInit, OnModuleDestroy {
         // Auto-update WorldCanon upToEpisode if World Fragments is enabled
         this.autoUpdateCanonEpisodeCount(ep.workId).catch((e2) =>
           this.logger.warn(`Canon auto-update failed for work ${ep.workId}: ${e2}`),
+        );
+        // Fire-and-forget: run Step 1 fragment analysis for the published episode
+        this.worldCanonService.runStep1ForEpisode(ep.workId, ep.id).catch((e2) =>
+          this.logger.warn(`Fragment analysis (Step 1) failed for episode ${ep.id}: ${e2}`),
         );
       }
     } catch (e) {

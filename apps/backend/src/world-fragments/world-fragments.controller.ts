@@ -78,7 +78,7 @@ export class WorldFragmentsController {
     @Param('workId') workId: string,
     @Body() body: BuildCanonDto,
   ) {
-    const canon = await this.canonService.buildCanon(workId, body.upToEpisode);
+    const canon = await this.canonService.buildCanon(workId, body.upToEpisode, body.steps);
     return canon;
   }
 
