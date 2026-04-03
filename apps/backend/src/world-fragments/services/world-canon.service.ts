@@ -120,6 +120,173 @@ export class WorldCanonService {
     return canon;
   }
 
+  /**
+   * Canonのキャラクタープロファイルをエピソード本文から深化させる
+   * 読了者視点で、各キャラクターの真の知識・隠していること・真の動機を分析
+   */
+  async enrichCharacterProfiles(workId: string) {
+    const canon = await this.getCanon(workId);
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    // 全エピソード本文を取得
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId, publishedAt: { not: null } },
+      select: { orderIndex: true, title: true, content: true },
+      orderBy: { orderIndex: 'asc' },
+    });
+
+    if (episodes.length === 0) {
+      throw new NotFoundException('No published episodes found');
+    }
+
+    // エピソード本文を結合（各エピソードを区切り付きで）
+    const episodeTexts = episodes.map((ep) => {
+      const content = ep.content || '';
+      // 長いエピソードは5000文字に切り詰め
+      const truncated = content.length > 5000
+        ? content.slice(0, 5000) + '\n[...省略...]'
+        : content;
+      return `=== 第${ep.orderIndex}話「${ep.title}」===\n${truncated}`;
+    }).join('\n\n');
+
+    const currentProfiles = canon.characterProfiles as any[];
+
+    const prompt = `あなたは小説を読了した読者として、各キャラクターの「真の姿」を分析する専門家です。
+
+以下の小説の全エピソードを読んだ上で、各キャラクターの深層プロファイルを構築してください。
+これはWorld Fragments（読了者向けの二次的な物語断片）を生成するためのものです。
+読了者は物語の全てを知っています。ネタバレを恐れる必要はありません。
+
+## 現在のキャラクタープロファイル（表面的な設定）
+${JSON.stringify(currentProfiles.map((c: any) => ({
+  name: c.name,
+  role: c.role,
+  personality: c.personality,
+  speechStyle: c.speechStyle,
+  motivation: c.motivation,
+  secrets: c.secrets,
+  constraints: c.constraints,
+})), null, 2)}
+
+## エピソード本文
+${episodeTexts}
+
+## 指示
+各キャラクターについて、物語全体を通読した上で以下を分析してください。
+特に「初回読了時には気づかないが、読み返すと見えてくること」を重視してください。
+
+\`\`\`json
+[
+  {
+    "name": "キャラクター名",
+    "trueNature": "物語全体を通じて明らかになるこのキャラクターの真の姿。表面的な設定ではなく、読了後に見える本質",
+    "knowledge": {
+      "knows": ["このキャラクターが知っていること（他のキャラクターが知らないことを含む）"],
+      "doesNotKnow": ["このキャラクターが知らないこと・気づいていないこと"],
+      "hidesFromOthers": ["知っているが意図的に隠していること、言わないこと"],
+      "sensesButCannotArticulate": ["言語化できないが感じていること"]
+    },
+    "keyMoments": [
+      {
+        "episode": "第N話",
+        "moment": "このキャラクターを理解する上で最も重要な瞬間の描写",
+        "significance": "なぜこの瞬間が重要か（読了者視点）"
+      }
+    ],
+    "voiceNotes": "このキャラクターの視点でFragmentを書くとき、絶対に守るべき内面の真実。例: 蒼は「わからない」のではなく「知っていて言わない」",
+    "updatedConstraints": "現在のconstraintsを読了者視点で補強・修正したもの"
+  }
+]
+\`\`\`
+
+重要:
+- 各キャラクターの「知っていること」は物語のテキストに基づく。推測ではなく、テキストから読み取れる根拠を持つこと
+- 「やっと会えたね」のような台詞の真意を分析すること
+- キャラクターが他のキャラクターについて何を知っていて何を知らないかの非対称性を明確にすること
+- 物語が意図的に曖昧にしていることは、曖昧なまま記述すること（断定しない）`;
+
+    this.logger.log(`Enriching character profiles. Episode text length: ${episodeTexts.length} chars`);
+
+    let response: Response;
+    try {
+      response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: SONNET,
+          max_tokens: 16384,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: AbortSignal.timeout(180_000), // 3分タイムアウト
+      });
+    } catch (fetchError: any) {
+      this.logger.error(`Enrich fetch failed: ${fetchError.message}`);
+      throw new ServiceUnavailableException(`AI API connection failed: ${fetchError.message}`);
+    }
+
+    if (!response.ok) {
+      const error = await response.text();
+      this.logger.error(`Enrich failed (${response.status}): ${error}`);
+      throw new ServiceUnavailableException('Failed to enrich character profiles');
+    }
+
+    const result = await response.json() as any;
+    const text = result.content?.[0]?.text;
+    if (!text) throw new ServiceUnavailableException('Empty response from AI');
+
+    // JSONを抽出
+    let enrichedProfiles: any[] = [];
+    const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
+    if (jsonFenced) {
+      try { enrichedProfiles = JSON.parse(jsonFenced[1]); } catch {}
+    }
+    if (enrichedProfiles.length === 0) {
+      const directJson = text.match(/\[[\s\S]*\]/);
+      if (directJson) {
+        try { enrichedProfiles = JSON.parse(directJson[0]); } catch {}
+      }
+    }
+
+    if (enrichedProfiles.length === 0) {
+      this.logger.error(`Failed to parse enriched profiles. Response: ${text.slice(0, 500)}`);
+      throw new ServiceUnavailableException('Failed to parse enriched character profiles');
+    }
+
+    // 既存のcharacterProfilesに深層情報をマージ
+    const mergedProfiles = currentProfiles.map((profile: any) => {
+      const enriched = enrichedProfiles.find(
+        (e: any) => e.name === profile.name || profile.name.includes(e.name),
+      );
+      if (!enriched) return profile;
+
+      return {
+        ...profile,
+        trueNature: enriched.trueNature,
+        knowledge: enriched.knowledge,
+        keyMoments: enriched.keyMoments,
+        voiceNotes: enriched.voiceNotes,
+        constraints: enriched.updatedConstraints || profile.constraints,
+      };
+    });
+
+    // Canonを更新
+    const updated = await this.prisma.worldCanon.update({
+      where: { workId },
+      data: {
+        characterProfiles: mergedProfiles,
+        canonVersion: canon.canonVersion + 1,
+      },
+    });
+
+    this.logger.log(`Enriched ${enrichedProfiles.length} character profiles for work ${workId} (Canon v${updated.canonVersion})`);
+    return updated;
+  }
+
   /** 願いの種をランダムに取得（プールから） */
   async getWishSeeds(workId: string, count = 5) {
     const canon = await this.getCanon(workId);

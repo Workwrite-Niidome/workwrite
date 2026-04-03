@@ -82,6 +82,14 @@ export class WorldFragmentsController {
     return canon;
   }
 
+  /** エピソード本文からキャラクタープロファイルを深化させる（Admin用） */
+  @Post(':workId/canon/enrich')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async enrichCanon(@Param('workId') workId: string) {
+    return this.canonService.enrichCharacterProfiles(workId);
+  }
+
   /** 手作りCanonを直接投入（Admin用） */
   @Post(':workId/canon/import')
   @UseGuards(RolesGuard)
