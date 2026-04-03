@@ -450,7 +450,17 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
 
     for (let i = 0; i < enrichedProfiles.length; i++) {
       const profile = enrichedProfiles[i];
-      const timeline = timelines.get(profile.name);
+      // キャラクター名のマッチング（完全一致 → 部分一致）
+      let timeline = timelines.get(profile.name);
+      if (!timeline) {
+        // 部分一致を試みる（「先生（せんせい）」→「先生」等）
+        for (const [key, value] of timelines.entries()) {
+          if (profile.name.includes(key) || key.includes(profile.name)) {
+            timeline = value;
+            break;
+          }
+        }
+      }
       if (!timeline || timeline.episodes.length === 0) continue;
 
       this.logger.log(`Step 3: synthesizing character ${i + 1}/${enrichedProfiles.length} (${profile.name})`);
