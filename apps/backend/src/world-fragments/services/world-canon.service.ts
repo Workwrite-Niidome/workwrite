@@ -559,7 +559,7 @@ ${JSON.stringify(timeline.episodes, null, 2)}
         },
         body: JSON.stringify({
           model: SONNET,
-          max_tokens: 4096,
+          max_tokens: 8192,
           messages: [{ role: 'user', content: prompt }],
         }),
         signal: AbortSignal.timeout(180_000),
@@ -579,9 +579,14 @@ ${JSON.stringify(timeline.episodes, null, 2)}
     const text = result.content?.[0]?.text;
     if (!text) return null;
 
+    // stop_reasonがend_turnでない場合（トークン切れ）はログ出力
+    if (result.stop_reason !== 'end_turn') {
+      this.logger.warn(`Step 3: response for ${basicProfile.name} may be truncated (stop_reason: ${result.stop_reason})`);
+    }
+
     const parsed = this.extractJson(text);
     if (!parsed) {
-      this.logger.error(`Step 3: failed to parse JSON for ${basicProfile.name}. Response: ${text.slice(0, 500)}`);
+      this.logger.error(`Step 3: failed to parse JSON for ${basicProfile.name}. stop_reason: ${result.stop_reason}. Response (last 300): ${text.slice(-300)}`);
       return null;
     }
 
