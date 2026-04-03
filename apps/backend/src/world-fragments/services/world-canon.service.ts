@@ -75,47 +75,58 @@ export class WorldCanonService {
         }),
       ]);
 
-    // AIでCanonを構築
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    const canonData = await this.generateCanonWithAI(apiKey, {
-      work,
-      characters,
-      worldSettings,
-      episodeAnalyses,
-      storyEvents,
-      dialogueSamples,
-      targetEpisode,
-    });
+    const runSteps = steps ?? [0, 1, 2, 3]; // 0 = base Canon build
 
-    // 既存Canonがあればバージョンアップ、なければ新規作成
+    // Step 0: AIでbase Canonを構築（既存Canonがある場合はスキップ可能）
     const existing = await this.prisma.worldCanon.findUnique({
       where: { workId },
     });
 
     let canon;
-    if (existing) {
-      canon = await this.prisma.worldCanon.update({
-        where: { workId },
-        data: {
-          canonVersion: existing.canonVersion + 1,
-          upToEpisode: targetEpisode,
-          ...canonData,
-        },
+    if (runSteps.includes(0) || !existing) {
+      const canonData = await this.generateCanonWithAI(apiKey, {
+        work,
+        characters,
+        worldSettings,
+        episodeAnalyses,
+        storyEvents,
+        dialogueSamples,
+        targetEpisode,
       });
+
+      if (existing) {
+        canon = await this.prisma.worldCanon.update({
+          where: { workId },
+          data: {
+            canonVersion: existing.canonVersion + 1,
+            upToEpisode: targetEpisode,
+            ...canonData,
+          },
+        });
+      } else {
+        canon = await this.prisma.worldCanon.create({
+          data: {
+            workId,
+            upToEpisode: targetEpisode,
+            ...canonData,
+          },
+        });
+      }
     } else {
-      canon = await this.prisma.worldCanon.create({
-        data: {
-          workId,
-          upToEpisode: targetEpisode,
-          ...canonData,
-        },
-      });
+      canon = existing;
+      // upToEpisodeだけ更新
+      if (existing.upToEpisode < targetEpisode) {
+        canon = await this.prisma.worldCanon.update({
+          where: { workId },
+          data: { upToEpisode: targetEpisode },
+        });
+      }
     }
 
-    // Run 3-step enrichment pipeline after base Canon build
-    const runSteps = steps ?? [1, 2, 3];
+    // Run 3-step enrichment pipeline
 
     if (runSteps.includes(1)) {
       await this.runStep1(workId);

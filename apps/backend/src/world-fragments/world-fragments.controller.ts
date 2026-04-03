@@ -68,6 +68,23 @@ export class WorldFragmentsController {
     };
   }
 
+  // ===== 作品のWorld Fragments有効化 =====
+
+  /** 作品のenableWorldFragmentsフラグを切り替える（Admin用） */
+  @Post(':workId/enable')
+  @UseGuards(RolesGuard)
+  @Roles('ADMIN')
+  async enableWorldFragments(
+    @Param('workId') workId: string,
+    @Body() body: { enabled: boolean },
+  ) {
+    await this.prisma.work.update({
+      where: { id: workId },
+      data: { enableWorldFragments: body.enabled ?? true },
+    });
+    return { enabled: body.enabled ?? true };
+  }
+
   // ===== WorldCanon =====
 
   /** WorldCanonを構築・更新する（Admin用） */
