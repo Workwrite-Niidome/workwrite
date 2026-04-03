@@ -328,7 +328,7 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
           max_tokens: 8192,
           messages: [{ role: 'user', content: prompt }],
         }),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(120_000),
       });
     } catch (fetchError: any) {
       this.logger.error(`Step 1 fetch failed for episode ${episodeId}: ${fetchError.message}`);
@@ -548,7 +548,7 @@ ${JSON.stringify(timeline.episodes, null, 2)}
           max_tokens: 4096,
           messages: [{ role: 'user', content: prompt }],
         }),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(120_000),
       });
     } catch (fetchError: any) {
       this.logger.error(`Step 3 synthesis failed for ${basicProfile.name}: ${fetchError.message}`);
@@ -665,7 +665,7 @@ ${existingSeeds.length > 0 ? `\n## 既存の種（これらと重複しない新
           max_tokens: 4096,
           messages: [{ role: 'user', content: prompt }],
         }),
-        signal: AbortSignal.timeout(60_000),
+        signal: AbortSignal.timeout(120_000),
       });
     } catch (fetchError: any) {
       this.logger.error(`Wish seeds generation fetch failed: ${fetchError.message}`);
