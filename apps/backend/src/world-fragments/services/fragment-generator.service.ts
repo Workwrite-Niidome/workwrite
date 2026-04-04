@@ -9,12 +9,12 @@ import { WishTypeDto } from '../dto/create-wish.dto';
 const OPUS = 'claude-opus-4-6';
 const SONNET = 'claude-sonnet-4-6';
 
-// wishTypeごとのクレジットコスト
+// wishTypeごとのクレジットコスト（全Opus生成、粗利率50%以上）
 const CREDIT_COSTS: Record<WishTypeDto, number> = {
-  [WishTypeDto.PERSPECTIVE]: 15,
-  [WishTypeDto.SIDE_STORY]: 20,
-  [WishTypeDto.MOMENT]: 10,
-  [WishTypeDto.WHAT_IF]: 25,
+  [WishTypeDto.MOMENT]: 25,
+  [WishTypeDto.PERSPECTIVE]: 30,
+  [WishTypeDto.SIDE_STORY]: 35,
+  [WishTypeDto.WHAT_IF]: 40,
 };
 
 const CONSTRAINT_CHECK_COST = 1; // 制約チェック分（リジェクトでも返金しない）
@@ -450,6 +450,11 @@ ${guidelines ? `## 制約チェッカーからのガイドライン\n${guideline
 - 「知っていて言わない」と「知らない」は全く異なる内面になる。混同しない
 - trueNature（読了者視点の本質）を踏まえて内面を描く
 - keyMomentsの描写と矛盾しないこと
+
+## 台詞の引用ルール
+- canonicalDialogueに記載された台詞を引用・参照する場合、原文を正確に使うこと
+- 台詞を「だいたいこんな感じ」で書き換えない。原文がある場合はそのまま使う
+- canonicalDialogueにない台詞を新たに創作する場合は、そのキャラクターのspeechStyleとconstraintsに厳密に従う
 
 ## 厳禁事項
 - タイトル・見出し・Markdownヘッダー（#）をつけない。冒頭から本文を始める

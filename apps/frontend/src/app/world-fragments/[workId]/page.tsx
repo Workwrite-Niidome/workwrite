@@ -20,10 +20,10 @@ import {
 // ===== Constants =====
 
 const WISH_TYPES: { value: WishType; label: string; description: string; cost: number }[] = [
-  { value: 'PERSPECTIVE', label: '別の視点', description: '既存シーンを別のキャラクターの目から', cost: 15 },
-  { value: 'SIDE_STORY', label: '裏側の物語', description: '本編の裏で起きていたこと', cost: 20 },
-  { value: 'MOMENT', label: '描かれなかった一瞬', description: '本編から零れ落ちた一瞬', cost: 10 },
-  { value: 'WHAT_IF', label: 'もしも', description: 'もし違う選択をしていたら', cost: 25 },
+  { value: 'MOMENT', label: '描かれなかった一瞬', description: '本編から零れ落ちた一瞬', cost: 25 },
+  { value: 'PERSPECTIVE', label: '別の視点', description: '既存シーンを別のキャラクターの目から', cost: 30 },
+  { value: 'SIDE_STORY', label: '裏側の物語', description: '本編の裏で起きていたこと', cost: 35 },
+  { value: 'WHAT_IF', label: 'もしも', description: 'もし違う選択をしていたら', cost: 40 },
 ];
 
 const STATUS_LABELS: Record<string, { label: string; color: string }> = {

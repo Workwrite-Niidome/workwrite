@@ -433,6 +433,21 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
       }
     }
 
+    // canonicalDialogueを構築: 各キャラの全話にわたる台詞一覧
+    for (const [name, timeline] of timelines.entries()) {
+      const canonicalDialogue: { episode: number; line: string; context: string }[] = [];
+      for (const ep of timeline.episodes) {
+        for (const quote of ep.dialogueQuotes || []) {
+          canonicalDialogue.push({
+            episode: ep.orderIndex,
+            line: typeof quote === 'string' ? quote : quote.line || quote,
+            context: typeof quote === 'string' ? `第${ep.orderIndex}話「${ep.title}」` : (quote.context || `第${ep.orderIndex}話「${ep.title}」`),
+          });
+        }
+      }
+      timeline.canonicalDialogue = canonicalDialogue;
+    }
+
     this.logger.log(`Step 2 complete: ${timelines.size} character timelines built from ${analyses.length} episodes`);
     return timelines;
   }
@@ -474,6 +489,13 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
           keyMoments: enrichment.keyMoments,
           voiceNotes: enrichment.voiceNotes,
           constraints: enrichment.updatedConstraints || profile.constraints,
+          canonicalDialogue: timeline.canonicalDialogue || [],
+        };
+      } else {
+        // enrichmentが失敗しても、canonicalDialogueは追加する
+        enrichedProfiles[i] = {
+          ...profile,
+          canonicalDialogue: timeline.canonicalDialogue || [],
         };
       }
     }
