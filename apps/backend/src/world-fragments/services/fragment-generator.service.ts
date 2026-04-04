@@ -4,6 +4,7 @@ import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
 import { CreditService } from '../../billing/credit.service';
 import { WorldCanonService } from './world-canon.service';
+import { EpisodeTextAnalyzerService } from './episode-text-analyzer.service';
 import { WishTypeDto } from '../dto/create-wish.dto';
 
 const OPUS = 'claude-opus-4-6';
@@ -34,6 +35,7 @@ export class FragmentGeneratorService {
     private aiSettings: AiSettingsService,
     private creditService: CreditService,
     private canonService: WorldCanonService,
+    private textAnalyzer: EpisodeTextAnalyzerService,
   ) {}
 
   /**
@@ -206,21 +208,8 @@ export class FragmentGeneratorService {
         constraintResult.guidelines,
       );
 
-      // Phase 3: 自己評価（Sonnet）
-      await this.prisma.worldFragment.update({
-        where: { id: fragmentId },
-        data: { status: 'EVALUATING' },
-      });
-
-      const qualityScore = await this.evaluateFragment(
-        apiKey,
-        canon,
-        wish,
-        wishType,
-        generatedContent,
-      );
-
-      // 最終更新
+      // Phase 3: Skip quality evaluation (was failing with Parse failed every time)
+      // Go straight from GENERATING to PUBLISHED
       const wordCount = generatedContent.length;
       const estimatedReadTime = Math.ceil(wordCount / 500); // 500文字/分
 
@@ -229,13 +218,12 @@ export class FragmentGeneratorService {
         data: {
           content: generatedContent,
           contentMeta: { wordCount, estimatedReadTime },
-          qualityScore,
+          qualityScore: Prisma.DbNull,
           status: 'PUBLISHED',
           publishedAt: new Date(),
           generationLog: {
             model: OPUS,
             constraintModel: SONNET,
-            evaluationModel: SONNET,
             timestamp: new Date().toISOString(),
             tokenUsage: this.lastTokenUsage,
           },
@@ -714,7 +702,7 @@ ${JSON.stringify(
 
   /**
    * wishの内容から関連するエピソードを特定し、原作テキストを取得する
-   * DB-only: fragmentAnalysisのキャラクター情報からマッチング（API呼び出しなし）
+   * Code-only: EpisodeTextAnalyzerを使用。ZERO AI calls, ZERO fragmentAnalysis dependency.
    */
   private async resolveAnchorContext(
     workId: string,
@@ -736,92 +724,108 @@ ${JSON.stringify(
     }
 
     try {
-      // Get all EpisodeAnalysis with fragmentAnalysis for this work
-      const analyses = await this.prisma.episodeAnalysis.findMany({
+      // Fetch all published episodes within scope
+      const episodes = await this.prisma.episode.findMany({
         where: {
           workId,
-          fragmentAnalysis: { not: Prisma.DbNull },
+          publishedAt: { not: null },
+          orderIndex: { lte: upToEpisode },
         },
-        include: {
-          episode: { select: { orderIndex: true, title: true } },
-        },
-        orderBy: { episode: { orderIndex: 'asc' } },
-      });
-
-      if (analyses.length === 0) return '';
-
-      // Extract character names from the wish text by matching against Canon characterProfiles
-      const characterProfiles = (canon.characterProfiles as any[]) || [];
-      const matchedCharNames: string[] = [];
-      for (const profile of characterProfiles) {
-        if (wish.includes(profile.name)) {
-          matchedCharNames.push(profile.name);
-        }
-      }
-
-      // Filter episodes where fragmentAnalysis.characters contains matching character names
-      type ScoredAnalysis = { analysis: typeof analyses[number]; score: number };
-      const scored: ScoredAnalysis[] = [];
-
-      for (const analysis of analyses) {
-        // Only include episodes within scope
-        if (analysis.episode.orderIndex > upToEpisode) continue;
-
-        const fa = analysis.fragmentAnalysis as any;
-        if (!fa || !fa.characters) continue;
-
-        const faCharNames = (fa.characters as any[]).map((c: any) => c.name);
-
-        // Score: number of matching characters found in this episode
-        let score = 0;
-        for (const name of matchedCharNames) {
-          if (faCharNames.includes(name)) {
-            score++;
-          }
-        }
-
-        // If no character match found but we have analyses, give a base score of 0
-        // so we can still fall back to picking some episodes
-        if (score > 0 || matchedCharNames.length === 0) {
-          scored.push({ analysis, score: score > 0 ? score : 0 });
-        }
-      }
-
-      // If no matches at all, take the last 3 episodes as fallback
-      let selectedAnalyses: typeof analyses;
-      if (scored.length === 0) {
-        selectedAnalyses = analyses
-          .filter((a) => a.episode.orderIndex <= upToEpisode)
-          .slice(-3);
-      } else {
-        // Sort by score descending, take top 3
-        scored.sort((a, b) => b.score - a.score);
-        selectedAnalyses = scored.slice(0, 3).map((s) => s.analysis);
-      }
-
-      if (selectedAnalyses.length === 0) return '';
-
-      // Fetch actual episode content for the selected episodes
-      const episodeIds = selectedAnalyses.map((a) => a.episodeId);
-      const relevantEpisodes = await this.prisma.episode.findMany({
-        where: { id: { in: episodeIds } },
         select: { title: true, content: true, orderIndex: true },
         orderBy: { orderIndex: 'asc' },
       });
 
-      if (relevantEpisodes.length === 0) return '';
+      if (episodes.length === 0) return '';
 
-      // Format with truncation
-      const maxCharsPerEpisode = Math.floor(12000 / relevantEpisodes.length);
-      const contextParts = relevantEpisodes.map((ep) => {
+      // Get character names from Canon
+      const characterProfiles = (canon.characterProfiles as any[]) || [];
+      const characterNames = characterProfiles.map((c: any) => c.name);
+
+      // Use code-only text analysis to find relevant episodes
+      const relevanceResults = this.textAnalyzer.findRelevantEpisodes(
+        wish,
+        episodes.map((ep) => ({
+          orderIndex: ep.orderIndex,
+          title: ep.title || '',
+          content: ep.content || '',
+        })),
+        characterNames,
+      );
+
+      if (relevanceResults.length === 0) {
+        // Fallback: last 3 episodes
+        const fallback = episodes.slice(-3);
+        if (fallback.length === 0) return '';
+
+        const contextParts = fallback.map((ep) => {
+          const content = ep.content || '';
+          const maxChars = Math.floor(12000 / fallback.length);
+          const truncated = content.length > maxChars
+            ? content.slice(0, maxChars) + '\n\n[...以下省略...]'
+            : content;
+          return `### 第${ep.orderIndex}話「${ep.title}」\n${truncated}`;
+        });
+
+        return `\n## 原作テキスト（関連エピソード）\n以下は原作の実際のテキストです。台詞、描写、固有名詞は必ずこの原文に従ってください。\n\n${contextParts.join('\n\n')}`;
+      }
+
+      // Take top 3 relevant episodes
+      const topResults = relevanceResults.slice(0, 3);
+      const episodeMap = new Map(
+        episodes.map((ep) => [ep.orderIndex, ep]),
+      );
+
+      const contextParts: string[] = [];
+
+      for (let i = 0; i < topResults.length; i++) {
+        const result = topResults[i];
+        const ep = episodeMap.get(result.orderIndex);
+        if (!ep) continue;
+
         const content = ep.content || '';
-        const truncated = content.length > maxCharsPerEpisode
-          ? content.slice(0, maxCharsPerEpisode) + '\n\n[...以下省略...]'
-          : content;
-        return `### 第${ep.orderIndex}話「${ep.title}」\n${truncated}`;
-      });
 
-      this.logger.log(`Resolved ${relevantEpisodes.length} anchor episodes (DB-only) for wish: ${wish.slice(0, 50)}`);
+        if (i === 0) {
+          // Top 1 most relevant: include FULL text (no truncation)
+          contextParts.push(`### 第${ep.orderIndex}話「${ep.title}」（最関連）\n${content}`);
+        } else {
+          // Episodes 2-3: include code-extracted dialogue for relevant characters only
+          const wishCharacters = new Set<string>();
+          const nameMap = this.textAnalyzer.buildNameVariantsMap(characterNames);
+          const sortedVariants = [...nameMap.keys()].sort((a, b) => b.length - a.length);
+          for (const variant of sortedVariants) {
+            if (wish.includes(variant)) {
+              wishCharacters.add(nameMap.get(variant)!);
+            }
+          }
+
+          const dialogueByChar = this.textAnalyzer.extractDialogueByCharacter(
+            content,
+            wishCharacters.size > 0 ? [...wishCharacters] : characterNames,
+          );
+
+          if (dialogueByChar.size > 0) {
+            const dialogueParts: string[] = [];
+            for (const [charName, dialogues] of dialogueByChar) {
+              const lines = dialogues.map((d) => `  「${d.line}」`).join('\n');
+              dialogueParts.push(`[${charName}]\n${lines}`);
+            }
+            contextParts.push(
+              `### 第${ep.orderIndex}話「${ep.title}」（関連台詞）\n${dialogueParts.join('\n\n')}`,
+            );
+          } else {
+            // No dialogue found, include truncated content
+            const maxChars = 4000;
+            const truncated = content.length > maxChars
+              ? content.slice(0, maxChars) + '\n\n[...以下省略...]'
+              : content;
+            contextParts.push(`### 第${ep.orderIndex}話「${ep.title}」\n${truncated}`);
+          }
+        }
+      }
+
+      this.logger.log(
+        `Resolved ${topResults.length} anchor episodes (code-only) for wish: ${wish.slice(0, 50)}`,
+      );
 
       return `\n## 原作テキスト（関連エピソード）\n以下は原作の実際のテキストです。台詞、描写、固有名詞は必ずこの原文に従ってください。\n\n${contextParts.join('\n\n')}`;
     } catch (e: any) {

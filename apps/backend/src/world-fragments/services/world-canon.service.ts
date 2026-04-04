@@ -2,6 +2,7 @@ import { Injectable, Logger, NotFoundException, ServiceUnavailableException } fr
 import { Prisma } from '@prisma/client';
 import { PrismaService } from '../../common/prisma/prisma.service';
 import { AiSettingsService } from '../../ai-settings/ai-settings.service';
+import { EpisodeTextAnalyzerService } from './episode-text-analyzer.service';
 
 const SONNET = 'claude-sonnet-4-6';
 
@@ -12,6 +13,7 @@ export class WorldCanonService {
   constructor(
     private prisma: PrismaService,
     private aiSettings: AiSettingsService,
+    private textAnalyzer: EpisodeTextAnalyzerService,
   ) {}
 
   /**
@@ -448,8 +450,93 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
       timeline.canonicalDialogue = canonicalDialogue;
     }
 
+    // Replace fragmentAnalysis-based canonicalDialogue with code-extracted version
+    await this.buildCanonicalDialogueFromText(workId, timelines);
+
     this.logger.log(`Step 2 complete: ${timelines.size} character timelines built from ${analyses.length} episodes`);
     return timelines;
+  }
+
+  /**
+   * Build canonical dialogue from episode text using code-only extraction.
+   * Replaces AI-extracted dialogue with complete code-extracted dialogue.
+   * Writes the result into the timelines map (modifying in place) so Step 3 picks it up.
+   */
+  async buildCanonicalDialogueFromText(
+    workId: string,
+    timelines: Map<string, any>,
+  ): Promise<void> {
+    // Fetch all published episodes
+    const episodes = await this.prisma.episode.findMany({
+      where: { workId, publishedAt: { not: null } },
+      select: { id: true, title: true, content: true, orderIndex: true },
+      orderBy: { orderIndex: 'asc' },
+    });
+
+    if (episodes.length === 0) return;
+
+    // Get character names from Canon (if available) or StoryCharacter table
+    const canon = await this.prisma.worldCanon.findUnique({ where: { workId } });
+    let characterNames: string[] = [];
+    if (canon && canon.characterProfiles) {
+      characterNames = (canon.characterProfiles as any[]).map((c: any) => c.name);
+    } else {
+      const chars = await this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: { name: true },
+      });
+      characterNames = chars.map((c) => c.name);
+    }
+
+    if (characterNames.length === 0) return;
+
+    // Extract dialogue from all episodes using code-only analysis
+    const codeExtractedDialogue = new Map<string, Array<{ episode: number; line: string; context: string }>>();
+
+    for (const ep of episodes) {
+      if (!ep.content) continue;
+
+      const dialogueByChar = this.textAnalyzer.extractDialogueByCharacter(ep.content, characterNames);
+
+      for (const [charName, dialogues] of dialogueByChar) {
+        if (!codeExtractedDialogue.has(charName)) {
+          codeExtractedDialogue.set(charName, []);
+        }
+        for (const d of dialogues) {
+          codeExtractedDialogue.get(charName)!.push({
+            episode: ep.orderIndex,
+            line: d.line,
+            context: d.context,
+          });
+        }
+      }
+    }
+
+    // Replace canonicalDialogue in each timeline entry with code-extracted version
+    for (const [name, timeline] of timelines.entries()) {
+      const extracted = codeExtractedDialogue.get(name);
+      if (extracted && extracted.length > 0) {
+        timeline.canonicalDialogue = extracted;
+        timeline.codeExtractedDialogue = extracted;
+      }
+    }
+
+    // Also store code-extracted dialogue for characters that appear in text
+    // but may not have been picked up by AI analysis (not in timelines yet)
+    for (const [name, dialogues] of codeExtractedDialogue) {
+      if (!timelines.has(name) && dialogues.length > 0) {
+        timelines.set(name, {
+          name,
+          episodes: [],
+          canonicalDialogue: dialogues,
+          codeExtractedDialogue: dialogues,
+        });
+      }
+    }
+
+    this.logger.log(
+      `buildCanonicalDialogueFromText: extracted dialogue for ${codeExtractedDialogue.size} characters from ${episodes.length} episodes`,
+    );
   }
 
   // ===== Step 3: Per-character synthesis =====
