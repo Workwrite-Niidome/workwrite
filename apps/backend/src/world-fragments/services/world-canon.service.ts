@@ -320,40 +320,63 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
 - 登場しないキャラクターは含めないこと
 - hides は「意図的に隠している」ものだけ。単に話題に出なかっただけのものは含めない`;
 
-    let response: Response;
-    try {
-      response = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'x-api-key': apiKey,
-          'anthropic-version': '2023-06-01',
-        },
-        body: JSON.stringify({
-          model: SONNET,
-          max_tokens: 8192,
-          messages: [{ role: 'user', content: prompt }],
-        }),
-        signal: AbortSignal.timeout(180_000),
-      });
-    } catch (fetchError: any) {
-      this.logger.error(`Step 1 fetch failed for episode ${episodeId}: ${fetchError.message}`);
-      throw new ServiceUnavailableException(`AI API connection failed: ${fetchError.message}`);
+    // リトライ付きAPI呼び出し（最大2回）
+    const maxAttempts = 2;
+    let parsed: any = null;
+    let lastError = '';
+
+    for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      try {
+        const response = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'x-api-key': apiKey,
+            'anthropic-version': '2023-06-01',
+          },
+          body: JSON.stringify({
+            model: SONNET,
+            max_tokens: 8192,
+            messages: [{ role: 'user', content: prompt }],
+          }),
+          signal: AbortSignal.timeout(180_000),
+        });
+
+        if (!response.ok) {
+          const error = await response.text();
+          lastError = `HTTP ${response.status}: ${error.slice(0, 200)}`;
+          this.logger.warn(`Step 1 attempt ${attempt}/${maxAttempts} failed for episode ${episodeId}: ${lastError}`);
+          continue;
+        }
+
+        const result = await response.json() as any;
+        const text = result.content?.[0]?.text;
+        if (!text) {
+          lastError = 'Empty response from AI';
+          this.logger.warn(`Step 1 attempt ${attempt}/${maxAttempts}: empty response for episode ${episodeId}`);
+          continue;
+        }
+
+        parsed = this.extractJson(text);
+        if (!parsed) {
+          lastError = `JSON parse failed. stop_reason: ${result.stop_reason}. Last 300 chars: ${text.slice(-300)}`;
+          this.logger.warn(`Step 1 attempt ${attempt}/${maxAttempts}: JSON parse failed for episode ${episodeId}. Response (first 300): ${text.slice(0, 300)}`);
+          continue;
+        }
+
+        if (attempt > 1) {
+          this.logger.log(`Step 1: episode ${episodeId} succeeded on attempt ${attempt}`);
+        }
+        break;
+      } catch (fetchError: any) {
+        lastError = fetchError.message;
+        this.logger.warn(`Step 1 attempt ${attempt}/${maxAttempts} fetch error for episode ${episodeId}: ${fetchError.message}`);
+        continue;
+      }
     }
 
-    if (!response.ok) {
-      const error = await response.text();
-      this.logger.error(`Step 1 failed for episode ${episodeId} (${response.status}): ${error}`);
-      throw new ServiceUnavailableException('Failed to analyze episode for fragments');
-    }
-
-    const result = await response.json() as any;
-    const text = result.content?.[0]?.text;
-    if (!text) throw new ServiceUnavailableException('Empty response from AI');
-
-    const parsed = this.extractJson(text);
     if (!parsed) {
-      this.logger.error(`Step 1: failed to parse JSON for episode ${episodeId}. Response: ${text.slice(0, 500)}`);
+      this.logger.error(`Step 1: all ${maxAttempts} attempts failed for episode ${episodeId}. Last error: ${lastError}`);
       throw new ServiceUnavailableException('Failed to parse episode fragment analysis');
     }
 
@@ -933,28 +956,48 @@ ${existingSeeds.length > 0 ? `\n## 既存の種（これらと重複しない新
   }
 
   /** AIレスポンスからJSONを抽出（複数パターン対応） */
+  /** JSONテキストをクリーンアップしてからパース */
+  private cleanAndParseJson(raw: string): any | null {
+    // まず直接パース
+    try { return JSON.parse(raw); } catch {}
+
+    // クリーンアップして再試行
+    let cleaned = raw.trim();
+    cleaned = cleaned.replace(/,\s*([\]}])/g, '$1'); // 末尾カンマ除去
+    cleaned = cleaned.replace(/\/\/[^\n]*/g, ''); // 単行コメント除去
+    cleaned = cleaned.replace(/\/\*[\s\S]*?\*\//g, ''); // 複数行コメント除去
+    try { return JSON.parse(cleaned); } catch {}
+
+    return null;
+  }
+
   private extractJson(text: string): any | null {
     // Pattern 1: ```json ... ```
     const jsonFenced = text.match(/```json\s*\n?([\s\S]*?)\n?\s*```/);
     if (jsonFenced) {
-      try { return JSON.parse(jsonFenced[1]); } catch {}
+      const result = this.cleanAndParseJson(jsonFenced[1]);
+      if (result) return result;
     }
 
     // Pattern 2: ``` ... ```
     const fenced = text.match(/```\s*\n?([\s\S]*?)\n?\s*```/);
     if (fenced) {
-      try { return JSON.parse(fenced[1]); } catch {}
+      const result = this.cleanAndParseJson(fenced[1]);
+      if (result) return result;
     }
 
-    // Pattern 3: 直接JSON
+    // Pattern 3: 直接JSON（オブジェクト）
     const directObj = text.match(/\{[\s\S]*\}/);
     if (directObj) {
-      try { return JSON.parse(directObj[0]); } catch {}
+      const result = this.cleanAndParseJson(directObj[0]);
+      if (result) return result;
     }
 
+    // Pattern 4: 直接JSON（配列）
     const directArr = text.match(/\[[\s\S]*\]/);
     if (directArr) {
-      try { return JSON.parse(directArr[0]); } catch {}
+      const result = this.cleanAndParseJson(directArr[0]);
+      if (result) return result;
     }
 
     return null;
