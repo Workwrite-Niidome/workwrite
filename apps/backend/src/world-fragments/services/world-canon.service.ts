@@ -19,7 +19,8 @@ export class WorldCanonService {
   /**
    * 作品のWorldCanonを構築・更新する
    * 既存のEpisodeAnalysis, StoryCharacter, WorldSetting, StoryEventから集約
-   * steps パラメータで特定のステップだけ実行可能 (1=per-episode analysis, 2=aggregation, 3=synthesis)
+   * 全ステップ: 1=per-episode analysis, 2=aggregation, 3=character synthesis, 4=world synthesis
+   * Step 0（旧・大規模AI呼び出し）は廃止。全てが小さなステップで構築される。
    */
   async buildCanon(workId: string, upToEpisode?: number, steps?: number[]) {
     const work = await this.prisma.work.findUnique({
@@ -35,111 +36,60 @@ export class WorldCanonService {
     });
     if (!work) throw new NotFoundException('Work not found');
 
-    // 対象エピソード数を決定
     const episodeCount = await this.prisma.episode.count({
       where: { workId, publishedAt: { not: null } },
     });
     const targetEpisode = upToEpisode ?? episodeCount;
 
-    // 既存データを収集
-    const [characters, worldSettings, episodeAnalyses, storyEvents, dialogueSamples] =
-      await Promise.all([
-        this.prisma.storyCharacter.findMany({
-          where: { workId },
-          select: {
-            id: true,
-            name: true,
-            role: true,
-            personality: true,
-            speechStyle: true,
-            firstPerson: true,
-            motivation: true,
-            background: true,
-            arc: true,
-            currentState: true,
-          },
-        }),
-        this.prisma.worldSetting.findMany({
-          where: { workId },
-        }),
-        this.prisma.episodeAnalysis.findMany({
-          where: { workId },
-          select: { summary: true, endState: true, narrativePOV: true, emotionalArc: true, characters: true, newWorldRules: true },
-          orderBy: { episode: { orderIndex: 'asc' } },
-        }),
-        this.prisma.storyEvent.findMany({
-          where: { workId },
-          orderBy: { timelinePosition: 'asc' },
-        }),
-        this.prisma.characterDialogueSample.findMany({
-          where: { workId },
-          orderBy: { episodeOrder: 'asc' },
-        }),
-      ]);
-
     const apiKey = await this.aiSettings.getApiKey();
     if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
 
-    const runSteps = steps ?? [0, 1, 2, 3]; // 0 = base Canon build
+    const runSteps = steps ?? [1, 2, 3, 4];
 
-    // Step 0: AIでbase Canonを構築（既存Canonがある場合はスキップ可能）
-    const existing = await this.prisma.worldCanon.findUnique({
-      where: { workId },
-    });
-
-    let canon;
-    if (runSteps.includes(0) || !existing) {
-      const canonData = await this.generateCanonWithAI(apiKey, {
-        work,
-        characters,
-        worldSettings,
-        episodeAnalyses,
-        storyEvents,
-        dialogueSamples,
-        targetEpisode,
+    // Canonが存在しない場合は空のCanonを作成（Step 2以降で埋める）
+    let existing = await this.prisma.worldCanon.findUnique({ where: { workId } });
+    if (!existing) {
+      existing = await this.prisma.worldCanon.create({
+        data: {
+          workId,
+          upToEpisode: targetEpisode,
+          characterProfiles: [],
+          worldRules: {},
+          timeline: [],
+          relationships: [],
+          establishedFacts: [],
+          ambiguities: [],
+        },
       });
-
-      if (existing) {
-        canon = await this.prisma.worldCanon.update({
-          where: { workId },
-          data: {
-            canonVersion: existing.canonVersion + 1,
-            upToEpisode: targetEpisode,
-            ...canonData,
-          },
-        });
-      } else {
-        canon = await this.prisma.worldCanon.create({
-          data: {
-            workId,
-            upToEpisode: targetEpisode,
-            ...canonData,
-          },
-        });
-      }
-    } else {
-      canon = existing;
-      // upToEpisodeだけ更新
-      if (existing.upToEpisode < targetEpisode) {
-        canon = await this.prisma.worldCanon.update({
-          where: { workId },
-          data: { upToEpisode: targetEpisode },
-        });
-      }
+      this.logger.log(`Created empty Canon for work ${workId}`);
+    } else if (existing.upToEpisode < targetEpisode) {
+      await this.prisma.worldCanon.update({
+        where: { workId },
+        data: { upToEpisode: targetEpisode },
+      });
     }
 
-    // Run 3-step enrichment pipeline
+    let canon = existing;
 
+    // Step 1: Per-episode analysis（小さいAI呼び出し x N話）
     if (runSteps.includes(1)) {
       await this.runStep1(workId);
     }
 
-    if (runSteps.includes(2) || runSteps.includes(3)) {
-      const timelines = await this.runStep2(workId);
+    // Step 2: Code aggregation（AI呼び出しなし）
+    let timelines: Map<string, any> | null = null;
+    if (runSteps.includes(2) || runSteps.includes(3) || runSteps.includes(4)) {
+      timelines = await this.runStep2(workId);
+    }
 
-      if (runSteps.includes(3)) {
-        canon = await this.runStep3(workId, timelines);
-      }
+    // Step 3: Per-character synthesis（小さいAI呼び出し x Nキャラ）
+    if (runSteps.includes(3) && timelines) {
+      canon = await this.runStep3(workId, timelines);
+    }
+
+    // Step 4: World synthesis（小さいAI呼び出し x 1回）
+    if (runSteps.includes(4) && timelines) {
+      canon = await this.runStep4(workId, work, timelines);
     }
 
     return canon;
@@ -569,7 +519,29 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
    */
   async runStep3(workId: string, timelines: Map<string, any>) {
     const canon = await this.getCanon(workId);
-    const profiles = canon.characterProfiles as any[];
+    let profiles = canon.characterProfiles as any[];
+
+    // characterProfilesが空の場合、StoryCharacterから初期プロファイルを構築
+    if (!profiles || profiles.length === 0) {
+      const storyChars = await this.prisma.storyCharacter.findMany({
+        where: { workId },
+        select: {
+          id: true, name: true, role: true, personality: true,
+          speechStyle: true, firstPerson: true, motivation: true,
+          background: true, arc: true, currentState: true,
+        },
+      });
+      profiles = storyChars.map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        role: c.role || '',
+        personality: c.personality || '',
+        speechStyle: c.speechStyle || '',
+        motivation: c.motivation || '',
+        constraints: '',
+      }));
+      this.logger.log(`Step 3: initialized ${profiles.length} character profiles from StoryCharacter`);
+    }
 
     const enrichedProfiles = [...profiles];
 
@@ -621,6 +593,184 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
 
     this.logger.log(`Step 3 complete: enriched ${enrichedProfiles.length} character profiles (Canon v${updated.canonVersion})`);
     return updated;
+  }
+
+  // ===== Step 4: World synthesis =====
+
+  /**
+   * Step 4: タイムラインデータから世界の構造を合成（小さいAI呼び出し1回）
+   * worldRules, timeline, relationships, establishedFacts, ambiguities, narrativeStyle, layers
+   */
+  async runStep4(workId: string, work: any, timelines: Map<string, any>) {
+    const canon = await this.getCanon(workId);
+    const apiKey = await this.aiSettings.getApiKey();
+    if (!apiKey) throw new ServiceUnavailableException('AI API key is not configured');
+
+    // Step 2で集約されたデータからサマリーを構築
+    const characterSummaries = [...timelines.entries()].map(([name, tl]) => {
+      const episodeCount = tl.episodes?.length || 0;
+      const keyDialogue = (tl.canonicalDialogue || []).slice(0, 5).map((d: any) => d.line).join(' / ');
+      return `${name}（${episodeCount}話に登場）: ${keyDialogue}`;
+    }).join('\n');
+
+    // StoryCharacterの基本情報
+    const storyChars = await this.prisma.storyCharacter.findMany({
+      where: { workId },
+      select: { name: true, role: true, personality: true, motivation: true, background: true },
+    });
+
+    // WorldSettingデータ
+    const worldSettings = await this.prisma.worldSetting.findMany({
+      where: { workId },
+    });
+
+    // fragmentAnalysisからイベントとworldBuildingを集約
+    const analyses = await this.prisma.episodeAnalysis.findMany({
+      where: { workId, fragmentAnalysis: { not: Prisma.DbNull } },
+      include: { episode: { select: { orderIndex: true, title: true } } },
+      orderBy: { episode: { orderIndex: 'asc' } },
+    });
+
+    const events: string[] = [];
+    const worldBuilding: string[] = [];
+    for (const a of analyses) {
+      const fa = a.fragmentAnalysis as any;
+      if (fa?.events) {
+        for (const e of fa.events) {
+          events.push(`第${a.episode.orderIndex}話: ${e.description || e} (${e.significance || 'normal'})`);
+        }
+      }
+      if (fa?.worldBuilding) {
+        for (const wb of fa.worldBuilding) {
+          worldBuilding.push(typeof wb === 'string' ? wb : wb.detail || JSON.stringify(wb));
+        }
+      }
+    }
+
+    const prompt = `あなたは小説世界の構造を分析する専門家です。
+以下の作品データから、世界の構造を構築してください。
+
+## 作品情報
+- タイトル: ${work.title}
+- ジャンル: ${work.genre || '不明'}
+- あらすじ: ${work.synopsis || 'なし'}
+- 時代設定: ${work.settingEra || '不明'}
+- 状態: ${work.completionStatus}
+
+## 登場人物
+${storyChars.map((c: any) => `- ${c.name}（${c.role || ''}）: ${c.personality || ''}`).join('\n')}
+
+## 世界設定
+${worldSettings.map((w: any) => `- [${w.category}] ${w.name}: ${w.description}`).join('\n') || 'なし'}
+
+## 主要イベント（エピソードごと）
+${events.slice(0, 40).join('\n') || 'なし'}
+
+## 世界構築の詳細
+${worldBuilding.slice(0, 20).join('\n') || 'なし'}
+
+## キャラクター出演サマリー
+${characterSummaries}
+
+## 出力（JSON）
+\`\`\`json
+{
+  "worldRules": {
+    "physics": "物理法則・魔法体系",
+    "society": "社会構造",
+    "geography": "地理・舞台",
+    "technology": "技術水準",
+    "culture": "文化・習慣",
+    "constraints": "この世界で起こりえないこと"
+  },
+  "timeline": [
+    { "position": 0.0, "event": "概要", "significance": "key/normal", "characters": ["名前"], "consequences": "影響" }
+  ],
+  "relationships": [
+    { "from": "A", "to": "B", "type": "関係", "description": "詳細", "evolution": "変化" }
+  ],
+  "establishedFacts": ["確定事実"],
+  "ambiguities": ["意図的に曖昧な領域"],
+  "narrativeStyle": {
+    "pov": "視点",
+    "tone": "トーン",
+    "prose": "文体",
+    "pacing": "テンポ"
+  },
+  "worldLayers": [
+    { "id": "層ID", "name": "名前", "description": "説明", "locations": [], "characters": [], "rules": "ルール", "certainty": "real/presented_as_real/fictional_within_story/dream/ambiguous" }
+  ],
+  "layerInteractions": [
+    { "from": "層ID", "to": "層ID", "method": "方法", "constraints": "制約" }
+  ],
+  "layerAmbiguities": ["層に関する曖昧さ"]
+}
+\`\`\`
+
+重要:
+- 原作に書かれていることだけを正典とする。推測はambiguitiesに入れる
+- 層が1つしかない作品ではworldLayersに1つだけ入れる（certainty: "real"）
+- timelineのpositionは0.0〜1.0で正規化する`;
+
+    this.logger.log(`Step 4: synthesizing world structure for ${work.title}`);
+
+    try {
+      const response = await fetch('https://api.anthropic.com/v1/messages', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          'x-api-key': apiKey,
+          'anthropic-version': '2023-06-01',
+        },
+        body: JSON.stringify({
+          model: SONNET,
+          max_tokens: 8192,
+          messages: [{ role: 'user', content: prompt }],
+        }),
+        signal: AbortSignal.timeout(180_000),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        this.logger.error(`Step 4 failed (${response.status}): ${error}`);
+        return canon;
+      }
+
+      const result = await response.json() as any;
+      const text = result.content?.[0]?.text;
+      if (!text) {
+        this.logger.error('Step 4: empty response');
+        return canon;
+      }
+
+      const parsed = this.extractJson(text);
+      if (!parsed) {
+        this.logger.error(`Step 4: JSON parse failed. Response: ${text.slice(0, 500)}`);
+        return canon;
+      }
+
+      const updated = await this.prisma.worldCanon.update({
+        where: { workId },
+        data: {
+          worldRules: parsed.worldRules || canon.worldRules,
+          timeline: parsed.timeline || canon.timeline,
+          relationships: parsed.relationships || canon.relationships,
+          establishedFacts: parsed.establishedFacts || canon.establishedFacts,
+          ambiguities: parsed.ambiguities || canon.ambiguities,
+          narrativeStyle: parsed.narrativeStyle || canon.narrativeStyle,
+          worldLayers: parsed.worldLayers || canon.worldLayers,
+          layerInteractions: parsed.layerInteractions || canon.layerInteractions,
+          layerAmbiguities: parsed.layerAmbiguities || canon.layerAmbiguities,
+          canonVersion: canon.canonVersion + 1,
+        },
+      });
+
+      this.logger.log(`Step 4 complete: world structure synthesized (Canon v${updated.canonVersion})`);
+      return updated;
+    } catch (e: any) {
+      this.logger.error(`Step 4 failed: ${e.message}`);
+      return canon;
+    }
   }
 
   /**
