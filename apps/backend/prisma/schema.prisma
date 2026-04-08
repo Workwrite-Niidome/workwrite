@@ -1618,6 +1618,9 @@ model WorldCanon {
   layerInteractions Json?   // 層間の相互作用ルール [{from, to, method, constraints}]
   layerAmbiguities  Json?   // 層に関する意図的な曖昧さ [string]
   wishSeeds         Json?   // 事前生成された「願いの種」プール [{wish, wishType, label}]
+  buildStatus       String?  // idle / building / completed / failed
+  buildProgress     String?  // "Step 1: 5/15" 等の進捗テキスト
+  buildError        String?  // 失敗時のエラーメッセージ
   createdAt        DateTime @default(now())
   updatedAt        DateTime @updatedAt
 

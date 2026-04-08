@@ -125,8 +125,12 @@ export const worldFragmentsApi = {
   getWishSeeds: (workId: string, count = 5): Promise<{ seeds: WishSeed[] }> =>
     fetchWithAuth(`/world-fragments/${workId}/wish-seeds?count=${count}`),
 
-  /** WorldCanonを構築 */
-  buildCanon: (workId: string, upToEpisode?: number, steps?: number[]): Promise<WorldCanon> =>
+  /** Canon構築ステータスを取得 */
+  getCanonBuildStatus: (workId: string): Promise<{ status: string; progress?: string; error?: string; canonVersion?: number }> =>
+    fetchWithAuth(`/world-fragments/${workId}/canon/status`),
+
+  /** WorldCanonを構築（非同期、即座にステータスを返す） */
+  buildCanon: (workId: string, upToEpisode?: number, steps?: number[]): Promise<any> =>
     fetchWithAuth(`/world-fragments/${workId}/canon/build`, {
       method: 'POST',
       body: JSON.stringify({ upToEpisode, steps }),

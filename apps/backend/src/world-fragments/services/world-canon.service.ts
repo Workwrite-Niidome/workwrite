@@ -71,28 +71,55 @@ export class WorldCanonService {
 
     let canon = existing;
 
-    // Step 1: Per-episode analysis（小さいAI呼び出し x N話）
-    if (runSteps.includes(1)) {
-      await this.runStep1(workId);
-    }
+    try {
+      // Step 1: Per-episode analysis（小さいAI呼び出し x N話）
+      if (runSteps.includes(1)) {
+        await this.updateBuildProgress(workId, 'Step 1: エピソード分析を開始...');
+        await this.runStep1(workId);
+      }
 
-    // Step 2: Code aggregation（AI呼び出しなし）
-    let timelines: Map<string, any> | null = null;
-    if (runSteps.includes(2) || runSteps.includes(3) || runSteps.includes(4)) {
-      timelines = await this.runStep2(workId);
-    }
+      // Step 2: Code aggregation（AI呼び出しなし）
+      let timelines: Map<string, any> | null = null;
+      if (runSteps.includes(2) || runSteps.includes(3) || runSteps.includes(4)) {
+        await this.updateBuildProgress(workId, 'Step 2: データを集約中...');
+        timelines = await this.runStep2(workId);
+      }
 
-    // Step 3: Per-character synthesis（小さいAI呼び出し x Nキャラ）
-    if (runSteps.includes(3) && timelines) {
-      canon = await this.runStep3(workId, timelines);
-    }
+      // Step 3: Per-character synthesis（小さいAI呼び出し x Nキャラ）
+      if (runSteps.includes(3) && timelines) {
+        await this.updateBuildProgress(workId, 'Step 3: キャラクター分析中...');
+        canon = await this.runStep3(workId, timelines);
+      }
 
-    // Step 4: World synthesis（小さいAI呼び出し x 1回）
-    if (runSteps.includes(4) && timelines) {
-      canon = await this.runStep4(workId, work, timelines);
-    }
+      // Step 4: World synthesis（小さいAI呼び出し x 1回）
+      if (runSteps.includes(4) && timelines) {
+        await this.updateBuildProgress(workId, 'Step 4: 世界構造を合成中...');
+        canon = await this.runStep4(workId, work, timelines);
+      }
 
-    return canon;
+      // 完了
+      await this.prisma.worldCanon.update({
+        where: { workId },
+        data: { buildStatus: 'completed', buildProgress: '構築完了', buildError: null },
+      });
+
+      return canon;
+    } catch (error: any) {
+      await this.prisma.worldCanon.update({
+        where: { workId },
+        data: { buildStatus: 'failed', buildError: error.message },
+      }).catch(() => {});
+      throw error;
+    }
+  }
+
+  /** 構築進捗をDBに保存 */
+  private async updateBuildProgress(workId: string, progress: string) {
+    await this.prisma.worldCanon.update({
+      where: { workId },
+      data: { buildProgress: progress },
+    }).catch(() => {});
+    this.logger.log(`Build progress: ${progress}`);
   }
 
   async getCanon(workId: string) {
@@ -154,7 +181,9 @@ export class WorldCanonService {
     for (const ep of episodes) {
       if (cachedSet.has(ep.id)) continue;
 
-      this.logger.log(`Step 1: analyzing episode ${analyzed + cached + 1}/${total} (${ep.title})`);
+      const progressText = `Step 1: エピソード分析 ${analyzed + cached + 1}/${total}（${ep.title}）`;
+      this.logger.log(progressText);
+      await this.updateBuildProgress(workId, progressText);
 
       try {
         await this.analyzeEpisodeForFragments(

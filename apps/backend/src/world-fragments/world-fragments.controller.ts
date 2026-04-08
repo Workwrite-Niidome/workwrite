@@ -87,7 +87,7 @@ export class WorldFragmentsController {
 
   // ===== WorldCanon =====
 
-  /** WorldCanonを構築・更新する（Admin用） */
+  /** WorldCanonを構築・更新する（非同期、即座にステータスを返す）（Admin用） */
   @Post(':workId/canon/build')
   @UseGuards(RolesGuard)
   @Roles('ADMIN')
@@ -95,8 +95,62 @@ export class WorldFragmentsController {
     @Param('workId') workId: string,
     @Body() body: BuildCanonDto,
   ) {
-    const canon = await this.canonService.buildCanon(workId, body.upToEpisode, body.steps);
-    return canon;
+    // 既に構築中なら拒否
+    const existing = await this.prisma.worldCanon.findUnique({ where: { workId } });
+    if (existing?.buildStatus === 'building') {
+      return { status: 'building', progress: existing.buildProgress };
+    }
+
+    // Canonが存在しない場合は空で作成
+    if (!existing) {
+      await this.prisma.worldCanon.create({
+        data: {
+          workId,
+          upToEpisode: body.upToEpisode ?? 0,
+          characterProfiles: [],
+          worldRules: {},
+          timeline: [],
+          relationships: [],
+          establishedFacts: [],
+          ambiguities: [],
+          buildStatus: 'building',
+          buildProgress: '開始準備中...',
+        },
+      });
+    } else {
+      await this.prisma.worldCanon.update({
+        where: { workId },
+        data: { buildStatus: 'building', buildProgress: '開始準備中...', buildError: null },
+      });
+    }
+
+    // 非同期で構築開始（awaitしない）
+    setImmediate(() => {
+      this.canonService.buildCanon(workId, body.upToEpisode, body.steps).catch((err) => {
+        this.prisma.worldCanon.update({
+          where: { workId },
+          data: { buildStatus: 'failed', buildError: err.message },
+        }).catch(() => {});
+      });
+    });
+
+    return { status: 'building', progress: '開始準備中...' };
+  }
+
+  /** Canon構築ステータスを取得 */
+  @Get(':workId/canon/status')
+  async getCanonBuildStatus(@Param('workId') workId: string) {
+    const canon = await this.prisma.worldCanon.findUnique({
+      where: { workId },
+      select: { buildStatus: true, buildProgress: true, buildError: true, canonVersion: true },
+    });
+    if (!canon) return { status: 'not_found' };
+    return {
+      status: canon.buildStatus || 'idle',
+      progress: canon.buildProgress,
+      error: canon.buildError,
+      canonVersion: canon.canonVersion,
+    };
   }
 
   /** エピソード本文からキャラクタープロファイルを深化させる（Admin用） */
