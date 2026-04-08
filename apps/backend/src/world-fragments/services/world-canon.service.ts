@@ -653,25 +653,24 @@ ${content.length > 8000 ? content.slice(0, 8000) + '\n\n[...以下省略...]' : 
       where: { workId },
     });
 
-    // fragmentAnalysisからイベントとworldBuildingを集約
-    const analyses = await this.prisma.episodeAnalysis.findMany({
-      where: { workId, fragmentAnalysis: { not: Prisma.DbNull } },
+    // EpisodeAnalysisのsummary（確実に存在するデータ）を使用
+    const episodeAnalyses = await this.prisma.episodeAnalysis.findMany({
+      where: { workId },
       include: { episode: { select: { orderIndex: true, title: true } } },
       orderBy: { episode: { orderIndex: 'asc' } },
     });
 
-    const events: string[] = [];
+    const episodeSummaries: string[] = [];
     const worldBuilding: string[] = [];
-    for (const a of analyses) {
-      const fa = a.fragmentAnalysis as any;
-      if (fa?.events) {
-        for (const e of fa.events) {
-          events.push(`第${a.episode.orderIndex}話: ${e.description || e} (${e.significance || 'normal'})`);
-        }
+    for (const a of episodeAnalyses) {
+      if (a.summary) {
+        episodeSummaries.push(`第${a.episode.orderIndex}話「${a.episode.title}」: ${a.summary}`);
       }
-      if (fa?.worldBuilding) {
-        for (const wb of fa.worldBuilding) {
-          worldBuilding.push(typeof wb === 'string' ? wb : wb.detail || JSON.stringify(wb));
+      // newWorldRulesがあれば世界設定として収集
+      const nwr = a.newWorldRules as any[];
+      if (nwr && Array.isArray(nwr)) {
+        for (const rule of nwr) {
+          worldBuilding.push(typeof rule === 'string' ? rule : `[${rule.category || ''}] ${rule.name || ''}: ${rule.description || ''}`);
         }
       }
     }
@@ -692,11 +691,11 @@ ${storyChars.map((c: any) => `- ${c.name}（${c.role || ''}）: ${c.personality 
 ## 世界設定
 ${worldSettings.map((w: any) => `- [${w.category}] ${w.name}: ${w.description}`).join('\n') || 'なし'}
 
-## 主要イベント（エピソードごと）
-${events.slice(0, 40).join('\n') || 'なし'}
+## エピソードあらすじ
+${episodeSummaries.join('\n') || 'なし'}
 
 ## 世界構築の詳細
-${worldBuilding.slice(0, 20).join('\n') || 'なし'}
+${worldBuilding.join('\n') || 'なし'}
 
 ## キャラクター出演サマリー
 ${characterSummaries}
