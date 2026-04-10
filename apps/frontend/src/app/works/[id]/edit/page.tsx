@@ -323,6 +323,38 @@ export default function EditWorkPage() {
             <option value="COMPLETED">完結</option>
             <option value="HIATUS">休載中</option>
           </select>
+          {user?.role === 'ADMIN' && (
+            <button
+              onClick={async () => {
+                try {
+                  const current = (work as any).enableWorldFragments ?? false;
+                  const newVal = !current;
+                  const res = await fetch(`${process.env.NEXT_PUBLIC_API_URL || 'http://localhost:3001/api/v1'}/world-fragments/${workId}/enable`, {
+                    method: 'POST',
+                    headers: {
+                      'Content-Type': 'application/json',
+                      'Authorization': `Bearer ${api.getToken()}`,
+                    },
+                    body: JSON.stringify({ enabled: newVal }),
+                  });
+                  if (res.ok) {
+                    setWork({ ...work, enableWorldFragments: newVal } as any);
+                    setMessage(newVal ? '世界の断片を有効にしました' : '世界の断片を無効にしました');
+                  } else {
+                    setMessage('変更に失敗しました');
+                  }
+                } catch { setMessage('変更に失敗しました'); }
+              }}
+              className={cn(
+                'h-8 px-3 text-xs rounded-md border transition-colors',
+                (work as any).enableWorldFragments
+                  ? 'border-primary bg-primary/10 text-primary'
+                  : 'border-border bg-background text-muted-foreground hover:border-primary/30'
+              )}
+            >
+              世界の断片 {(work as any).enableWorldFragments ? 'ON' : 'OFF'}
+            </button>
+          )}
           <Button onClick={() => setConfirmDelete(true)} variant="destructive" size="sm" className="px-2">
             <Trash2 className="h-4 w-4" />
           </Button>
