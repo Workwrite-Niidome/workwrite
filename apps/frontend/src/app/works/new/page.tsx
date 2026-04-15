@@ -1,15 +1,17 @@
 'use client';
 
-import { Suspense, useState } from 'react';
+import { Suspense, useState, useEffect } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { Wand2, Zap, Sparkles, Users, GitBranch, Brain, Bot, Crown, AlertTriangle } from 'lucide-react';
+import { Wand2, Zap, Sparkles, Users, GitBranch, Brain, Bot, Crown, AlertTriangle, Globe } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardHeader, CardTitle, CardContent, CardFooter } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { api } from '@/lib/api';
+import { useAuth } from '@/lib/auth-context';
 import { WizardShell } from '@/components/creation-wizard/wizard-shell';
+import { sharedWorldApi } from '@/lib/shared-world-api';
 
 import { GENRE_LABELS } from '@/lib/constants';
 
@@ -26,11 +28,19 @@ export default function NewWorkPage() {
 function NewWorkPageInner() {
   const searchParams = useSearchParams();
   const router = useRouter();
+  const { user } = useAuth();
   const urlMode = searchParams.get('mode');
   const urlDraft = searchParams.get('draft');
   const [mode, setMode] = useState<'choose' | 'quick' | 'wizard'>(
     urlMode === 'wizard' || urlDraft ? 'wizard' : urlMode === 'quick' ? 'quick' : 'choose'
   );
+  const [myWorlds, setMyWorlds] = useState<any[]>([]);
+
+  useEffect(() => {
+    if (user?.role === 'ADMIN') {
+      sharedWorldApi.listMy().then((data) => setMyWorlds(data)).catch(() => {});
+    }
+  }, [user?.role]);
 
   if (mode === 'wizard') {
     return <WizardShell />;
@@ -120,6 +130,30 @@ function NewWorkPageInner() {
             </p>
           </div>
         </button>
+
+        {user?.role === 'ADMIN' && myWorlds.length > 0 && (
+          <button
+            onClick={() => {
+              const world = myWorlds[0];
+              router.push(`/shared-world/${world.id}`);
+            }}
+            className="group p-6 rounded-xl border border-dashed border-primary/30 hover:border-primary/50 transition-colors text-left space-y-4"
+          >
+            <div className="h-10 w-10 rounded-lg bg-primary/5 flex items-center justify-center group-hover:bg-primary/10 transition-colors">
+              <Globe className="h-5 w-5 text-primary/60" />
+            </div>
+            <div>
+              <h2 className="font-semibold mb-1.5">共有世界から作成</h2>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                既存の世界を舞台に、新しい物語を書く。
+                キャラクターや世界設定が共有されます。
+              </p>
+              <p className="text-[10px] text-muted-foreground/60 mt-2">
+                {myWorlds.length}つの共有世界が利用可能
+              </p>
+            </div>
+          </button>
+        )}
       </div>
     </div>
   );
