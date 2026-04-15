@@ -14,6 +14,7 @@ import { CharacterExtractionService } from '../character-talk/character-extracti
 import { PrismaService } from '../common/prisma/prisma.service';
 import { OriginalityService } from '../originality/originality.service';
 import { WorldCanonService } from '../world-fragments/services/world-canon.service';
+import { SharedWorldCanonService } from '../shared-world/shared-world-canon.service';
 import { PostType, Episode } from '@prisma/client';
 
 interface EpisodeWithWork extends Episode {
@@ -35,6 +36,7 @@ export class EpisodesController {
     private prisma: PrismaService,
     private originalityService: OriginalityService,
     private worldCanonService: WorldCanonService,
+    private sharedWorldCanonService: SharedWorldCanonService,
   ) {}
 
   @Get('works/:workId/episodes')
@@ -161,6 +163,10 @@ export class EpisodesController {
     // Fire-and-forget: run Step 1 fragment analysis for the published episode
     this.worldCanonService.runStep1ForEpisode(episode.workId, id).catch((e) =>
       this.logger.warn(`Fragment analysis (Step 1) failed for episode ${id}: ${e}`),
+    );
+    // Fire-and-forget: contribute new characters/settings to shared Canon
+    this.sharedWorldCanonService.contributeToCanon(episode.workId).catch((e) =>
+      this.logger.warn(`Shared Canon contribution failed for work ${episode.workId}: ${e}`),
     );
     return result;
   }
