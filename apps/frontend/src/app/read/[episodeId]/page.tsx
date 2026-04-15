@@ -191,13 +191,7 @@ export default function ReaderPage() {
         const sorted = (epRes.data as { id: string; title: string; orderIndex: number }[])
           .sort((a, b) => a.orderIndex - b.orderIndex);
         setEpisodes(sorted);
-        // Check if Canon exists for World Fragments
-        const wId = (workRes as any)?.data?.id ?? (workRes as any)?.id;
-        if (wId) {
-          worldFragmentsApi.getCanon(wId)
-            .then(() => setHasWorldFragments(true))
-            .catch(() => setHasWorldFragments(false));
-        }
+        // World Fragments Canon check — disabled until beta release
       })
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));

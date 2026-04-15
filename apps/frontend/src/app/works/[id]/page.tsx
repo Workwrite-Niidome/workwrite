@@ -101,7 +101,9 @@ export default function WorkDetailPage() {
     // Fetch shared world (ADMIN only)
     if (user?.role === 'ADMIN') {
       sharedWorldApi.getByWork(workId)
-        .then((data) => setSharedWorld(data))
+        .then((data) => {
+          if (data && data.works) setSharedWorld(data);
+        })
         .catch(() => {});
 
       // Check if Canon exists for World Fragments tab
@@ -765,7 +767,7 @@ export default function WorkDetailPage() {
         )}
 
         {/* Shared World: 同じ世界の物語 (ADMIN only) */}
-        {user?.role === 'ADMIN' && sharedWorld && sharedWorld.works.filter((sw) => sw.workId !== workId).length > 0 && (
+        {user?.role === 'ADMIN' && sharedWorld && Array.isArray(sharedWorld.works) && sharedWorld.works.filter((sw: any) => sw.workId !== workId).length > 0 && (
           <Card>
             <CardHeader>
               <CardTitle className="text-base">同じ世界の物語</CardTitle>

@@ -161,14 +161,7 @@ export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId, hasWor
         )}
       </div>
 
-      {/* World Fragments link */}
-      {hasWorldFragments && (
-        <p className="text-xs text-muted-foreground mt-2">
-          <Link href={`/works/${workId}?tab=fragments`} className="hover:text-foreground transition-colors underline underline-offset-2">
-            この作品の世界の断片を覗いてみませんか？
-          </Link>
-        </p>
-      )}
+      {/* World Fragments link — disabled until beta release */}
 
       {/* Navigation */}
       <div className="flex justify-center gap-3">
