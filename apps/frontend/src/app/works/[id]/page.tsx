@@ -19,6 +19,7 @@ import { ShareScoreButton } from '@/components/scoring/share-score-button';
 import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { OriginalityBadge } from '@/components/originality/originality-badge';
 import { ExportDialog } from '@/components/work-export/export-dialog';
+import { sharedWorldApi, type SharedWorld as SharedWorldType } from '@/lib/shared-world-api';
 
 export default function WorkDetailPage() {
   const params = useParams();
@@ -40,6 +41,7 @@ export default function WorkDetailPage() {
   const [emotionProfile, setEmotionProfile] = useState<any>(null);
   const [hasWorldData, setHasWorldData] = useState(false);
   const [workReactions, setWorkReactions] = useState<{ byEpisode: { episodeId: string; title: string; orderIndex: number; totalClaps: number; topEmotion: string | null }[]; totalClaps: number; totalReactions: number; emotions: Record<string, number> } | null>(null);
+  const [sharedWorld, setSharedWorld] = useState<SharedWorldType | null>(null);
 
   useEffect(() => {
     api.getWork(workId)
@@ -86,7 +88,14 @@ export default function WorkDetailPage() {
     api.getWorkReactions(workId)
       .then((res) => setWorkReactions(res.data))
       .catch(() => {});
-  }, [workId, router, isAuthenticated, user?.id]);
+
+    // Fetch shared world (ADMIN only)
+    if (user?.role === 'ADMIN') {
+      sharedWorldApi.getByWork(workId)
+        .then((data) => setSharedWorld(data))
+        .catch(() => {});
+    }
+  }, [workId, router, isAuthenticated, user?.id, user?.role]);
 
   async function handleAddToBookshelf() {
     if (!isAuthenticated) {
@@ -724,6 +733,41 @@ export default function WorkDetailPage() {
                 ))}
             </ul>
           </div>
+        )}
+
+        {/* Shared World: 同じ世界の物語 (ADMIN only) */}
+        {user?.role === 'ADMIN' && sharedWorld && sharedWorld.works.filter((sw) => sw.workId !== workId).length > 0 && (
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-base">同じ世界の物語</CardTitle>
+            </CardHeader>
+            <CardContent className="space-y-3">
+              {sharedWorld.works
+                .filter((sw) => sw.workId !== workId)
+                .map((sw) => (
+                  <Link key={sw.id} href={`/works/${sw.workId}`} className="block group">
+                    <div className="flex items-start gap-2">
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-sm font-medium group-hover:text-primary transition-colors truncate">
+                            {sw.work?.title || sw.workId}
+                          </span>
+                          {sw.role === 'ORIGIN' && <Badge variant="default">原典</Badge>}
+                          {sw.work?.genre && (
+                            <Badge variant="secondary" className="text-xs">
+                              {GENRE_LABELS[sw.work.genre] || sw.work.genre}
+                            </Badge>
+                          )}
+                        </div>
+                        {sw.work?.synopsis && (
+                          <p className="text-xs text-muted-foreground mt-1 line-clamp-2">{sw.work.synopsis}</p>
+                        )}
+                      </div>
+                    </div>
+                  </Link>
+                ))}
+            </CardContent>
+          </Card>
         )}
 
         {/* Recommendations: この作品が好きなら */}

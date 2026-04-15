@@ -18,6 +18,8 @@ import { useAuth } from '@/lib/auth-context';
 import { CharacterRegistryPanel } from '@/components/editor/character-registry-panel';
 import { cn } from '@/lib/utils';
 import { normalizeChapterRecord, buildEmotionBlueprintPayload } from '@/lib/wizard-derive';
+import { sharedWorldApi, type SharedWorld } from '@/lib/shared-world-api';
+import { worldFragmentsApi } from '@/lib/world-fragments-api';
 
 const MAIN_GENRES = [
   { key: 'fantasy', label: 'ファンタジー' },
@@ -85,6 +87,11 @@ export default function EditWorkPage() {
   const [chapterTitleInput, setChapterTitleInput] = useState('');
   const [moveTargetId, setMoveTargetId] = useState<string | null>(null);
 
+  // Shared World state
+  const [sharedWorld, setSharedWorld] = useState<SharedWorld | null>(null);
+  const [hasCanon, setHasCanon] = useState(false);
+  const [sharedWorldLoading, setSharedWorldLoading] = useState(false);
+
   // Drag state
   const dragItemRef = useRef<number | null>(null);
   const dragOverRef = useRef<number | null>(null);
@@ -123,6 +130,17 @@ export default function EditWorkPage() {
       .then((res) => { if (res.data) setCreationPlan(res.data); })
       .catch(() => {});
   }, [workId, router]);
+
+  // Fetch Shared World and Canon status (ADMIN only)
+  useEffect(() => {
+    if (user?.role !== 'ADMIN') return;
+    sharedWorldApi.getByWork(workId)
+      .then((data) => setSharedWorld(data))
+      .catch(() => {});
+    worldFragmentsApi.getCanon(workId)
+      .then(() => setHasCanon(true))
+      .catch(() => setHasCanon(false));
+  }, [workId, user?.role]);
 
   async function handleSave() {
     setSaving(true);
@@ -353,6 +371,37 @@ export default function EditWorkPage() {
               )}
             >
               世界の断片 {(work as any).enableWorldFragments ? 'ON' : 'OFF'}
+            </button>
+          )}
+          {user?.role === 'ADMIN' && sharedWorld && (
+            <Link href={`/shared-world/${sharedWorld.id}`}>
+              <button
+                className="h-8 px-3 text-xs rounded-md border border-primary bg-primary/10 text-primary transition-colors"
+              >
+                共有世界を管理
+              </button>
+            </Link>
+          )}
+          {user?.role === 'ADMIN' && !sharedWorld && (work as any).enableWorldFragments && hasCanon && (
+            <button
+              disabled={sharedWorldLoading}
+              onClick={async () => {
+                const name = window.prompt('共有世界の名前を入力してください');
+                if (!name?.trim()) return;
+                setSharedWorldLoading(true);
+                try {
+                  const created = await sharedWorldApi.create({ canonWorkId: workId, name: name.trim() });
+                  setSharedWorld(created);
+                  setMessage('共有世界を作成しました');
+                } catch {
+                  setMessage('共有世界の作成に失敗しました');
+                } finally {
+                  setSharedWorldLoading(false);
+                }
+              }}
+              className="h-8 px-3 text-xs rounded-md border border-border bg-background text-muted-foreground hover:border-primary/30 transition-colors"
+            >
+              {sharedWorldLoading ? '作成中...' : '共有世界を作成'}
             </button>
           )}
           <Button onClick={() => setConfirmDelete(true)} variant="destructive" size="sm" className="px-2">
