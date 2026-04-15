@@ -48,6 +48,14 @@ export interface AiWritingContext {
   chapterBrief?: string;
   plotOutline?: string;
   emotionGoals?: string;
+  // 共有世界の正典（派生作品の場合のみ）
+  sharedCanon?: {
+    worldName: string;
+    worldRules: string;
+    establishedFacts: string[];
+    characters: { name: string; role: string; personality: string }[];
+    originWorkTitle: string;
+  };
 }
 
 @Injectable()
@@ -313,6 +321,47 @@ export class AiContextBuilderService {
       }
     }
 
+    // 共有世界のCanon取得（派生作品の場合）
+    let sharedCanon: AiWritingContext['sharedCanon'] = undefined;
+    try {
+      const swLink = await this.prisma.sharedWorldWork.findUnique({
+        where: { workId },
+      });
+      if (swLink && swLink.role === 'DERIVATIVE') {
+        const sw = await this.prisma.sharedWorld.findUnique({
+          where: { id: swLink.sharedWorldId },
+        });
+        if (sw) {
+          const originWork = await this.prisma.work.findUnique({
+            where: { id: sw.canonWorkId },
+            select: { title: true },
+          });
+          const canon = await this.prisma.worldCanon.findUnique({
+            where: { workId: sw.canonWorkId },
+          });
+          if (canon && originWork) {
+            const profiles = (canon.characterProfiles as any[]) || [];
+            const wr = canon.worldRules as any;
+            const facts = (canon.establishedFacts as string[]) || [];
+
+            sharedCanon = {
+              worldName: sw.name,
+              originWorkTitle: originWork.title,
+              worldRules: typeof wr === 'object' ? Object.entries(wr).map(([k, v]) => `${k}: ${String(v).slice(0, 200)}`).join('\n') : '',
+              establishedFacts: facts.slice(0, 10),
+              characters: profiles.slice(0, 15).map((p: any) => ({
+                name: p.name || '',
+                role: p.role || '',
+                personality: (p.personality || '').slice(0, 100),
+              })),
+            };
+          }
+        }
+      }
+    } catch (e) {
+      this.logger.warn(`Failed to load shared Canon for work ${workId}: ${e}`);
+    }
+
     return {
       currentEpisodeOrder,
       episodeSummaries,
@@ -329,6 +378,7 @@ export class AiContextBuilderService {
       chapterBrief,
       plotOutline,
       emotionGoals,
+      sharedCanon,
     };
   }
 
@@ -417,6 +467,23 @@ export class AiContextBuilderService {
     // Priority 5: Recent detailed summary
     if (ctx.recentDetailedSummary) {
       addSection(`【直前のあらすじ】\n${ctx.recentDetailedSummary}`);
+    }
+
+    // Priority 5.5: Shared Canon (derivative works only)
+    if (ctx.sharedCanon) {
+      const sc = ctx.sharedCanon;
+      const lines: string[] = [];
+      lines.push(`この作品は「${sc.worldName}」（原典:『${sc.originWorkTitle}』）と同じ世界を舞台としています。`);
+      if (sc.worldRules) {
+        lines.push(`世界のルール:\n${sc.worldRules}`);
+      }
+      if (sc.establishedFacts.length > 0) {
+        lines.push(`確定事実:\n${sc.establishedFacts.map((f) => `- ${f}`).join('\n')}`);
+      }
+      if (sc.characters.length > 0) {
+        lines.push(`原典の登場人物:\n${sc.characters.map((c) => `- ${c.name}（${c.role}）: ${c.personality}`).join('\n')}`);
+      }
+      addSection(`【共有世界の正典】\n${lines.join('\n')}`);
     }
 
     // Priority 6: World setting / era
