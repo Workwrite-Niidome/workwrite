@@ -1719,3 +1719,62 @@ model WorldFragmentBookmark {
   @@index([fragmentId])
   @@index([userId])
 }
+
+// ============================================================
+// Shared World — 一つの世界で、複数の物語が生まれる
+// ============================================================
+
+enum SharedWorldRole {
+  ORIGIN      // 原典（この世界の元になった作品）
+  DERIVATIVE  // 派生作品
+}
+
+model SharedWorld {
+  id           String   @id @default(cuid())
+  name         String   // 世界の名前
+  description  String?  @db.Text
+  ownerId      String   // 原作者のuserId
+  canonWorkId  String   // 原典WorkのID（このWorkのCanonが共有される）
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  works   SharedWorldWork[]
+  members SharedWorldMember[]
+
+  @@index([ownerId])
+  @@index([canonWorkId])
+}
+
+// 共有世界のメンバー（別作者の参加管理）
+enum SharedWorldMemberStatus {
+  INVITED   // オーナーが招待した
+  ACCEPTED  // 招待を承諾した
+  DECLINED  // 招待を辞退した
+}
+
+model SharedWorldMember {
+  id            String                   @id @default(cuid())
+  sharedWorldId String
+  userId        String                   // 招待された作者のuserId
+  status        SharedWorldMemberStatus  @default(INVITED)
+  invitedAt     DateTime                 @default(now())
+  respondedAt   DateTime?
+
+  sharedWorld SharedWorld @relation(fields: [sharedWorldId], references: [id], onDelete: Cascade)
+
+  @@unique([sharedWorldId, userId])
+  @@index([userId])
+}
+
+model SharedWorldWork {
+  id            String          @id @default(cuid())
+  sharedWorldId String
+  workId        String          @unique  // 1つのWorkは1つのSharedWorldにのみ所属
+  role          SharedWorldRole @default(DERIVATIVE)
+  joinedAt      DateTime        @default(now())
+
+  sharedWorld SharedWorld @relation(fields: [sharedWorldId], references: [id], onDelete: Cascade)
+
+  @@index([sharedWorldId])
+  @@index([workId])
+}
