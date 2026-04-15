@@ -110,6 +110,28 @@ export class CharacterTalkService {
         where: { workId },
         select: { id: true, name: true, role: true, personality: true, motivation: true, speechStyle: true, firstPerson: true, background: true },
         orderBy: { sortOrder: 'asc' },
+      }).then(async (chars) => {
+        // 共有世界のキャラクターも追加
+        try {
+          const swLink = await this.prisma.sharedWorldWork.findUnique({ where: { workId } });
+          if (swLink) {
+            const swWorks = await this.prisma.sharedWorldWork.findMany({
+              where: { sharedWorldId: swLink.sharedWorldId, workId: { not: workId } },
+              select: { workId: true },
+            });
+            if (swWorks.length > 0) {
+              const crossChars = await this.prisma.storyCharacter.findMany({
+                where: { workId: { in: swWorks.map((w) => w.workId) } },
+                select: { id: true, name: true, role: true, personality: true, motivation: true, speechStyle: true, firstPerson: true, background: true },
+              });
+              // 重複除去（名前ベース）
+              const existingNames = new Set(chars.map((c) => c.name));
+              const newChars = crossChars.filter((c) => !existingNames.has(c.name));
+              return [...chars, ...newChars];
+            }
+          }
+        } catch {}
+        return chars;
       }),
       this.prisma.storyArc.findUnique({
         where: { workId },
