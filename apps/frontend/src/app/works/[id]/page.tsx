@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter, useSearchParams } from 'next/navigation';
+import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight, BarChart3, Eye, TrendingDown, Globe, Heart, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -27,7 +27,6 @@ export default function WorkDetailPage() {
   const params = useParams();
   const workId = params.id as string;
   const router = useRouter();
-  const searchParams = useSearchParams();
   const { user, isAuthenticated } = useAuth();
   const [work, setWork] = useState<Work | null>(null);
   const [loading, setLoading] = useState(true);
@@ -41,8 +40,11 @@ export default function WorkDetailPage() {
   const [readerStats, setReaderStats] = useState<WorkReaderStats | null>(null);
   const [showStats, setShowStats] = useState(false);
   const [activeTab, setActiveTab] = useState<'overview' | 'world' | 'characters' | 'fragments'>(() => {
-    const tabParam = searchParams.get('tab');
-    return tabParam === 'fragments' ? 'fragments' : 'overview';
+    if (typeof window !== 'undefined') {
+      const params = new URLSearchParams(window.location.search);
+      if (params.get('tab') === 'fragments') return 'fragments';
+    }
+    return 'overview';
   });
   const [emotionProfile, setEmotionProfile] = useState<any>(null);
   const [hasWorldData, setHasWorldData] = useState(false);
