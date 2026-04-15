@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useParams, useRouter, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { BookOpen, BookmarkPlus, Clock, User, Users, Sparkles, UserPlus, UserCheck, X, ChevronDown, ChevronRight, BarChart3, Eye, TrendingDown, Globe, Heart, Share2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
@@ -20,11 +20,14 @@ import { AiGeneratedBadge } from '@/components/ui/ai-generated-badge';
 import { OriginalityBadge } from '@/components/originality/originality-badge';
 import { ExportDialog } from '@/components/work-export/export-dialog';
 import { sharedWorldApi, type SharedWorld as SharedWorldType } from '@/lib/shared-world-api';
+import { worldFragmentsApi } from '@/lib/world-fragments-api';
+import { WorldFragmentsTab } from '@/components/work/WorldFragmentsTab';
 
 export default function WorkDetailPage() {
   const params = useParams();
   const workId = params.id as string;
   const router = useRouter();
+  const searchParams = useSearchParams();
   const { user, isAuthenticated } = useAuth();
   const [work, setWork] = useState<Work | null>(null);
   const [loading, setLoading] = useState(true);
@@ -37,11 +40,15 @@ export default function WorkDetailPage() {
   const [showPrologue, setShowPrologue] = useState(false);
   const [readerStats, setReaderStats] = useState<WorkReaderStats | null>(null);
   const [showStats, setShowStats] = useState(false);
-  const [activeTab, setActiveTab] = useState<'overview' | 'world' | 'characters'>('overview');
+  const [activeTab, setActiveTab] = useState<'overview' | 'world' | 'characters' | 'fragments'>(() => {
+    const tabParam = searchParams.get('tab');
+    return tabParam === 'fragments' ? 'fragments' : 'overview';
+  });
   const [emotionProfile, setEmotionProfile] = useState<any>(null);
   const [hasWorldData, setHasWorldData] = useState(false);
   const [workReactions, setWorkReactions] = useState<{ byEpisode: { episodeId: string; title: string; orderIndex: number; totalClaps: number; topEmotion: string | null }[]; totalClaps: number; totalReactions: number; emotions: Record<string, number> } | null>(null);
   const [sharedWorld, setSharedWorld] = useState<SharedWorldType | null>(null);
+  const [hasCanon, setHasCanon] = useState(false);
 
   useEffect(() => {
     api.getWork(workId)
@@ -94,6 +101,11 @@ export default function WorkDetailPage() {
       sharedWorldApi.getByWork(workId)
         .then((data) => setSharedWorld(data))
         .catch(() => {});
+
+      // Check if Canon exists for World Fragments tab
+      worldFragmentsApi.getCanon(workId)
+        .then(() => setHasCanon(true))
+        .catch(() => setHasCanon(false));
     }
   }, [workId, router, isAuthenticated, user?.id, user?.role]);
 
@@ -348,8 +360,8 @@ export default function WorkDetailPage() {
           </div>
         )}
 
-        {/* Tabs: 概要 | 世界観 | キャラクター */}
-        {(hasWorldData || publicCharacters.length > 0) && (
+        {/* Tabs: 概要 | 世界観 | キャラクター | 世界の断片 */}
+        {(hasWorldData || publicCharacters.length > 0 || (user?.role === 'ADMIN' && hasCanon)) && (
           <div className="border-b border-border">
             <div className="flex gap-4">
               <button
@@ -383,6 +395,17 @@ export default function WorkDetailPage() {
                   <Users className="h-3.5 w-3.5" /> キャラクター
                 </button>
               )}
+              {user?.role === 'ADMIN' && hasCanon && (
+                <button
+                  onClick={() => setActiveTab('fragments')}
+                  className={cn(
+                    'pb-2 text-sm font-medium border-b-2 transition-colors flex items-center gap-1',
+                    activeTab === 'fragments' ? 'border-primary text-foreground' : 'border-transparent text-muted-foreground hover:text-foreground',
+                  )}
+                >
+                  世界の断片 <Badge variant="outline" className="text-[10px] ml-1 py-0">Beta</Badge>
+                </button>
+              )}
             </div>
           </div>
         )}
@@ -390,6 +413,10 @@ export default function WorkDetailPage() {
         {/* Tab Content */}
         {activeTab === 'world' && hasWorldData && (
           <WorldTab workId={workId} />
+        )}
+
+        {activeTab === 'fragments' && user?.role === 'ADMIN' && hasCanon && work && (
+          <WorldFragmentsTab workId={workId} authorId={work.author.id} />
         )}
 
         {activeTab === 'characters' && publicCharacters.length > 0 && (

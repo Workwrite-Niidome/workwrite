@@ -26,6 +26,7 @@ import { HighlightedText } from '@/components/reader/highlighted-text';
 import { HighlightToolbar } from '@/components/reader/highlight-toolbar';
 import { HighlightDetailPopover } from '@/components/reader/highlight-detail-popover';
 import { EpisodeCompleteBanner } from '@/components/reader/episode-complete-banner';
+import { worldFragmentsApi } from '@/lib/world-fragments-api';
 import { CharacterTalkChat } from '@/components/ai/character-talk-chat';
 import { LetterPanel } from '@/components/reader/letter-panel';
 import { LetterComposeDialog } from '@/components/reader/letter-compose-dialog';
@@ -151,6 +152,9 @@ export default function ReaderPage() {
   const [explainText, setExplainText] = useState('');
   const [showExplainDialog, setShowExplainDialog] = useState(false);
 
+  // World Fragments
+  const [hasWorldFragments, setHasWorldFragments] = useState(false);
+
   const contentRef = useRef<HTMLDivElement>(null);
   const progressTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const cursorTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
@@ -187,7 +191,13 @@ export default function ReaderPage() {
         const sorted = (epRes.data as { id: string; title: string; orderIndex: number }[])
           .sort((a, b) => a.orderIndex - b.orderIndex);
         setEpisodes(sorted);
-        // Prologue is shown on the work detail page, not in the reader
+        // Check if Canon exists for World Fragments
+        const wId = (workRes as any)?.data?.id ?? (workRes as any)?.id;
+        if (wId) {
+          worldFragmentsApi.getCanon(wId)
+            .then(() => setHasWorldFragments(true))
+            .catch(() => setHasWorldFragments(false));
+        }
       })
       .catch(() => router.push('/'))
       .finally(() => setLoading(false));
@@ -726,6 +736,7 @@ export default function ReaderPage() {
           episodeId={episodeId}
           nextEpisodeId={nextEp?.id}
           workId={episode.workId}
+          hasWorldFragments={hasWorldFragments}
         />
       )}
 

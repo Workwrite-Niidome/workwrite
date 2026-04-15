@@ -20,9 +20,10 @@ interface EpisodeCompleteBannerProps {
   episodeId: string;
   nextEpisodeId?: string;
   workId: string;
+  hasWorldFragments?: boolean;
 }
 
-export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId }: EpisodeCompleteBannerProps) {
+export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId, hasWorldFragments }: EpisodeCompleteBannerProps) {
   const { isAuthenticated } = useAuth();
   const [claps, setClaps] = useState(0);
   const [selectedEmotion, setSelectedEmotion] = useState<string | null>(null);
@@ -159,6 +160,15 @@ export function EpisodeCompleteBanner({ episodeId, nextEpisodeId, workId }: Epis
           </p>
         )}
       </div>
+
+      {/* World Fragments link */}
+      {hasWorldFragments && (
+        <p className="text-xs text-muted-foreground mt-2">
+          <Link href={`/works/${workId}?tab=fragments`} className="hover:text-foreground transition-colors underline underline-offset-2">
+            この作品の世界の断片を覗いてみませんか？
+          </Link>
+        </p>
+      )}
 
       {/* Navigation */}
       <div className="flex justify-center gap-3">
